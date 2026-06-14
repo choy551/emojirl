@@ -30,4 +30,4 @@ lerna-debug.log*
 # OS
 Thumbs.db
 
-pm-workspace.yaml
+pnpm-workspace.yaml
