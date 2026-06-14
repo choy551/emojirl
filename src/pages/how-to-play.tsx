@@ -200,11 +200,9 @@ export default function HowToPlay({
               <div className="flex items-center gap-2 flex-wrap">
                 <Kbd>Z</Kbd>
                 <span className="text-muted-foreground">or</span>
-                <Kbd>Enter</Kbd>
-                <span className="text-muted-foreground">or</span>
                 <Kbd>Numpad 5</Kbd>
                 <span className="text-muted-foreground">
-                  — wait 1 turn / rest (heals +1 HP; +2 near campfire or restaurant)
+                  — wait 1 turn / rest (heals +1 HP; +2 near campfire or restaurant). Click your own tile to wait.
                 </span>
               </div>
             </div>
@@ -508,10 +506,42 @@ export default function HowToPlay({
           a second copy auto-routes it to your bank with a{" "}
           <em>"Extra → Bank (already carried)"</em> notice. But several emojis are
           designed to <strong className="text-foreground">stack</strong>: each
-          extra copy in your bag makes the effect stronger (Heart, Butterfly, Dagger, Wave, and the original five).
+          extra copy in your bag (up to a per-emoji cap) makes the passive effect stronger.
         </p>
         <div className="space-y-2">
           {[
+            {
+              emoji: "❤️",
+              name: "Heart",
+              effect: "Vampiric",
+              detail:
+                "+1 HP restored on melee hit per copy (cap 5). Five hearts = +5 HP healed per hit.",
+              color: "text-rose-400",
+            },
+            {
+              emoji: "🦋",
+              name: "Butterfly",
+              effect: "Dodge Heal",
+              detail:
+                "+1 HP restored on successful dodge per copy (cap 5). Two butterflies = +2 HP per dodge.",
+              color: "text-purple-400",
+            },
+            {
+              emoji: "🗡️",
+              name: "Dagger",
+              effect: "Ninja Combo",
+              detail:
+                "25% base chance of a bonus ¼-power strike; +15% per copy (cap 4 → 80% max). Two daggers ≈ 40% chance.",
+              color: "text-slate-300",
+            },
+            {
+              emoji: "🌊",
+              name: "Wave",
+              effect: "Combat Regen",
+              detail:
+                "+1 HP per turn (even during combat) per copy (cap 5). Two waves = +2 HP regen every enemy turn.",
+              color: "text-cyan-400",
+            },
             {
               emoji: "🛡️",
               name: "Shield",
@@ -678,7 +708,7 @@ export default function HowToPlay({
               {
                 badge: "🧑‍🔬",
                 color: "bg-green-500/15 border-green-500/30 text-green-300",
-                label: "Mad Scientist",
+                label: "Healer",
                 desc: "Heals injured allies in LOS every 3 turns instead of attacking. Always flees. Kill the healer first.",
               },
               {
@@ -690,7 +720,7 @@ export default function HowToPlay({
               {
                 badge: "🐒",
                 color: "bg-amber-500/15 border-amber-500/30 text-amber-300",
-                label: "Monkey",
+                label: "Thief",
                 desc: "Neutral — but steals a soul emoji from your bag each turn you stand adjacent. Provoke it and it fights back with your own stolen power. Kill it to reclaim your emojis.",
               },
               {
@@ -850,7 +880,7 @@ export default function HowToPlay({
                           <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-green-500/15 border border-green-500/25">
                             <span>🧑‍🔬</span>
                             <span className="font-semibold text-green-300">
-                              Medic
+                              Healer
                             </span>
                             <span className="text-muted-foreground">
                               — heals allies, always flees
