@@ -340,8 +340,52 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       if (tile.type === 'water') {
         const canSwim = computeBagPassives(prev.player.inventory).canSwim;
         if (!canSwim) {
-          addLog("You can't swim! 🌊 (Find a ⛵ Boat to cross water)");
-          return prev;
+          const hasEnemyThere = prev.enemies.some(e => e.pos.x === newPos.x && e.pos.y === newPos.y);
+          if (hasEnemyThere) {
+            // fall through: allow melee bump attack on water enemies (e.g. Mermen near shore) without swimming
+          } else {
+            const itemIndex = prev.items.findIndex(it => it.pos.x === newPos.x && it.pos.y === newPos.y);
+            if (itemIndex !== -1) {
+              // special "bump" pickup for loot on water tiles (e.g. dropped by Mermen) without entering water
+              let bumpedPlayer: Player = { ...player };
+              const item = prev.items[itemIndex];
+              const newItems = prev.items.filter((_, i) => i !== itemIndex);
+              if (item.ammoAmount) {
+                bumpedPlayer.ammo = (bumpedPlayer.ammo ?? 0) + item.ammoAmount;
+                const _ammoWord = item.emoji === '🪙' ? 'bullets' : 'arrows';
+                addLog(`${item.emoji} +${item.ammoAmount} ${_ammoWord} — ${bumpedPlayer.ammo} total`);
+              } else {
+                const { pos: _pos, ...pickedUp } = item;
+                const isUnequippable = pickedUp.isEquipment && !canEquipItem(pickedUp, bumpedPlayer.characterClass);
+                const bagCount = bumpedPlayer.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment).length;
+                if (pickedUp.isEquipment) {
+                  const autoSlot = !isUnequippable
+                    ? (pickedUp.equipSlots ?? []).find(s => !bumpedPlayer.equipment[s as import('../game/types').EquipSlot])
+                    : undefined;
+                  if (autoSlot) {
+                    bumpedPlayer = { ...bumpedPlayer, equipment: { ...bumpedPlayer.equipment, [autoSlot]: pickedUp } };
+                    addLog(`Auto-equipped ${pickedUp.emoji} ${pickedUp.name} → ${autoSlot}!`);
+                  } else {
+                    bumpedPlayer = { ...bumpedPlayer, bank: [...bumpedPlayer.bank, pickedUp] };
+                    addLog(isUnequippable
+                      ? `Picked up ${pickedUp.emoji} ${pickedUp.name} — can't equip, sent to bank.`
+                      : `Picked up ${pickedUp.emoji} ${pickedUp.name} → Equip tab (⚔️).`);
+                  }
+                } else if (pickedUp.healAmount !== undefined || bagCount < 9) {
+                  bumpedPlayer.inventory = [...bumpedPlayer.inventory, pickedUp];
+                  addLog(`Picked up ${pickedUp.emoji} ${pickedUp.name} (${pickedUp.description})`);
+                } else {
+                  bumpedPlayer.bank = [...bumpedPlayer.bank, pickedUp];
+                  addLog(`Picked up ${pickedUp.emoji} ${pickedUp.name} — bag full, sent to bank.`);
+                }
+              }
+              const midState = { ...prev, player: bumpedPlayer, items: newItems, turn: prev.turn + 1 };
+              return applyEnemyTurns(withVisibility(midState), runEnemyTurns(midState));
+            } else {
+              addLog("You can't swim! 🌊 (Find a ⛵ Boat to cross water)");
+              return prev;
+            }
+          }
         }
       } else if (!PLAYER_PASSABLE_TILES.has(tile.type)) {
         return prev;
