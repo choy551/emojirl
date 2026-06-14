@@ -78,7 +78,7 @@ EmojiRL/
 - **Movement**: Arrow keys / WASD / numpad
 - **Wait / Rest**: `.` or `z`
 - **Autoexplore**: `O` or numpad `+`
-- **Inventory / Equipment**: `i` / `e`
+- **Inventory / Equipment**: `b`
 - **How to Play**: Accessible from the main menu
 
 ## Current Status
