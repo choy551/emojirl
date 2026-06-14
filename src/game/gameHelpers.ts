@@ -649,6 +649,7 @@ export interface EnemyTurnResult {
   moodDrain: number;
   playerInventoryRemovals: string[];
   playerInventoryAdditions: EmojiItem[];
+  enemyBeam?: { positions: Position[]; color: string };
 }
 
 export const _flashSignals = {
@@ -706,6 +707,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
     newLogs.push({ id: Math.random().toString(), text, turn: state.turn });
 
   let newBombs: PlacedBomb[] = [];
+  let enemyBeam: { positions: Position[]; color: string } | undefined;
   for (const bomb of state.placedBombs) {
     const newCount = bomb.countdown - 1;
     if (newCount <= 0) {
@@ -1206,6 +1208,64 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
       if (monkeyBonus > 0) log(`🐒 ${enemy.emoji} ${enemy.name} fights with your stolen emojis! (+${monkeyBonus} ATK)`);
       const effectiveAttack = Math.round((enemy.attack + packBonus + monkeyBonus) * divineMult);
 
+      if (enemy.ranged && hasLOSBetween(map, enemy.pos, player.pos) && !playerDied) {
+        // Simple visual line/flash for the arrow shot (reuses the pendingBeam system used by player ranger/wizard attacks)
+        const dx = player.pos.x - enemy.pos.x;
+        const dy = player.pos.y - enemy.pos.y;
+        const steps = Math.max(Math.abs(dx), Math.abs(dy)) || 1;
+        const _aBeam: Position[] = [];
+        for (let n = 1; n <= steps; n++) {
+          _aBeam.push({
+            x: Math.round(enemy.pos.x + (dx * n) / steps),
+            y: Math.round(enemy.pos.y + (dy * n) / steps),
+          });
+        }
+        enemyBeam = { positions: _aBeam, color: '#f59e0b' }; // warm elven arrow color
+
+        if (enemy.ghostly) {
+          moodDrain += 1;
+          log(`👻 ${enemy.name}'s ethereal arrow chills your soul! (mood −1)`);
+        }
+        const dodgeChance = player.characterClass === '🥷' ? computeNinjaEvasion(effectivePlayer) : Math.min(50, effectivePlayer.stats.evasion ?? 0);
+        if (Math.random() * 100 < dodgeChance) {
+          log(`The ${enemy.name} shoots an arrow — you dodge!`);
+        } else {
+          const dmg = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+          playerHp -= dmg;
+          log(`The ${enemy.name} shoots an arrow at you for ${dmg} damage!`);
+          if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
+          newFloatingTexts.push({
+            id: `hit-p-${enemy.id}-ranged-${state.turn}-${Math.random()}`,
+            pos: { ...player.pos },
+            text: `-${dmg}`,
+            color: '#f97316',
+            life: 2,
+          });
+          if (enemy.berserker && !playerDied) {
+            const dodgeChance2 = player.characterClass === '🥷' ? computeNinjaEvasion(effectivePlayer) : Math.min(50, effectivePlayer.stats.evasion ?? 0);
+            if (Math.random() * 100 < dodgeChance2) {
+              log(`🔥 The ${enemy.name} shoots an arrow again — you dodge!`);
+            } else {
+              const dmg2 = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+              playerHp -= dmg2;
+              log(`🔥 The ${enemy.name} shoots an arrow again for ${dmg2} damage! (Berserk!)`);
+              if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
+              newFloatingTexts.push({
+                id: `hit-p-${enemy.id}-ranged-berserk-${state.turn}-${Math.random()}`,
+                pos: { ...player.pos },
+                text: `-${dmg2}`,
+                color: '#dc2626',
+                life: 2,
+              });
+            }
+            _flashSignals.berserkFlashPending = enemy.id;
+          }
+        }
+        occupied.add(`${updated.pos.x},${updated.pos.y}`);
+        newEnemies[i] = updated;
+        continue;
+      }
+
       if (dist <= 1) {
         if (enemy.ghostly) {
           moodDrain += 1;
@@ -1381,7 +1441,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
     }
   }
 
-  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, playerInventoryRemovals, playerInventoryAdditions };
+  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam };
 }
 
 export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): GameState {
@@ -1406,9 +1466,9 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
   const hasExtraChanges = result.playerInventoryRemovals.length > 0 || result.playerInventoryAdditions.length > 0 || result.moodDrain > 0;
 
   if (result.newLogs.length === 0 && result.playerHp === state.player.stats.hp && mergedFloating.length === 0 && state.floatingTexts.length === 0 && !hasExtraChanges) {
-    return withVisibility({ ...state, enemies: result.enemies, floatingTexts: mergedFloating, placedBombs: result.placedBombs, activeProjectile: result.activeProjectile, pendingExplosion: result.explosionPositions.length > 0 ? result.explosionPositions : undefined, player: { ...state.player, trailblazerCooldown: result.trailblazerCooldown } });
+    return withVisibility({ ...state, enemies: result.enemies, floatingTexts: mergedFloating, placedBombs: result.placedBombs, activeProjectile: result.activeProjectile, pendingExplosion: result.explosionPositions.length > 0 ? result.explosionPositions : undefined, pendingBeam: result.enemyBeam ?? state.pendingBeam, player: { ...state.player, trailblazerCooldown: result.trailblazerCooldown } });
   }
-  const mergedLogs = [...result.newLogs, ...state.logs].slice(0, 8);
+  const mergedLogs = [...result.newLogs, ...state.logs].slice(0, 24);
   return withVisibility({
     ...state,
     enemies: result.enemies,
@@ -1427,6 +1487,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     placedBombs: result.placedBombs,
     activeProjectile: result.activeProjectile,
     pendingExplosion: result.explosionPositions.length > 0 ? result.explosionPositions : undefined,
+    pendingBeam: result.enemyBeam ?? state.pendingBeam,
   });
 }
 

@@ -129,6 +129,8 @@ export default function Game() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.currentFloor]);
   const [logOpen, setLogOpen] = useState(false);
+  const logOpenRef = useRef(false);
+  useEffect(() => { logOpenRef.current = logOpen; }, [logOpen]);
   const [pauseMenuOpen, setPauseMenuOpen] = useState(false);
   const pauseMenuOpenRef = useRef(false);
   useEffect(() => { pauseMenuOpenRef.current = pauseMenuOpen; }, [pauseMenuOpen]);
@@ -706,7 +708,7 @@ export default function Game() {
                 ...prev,
                 player: { ...prev.player, stats: { ...prev.player.stats, hp: prev.player.stats.maxHp } },
                 enemies: prev.enemies.filter(e => e.id !== fairyId),
-                logs: [{ id: Math.random().toString(), text: `🧚‍♀️ ${fairy.name} heals you to full HP! ✨`, turn: prev.turn }, ...prev.logs].slice(0, 8),
+                logs: [{ id: Math.random().toString(), text: `🧚‍♀️ ${fairy.name} heals you to full HP! ✨`, turn: prev.turn }, ...prev.logs].slice(0, 24),
               };
             });
           }
@@ -931,7 +933,7 @@ export default function Game() {
           setInspectedEnemyId(null);
           return;
         }
-        if (logOpen) {
+        if (logOpenRef.current) {
           setLogOpen(false);
           return;
         }
@@ -1024,6 +1026,10 @@ export default function Game() {
       // ── Bag: open with B ──────────────────────────────────────────────────
       if (e.key === 'b') { e.preventDefault(); setBankOpen(true); setSelectedItemId(null); return; }
       // ── Combat log: open with / ───────────────────────────────────────────
+      if (logOpenRef.current && e.key !== 'Escape') {
+        e.preventDefault();
+        return;
+      }
 
       // Use bag slot: digit 1–9, main keyboard only
       if (/^[1-9]$/.test(e.key) && !isNumpad && !e.ctrlKey && !e.metaKey) {
@@ -2176,7 +2182,7 @@ export default function Game() {
           style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)' }}
           title="Click or press / to open full log"
         >
-          {gameState.logs.slice().reverse().map((log, i) => (
+          {gameState.logs.slice(0, 8).reverse().map((log, i) => (
             <div
               key={log.id}
               className="text-xs text-muted-foreground leading-tight animate-in fade-in slide-in-from-bottom-1"
@@ -2485,15 +2491,13 @@ export default function Game() {
             if (!prev) return prev;
             const itemIdx = prev.player.inventory.findIndex(i => !i.consumed && i.emoji === wants);
             if (itemIdx === -1) return prev;
-            const newInventory = [
-              ...prev.player.inventory.filter((_, i) => i !== itemIdx),
-              ...(monkey.stolenEmojis ?? []),
-            ];
+            const remainingInv = prev.player.inventory.filter((_, i) => i !== itemIdx);
+            const { inventory: _inv, bank: _bnk } = addToBag(remainingInv, prev.player.bank, ...(monkey.stolenEmojis ?? []));
             return {
               ...prev,
-              player: { ...prev.player, inventory: newInventory },
+              player: { ...prev.player, inventory: _inv, bank: _bnk },
               enemies: prev.enemies.filter(e => e.id !== pendingMonkeyInteraction.id),
-              logs: [{ id: Math.random().toString(), text: `🐒 ${monkey.name} happily takes the ${wants} and drops your emojis! 🎉`, turn: prev.turn }, ...prev.logs].slice(0, 8),
+              logs: [{ id: Math.random().toString(), text: `🐒 ${monkey.name} happily takes the ${wants} and drops your emojis! 🎉`, turn: prev.turn }, ...prev.logs].slice(0, 24),
             };
           });
           setPendingMonkeyInteraction(null);
@@ -2509,7 +2513,7 @@ export default function Game() {
             return {
               ...prev,
               enemies: newEnemies,
-              logs: [{ id: Math.random().toString(), text: `🐒 ${monkey.name} shrieks and bares its teeth — it's hostile now!`, turn: prev.turn }, ...prev.logs].slice(0, 8),
+              logs: [{ id: Math.random().toString(), text: `🐒 ${monkey.name} shrieks and bares its teeth — it's hostile now!`, turn: prev.turn }, ...prev.logs].slice(0, 24),
             };
           });
           setPendingMonkeyInteraction(null);
@@ -2572,7 +2576,7 @@ export default function Game() {
               ...prev,
               player: { ...prev.player, stats: { ...prev.player.stats, hp: prev.player.stats.maxHp } },
               enemies: prev.enemies.filter(e => e.id !== pendingFairyId),
-              logs: [{ id: Math.random().toString(), text: `🧚‍♀️ ${fairy.name} heals you to full HP! ✨`, turn: prev.turn }, ...prev.logs].slice(0, 8),
+              logs: [{ id: Math.random().toString(), text: `🧚‍♀️ ${fairy.name} heals you to full HP! ✨`, turn: prev.turn }, ...prev.logs].slice(0, 24),
             };
           });
           setPendingFairyId(null);
@@ -2664,7 +2668,7 @@ export default function Game() {
                   ? { ...e, tag: 'Friendly' as const, engaged: false, isRecruited: true }
                   : e
               ),
-              logs: [{ id: Math.random().toString(), text: `🤝 ${adv.emoji} ${adv.name} beams with joy! "${fav}?! For me?!" — joins as your companion!`, turn: prev.turn }, ...prev.logs].slice(0, 8),
+              logs: [{ id: Math.random().toString(), text: `🤝 ${adv.emoji} ${adv.name} beams with joy! "${fav}?! For me?!" — joins as your companion!`, turn: prev.turn }, ...prev.logs].slice(0, 24),
             };
           });
           setPendingAdventurerInteraction(null);
@@ -2680,7 +2684,7 @@ export default function Game() {
                   ? { ...e, tag: 'Friendly' as const, engaged: false, isRecruited: true }
                   : e
               ),
-              logs: [{ id: Math.random().toString(), text: `🤝 ${adv.emoji} ${adv.name} grins warmly — joins as your companion!`, turn: prev.turn }, ...prev.logs].slice(0, 8),
+              logs: [{ id: Math.random().toString(), text: `🤝 ${adv.emoji} ${adv.name} grins warmly — joins as your companion!`, turn: prev.turn }, ...prev.logs].slice(0, 24),
             };
           });
           setPendingAdventurerInteraction(null);

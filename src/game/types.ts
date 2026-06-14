@@ -208,6 +208,7 @@ export interface Enemy {
   isAdventurer?: boolean;
   isRecruited?: boolean;
   favoriteEmoji?: string;
+  ranged?: boolean;
 }
 
 export interface FloatingText {

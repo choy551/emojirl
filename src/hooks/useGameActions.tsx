@@ -79,9 +79,20 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
   const addLog = useCallback((text: string) => {
     setGameState(prev => {
       if (!prev) return prev;
-      return { ...prev, logs: [{ id: Math.random().toString(), text, turn: prev.turn }, ...prev.logs].slice(0, 8) };
+      return { ...prev, logs: [{ id: Math.random().toString(), text, turn: prev.turn }, ...prev.logs].slice(0, 24) };
     });
   }, [setGameState]);
+
+  // Helper to consistently return stolen emojis (via proper addToBag for stacking/banking) when a monkey is killed.
+  // Used in all kill paths (melee/ranged/bolt/blink/zap/arc/etc) to fix incomplete returns.
+  const applyMonkeyDropOnKill = (killed: any, p: Player) => {
+    if (killed?.monkey && killed.stolenEmojis?.length) {
+      const { inventory: ii, bank: bb } = addToBag(p.inventory, p.bank, ...killed.stolenEmojis);
+      addLog(`🐒 ${killed.emoji} Monkey dropped your ${killed.stolenEmojis.map((e: any) => e.emoji).join('')}! Soul restored.`);
+      return { ...p, inventory: ii, bank: bb };
+    }
+    return p;
+  };
 
   const handleMove = useCallback((dx: number, dy: number) => {
     // Auto-deactivate expired Blink / Trailblaze (must run outside setGameState)
@@ -138,6 +149,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (cResult.enemyDied) {
             markEnemyKilled(enemy.emoji);
             cKillCounts = { ...cKillCounts, [enemy.emoji]: (cKillCounts[enemy.emoji] ?? 0) + 1 };
+            cPlayer = applyMonkeyDropOnKill(enemy, cPlayer);
             cEnemies.splice(enemyIdx, 1);
             cPlayer.stats.xp = cPlayer.stats.xp + (enemy.isBoss ? 25 : 5);
             cPlayer.stats.moodValue = Math.min(moodMax(cls), cPlayer.stats.moodValue + 10);
@@ -229,6 +241,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (combatResult.enemyDied) {
             markEnemyKilled(enemy.emoji);
             rangerKillCounts = { ...rangerKillCounts, [enemy.emoji]: (rangerKillCounts[enemy.emoji] ?? 0) + 1 };
+            newPlayer = applyMonkeyDropOnKill(enemy, newPlayer);
             newEnemies.splice(enemyIdx, 1);
             const xpGain = enemy.isBoss ? 25 : 5;
             const newXP = newPlayer.stats.xp + xpGain;
@@ -475,11 +488,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         if (combatResult.enemyDied && !godBlessedProc) {
           markEnemyKilled(enemy.emoji);
           updatedKillCounts[enemy.emoji] = (updatedKillCounts[enemy.emoji] ?? 0) + 1;
-          if (enemy.monkey && enemy.stolenEmojis?.length) {
-            const { inventory: _invM, bank: _bankM } = addToBag(newPlayer.inventory, newPlayer.bank, ...enemy.stolenEmojis);
-            newPlayer = { ...newPlayer, inventory: _invM, bank: _bankM };
-            addLog(`🐒 ${enemy.emoji} Monkey dropped your ${enemy.stolenEmojis.map(e => e.emoji).join('')}! Soul restored.`);
-          }
+          newPlayer = applyMonkeyDropOnKill(enemy, newPlayer);
           newEnemies.splice(enemyIndex, 1);
           const xpGain = enemy.isBoss ? 25 : 5;
           const newXP = newPlayer.stats.xp + xpGain;
@@ -587,6 +596,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               if (newHp <= 0) {
                 markEnemyKilled(tgt.emoji);
                 updatedKillCounts[tgt.emoji] = (updatedKillCounts[tgt.emoji] ?? 0) + 1;
+                newPlayer = applyMonkeyDropOnKill(tgt, newPlayer);
                 newEnemies.splice(idx, 1);
                 newPlayer.stats.xp += tgt.isBoss ? 25 : 5;
               } else {
@@ -614,6 +624,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             if (ncNewHp <= 0) {
               markEnemyKilled(ncEnemy.emoji);
               updatedKillCounts[ncEnemy.emoji] = (updatedKillCounts[ncEnemy.emoji] ?? 0) + 1;
+              newPlayer = applyMonkeyDropOnKill(ncEnemy, newPlayer);
               newEnemies.splice(nci, 1);
               newPlayer.stats.xp += enemy.isBoss ? 25 : 5;
               newPlayer.stats.moodValue = Math.min(moodMax(cls), newPlayer.stats.moodValue + 10);
@@ -912,6 +923,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (boltResult.enemyDied) {
             markEnemyKilled(boltTarget.emoji);
             newState.killCounts = { ...newState.killCounts, [boltTarget.emoji]: (newState.killCounts[boltTarget.emoji] ?? 0) + 1 };
+            newPlayer = applyMonkeyDropOnKill(boltTarget, newPlayer);
             boltEnemies.splice(boltEnemyIdx, 1);
             const boltXpGain = boltTarget.isBoss ? 25 : 5;
             const boltXP = newPlayer.stats.xp + boltXpGain;
@@ -1105,6 +1117,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (boltResult.enemyDied) {
             markEnemyKilled(boltTarget.emoji);
             waitKillCounts = { ...waitKillCounts, [boltTarget.emoji]: (waitKillCounts[boltTarget.emoji] ?? 0) + 1 };
+            waitPlayer = applyMonkeyDropOnKill(boltTarget, waitPlayer);
             waitEnemies.splice(boltEnemyIdx, 1);
             const boltXpGain = boltTarget.isBoss ? 25 : 5;
             const boltXP = waitPlayer.stats.xp + boltXpGain;
@@ -1212,7 +1225,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             turn: prev.turn,
           },
           ...prev.logs,
-        ].slice(0, 8),
+        ].slice(0, 24),
       };
       return withVisibility(applyEnemyTurns(midState, runEnemyTurns(midState)));
     });
@@ -1655,7 +1668,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         addLog(`🪢 You descend into a hidden vault! Treasure awaits…`);
       }
 
-      const midState = { ...prev, player: newPlayer, map, items: newItems, logs: [...newLogs, ...prev.logs].slice(0, 8), turn: prev.turn + 1 };
+      const midState = { ...prev, player: newPlayer, map, items: newItems, logs: [...newLogs, ...prev.logs].slice(0, 24), turn: prev.turn + 1 };
       const withVis = withVisibility(midState);
       return applyEnemyTurns(withVis, runEnemyTurns(withVis));
     });
@@ -1809,6 +1822,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           addLog(`✨ Level ${newLevel}! Full heal! +${hpInc} max HP! Got ${lvlEmoji.emoji}!`);
         }
         newEnemies = prev.enemies.filter(e => e.id !== target.id);
+        newPlayer = applyMonkeyDropOnKill(target, newPlayer);
         if (target.isBoss || Math.random() < 0.50) {
           const r2 = Math.random();
           const drop = r2 < 0.12 ? getRandomEquipmentDrop(prev.currentFloor) : r2 < 0.28 ? getRandomActiveDrop() : getRandomHealDrop();
@@ -1959,6 +1973,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         markEnemySeen(target.emoji); markEnemyKilled(target.emoji);
         addLog(`⚡ ZAP! ${target.emoji} ${target.name} is obliterated!`);
         newEnemies = prev.enemies.filter(e => e.id !== target.id);
+        newPlayer = applyMonkeyDropOnKill(target, newPlayer);
         if (target.isBoss || Math.random() < 0.50) {
           const r2 = Math.random();
           const drop = r2 < 0.12 ? getRandomEquipmentDrop(prev.currentFloor) : r2 < 0.28 ? getRandomActiveDrop() : getRandomHealDrop();
@@ -2106,6 +2121,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         markEnemyKilled(target.emoji);
         newKillCounts[target.emoji] = (newKillCounts[target.emoji] ?? 0) + 1;
         if (targetIdx !== -1) newEnemies.splice(targetIdx, 1);
+        newPlayer = applyMonkeyDropOnKill(target, newPlayer);
         const blinkInstakill = target.hp >= target.maxHp;
         const currentChain = prev.player.stats.blinkStrikeInstakillChain ?? 0;
         if (blinkInstakill && currentChain < 3) {
@@ -2220,6 +2236,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         markEnemyKilled(target.emoji);
         newKillCounts[target.emoji] = (newKillCounts[target.emoji] ?? 0) + 1;
         if (targetIdx !== -1) newEnemies.splice(targetIdx, 1);
+        newPlayer = applyMonkeyDropOnKill(target, newPlayer);
         const blinkInstakillX = target.hp >= target.maxHp;
         const currentChainX = prev.player.stats.blinkStrikeInstakillChain ?? 0;
         if (blinkInstakillX && currentChainX < 3) {

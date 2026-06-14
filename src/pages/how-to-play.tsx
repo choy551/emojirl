@@ -724,6 +724,12 @@ export default function HowToPlay({
                 desc: "Neutral — but steals a soul emoji from your bag each turn you stand adjacent. Provoke it and it fights back with your own stolen power. Kill it to reclaim your emojis.",
               },
               {
+                badge: "🏹",
+                color: "bg-orange-500/15 border-orange-500/30 text-orange-300",
+                label: "Ranged",
+                desc: "Can attack from a distance if it has line of sight (supports any direction, not just up/down/left/right).",
+              },
+              {
                 badge: "✨",
                 color: "bg-violet-500/15 border-violet-500/30 text-violet-300",
                 label: "Echo",
@@ -786,6 +792,7 @@ export default function HowToPlay({
                       ("madScientist" in enemy && enemy.madScientist) ||
                       ("waterAggro" in enemy && enemy.waterAggro) ||
                       ("monkey" in enemy && enemy.monkey) ||
+                      ("ranged" in enemy && enemy.ranged) ||
                       ("tag" in enemy && (enemy.tag === 'Neutral' || enemy.tag === 'Friendly'))) && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {"berserker" in enemy && enemy.berserker && (
@@ -906,6 +913,17 @@ export default function HowToPlay({
                             </span>
                             <span className="text-muted-foreground">
                               — steals your soul emojis
+                            </span>
+                          </span>
+                        )}
+                        {"ranged" in enemy && enemy.ranged && (
+                          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-orange-500/15 border border-orange-500/25">
+                            <span>🏹</span>
+                            <span className="font-semibold text-orange-300">
+                              Ranged
+                            </span>
+                            <span className="text-muted-foreground">
+                              — shoots from any LOS
                             </span>
                           </span>
                         )}
