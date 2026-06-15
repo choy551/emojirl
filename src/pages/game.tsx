@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { generateMap } from '../game/mapgen';
-import { Player, Enemy, EmojiItem, GameState, Position, EquipSlot, Equipment } from '../game/types';
+import { Player, Enemy, EmojiItem, GameState, Position, EquipSlot } from '../game/types';
 import { getCowboyUnarmedBonus } from '../game/combat';
 import { getRandomEmojiPower } from '../game/emojis';
 import { Link, useLocation } from 'wouter';
@@ -9,27 +9,29 @@ import { getMood, MOODS } from '../game/moods';
 import { getClassDef } from '../game/classes';
 import { saveScore } from '../game/leaderboard';
 import { saveGame, loadGame, clearSave, getRawSave } from '../game/save';
-import { isStackableBagPassive, hasBagPassive, getStackableBonusLabel, getStackableCumulativeLabel, getPassiveTooltipSuffix } from '../game/passives';
+import { isStackableBagPassive } from '../game/passives';
 import { useIsMobile } from '../hooks/use-mobile';
-import { ActivePassivesPanel } from '../components/ActivePassivesPanel';
 import { VirtualDpad } from '../components/VirtualDpad';
-import { StatBadge } from '../components/StatBadge';
-import { MiniMap } from '../components/MiniMap';
-import { EnemyTooltip } from '../components/EnemyTooltip';
 import { EnemyCard } from '../components/EnemyCard';
 import HowToPlay from './how-to-play';
 import { HotbarPanel } from '../components/HotbarPanel';
 import { BankPanel } from '../components/BankPanel';
+import { ShopModal } from '../components/ShopModal';
+import { AmmoCacheModal } from '../components/AmmoCacheModal';
+import { RestaurantModal } from '../components/RestaurantModal';
+import { ItemStatCard } from '../components/ItemStatCard';
+import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog } from '../components/InteractionDialogs';
+import { TacticsMenu } from '../components/TacticsMenu';
 import { EquipmentTab } from '../components/EquipmentTab';
-import { getEquipBonusSuffix, canEquipItem, equipRestrictionReason } from '../components/itemUtils';
+import { canEquipItem } from '../components/itemUtils';
 import { RightSidebar } from '../components/RightSidebar';
 import {
   chebyshev, computeBagPassives, applyEquipmentAndPassives, computeNinjaEvasion,
   VISION_RADIUS, hasLOS, hasLOSBetween, detectionRadius,
-  eagleEyeRange, sortBagSlots, generateShopStock, generateAmmoCacheStock, generateRestaurantStock, nearestRestaurantPos,
+  eagleEyeRange, sortBagSlots, generateShopStock, generateAmmoCacheStock, generateRestaurantStock,
   spawnEnemies, spawnVaultItems, xpThresholdForLevel,
-  computeVisibility, visionRadiusFor, addToBag,
-  getItemBuyPrice, getItemSellValue, _flashSignals,
+  computeVisibility, visionRadiusFor,
+  _flashSignals,
   bfsStepToward, bfsNextStep, bfsNextStepWallHug, PLAYER_PASSABLE_TILES,
   getDungeonPressure,
 } from '../game/gameHelpers';
@@ -396,9 +398,7 @@ export default function Game() {
     handleBlinkStrikeOnTarget,
     applyRangerMode,
     handleCowboyTactics,
-    handlePlantBomb,
     handleFireProjectile,
-    handleUseRope,
     handleUseSlot,
     handleCook,
     handleBankMove,
@@ -2264,157 +2264,23 @@ export default function Game() {
 
       {/* Tactics Menu overlay */}
       {tacticsMenuOpen && !gameState.gameOver && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.55)' }}
-          onClick={() => setTacticsMenuOpen(false)}
-        >
-          <div
-            className="bg-card border border-border rounded-xl p-5 shadow-2xl min-w-[260px] max-w-xs"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="text-sm font-bold uppercase tracking-widest text-center mb-4 text-muted-foreground">
-              {player.characterClass} Tactics
-            </div>
-
-            {/* Wizard */}
-            {player.characterClass === '🧙' && (
-              <div className="space-y-1.5">
-                {([
-                  { n: 1, label: '🎯 Autofire — Nearest',  mode: 'nearest'  as const },
-                  { n: 2, label: '🎯 Autofire — Furthest', mode: 'furthest' as const },
-                  { n: 3, label: '🎯 Autofire — Manual',   mode: 'manual'   as const },
-                ]).map(({ n, label, mode }) => (
-                  <button key={mode}
-                    className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${wizardTactics.mode === mode ? 'bg-violet-500/20 text-violet-200 font-semibold' : 'hover:bg-secondary/60'}`}
-                    onClick={() => { applyWizardMode(mode); setTacticsMenuOpen(false); }}
-                  >
-                    <span className="font-mono text-muted-foreground w-4 shrink-0">{n}</span>
-                    {label}
-                    {wizardTactics.mode === mode && <span className="ml-auto text-violet-400">✓</span>}
-                  </button>
-                ))}
-                {(() => {
-                  const elapsed = gameState.turn - blinkTurn;
-                  const BLINK_ACTIVE = 3, BLINK_CD = 5;
-                  const isActive = wizardTactics.mode === 'holdfire' && elapsed < BLINK_ACTIVE;
-                  const onCooldown = elapsed < BLINK_ACTIVE + BLINK_CD;
-                  const remaining = onCooldown ? (BLINK_ACTIVE + BLINK_CD) - elapsed : 0;
-                  return (
-                    <button
-                      className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${isActive ? 'bg-violet-500/20 text-violet-200 font-semibold' : onCooldown ? 'opacity-40 cursor-not-allowed' : 'hover:bg-secondary/60'}`}
-                      onClick={() => { applyWizardMode('holdfire'); if (!onCooldown) setTacticsMenuOpen(false); }}
-                    >
-                      <span className="font-mono text-muted-foreground w-4 shrink-0">4</span>
-                      ✨ Blink — phase through gaps &amp; enemies
-                      <span className="ml-auto text-[10px] font-mono">
-                        {isActive ? <span className="text-violet-300">{BLINK_ACTIVE - elapsed}t left</span> : onCooldown ? <span className="text-zinc-400">{remaining}t</span> : <span className="text-violet-400">ready</span>}
-                      </span>
-                    </button>
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* Ninja */}
-            {player.characterClass === '🥷' && (
-              <div className="space-y-1.5">
-                <button
-                  className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${(player.stats.blinkStrikeCooldown ?? 0) === 0 ? 'hover:bg-violet-500/20 text-violet-200' : 'opacity-50 cursor-default'}`}
-                  onClick={() => { if ((player.stats.blinkStrikeCooldown ?? 0) === 0) { enterBlinkTargetMode(); setTacticsMenuOpen(false); } }}
-                >
-                  <span className="font-mono text-muted-foreground w-4 shrink-0">1</span>
-                  ⚡ Blink Strike — teleport &amp; 2× damage
-                  <span className="ml-auto text-[10px] font-mono">
-                    {(player.stats.blinkStrikeCooldown ?? 0) === 0 ? <span className="text-violet-400">READY · X</span> : <span className="text-zinc-400">{player.stats.blinkStrikeCooldown}t</span>}
-                  </span>
-                </button>
-                {([
-                  { n: 2, label: '🤫 Stealth On — hug walls', active: !!gameState.stealthMode && !autoStealth, stealth: true  },
-                  { n: 3, label: '👁️ Stealth Off — move freely', active: !gameState.stealthMode && !autoStealth, stealth: false },
-                ]).map(({ n, label, active, stealth }) => (
-                  <button key={n}
-                    className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${active ? 'bg-slate-500/20 text-slate-200 font-semibold' : 'hover:bg-secondary/60'}`}
-                    onClick={() => { applyNinjaMode(stealth); setTacticsMenuOpen(false); }}
-                  >
-                    <span className="font-mono text-muted-foreground w-4 shrink-0">{n}</span>
-                    {label}
-                    {active && <span className="ml-auto text-slate-400">✓</span>}
-                  </button>
-                ))}
-                <button
-                  className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${autoStealth ? 'bg-violet-500/20 text-violet-200 font-semibold' : 'hover:bg-secondary/60'}`}
-                  onClick={() => { toggleAutoStealth(); setTacticsMenuOpen(false); }}
-                >
-                  <span className="font-mono text-muted-foreground w-4 shrink-0">4</span>
-                  🧱 Auto-Stealth — wall-hug explore
-                  {autoStealth && <span className="ml-auto text-violet-400">✓</span>}
-                </button>
-              </div>
-            )}
-
-            {/* Ranger */}
-            {player.characterClass === '🧝' && (
-              <div className="space-y-1.5">
-                {([
-                  { n: 1, label: '🏹 Ranged — auto-fire bow', active: rangerMode === 'ranged', mode: 'ranged' as const },
-                  { n: 2, label: '⚔️ Melee — conserve ammo',  active: rangerMode === 'melee',  mode: 'melee'  as const },
-                ]).map(({ n, label, active, mode }) => (
-                  <button key={mode}
-                    className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${active ? 'bg-green-500/20 text-green-200 font-semibold' : 'hover:bg-secondary/60'}`}
-                    onClick={() => { applyRangerMode(mode); setTacticsMenuOpen(false); }}
-                  >
-                    <span className="font-mono text-muted-foreground w-4 shrink-0">{n}</span>
-                    {label}
-                    {active && <span className="ml-auto text-green-400">✓</span>}
-                  </button>
-                ))}
-                {(() => {
-                  const elapsed = gameState.turn - trailblazeTurn;
-                  const BLINK_ACTIVE = 3, BLINK_CD = 5;
-                  const isActive = rangerMode === 'flee' && elapsed < BLINK_ACTIVE;
-                  const onCooldown = elapsed < BLINK_ACTIVE + BLINK_CD;
-                  const remaining = onCooldown ? (BLINK_ACTIVE + BLINK_CD) - elapsed : 0;
-                  return (
-                    <button
-                      className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${isActive ? 'bg-green-500/20 text-green-200 font-semibold' : onCooldown ? 'opacity-40 cursor-not-allowed' : 'hover:bg-secondary/60'}`}
-                      onClick={() => { applyRangerMode('flee'); if (!onCooldown) setTacticsMenuOpen(false); }}
-                    >
-                      <span className="font-mono text-muted-foreground w-4 shrink-0">3</span>
-                      💨 Trailblaze — sprint 2 tiles
-                      <span className="ml-auto text-[10px] font-mono">
-                        {isActive ? <span className="text-green-300">{BLINK_ACTIVE - elapsed}t left</span> : onCooldown ? <span className="text-zinc-400">{remaining}t</span> : <span className="text-green-400">ready</span>}
-                      </span>
-                    </button>
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* Cowboy */}
-            {player.characterClass === '🤠' && (() => {
-              const ready = gameState.turn - yeehawTurn >= 45;
-              return (
-                <div className="space-y-1.5">
-                  <button
-                    className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${ready ? 'hover:bg-yellow-500/20' : 'opacity-40 cursor-not-allowed'}`}
-                    onClick={() => { if (ready) { handleCowboyTactics(); setTacticsMenuOpen(false); } }}
-                  >
-                    <span className="font-mono text-muted-foreground w-4 shrink-0">1</span>
-                    🤠 YEEHAW! (+25 mood)
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {ready ? 'ready!' : `${45 - (gameState.turn - yeehawTurn)}t`}
-                    </span>
-                  </button>
-                </div>
-              );
-            })()}
-
-            <div className="mt-4 pt-3 border-t border-border/50 text-xs text-muted-foreground text-center">
-              press number to select · ESC or T to close
-            </div>
-          </div>
-        </div>
+        <TacticsMenu
+          player={player}
+          gameState={gameState}
+          wizardTactics={wizardTactics}
+          blinkTurn={blinkTurn}
+          trailblazeTurn={trailblazeTurn}
+          yeehawTurn={yeehawTurn}
+          autoStealth={autoStealth}
+          rangerMode={rangerMode}
+          applyWizardMode={applyWizardMode}
+          enterBlinkTargetMode={enterBlinkTargetMode}
+          applyNinjaMode={applyNinjaMode}
+          toggleAutoStealth={toggleAutoStealth}
+          applyRangerMode={applyRangerMode}
+          handleCowboyTactics={handleCowboyTactics}
+          onClose={() => setTacticsMenuOpen(false)}
+        />
       )}
 
       {/* Last Boat Warning */}
@@ -2477,850 +2343,75 @@ export default function Game() {
         </div>
       )}
 
-      {pendingMonkeyInteraction && gameState && (() => {
-        const monkey = gameState.enemies.find(e => e.id === pendingMonkeyInteraction.id);
-        if (!monkey) return null;
-        const { wants } = pendingMonkeyInteraction;
-        const stolenCount = monkey.stolenEmojis?.length ?? 0;
-        const wantsItemIdx = gameState.player.inventory.findIndex(i => !i.consumed && i.emoji === wants);
-        const playerHasIt = wantsItemIdx !== -1;
+      {pendingMonkeyInteraction && gameState && (
+        <MonkeyInteractionDialog
+          gameState={gameState}
+          setGameState={setGameState}
+          interaction={pendingMonkeyInteraction}
+          onClose={() => setPendingMonkeyInteraction(null)}
+        />
+      )}
 
-        const handleGive = () => {
-          if (!playerHasIt) return;
-          setGameState(prev => {
-            if (!prev) return prev;
-            const itemIdx = prev.player.inventory.findIndex(i => !i.consumed && i.emoji === wants);
-            if (itemIdx === -1) return prev;
-            const remainingInv = prev.player.inventory.filter((_, i) => i !== itemIdx);
-            const { inventory: _inv, bank: _bnk } = addToBag(remainingInv, prev.player.bank, ...(monkey.stolenEmojis ?? []));
-            return {
-              ...prev,
-              player: { ...prev.player, inventory: _inv, bank: _bnk },
-              enemies: prev.enemies.filter(e => e.id !== pendingMonkeyInteraction.id),
-              logs: [{ id: Math.random().toString(), text: `🐒 ${monkey.name} happily takes the ${wants} and drops your emojis! 🎉`, turn: prev.turn }, ...prev.logs].slice(0, 24),
-            };
-          });
-          setPendingMonkeyInteraction(null);
-        };
+      {pendingFairyId && gameState && (
+        <FairyInteractionDialog
+          gameState={gameState}
+          setGameState={setGameState}
+          fairyId={pendingFairyId}
+          onClose={() => setPendingFairyId(null)}
+        />
+      )}
 
-        const handleAttack = () => {
-          setGameState(prev => {
-            if (!prev) return prev;
-            const idx = prev.enemies.findIndex(e => e.id === pendingMonkeyInteraction.id);
-            if (idx === -1) return prev;
-            const newEnemies = [...prev.enemies];
-            newEnemies[idx] = { ...newEnemies[idx], engaged: true, tag: 'Hostile' as const };
-            return {
-              ...prev,
-              enemies: newEnemies,
-              logs: [{ id: Math.random().toString(), text: `🐒 ${monkey.name} shrieks and bares its teeth — it's hostile now!`, turn: prev.turn }, ...prev.logs].slice(0, 24),
-            };
-          });
-          setPendingMonkeyInteraction(null);
-        };
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="bg-card border border-amber-400/40 rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
-              <div className="text-center mb-5">
-                <div className="text-5xl mb-2">{monkey.emoji}</div>
-                <div className="text-sm font-bold text-amber-300 mb-2">{monkey.name}</div>
-                <div className="text-xs text-muted-foreground leading-relaxed italic">
-                  "Oo oo! Give {wants}... give {wants}!"
-                </div>
-                {stolenCount > 0 && (
-                  <div className="mt-2 text-xs text-amber-400/80">
-                    Holding <span className="font-semibold">{stolenCount}</span> stolen emoji{stolenCount !== 1 ? 's' : ''}: {(monkey.stolenEmojis ?? []).map(s => s.emoji).join('')}
-                  </div>
-                )}
-              </div>
-              <div className="space-y-2">
-                <button
-                  className={`w-full py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
-                    playerHasIt
-                      ? 'bg-amber-500/20 border-amber-400/40 text-amber-200 hover:bg-amber-500/35 cursor-pointer'
-                      : 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
-                  }`}
-                  onClick={handleGive}
-                  disabled={!playerHasIt}
-                >
-                  {playerHasIt
-                    ? `Give ${wants} — get your emojis back`
-                    : `Give ${wants} — you don't have one`}
-                </button>
-                <button
-                  className="w-full py-2.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-sm font-semibold hover:bg-red-500/25 transition-colors"
-                  onClick={handleAttack}
-                >
-                  ⚔️ Attack — turns it hostile
-                </button>
-                <button
-                  className="w-full py-2.5 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-sm font-semibold hover:bg-slate-500/30 transition-colors"
-                  onClick={() => setPendingMonkeyInteraction(null)}
-                >
-                  Back away slowly 🤫
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {pendingFairyId && gameState && (() => {
-        const fairy = gameState.enemies.find(e => e.id === pendingFairyId);
-        if (!fairy) return null;
-        const handleYes = () => {
-          setGameState(prev => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              player: { ...prev.player, stats: { ...prev.player.stats, hp: prev.player.stats.maxHp } },
-              enemies: prev.enemies.filter(e => e.id !== pendingFairyId),
-              logs: [{ id: Math.random().toString(), text: `🧚‍♀️ ${fairy.name} heals you to full HP! ✨`, turn: prev.turn }, ...prev.logs].slice(0, 24),
-            };
-          });
-          setPendingFairyId(null);
-        };
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="bg-card border border-pink-400/40 rounded-xl p-6 shadow-2xl max-w-xs w-full mx-4">
-              <div className="text-center mb-5">
-                <div className="text-5xl mb-2">{fairy.emoji}</div>
-                <div className="text-sm font-bold text-pink-300 mb-2">{fairy.name}</div>
-                <div className="text-xs text-muted-foreground leading-relaxed italic">
-                  "Hehe, you look tired~ Want me to heal you? ✨"
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  className="flex-1 py-2.5 rounded-lg bg-pink-500/20 border border-pink-400/40 text-pink-200 text-sm font-semibold hover:bg-pink-500/35 transition-colors"
-                  onClick={handleYes}
-                >
-                  Yes please 💗
-                </button>
-                <button
-                  className="flex-1 py-2.5 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-sm font-semibold hover:bg-slate-500/30 transition-colors"
-                  onClick={() => setPendingFairyId(null)}
-                >
-                  No thanks 🤚
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {pendingAdventurerInteraction && gameState && (() => {
-        const adv = gameState.enemies.find(e => e.id === pendingAdventurerInteraction);
-        if (!adv) return null;
-        const fav = adv.favoriteEmoji ?? '❓';
-        const isAlreadyFriendly = adv.tag === 'Friendly';
-        const playerHasIt = gameState.player.inventory.some(i => !i.consumed && i.emoji === fav);
-
-        const ADV_LINES: Record<string, string> = {
-          '🧙': `Hm, you seem capable~ I've been wandering these floors researching arcane theory. A little company wouldn't hurt. Have anything shiny for me?`,
-          '🥷': `You actually spotted me. I'm impressed. I need someone worth walking alongside — prove it. What've you got?`,
-          '🧝': `I've been riding solo for too long. My arrows fly true and I know these floors well. Trade me something good and I'm yours.`,
-          '🤠': `Howdy, partner~ Reckon these here dungeons ain't no place to ride alone. Got anything worth a handshake deal?`,
-          '🧑‍🎤': `Oh~! A protagonist! My ballad needs a hero to follow around. I'll trade my loyalty for one little trinket~`,
-        };
-        const flavorLine = ADV_LINES[adv.emoji] ?? `Hey, adventurer! These floors are rough alone. Got something to share?`;
-
-        const ADV_COLORS: Record<string, string> = {
-          '🧙': 'text-violet-300',
-          '🥷': 'text-slate-300',
-          '🧝': 'text-emerald-300',
-          '🤠': 'text-amber-300',
-          '🧑‍🎤': 'text-pink-300',
-        };
-        const nameColor = ADV_COLORS[adv.emoji] ?? 'text-cyan-300';
-
-        const ADV_BORDER: Record<string, string> = {
-          '🧙': 'border-violet-400/40',
-          '🥷': 'border-slate-400/40',
-          '🧝': 'border-emerald-400/40',
-          '🤠': 'border-amber-400/40',
-          '🧑‍🎤': 'border-pink-400/40',
-        };
-        const borderColor = ADV_BORDER[adv.emoji] ?? 'border-cyan-400/40';
-
-        const ADV_FRIENDLY_LINES: Record<string, string> = {
-          '🧙': `Oh, it's you! I was hoping you'd come by~ I'm ready to travel with you, no strings attached!`,
-          '🥷': `I've already decided I like you. Don't make me regret it. Let's move.`,
-          '🧝': `I've been waiting for the right person. Looks like that's you — shall we?`,
-          '🤠': `Well, I reckon you're exactly the kind of partner I was lookin' for. Ready when you are, partner~`,
-          '🧑‍🎤': `I had a good feeling about you! The ballad practically writes itself. Come on, let's go~`,
-        };
-        const friendlyLine = ADV_FRIENDLY_LINES[adv.emoji] ?? `I'm already on your side — let's go!`;
-
-        const handleGive = () => {
-          if (!playerHasIt) return;
-          setGameState(prev => {
-            if (!prev) return prev;
-            const itemIdx = prev.player.inventory.findIndex(i => !i.consumed && i.emoji === fav);
-            if (itemIdx === -1) return prev;
-            const newInventory = prev.player.inventory.filter((_, idx) => idx !== itemIdx);
-            return {
-              ...prev,
-              player: { ...prev.player, inventory: newInventory },
-              enemies: prev.enemies.map(e =>
-                e.id === pendingAdventurerInteraction
-                  ? { ...e, tag: 'Friendly' as const, engaged: false, isRecruited: true }
-                  : e
-              ),
-              logs: [{ id: Math.random().toString(), text: `🤝 ${adv.emoji} ${adv.name} beams with joy! "${fav}?! For me?!" — joins as your companion!`, turn: prev.turn }, ...prev.logs].slice(0, 24),
-            };
-          });
-          setPendingAdventurerInteraction(null);
-        };
-
-        const handleAcceptFriendly = () => {
-          setGameState(prev => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              enemies: prev.enemies.map(e =>
-                e.id === pendingAdventurerInteraction
-                  ? { ...e, tag: 'Friendly' as const, engaged: false, isRecruited: true }
-                  : e
-              ),
-              logs: [{ id: Math.random().toString(), text: `🤝 ${adv.emoji} ${adv.name} grins warmly — joins as your companion!`, turn: prev.turn }, ...prev.logs].slice(0, 24),
-            };
-          });
-          setPendingAdventurerInteraction(null);
-        };
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className={`bg-card border ${borderColor} rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4`}>
-              <div className="text-center mb-5">
-                <div className="text-5xl mb-2">{adv.emoji}</div>
-                <div className={`text-sm font-bold ${nameColor} mb-3`}>{adv.name}</div>
-                <div className="text-xs text-muted-foreground leading-relaxed italic px-1">
-                  "{isAlreadyFriendly ? friendlyLine : flavorLine}"
-                </div>
-              </div>
-              <div className="space-y-2">
-                {isAlreadyFriendly ? (
-                  <button
-                    className="w-full py-2.5 rounded-lg border bg-cyan-500/20 border-cyan-400/40 text-cyan-200 hover:bg-cyan-500/30 text-sm font-semibold transition-colors"
-                    onClick={handleAcceptFriendly}
-                  >
-                    Accept companion 🤝
-                  </button>
-                ) : (
-                  <button
-                    className={`w-full py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
-                      playerHasIt
-                        ? 'bg-cyan-500/20 border-cyan-400/40 text-cyan-200 hover:bg-cyan-500/30 cursor-pointer'
-                        : 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
-                    }`}
-                    onClick={handleGive}
-                    disabled={!playerHasIt}
-                  >
-                    {playerHasIt
-                      ? `Recruit — give ${fav} 🤝`
-                      : `Recruit — need ${fav} (you don't have one)`}
-                  </button>
-                )}
-                <button
-                  className="w-full py-2.5 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-sm font-semibold hover:bg-slate-500/30 transition-colors"
-                  onClick={() => setPendingAdventurerInteraction(null)}
-                >
-                  Exit dialogue 👋
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {pendingAdventurerInteraction && gameState && (
+        <AdventurerInteractionDialog
+          gameState={gameState}
+          setGameState={setGameState}
+          adventurerId={pendingAdventurerInteraction}
+          onClose={() => setPendingAdventurerInteraction(null)}
+        />
+      )}
 
       {/* Shop Modal */}
       {shopOpen && gameState && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setShopOpen(false)}
-        >
-          <div
-            className="bg-card border border-yellow-500/30 rounded-xl p-5 shadow-2xl w-96 max-h-[90vh] overflow-y-auto"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-widest text-yellow-300">🏪 Emoji Shop</h2>
-                <div className="text-[10px] text-muted-foreground mt-0.5">Buy & sell emojis for gold</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/30 rounded px-2 py-1">
-                  <span className="text-base leading-none">💰</span>
-                  <span className="text-sm font-bold text-yellow-300 tabular-nums">{gameState.player.stats.gold}g</span>
-                </div>
-                <button onClick={() => setShopOpen(false)} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded">ESC</button>
-              </div>
-            </div>
-
-            {/* For Sale */}
-            <div className="mb-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">For Sale</div>
-              {shopItems.length === 0 && <div className="text-xs text-muted-foreground text-center py-3">Sold out!</div>}
-              <div className="flex flex-col gap-1.5">
-                {shopItems.map(item => {
-                  const price = getItemBuyPrice(item, gameState.currentFloor);
-                  const canAfford = gameState.player.stats.gold >= price;
-                  const nonHealBagCount = gameState.player.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined).length;
-                  const bagFull = !item.isEquipment && item.healAmount === undefined && item.ammoAmount === undefined && nonHealBagCount >= 9;
-                  return (
-                    <div key={item.id} className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">
-                      <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold leading-tight">{item.name}</div>
-                        <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.description}</div>
-                      </div>
-                      <button
-                        disabled={!canAfford || bagFull}
-                        onClick={() => {
-                          let sentToBank = false;
-                          let shopAmmoTotal: number | null = null;
-                          let autoEquippedSlot: EquipSlot | null = null;
-                          setGameState(prev => {
-                            if (!prev) return prev;
-                            if (prev.player.stats.gold < price) return prev;
-                            const boughtItem = { ...item, id: `bought-${Math.random().toString(36).slice(2)}` };
-                            const newGold = prev.player.stats.gold - price;
-                            if (boughtItem.ammoAmount) {
-                              const newAmmo = (prev.player.ammo ?? 0) + boughtItem.ammoAmount;
-                              shopAmmoTotal = newAmmo;
-                              return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, ammo: newAmmo } };
-                            }
-                            const isUnequippable = boughtItem.isEquipment && !canEquipItem(boughtItem, prev.player.characterClass);
-                            if (isUnequippable) {
-                              sentToBank = true;
-                              return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, bank: [...prev.player.bank, boughtItem] } };
-                            }
-                            if (boughtItem.isEquipment) {
-                              const slots = (boughtItem.equipSlots ?? []) as EquipSlot[];
-                              const emptySlot = slots.find(s => !prev.player.equipment[s]);
-                              if (emptySlot) {
-                                autoEquippedSlot = emptySlot;
-                                return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, equipment: { ...prev.player.equipment, [emptySlot]: boughtItem } } };
-                              }
-                            }
-                            const { inventory, bank } = addToBag(prev.player.inventory, prev.player.bank, boughtItem);
-                            return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, inventory, bank } };
-                          });
-                          if (shopAmmoTotal !== null) {
-                            const shopAmmoWord = item.emoji === '🪙' ? 'bullets' : 'arrows';
-                            addLog(`🏪 ${item.emoji} +${item.ammoAmount} ${shopAmmoWord} for ${price}g — ${shopAmmoTotal} total`);
-                          } else {
-                            addLog(sentToBank
-                              ? `🏪 Bought ${item.emoji} ${item.name} for ${price}g — your class can't equip it, sent to bank.`
-                              : autoEquippedSlot
-                                ? `🏪 Bought ${item.emoji} ${item.name} for ${price}g — auto-equipped to ${autoEquippedSlot} slot!`
-                                : `🏪 Bought ${item.emoji} ${item.name} for ${price}g!`);
-                          }
-                          setShopItems(prev => prev.filter(i => i.id !== item.id));
-                        }}
-                        className={`shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-colors ${
-                          canAfford && !bagFull
-                            ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-300 hover:bg-yellow-500/30'
-                            : bagFull
-                              ? 'bg-secondary/10 border-border/30 text-orange-400/60 cursor-not-allowed'
-                              : 'bg-secondary/10 border-border/30 text-red-400/60 cursor-not-allowed'
-                        }`}
-                      >
-                        {bagFull ? 'Full' : `${price}g`}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Sell */}
-            {(() => {
-              const cls = gameState.player.characterClass;
-              const allSellable = [
-                ...gameState.player.inventory.filter(i => !i.consumed),
-                ...gameState.player.bank.filter(i => !i.consumed),
-              ];
-              const souls = allSellable.filter(i => !i.healAmount && !i.ammoAmount);
-              const food  = allSellable.filter(i => i.healAmount !== undefined);
-              const isJunk = (i: EmojiItem) =>
-                (i.isEquipment && !canEquipItem(i, cls)) ||
-                (i.healAmount !== undefined && !i.isCooked && !i.cookedBuff && i.healAmount <= 4);
-              const junk = allSellable.filter(isJunk);
-              const junkGold = junk.reduce((s, i) => s + getItemSellValue(i), 0);
-
-              const SellRow = ({ item }: { item: EmojiItem }) => {
-                const price = getItemSellValue(item);
-                const inBank = gameState.player.bank.some(i => i.id === item.id);
-                return (
-                  <div className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">
-                    <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold leading-tight">
-                        {item.name}{inBank ? ' (bank)' : ''}
-                        {item.isEquipment && !canEquipItem(item, cls) && <span className="ml-1 text-[9px] text-red-400/80 font-normal">wrong class</span>}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.description}</div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setGameState(prev => {
-                          if (!prev) return prev;
-                          const inventory = prev.player.inventory.filter(i => i.id !== item.id);
-                          const bank = prev.player.bank.filter(i => i.id !== item.id);
-                          const equipment: Equipment = { ...prev.player.equipment };
-                          (Object.keys(equipment) as EquipSlot[]).forEach(slot => {
-                            if (equipment[slot]?.id === item.id) delete equipment[slot];
-                          });
-                          return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: prev.player.stats.gold + price }, inventory, bank, equipment } };
-                        });
-                        addLog(`💰 Sold ${item.emoji} ${item.name} for ${price}g.`);
-                      }}
-                      className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-lg border bg-emerald-500/20 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/30 transition-colors"
-                    >
-                      +{price}g
-                    </button>
-                  </div>
-                );
-              };
-
-              return (
-                <div className="space-y-3">
-                  {/* Sell All Junk */}
-                  {junk.length > 0 && (
-                    <button
-                      onClick={() => {
-                        setGameState(prev => {
-                          if (!prev) return prev;
-                          const junkIds = new Set(junk.map(i => i.id));
-                          const inventory = prev.player.inventory.filter(i => !junkIds.has(i.id));
-                          const bank = prev.player.bank.filter(i => !junkIds.has(i.id));
-                          const equipment: Equipment = { ...prev.player.equipment };
-                          (Object.keys(equipment) as EquipSlot[]).forEach(slot => {
-                            if (equipment[slot] && junkIds.has(equipment[slot]!.id)) delete equipment[slot];
-                          });
-                          return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: prev.player.stats.gold + junkGold }, inventory, bank, equipment } };
-                        });
-                        addLog(`🗑️ Sold ${junk.length} junk item${junk.length !== 1 ? 's' : ''} for ${junkGold}g.`);
-                      }}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors text-xs font-bold"
-                    >
-                      <span>🗑️ Sell All Junk ({junk.length} item{junk.length !== 1 ? 's' : ''})</span>
-                      <span className="text-emerald-300">+{junkGold}g</span>
-                    </button>
-                  )}
-
-                  {/* Emojis & Equipment */}
-                  {souls.length > 0 && (
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Emojis &amp; Equipment</div>
-                      <div className="flex flex-col gap-1.5">
-                        {souls.map(item => <SellRow key={item.id} item={item} />)}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Food & Healing — capped at 5 per visit */}
-                  {food.length > 0 && (
-                    <div>
-                      <div className="flex items-baseline justify-between mb-1.5">
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Food &amp; Healing</div>
-                        <div className="text-[9px] text-amber-400/70">{Math.min(food.length, 5)}/{food.length} sellable (5 max/visit)</div>
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        {food.slice(0, 5).map(item => <SellRow key={item.id} item={item} />)}
-                      </div>
-                    </div>
-                  )}
-
-                  {allSellable.length === 0 && (
-                    <div className="text-xs text-muted-foreground text-center py-3">Nothing to sell.</div>
-                  )}
-                </div>
-              );
-            })()}
-
-            <div className="mt-4 pt-3 border-t border-border/50 text-xs text-muted-foreground text-center">
-              Esc or B to close
-            </div>
-          </div>
-        </div>
+        <ShopModal
+          gameState={gameState}
+          setGameState={setGameState}
+          shopItems={shopItems}
+          setShopItems={setShopItems}
+          addLog={addLog}
+          onClose={() => setShopOpen(false)}
+        />
       )}
 
       {/* ── Ammo Cache Modal ───────────────────────────────────────────────── */}
       {ammoCacheOpen && gameState && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setAmmoCacheOpen(false)}
-        >
-          <div
-            className="bg-card border border-amber-600/40 rounded-xl p-5 shadow-2xl w-80 max-h-[80vh] overflow-y-auto"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-widest text-amber-300">📦 Ammo Cache</h2>
-                <div className="text-[10px] text-muted-foreground mt-0.5">Resupply before the boss</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/30 rounded px-2 py-1">
-                  <span className="text-base leading-none">💰</span>
-                  <span className="text-sm font-bold text-yellow-300 tabular-nums">{gameState.player.stats.gold}g</span>
-                </div>
-                <button onClick={() => setAmmoCacheOpen(false)} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded">ESC</button>
-              </div>
-            </div>
-
-            {/* Stock */}
-            <div className="flex flex-col gap-1.5">
-              {ammoCacheItems.length === 0 && (
-                <div className="text-xs text-muted-foreground text-center py-4">
-                  {gameState.player.characterClass === '🤠' || gameState.player.characterClass === '🧝'
-                    ? 'Sold out!'
-                    : 'Nothing here for your class.'}
-                </div>
-              )}
-              {ammoCacheItems.map(item => {
-                const price = getItemBuyPrice(item, gameState.currentFloor);
-                const canAfford = gameState.player.stats.gold >= price;
-                return (
-                  <div key={item.id} className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">
-                    <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold leading-tight">{item.name}</div>
-                      <div className="text-[10px] text-muted-foreground leading-snug">{item.description}</div>
-                    </div>
-                    <button
-                      disabled={!canAfford}
-                      onClick={() => {
-                        setGameState(prev => {
-                          if (!prev) return prev;
-                          if (prev.player.stats.gold < price) return prev;
-                          const boughtItem = { ...item, id: `cache-bought-${Math.random().toString(36).slice(2)}` };
-                          const newGold = prev.player.stats.gold - price;
-                          const { inventory, bank } = addToBag(prev.player.inventory, prev.player.bank, boughtItem);
-                          return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, inventory, bank } };
-                        });
-                        addLog(`📦 Bought ${item.emoji} ${item.name} for ${price}g!`);
-                        setAmmoCacheItems(prev => prev.filter(i => i.id !== item.id));
-                      }}
-                      className={`shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-colors ${
-                        canAfford
-                          ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 hover:bg-amber-500/30'
-                          : 'bg-secondary/10 border-border/30 text-red-400/60 cursor-not-allowed'
-                      }`}
-                    >
-                      {price}g
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-border/50 text-xs text-muted-foreground text-center">
-              Esc or B to close
-            </div>
-          </div>
-        </div>
+        <AmmoCacheModal
+          gameState={gameState}
+          setGameState={setGameState}
+          ammoCacheItems={ammoCacheItems}
+          setAmmoCacheItems={setAmmoCacheItems}
+          addLog={addLog}
+          onClose={() => setAmmoCacheOpen(false)}
+        />
       )}
 
       {/* ── Restaurant Modal ────────────────────────────────────────────────── */}
       {restaurantOpen && gameState && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setRestaurantOpen(false)}
-        >
-          <div
-            className="bg-card border border-red-500/30 rounded-xl p-5 shadow-2xl w-96 max-h-[90vh] overflow-y-auto"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-widest text-red-300">🔥 Restaurant</h2>
-                <div className="text-[10px] text-muted-foreground mt-0.5">Food, rest & cooking — food smell draws enemies...</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/30 rounded px-2 py-1">
-                  <span className="text-base leading-none">💰</span>
-                  <span className="text-sm font-bold text-yellow-300 tabular-nums">{gameState.player.stats.gold}g</span>
-                </div>
-                <button onClick={() => setRestaurantOpen(false)} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded">ESC</button>
-              </div>
-            </div>
-
-            {/* For Sale — food only */}
-            <div className="mb-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Chef's Menu</div>
-              {restaurantItems.length === 0 && <div className="text-xs text-muted-foreground text-center py-3">Sold out!</div>}
-              <div className="flex flex-col gap-1.5">
-                {restaurantItems.map(item => {
-                  const price = getItemBuyPrice(item, gameState.currentFloor);
-                  const canAfford = gameState.player.stats.gold >= price;
-                  return (
-                    <div key={item.id} className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">
-                      <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold leading-tight">{item.name}{item.isCooked ? ' ✨' : ''}</div>
-                        <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.description}</div>
-                      </div>
-                      <button
-                        disabled={!canAfford}
-                        onClick={() => {
-                          let restAutoEquippedSlot: EquipSlot | null = null;
-                          setGameState(prev => {
-                            if (!prev) return prev;
-                            if (prev.player.stats.gold < price) return prev;
-                            const boughtItem = { ...item, id: `rest-bought-${Math.random().toString(36).slice(2)}` };
-                            const newGold = prev.player.stats.gold - price;
-                            if (boughtItem.ammoAmount) {
-                              return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, ammo: (prev.player.ammo ?? 0) + boughtItem.ammoAmount } };
-                            }
-                            const isUnequippable = boughtItem.isEquipment && !canEquipItem(boughtItem, prev.player.characterClass);
-                            if (isUnequippable) {
-                              return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, bank: [...prev.player.bank, boughtItem] } };
-                            }
-                            if (boughtItem.isEquipment) {
-                              const slots = (boughtItem.equipSlots ?? []) as EquipSlot[];
-                              const emptySlot = slots.find(s => !prev.player.equipment[s]);
-                              if (emptySlot) {
-                                restAutoEquippedSlot = emptySlot;
-                                return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, equipment: { ...prev.player.equipment, [emptySlot]: boughtItem } } };
-                              }
-                            }
-                            const { inventory, bank } = addToBag(prev.player.inventory, prev.player.bank, boughtItem);
-                            return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, inventory, bank } };
-                          });
-                          addLog(restAutoEquippedSlot
-                            ? `🔥 Bought ${item.emoji} ${item.name} for ${price}g — auto-equipped to ${restAutoEquippedSlot} slot!`
-                            : `🔥 Bought ${item.emoji} ${item.name} for ${price}g!`);
-                          setRestaurantItems(prev => prev.filter(i => i.id !== item.id));
-                        }}
-                        className={`shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-colors ${
-                          canAfford
-                            ? 'bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500/30'
-                            : 'bg-secondary/10 border-border/30 text-red-400/60 cursor-not-allowed'
-                        }`}
-                      >
-                        {price}g
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Sell — 250% for cooked food, 5-item limit */}
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-                Sell Your Food <span className="text-red-400">(250% for cooked!)</span>
-                {restaurantSoldCount > 0 && restaurantSoldCount < 5 && (
-                  <span className="ml-2 text-amber-400/80 normal-case font-normal">{restaurantSoldCount}/5 cooked sold</span>
-                )}
-              </div>
-              {restaurantSoldCount >= 5 ? (
-                <div className="text-center py-4 px-3 bg-secondary/20 border border-border/40 rounded-lg">
-                  <div className="text-lg mb-1">🍽️</div>
-                  <div className="text-xs font-semibold text-amber-300">Thank you for cooking for us — we're closed now!</div>
-                  <div className="text-[10px] text-muted-foreground mt-1">The kitchen is full. Rest here for +2 HP/turn.</div>
-                </div>
-              ) : (() => {
-                const sellable = [
-                  ...gameState.player.inventory.filter(i => !i.consumed && i.healAmount !== undefined),
-                  ...gameState.player.bank.filter(i => !i.consumed && i.healAmount !== undefined),
-                ];
-                if (sellable.length === 0) return <div className="text-xs text-muted-foreground text-center py-3">Nothing to sell.</div>;
-                const isLastCooked = restaurantSoldCount === 4;
-                return (
-                  <div className="flex flex-col gap-1.5">
-                    {isLastCooked && (
-                      <div className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1.5 leading-snug">
-                        ⚠️ Selling one more cooked dish will close the kitchen!
-                      </div>
-                    )}
-                    {sellable.map(item => {
-                      const isCooked = item.isCooked || !!item.cookedBuff;
-                      const sellMul = isCooked ? 2.5 : 1;
-                      const price = getItemSellValue(item, sellMul);
-                      const inBank = gameState.player.bank.some(i => i.id === item.id);
-                      return (
-                        <div key={item.id} className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">
-                          <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-bold leading-tight">{item.name}{inBank ? ' (bank)' : ''}{item.isCooked ? ' ✨' : ''}</div>
-                            <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.description}</div>
-                          </div>
-                          <button
-                            onClick={() => {
-                              setGameState(prev => {
-                                if (!prev) return prev;
-                                const inventory = prev.player.inventory.filter(i => i.id !== item.id);
-                                const bank = prev.player.bank.filter(i => i.id !== item.id);
-                                const equipment: Equipment = { ...prev.player.equipment };
-                                (Object.keys(equipment) as EquipSlot[]).forEach(slot => {
-                                  if (equipment[slot]?.id === item.id) delete equipment[slot];
-                                });
-                                return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: prev.player.stats.gold + price }, inventory, bank, equipment } };
-                              });
-                              if (isCooked) {
-                                const newCount = restaurantSoldCount + 1;
-                                setRestaurantSoldCount(newCount);
-                                if (newCount >= 5) {
-                                  addLog(`🏪 Sold ${item.emoji} ${item.name} for ${price}g ✨ — kitchen is now closed, thank you!`);
-                                } else {
-                                  addLog(`🔥 Sold ${item.emoji} ${item.name} for ${price}g (cooked bonus!)${newCount === 4 ? ' — 1 more until kitchen closes!' : ''}`);
-                                }
-                              } else {
-                                addLog(`🔥 Sold ${item.emoji} ${item.name} for ${price}g!`);
-                              }
-                            }}
-                            className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-lg border bg-emerald-500/20 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/30 transition-colors"
-                          >
-                            +{price}g {sellMul > 1 && <span className="text-red-400">✨</span>}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-border/50 text-xs text-muted-foreground text-center">
-              Esc or B to close
-            </div>
-          </div>
-        </div>
+        <RestaurantModal
+          gameState={gameState}
+          setGameState={setGameState}
+          restaurantItems={restaurantItems}
+          setRestaurantItems={setRestaurantItems}
+          restaurantSoldCount={restaurantSoldCount}
+          setRestaurantSoldCount={setRestaurantSoldCount}
+          addLog={addLog}
+          onClose={() => setRestaurantOpen(false)}
+        />
       )}
 
       {/* ── Item Stat Card (right-click / long-press) ──────────────────────── */}
-      {statCardItem && (() => {
-        const si = statCardItem;
-        const effect = (si as any).effect as Record<string, number | boolean> | undefined;
-        const consumeLines: string[] = [];
-        if (effect) {
-          if (effect.hpBonus)      consumeLines.push(`+${effect.hpBonus} HP`);
-          if (effect.maxHpBonus)   consumeLines.push(`+${effect.maxHpBonus} max HP`);
-          if (effect.attackBonus)  consumeLines.push(`+${effect.attackBonus} ATK`);
-          if (effect.defenseBonus) consumeLines.push(`+${effect.defenseBonus} DEF`);
-          if (effect.speedBonus)   consumeLines.push(`+${effect.speedBonus} SPD`);
-          if (effect.evasionBonus) consumeLines.push(`+${effect.evasionBonus} EVA`);
-          if (effect.luckBonus)    consumeLines.push(`+${effect.luckBonus} LCK`);
-          if (effect.moodBonus)    consumeLines.push(`+${effect.moodBonus} mood`);
-          if (effect.xpBonus)      consumeLines.push(`+${effect.xpBonus} XP`);
-          if (effect.instakillNearest) consumeLines.push('⚡ Instakill nearest visible enemy');
-        }
-        const equipBonusLines = si.isEquipment
-          ? Object.entries(si.equipBonus ?? {}).filter(([,v]) => (v ?? 0) !== 0).map(([k, v]) => `${(v as number) > 0 ? '+' : ''}${v} ${k.toUpperCase()}`)
-          : [];
-        const typeLabel = si.isEquipment ? '⚔️ Equipment'
-          : si.healAmount !== undefined ? '💊 Heal Item'
-          : si.ammoAmount !== undefined ? '🪖 Ammo'
-          : si.activeKind ? `⚡ Active — ${si.activeKind}`
-          : si.bagPassive ? '✨ Soul Passive'
-          : '✨ Soul';
-        return (
-          <div
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm"
-            onClick={() => setStatCardItem(null)}
-          >
-            <div
-              className="bg-card border border-border/80 rounded-2xl p-5 shadow-2xl w-72 max-w-[90vw] space-y-3"
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center gap-3">
-                <div className="text-5xl leading-none select-none">{si.emoji}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-base font-bold text-foreground leading-tight">{si.name}</div>
-                  <div className="text-[11px] text-muted-foreground/60 mt-0.5">{typeLabel}</div>
-                </div>
-              </div>
-
-              {/* Description */}
-              <p className="text-xs text-muted-foreground/80 leading-relaxed">{si.description}</p>
-
-              {/* Equipment bonuses */}
-              {si.isEquipment && equipBonusLines.length > 0 && (
-                <div className="bg-black/20 rounded-lg p-2.5 space-y-1">
-                  <div className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wide">Stat bonuses</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {equipBonusLines.map(b => (
-                      <span key={b} className="text-xs text-emerald-400 font-semibold bg-emerald-900/20 border border-emerald-800/40 px-1.5 py-0.5 rounded">{b}</span>
-                    ))}
-                  </div>
-                  {si.equipSlots && <div className="text-[10px] text-muted-foreground/40 mt-1">Slots: {si.equipSlots.join(', ')}</div>}
-                </div>
-              )}
-
-              {/* Bag passive */}
-              {si.bagPassive && (
-                <div className="bg-black/20 rounded-lg p-2.5 space-y-1.5">
-                  <div className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wide">Bag passive</div>
-                  <p className="text-xs text-sky-300/80 leading-relaxed">{si.bagPassive.description}</p>
-                  {isStackableBagPassive(si) ? (() => {
-                    const perStack = getStackableBonusLabel(si);
-                    const stackN = si.stackCount ?? 1;
-                    const cumulative = getStackableCumulativeLabel(si);
-                    return (
-                      <div className="space-y-1 pt-0.5">
-                        {perStack && (
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wide">Per copy:</span>
-                            <span className="text-[10px] text-emerald-400/80 font-medium bg-emerald-900/20 border border-emerald-800/30 px-1.5 py-0.5 rounded">{perStack}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wide">Stacked:</span>
-                          <span className="text-[10px] text-emerald-300/90 font-semibold">×{stackN}</span>
-                          {cumulative && (
-                            <span className="text-[10px] text-emerald-300/80 bg-emerald-900/25 border border-emerald-800/30 px-1.5 py-0.5 rounded font-medium">{cumulative}</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })() : si.bagPassive.nonStackable
-                    ? <div className="text-[10px] text-amber-400/60">Non-stackable — only 1 copy applies</div>
-                    : <div className="text-[10px] text-emerald-400/60">Stackable — each copy adds another instance</div>
-                  }
-                </div>
-              )}
-
-              {/* Consume effect */}
-              {consumeLines.length > 0 && (
-                <div className="bg-black/20 rounded-lg p-2.5 space-y-1">
-                  <div className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wide">Consume effect</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {consumeLines.map(l => (
-                      <span key={l} className="text-xs text-violet-300/90 font-medium bg-violet-900/20 border border-violet-800/40 px-1.5 py-0.5 rounded">{l}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Heal / ammo / charges */}
-              {si.healAmount !== undefined && (
-                <div className="text-xs text-emerald-400/80">Restores <span className="font-bold">+{si.healAmount} HP</span> when consumed</div>
-              )}
-              {si.ammoAmount !== undefined && (
-                <div className="text-xs text-sky-400/80">Ammo: <span className="font-bold">+{si.ammoAmount}</span></div>
-              )}
-              {si.charges !== undefined && si.charges >= 0 && (
-                <div className="text-xs text-amber-400/80">Charges remaining: <span className="font-bold">×{si.charges}</span></div>
-              )}
-
-              <button
-                onClick={() => setStatCardItem(null)}
-                className="w-full text-xs py-1.5 rounded-lg bg-secondary/40 border border-border/50 text-muted-foreground hover:bg-secondary/60 transition-colors mt-1"
-              >Close</button>
-            </div>
-          </div>
-        );
-      })()}
+      {statCardItem && (
+        <ItemStatCard item={statCardItem} onClose={() => setStatCardItem(null)} />
+      )}
 
       {/* Bank / Bag Modal */}
       {bankOpen && (

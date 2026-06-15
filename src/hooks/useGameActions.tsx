@@ -13,7 +13,7 @@ import {
   applyEquipmentAndPassives, withVisibility, runEnemyTurns, applyEnemyTurns, tickActiveBuffs,
   addToBag, activeKindLabel, sortBagSlots, refillBagFromBank, levelFromXP, isNonStackableBagPassiveDuplicate, isActiveKindDuplicate,
   hpBonusForLevel, mpBonusForLevel, computeNinjaEvasion, getRandomCowboyFlavor, spawnEnemies,
-  spawnVaultItems, bfsStepToward, bfsNextStep, bfsNextStepWallHug, handleGodBlessedImmunity,
+  spawnVaultItems, handleGodBlessedImmunity,
   getDungeonPressure, _flashSignals,
 } from '../game/gameHelpers';
 import { canEquipItem } from '../components/itemUtils';

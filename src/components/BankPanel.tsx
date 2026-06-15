@@ -25,7 +25,6 @@ export function BankPanel({
   onSelect,
   onMove,
   onConsume,
-  onClose,
   onShowStatCard,
 }: BankPanelProps) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
