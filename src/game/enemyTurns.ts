@@ -1,7 +1,7 @@
 import { Enemy, EmojiItem, GameState, Position, FloatingText, PlacedBomb, ActiveProjectile } from './types';
 import { chebyshev } from './geo';
 import { applyEquipmentAndPassives, addToBag, computeBagPassives } from './inventory';
-import { withVisibility } from './vision';
+import { withVisibility, visionRadiusFor } from './vision';
 import { bfsStepToward, fleeStep, hasLOSBetween, detectionRadius } from './pathfinding';
 import { PLAYER_PASSABLE_TILES, MERMAN_PASSABLE_TILES } from './tiles';
 import { _flashSignals } from './flashSignals';
@@ -29,6 +29,10 @@ export interface EnemyTurnResult {
 export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResult {
   const { player, map } = state;
   const effectivePlayer = applyEquipmentAndPassives(player);
+  // Player's true sight range (class/level + bag LOS passives). Ranged enemies may
+  // only attack while the player can actually see them — i.e. within this radius
+  // with clear line of sight — so archers can't snipe from the unseen fog.
+  const playerVisionRadius = Math.max(1, visionRadiusFor(player.characterClass, player.stats.level) + computeBagPassives(player.inventory).losBonus);
   const newEnemies = [...state.enemies];
   let playerHp = player.stats.hp;
   let playerDied = false;
@@ -545,7 +549,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
       if (monkeyBonus > 0) log(`🐒 ${enemy.emoji} ${enemy.name} fights with your stolen emojis! (+${monkeyBonus} ATK)`);
       const effectiveAttack = Math.round((enemy.attack + packBonus + monkeyBonus) * divineMult);
 
-      if (enemy.ranged && hasLOSBetween(map, enemy.pos, player.pos) && !playerDied) {
+      if (enemy.ranged && hasLOSBetween(map, enemy.pos, player.pos) && chebyshev(enemy.pos, player.pos) <= playerVisionRadius && !playerDied) {
         // Simple visual line/flash for the arrow shot (reuses the pendingBeam system used by player ranger/wizard attacks)
         const dx = player.pos.x - enemy.pos.x;
         const dy = player.pos.y - enemy.pos.y;

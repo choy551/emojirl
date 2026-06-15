@@ -36,12 +36,20 @@ export function getBossForFloor(floor: number) {
   return BOSS_TYPES[idx];
 }
 
-export function getRandomEnemy(floor: number) {
+// Elf Archer (ranged) spawn weight: kept rare until the D:5 boss is beaten
+// (difficultyTier becomes >= 1 on the first boss kill), then bumped above its
+// base weight so archers become a more common threat in the back half of a run.
+function enemySpawnWeight(e: typeof ENEMY_TYPES[number], difficultyTier: number): number {
+  if (e.ranged) return difficultyTier >= 1 ? 3.5 : 0.25;
+  return e.weight;
+}
+
+export function getRandomEnemy(floor: number, difficultyTier = 0) {
   const valid = ENEMY_TYPES.filter(e => floor >= 1 || e.weight >= 2);
-  const total = valid.reduce((s, e) => s + e.weight, 0);
+  const total = valid.reduce((s, e) => s + enemySpawnWeight(e, difficultyTier), 0);
   let roll = Math.random() * total;
   for (const e of valid) {
-    roll -= e.weight;
+    roll -= enemySpawnWeight(e, difficultyTier);
     if (roll <= 0) {
       if (!e.godBlessed && floor > 10) {
         const scaledChance = Math.min(0.30, 0.05 * (1 + 0.15 * Math.max(0, floor - 10) / 5));

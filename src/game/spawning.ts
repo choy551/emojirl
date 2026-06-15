@@ -67,7 +67,7 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
       for (let ry = room.y + 1; ry < room.y + room.h - 1; ry++) {
         for (let rx = room.x + 1; rx < room.x + room.w - 1; rx++) {
           if ((rx + ry) % 2 !== 0) continue;
-          const base = scaleEnemy(floorScale(getRandomEnemy(floor), floor), difficultyTier);
+          const base = scaleEnemy(floorScale(getRandomEnemy(floor, difficultyTier), floor), difficultyTier);
           const type = pressure.atk > 0
             ? { ...base, attack: base.attack + pressure.atk, defense: base.defense + pressure.def }
             : base;
@@ -88,7 +88,7 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
     const count = Math.min(6, baseCount + Math.floor(difficultyTier / 2));
     const roomEnemyStart = enemies.length;
     for (let j = 0; j < count; j++) {
-      const rawType = room.theme === 'forest' ? getForestEnemy(floor) : getRandomEnemy(floor);
+      const rawType = room.theme === 'forest' ? getForestEnemy(floor) : getRandomEnemy(floor, difficultyTier);
       const base = scaleEnemy(floorScale(rawType, floor), difficultyTier);
       const type = pressure.atk > 0
         ? { ...base, attack: base.attack + pressure.atk, defense: base.defense + pressure.def }

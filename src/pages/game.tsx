@@ -483,13 +483,28 @@ export default function Game() {
       const exploreCls = player.characterClass;
 
       const hostileEnemies = enemies.filter(e => e.tag !== 'Friendly');
-      if (exploreCls === '🧙' && hostileEnemies.some(e =>
+      const visibleHostile = hostileEnemies.filter(e =>
         chebyshev(player.pos, e.pos) <= VISION_RADIUS + 1 &&
         state.map[e.pos.y]?.[e.pos.x]?.visible
-      )) {
+      );
+      if (exploreCls === '🧙' && visibleHostile.length > 0) {
         setAutoExplore(false);
         addLog('Autoexplore stopped: enemy in sight — auto-fire engaged!');
         return;
+      }
+      // Ranger in ranged mode and Cowboy with dual guns auto-attack when moving toward
+      // enemies — stop autoexplore so the player decides when to engage.
+      const exploreCowboyDualGuns = exploreCls === '🤠' &&
+        player.equipment.mainHand?.weaponKind === 'gun' &&
+        player.equipment.offHand?.weaponKind === 'gun';
+      if ((exploreCls === '🧝' && rangerModeRef.current === 'ranged') || exploreCowboyDualGuns) {
+        if (visibleHostile.some(e =>
+          chebyshev(player.pos, e.pos) <= eagleEyeRange(player.stats.level) + 1
+        )) {
+          setAutoExplore(false);
+          addLog('Autoexplore stopped: enemy in range — ranged attack ready!');
+          return;
+        }
       }
       if (hostileEnemies.some(e => chebyshev(player.pos, e.pos) <= 1)) {
         setAutoExplore(false);
@@ -502,15 +517,20 @@ export default function Game() {
       );
       // Collect bar (🍺) tile positions so autoexplore routes around them
       const barBlockedSet = new Set<string>();
+      // Collect stairs position so autoexplore never accidentally steps on it
+      const stairsBlockedSet = new Set<string>();
       for (let by = 0; by < state.map.length; by++) {
         for (let bx = 0; bx < state.map[0].length; bx++) {
           const bt = state.map[by][bx];
           if (bt.type === 'shop-item' && bt.emoji === '🍺') {
             barBlockedSet.add(`${bx},${by}`);
           }
+          if (bt.type === 'stairs') {
+            stairsBlockedSet.add(`${bx},${by}`);
+          }
         }
       }
-      const autoBlockedSet = new Set([...friendlyBlockedSet, ...barBlockedSet]);
+      const autoBlockedSet = new Set([...friendlyBlockedSet, ...barBlockedSet, ...stairsBlockedSet]);
       const exploreTile = state.map[player.pos.y]?.[player.pos.x];
       if (exploreTile?.type === 'restaurant') {
         setAutoExplore(false);
@@ -520,6 +540,20 @@ export default function Game() {
       if (exploreTile?.type === 'shop-item' && exploreTile.emoji === '🏪') {
         setAutoExplore(false);
         addLog('Autoexplore stopped: 🏪 shop found!');
+        return;
+      }
+      // Stop when adjacent to a visible bar tile. BFS already routes around bars so
+      // the player never steps on one, but without this stop the player could end up
+      // right next to a bar with no feedback. This lets them decide whether to visit.
+      const adjacentVisibleBar = state.map.some((row, by) =>
+        row.some((t, bx) =>
+          t.type === 'shop-item' && t.emoji === '🍺' && t.visible &&
+          chebyshev(player.pos, { x: bx, y: by }) <= 1
+        )
+      );
+      if (adjacentVisibleBar) {
+        setAutoExplore(false);
+        addLog('Autoexplore stopped: 🍺 Innkeeper nearby!');
         return;
       }
       const explorePassives = computeBagPassives(player.inventory);

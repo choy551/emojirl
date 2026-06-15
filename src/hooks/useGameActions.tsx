@@ -398,16 +398,18 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const newState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1 };
           return applyEnemyTurns(newState, runEnemyTurns(newState));
         }
-        if (enemy.isAdventurer) {
-          // Any non-recruited adventurer offers recruitment when bumped (recruited ones
-          // are handled by the position-swap branch above). Don't gate on `engaged`:
-          // splash/projectile damage can flag a friendly adventurer as engaged, which
-          // previously made them fall through to the Fairy heal dialog by mistake.
+        if (enemy.isAdventurer && !enemy.engaged) {
+          // Offer recruitment only while the adventurer is not in combat with the
+          // player. If they're engaged (e.g. accidentally hit by a bomb/projectile
+          // and now attacking back), fall through to normal melee so the player can
+          // fight back. Recruited companions are handled by the swap branch above.
           setPendingAdventurerInteraction(enemy.id);
           return prev;
         }
-        if (enemy.tag === 'Friendly') {
-          // Only genuine fairies remain here (all adventurers handled above).
+        if (enemy.tag === 'Friendly' && !enemy.isAdventurer) {
+          // Only genuine fairies reach here. Adventurers with tag 'Friendly' who are
+          // engaged (e.g. splash-damaged) are intentionally allowed to fall through to
+          // melee — the player caused it and deserves to be able to fight back.
           setPendingFairyId(enemy.id);
           return prev;
         }
@@ -772,7 +774,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       if (tile.type === 'shop-item') {
         if (tile.emoji === '🍺') {
           const cost = 15;
-          if (newPlayer.stats.xp >= cost) {
+          if (newPlayer.stats.hp > newPlayer.stats.maxHp) {
+            // Already overhealed — don't charge XP or re-apply.
+            addLog(`🍺 Innkeeper: You're already overhealed — come back when it fades!`);
+          } else if (newPlayer.stats.xp >= cost) {
             const overhealHp = Math.floor(newPlayer.stats.maxHp * 1.5);
             const isWizard = newPlayer.characterClass === '🧙';
             newPlayer.stats = {
