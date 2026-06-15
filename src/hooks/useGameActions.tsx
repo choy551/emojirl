@@ -1,80 +1,43 @@
 import { useCallback } from 'react';
-import type { MutableRefObject } from 'react';
-import { GameState, Player, Enemy, EmojiItem, Position, FloatingText, PlacedBomb, ActiveProjectile, EquipSlot, ActiveBuff } from '../game/types';
+import { Player, Enemy, Position, FloatingText } from '../game/types';
 import { resolveCombat, getCowboyUnarmedBonus } from '../game/combat';
-import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, COOKABLE_EMOJIS, cookFood } from '../game/emojis';
+import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop } from '../game/emojis';
 import { getMood } from '../game/moods';
 import { generateMap } from '../game/mapgen';
 import { markEnemySeen, markEmojiSeen, markEnemyKilled } from '../game/discoveries';
-import { isStackableBagPassive } from '../game/passives';
 import {
   moodMax, chebyshev, hasLOS, hasLOSBetween, VISION_RADIUS, visionRadiusFor,
   eagleEyeRange, PLAYER_PASSABLE_TILES, computeVisibility, computeBagPassives,
   applyEquipmentAndPassives, withVisibility, runEnemyTurns, applyEnemyTurns, tickActiveBuffs,
-  addToBag, activeKindLabel, sortBagSlots, refillBagFromBank, levelFromXP, isNonStackableBagPassiveDuplicate, isActiveKindDuplicate,
-  hpBonusForLevel, mpBonusForLevel, computeNinjaEvasion, getRandomCowboyFlavor, spawnEnemies,
+  addToBag, levelFromXP,
+  mpBonusForLevel, computeNinjaEvasion, getRandomCowboyFlavor, spawnEnemies,
   spawnVaultItems, handleGodBlessedImmunity,
   getDungeonPressure, _flashSignals,
 } from '../game/gameHelpers';
 import { canEquipItem } from '../components/itemUtils';
-
-interface GameRefs {
-  gameStateRef: MutableRefObject<GameState | null>;
-  wizardTacticsRef: MutableRefObject<{ mode: 'nearest' | 'furthest' | 'manual' | 'holdfire'; manualTargetId: string | null }>;
-  autoStealthRef: MutableRefObject<boolean>;
-  rangerModeRef: MutableRefObject<'ranged' | 'melee' | 'flee'>;
-  yeehawTurnRef: MutableRefObject<number>;
-  lastCowboyFlavorTurnRef: MutableRefObject<number>;
-  inspectedEnemyIdRef: MutableRefObject<string | null>;
-  dirPickModeRef: MutableRefObject<'gun' | 'freeze' | 'boomerang' | 'bomb' | null>;
-  boatConfirmedRef: MutableRefObject<boolean>;
-  blinkTurnRef: MutableRefObject<number>;
-  trailblazeTurnRef: MutableRefObject<number>;
-  restaurantClosedRef: MutableRefObject<boolean>;
-}
-
-interface GameSetters {
-  setGameState: React.Dispatch<React.SetStateAction<GameState | null>>;
-  setWizardTactics: React.Dispatch<React.SetStateAction<{ mode: 'nearest' | 'furthest' | 'manual' | 'holdfire'; manualTargetId: string | null }>>;
-  setAutoStealth: React.Dispatch<React.SetStateAction<boolean>>;
-  setRangerMode: React.Dispatch<React.SetStateAction<'ranged' | 'melee' | 'flee'>>;
-  setYeehawTurn: React.Dispatch<React.SetStateAction<number>>;
-  setAutoExplore: React.Dispatch<React.SetStateAction<boolean>>;
-  setAutoRest: React.Dispatch<React.SetStateAction<boolean>>;
-  setInspectedEnemyId: React.Dispatch<React.SetStateAction<string | null>>;
-  setDirPickMode: React.Dispatch<React.SetStateAction<'gun' | 'freeze' | 'boomerang' | 'bomb' | null>>;
-  setBagTab: React.Dispatch<React.SetStateAction<'hotbar' | 'equipment' | 'bank'>>;
-  setBankOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  setSelectedItemId: React.Dispatch<React.SetStateAction<string | null>>;
-  setDrownWarnSlot: React.Dispatch<React.SetStateAction<number | null>>;
-  setLastBoatWarnSlot: React.Dispatch<React.SetStateAction<number | null>>;
-  setPendingFairyId: React.Dispatch<React.SetStateAction<string | null>>;
-  setPendingMonkeyInteraction: React.Dispatch<React.SetStateAction<{ id: string; wants: string } | null>>;
-  setPendingAdventurerInteraction: React.Dispatch<React.SetStateAction<string | null>>;
-  setBlinkTurn: React.Dispatch<React.SetStateAction<number>>;
-  setTrailblazeTurn: React.Dispatch<React.SetStateAction<number>>;
-}
+import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
+import type { GameRefs, GameSetters } from './actions/types';
+import { useTacticsActions } from './actions/useTacticsActions';
+import { useInventoryActions } from './actions/useInventoryActions';
+import { useItemActions } from './actions/useItemActions';
+import { useCombatActions } from './actions/useCombatActions';
 
 const WAIT_HEAL = 1;
 
 export function useGameActions(refs: GameRefs, setters: GameSetters) {
   const {
     gameStateRef, wizardTacticsRef, autoStealthRef, rangerModeRef,
-    yeehawTurnRef, lastCowboyFlavorTurnRef, inspectedEnemyIdRef,
-    dirPickModeRef, boatConfirmedRef, blinkTurnRef, trailblazeTurnRef,
-    restaurantClosedRef,
+    lastCowboyFlavorTurnRef,
+    blinkTurnRef, trailblazeTurnRef,
   } = refs;
   const {
-    setGameState, setWizardTactics, setAutoStealth, setRangerMode,
-    setYeehawTurn, setAutoExplore, setAutoRest, setInspectedEnemyId,
-    setDirPickMode, setBagTab, setBankOpen, setSelectedItemId,
-    setDrownWarnSlot, setLastBoatWarnSlot, setPendingFairyId, setPendingMonkeyInteraction,
+    setGameState, setWizardTactics, setRangerMode,
+    setPendingFairyId, setPendingMonkeyInteraction,
     setPendingAdventurerInteraction,
     setBlinkTurn, setTrailblazeTurn,
   } = setters;
 
   const BLINK_ACTIVE = 3;
-  const BLINK_CD = 5;
 
   const addLog = useCallback((text: string) => {
     setGameState(prev => {
@@ -253,31 +216,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               addLog(`⬆️ Darkness stirs — enemies grow stronger from here on!`);
             }
             if (newLevel > oldLevel) {
-              const hpIncrease = hpBonusForLevel(newLevel) - hpBonusForLevel(oldLevel);
-              const newMaxHp = newPlayer.stats.maxHp + hpIncrease;
-              const newEmoji = { ...getRandomEmojiPower(), id: `lvlup-${Math.random()}`, consumed: false };
-              const extraEmoji = player.characterClass === '🧙'
-                ? [{ ...getRandomEmojiPower(), id: `lvlup2-${Math.random()}`, consumed: false }]
-                : [];
-              const { inventory: _inv1, bank: _bank1, nonStackableBanked: _nsb1, duplicateActiveBanked: _dab1 } = addToBag(newPlayer.inventory, newPlayer.bank, newEmoji, ...extraEmoji);
-              markEmojiSeen(newEmoji.emoji); extraEmoji.forEach(e => markEmojiSeen(e.emoji));
-              _nsb1.forEach(i => addLog(`Extra ${i.emoji} → Bank (already carried)`));
-              _dab1.forEach(i => addLog(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
-              newPlayer = {
-                ...newPlayer,
-                stats: { ...newPlayer.stats, level: newLevel, maxHp: newMaxHp, hp: newMaxHp, moodValue: Math.min(moodMax(player.characterClass), newPlayer.stats.moodValue + 30) },
-                inventory: _inv1,
-                bank: _bank1,
-              };
-              addLog(`✨ Level ${newLevel}! Full heal! +${hpIncrease} max HP! Got ${newEmoji.emoji}!`);
-              if (player.characterClass === '🧙') {
-                const mpInc = mpBonusForLevel(newLevel) - mpBonusForLevel(oldLevel);
-                if (mpInc > 0) {
-                  const newMaxMana = (newPlayer.stats.maxMana ?? 4) + mpInc;
-                  newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, maxMana: newMaxMana, mana: newMaxMana } };
-                  addLog(`🔵 +${mpInc} max MP! (${newMaxMana} total)`);
-                }
-              }
+              newPlayer = applyLevelUp(newPlayer, oldLevel, newLevel, addLog);
             }
             newPlayer.stats.moodValue = Math.min(moodMax(player.characterClass), newPlayer.stats.moodValue + 10);
             if (enemy.isBoss || Math.random() < 0.55) {
@@ -459,11 +398,16 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const newState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1 };
           return applyEnemyTurns(newState, runEnemyTurns(newState));
         }
-        if (enemy.isAdventurer && !enemy.engaged) {
+        if (enemy.isAdventurer) {
+          // Any non-recruited adventurer offers recruitment when bumped (recruited ones
+          // are handled by the position-swap branch above). Don't gate on `engaged`:
+          // splash/projectile damage can flag a friendly adventurer as engaged, which
+          // previously made them fall through to the Fairy heal dialog by mistake.
           setPendingAdventurerInteraction(enemy.id);
           return prev;
         }
         if (enemy.tag === 'Friendly') {
+          // Only genuine fairies remain here (all adventurers handled above).
           setPendingFairyId(enemy.id);
           return prev;
         }
@@ -545,31 +489,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             newState.difficultyTier = (prev.difficultyTier ?? 0) + 1;
           }
           if (newLevel > oldLevel) {
-            const hpIncrease = hpBonusForLevel(newLevel) - hpBonusForLevel(oldLevel);
-            const newMaxHp = newPlayer.stats.maxHp + hpIncrease;
-            const newEmoji = { ...getRandomEmojiPower(), id: `lvlup-${Math.random()}`, consumed: false };
-            const extraEmoji = cls === '🧙'
-              ? [{ ...getRandomEmojiPower(), id: `lvlup2-${Math.random()}`, consumed: false }]
-              : [];
-            const { inventory: _inv0, bank: _bank0, nonStackableBanked: _nsb0, duplicateActiveBanked: _dab0 } = addToBag(newPlayer.inventory, newPlayer.bank, newEmoji, ...extraEmoji);
-            markEmojiSeen(newEmoji.emoji); extraEmoji.forEach(e => markEmojiSeen(e.emoji));
-            _nsb0.forEach(i => addLog(`Extra ${i.emoji} → Bank (already carried)`));
-            _dab0.forEach(i => addLog(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
-            newPlayer = {
-              ...newPlayer,
-              stats: { ...newPlayer.stats, level: newLevel, maxHp: newMaxHp, hp: newMaxHp, moodValue: Math.min(moodMax(cls), newPlayer.stats.moodValue + 30) },
-              inventory: _inv0,
-              bank: _bank0,
-            };
-            addLog(`✨ Level ${newLevel}! Full heal! +${hpIncrease} max HP! Got ${newEmoji.emoji}!`);
-            if (cls === '🧙') {
-              const mpInc = mpBonusForLevel(newLevel) - mpBonusForLevel(oldLevel);
-              if (mpInc > 0) {
-                const newMaxMana = (newPlayer.stats.maxMana ?? 4) + mpInc;
-                newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, maxMana: newMaxMana, mana: newMaxMana } };
-                addLog(`🔵 +${mpInc} max MP! (${newMaxMana} total)`);
-              }
-            }
+            newPlayer = applyLevelUp(newPlayer, oldLevel, newLevel, addLog);
           }
           newPlayer.stats.moodValue = Math.min(moodMax(cls), newPlayer.stats.moodValue + 10);
           if (cls === '🥷') {
@@ -821,9 +741,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const oldMaxHp = newPlayer.stats.maxHp;
         const currentOverheal = Math.max(0, newPlayer.stats.hp - oldMaxHp);
         if (cls === '🧙') {
-          // Wizard shrine does not increase HP max (only MP), but must not discard existing HP overheal from bar.
-          // Just add the shrine heal amount on top of whatever (over)heal is currently present.
-          const healedHp = newPlayer.stats.hp + shrineAmt;
+          // Wizard shrine gives +max MP and a plain +HP heal (no +max HP, no overheal).
+          // Heal up to maxHp, but never strip an existing overheal buffer (e.g. from the 🍺 bar).
+          const healedHp = Math.max(newPlayer.stats.hp, Math.min(newPlayer.stats.maxHp, newPlayer.stats.hp + shrineAmt));
           const newMaxMana = (newPlayer.stats.maxMana ?? 4) + 1;
           newPlayer.stats = { ...newPlayer.stats, hp: healedHp, maxMana: newMaxMana, mana: newMaxMana };
         } else {
@@ -980,27 +900,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               newState.difficultyTier = (newState.difficultyTier ?? 0) + 1;
             }
             if (boltNewLevel > boltOldLevel) {
-              const hpInc = hpBonusForLevel(boltNewLevel) - hpBonusForLevel(boltOldLevel);
-              const newMaxHp = newPlayer.stats.maxHp + hpInc;
-              const newEmoji = { ...getRandomEmojiPower(), id: `bolt-lvl-${Math.random()}`, consumed: false };
-              const extraEmoji = { ...getRandomEmojiPower(), id: `bolt-lvl2-${Math.random()}`, consumed: false };
-              const { inventory: _inv2, bank: _bank2, nonStackableBanked: _nsb2, duplicateActiveBanked: _dab2a } = addToBag(newPlayer.inventory, newPlayer.bank, newEmoji, extraEmoji);
-              markEmojiSeen(newEmoji.emoji); markEmojiSeen(extraEmoji.emoji);
-              _nsb2.forEach(i => addLog(`Extra ${i.emoji} → Bank (already carried)`));
-              _dab2a.forEach(i => addLog(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
-              newPlayer = {
-                ...newPlayer,
-                stats: { ...newPlayer.stats, level: boltNewLevel, maxHp: newMaxHp, hp: newMaxHp, moodValue: Math.min(moodMax(cls), newPlayer.stats.moodValue + 30) },
-                inventory: _inv2,
-                bank: _bank2,
-              };
-              addLog(`✨ Level ${boltNewLevel}! Full heal! +${hpInc} max HP! Got ${newEmoji.emoji}!`);
-              const bMoveMpInc = mpBonusForLevel(boltNewLevel) - mpBonusForLevel(boltOldLevel);
-              if (bMoveMpInc > 0) {
-                const bMoveNewMaxMana = (newPlayer.stats.maxMana ?? 4) + bMoveMpInc;
-                newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, maxMana: bMoveNewMaxMana, mana: bMoveNewMaxMana } };
-                addLog(`🔵 +${bMoveMpInc} max MP! (${bMoveNewMaxMana} total)`);
-              }
+              newPlayer = applyLevelUp(newPlayer, boltOldLevel, boltNewLevel, addLog);
             }
             if (boltTarget.isBoss || Math.random() < 0.55) {
               const r2 = Math.random();
@@ -1041,35 +941,13 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       }
 
       // Out-of-combat decay for Blink Strike instakill chain (resets 2/3 or 3/3 after 10 turns with no engaged enemies)
-      if (cls === '🥷') {
-        const inCombat = prev.enemies.some(e => e.engaged);
-        let outTurns = newPlayer.stats.blinkStrikeInstakillOutOfCombat ?? 0;
-        if (inCombat) {
-          outTurns = 0;
-        } else {
-          outTurns += 1;
-          if (outTurns >= 10) {
-            const chain = newPlayer.stats.blinkStrikeInstakillChain ?? 0;
-            if (chain >= 2) {
-              newPlayer.stats.blinkStrikeInstakillChain = 0;
-              addLog(`🥷 Blink Strike instakill chain faded (10 turns out of combat).`);
-              outTurns = 0;
-            }
-          }
-        }
-        newPlayer.stats.blinkStrikeInstakillOutOfCombat = outTurns;
-      }
+      newPlayer = tickBlinkChainOutOfCombat(newPlayer, prev.enemies.some(e => e.engaged), addLog);
 
       // Overheal decay: every 5 turns, shed 1 HP until back to natural maxHp
-      if (newPlayer.stats.hp > newPlayer.stats.maxHp) {
-        const tick = ((newPlayer.stats.overhealDecayTick ?? 0) + 1);
-        if (tick >= 5) {
-          const decayedHp = Math.max(newPlayer.stats.maxHp, newPlayer.stats.hp - 1);
-          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, hp: decayedHp, overhealDecayTick: 0 } };
-          if (decayedHp > newPlayer.stats.maxHp) newState.floatingTexts = [{ id: `oh-decay-${newState.turn}`, pos: { ...newPlayer.pos }, text: '-1 ✨', color: '#fbbf24', life: 2 }, ...newState.floatingTexts];
-        } else {
-          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, overhealDecayTick: tick } };
-        }
+      {
+        const ohDecay = applyOverhealDecay(newPlayer, newState.turn, newPlayer.pos, 'oh-decay');
+        newPlayer = ohDecay.player;
+        if (ohDecay.float) newState.floatingTexts = [ohDecay.float, ...newState.floatingTexts];
       }
 
       newState.player = newPlayer;
@@ -1173,22 +1051,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               addLog(`⬆️ Darkness stirs — enemies grow stronger from here on!`);
             }
             if (boltNewLevel > boltOldLevel) {
-              const hpInc = hpBonusForLevel(boltNewLevel) - hpBonusForLevel(boltOldLevel);
-              const newMaxHp = waitPlayer.stats.maxHp + hpInc;
-              const newEmoji = { ...getRandomEmojiPower(), id: `bolt-lvl-${Math.random()}`, consumed: false };
-              const extraEmoji = { ...getRandomEmojiPower(), id: `bolt-lvl2-${Math.random()}`, consumed: false };
-              const { inventory: _inv2, bank: _bank2, nonStackableBanked: _nsb2, duplicateActiveBanked: _dab2b } = addToBag(waitPlayer.inventory, waitPlayer.bank, newEmoji, extraEmoji);
-              markEmojiSeen(newEmoji.emoji); markEmojiSeen(extraEmoji.emoji);
-              _nsb2.forEach(i => addLog(`Extra ${i.emoji} → Bank (already carried)`));
-              _dab2b.forEach(i => addLog(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
-              waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, level: boltNewLevel, maxHp: newMaxHp, hp: newMaxHp, moodValue: Math.min(moodMax(cls), waitPlayer.stats.moodValue + 30) }, inventory: _inv2, bank: _bank2 };
-              addLog(`✨ Level ${boltNewLevel}! Full heal! +${hpInc} max HP! Got ${newEmoji.emoji}!`);
-              const bWaitMpInc = mpBonusForLevel(boltNewLevel) - mpBonusForLevel(boltOldLevel);
-              if (bWaitMpInc > 0) {
-                const bWaitNewMaxMana = (waitPlayer.stats.maxMana ?? 4) + bWaitMpInc;
-                waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, maxMana: bWaitNewMaxMana, mana: bWaitNewMaxMana } };
-                addLog(`🔵 +${bWaitMpInc} max MP! (${bWaitNewMaxMana} total)`);
-              }
+              waitPlayer = applyLevelUp(waitPlayer, boltOldLevel, boltNewLevel, addLog);
             }
             if (boltTarget.isBoss || Math.random() < 0.55) {
               const r2 = Math.random();
@@ -1219,35 +1082,13 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       }
 
       // Out-of-combat decay for Blink Strike instakill chain on wait
-      if (prev.player.characterClass === '🥷') {
-        const inCombat = prev.enemies.some(e => e.engaged);
-        let outTurns = waitPlayer.stats.blinkStrikeInstakillOutOfCombat ?? 0;
-        if (inCombat) {
-          outTurns = 0;
-        } else {
-          outTurns += 1;
-          if (outTurns >= 10) {
-            const chain = waitPlayer.stats.blinkStrikeInstakillChain ?? 0;
-            if (chain >= 2) {
-              waitPlayer.stats.blinkStrikeInstakillChain = 0;
-              addLog(`🥷 Blink Strike instakill chain faded (10 turns out of combat).`);
-              outTurns = 0;
-            }
-          }
-        }
-        waitPlayer.stats.blinkStrikeInstakillOutOfCombat = outTurns;
-      }
+      waitPlayer = tickBlinkChainOutOfCombat(waitPlayer, prev.enemies.some(e => e.engaged), addLog);
 
       // Overheal decay on wait
-      if (waitPlayer.stats.hp > waitPlayer.stats.maxHp) {
-        const tick = ((waitPlayer.stats.overhealDecayTick ?? 0) + 1);
-        if (tick >= 5) {
-          const decayedHp = Math.max(waitPlayer.stats.maxHp, waitPlayer.stats.hp - 1);
-          waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, hp: decayedHp, overhealDecayTick: 0 } };
-          if (decayedHp > waitPlayer.stats.maxHp) waitFloats.push({ id: `oh-decay-wait-${prev.turn}`, pos: { ...waitPlayer.pos }, text: '-1 ✨', color: '#fbbf24', life: 2 });
-        } else {
-          waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, overhealDecayTick: tick } };
-        }
+      {
+        const ohDecayW = applyOverhealDecay(waitPlayer, prev.turn, waitPlayer.pos, 'oh-decay-wait');
+        waitPlayer = ohDecayW.player;
+        if (ohDecayW.float) waitFloats.push(ohDecayW.float);
       }
 
       const midState = {
@@ -1301,1024 +1142,22 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     });
   }, [addLog, setGameState]);
 
-  const handleUseHeal = useCallback(() => {
-    setGameState(prev => {
-      if (!prev || prev.gameOver) return prev;
-      if (prev.player.stats.hp >= prev.player.stats.maxHp) { addLog('Already at full HP.'); return prev; }
-
-      const healCandidates = prev.player.inventory
-        .map((it, idx) => ({ it, idx }))
-        .filter(({ it }) => !it.consumed && it.healAmount !== undefined);
-      if (healCandidates.length === 0) { addLog('No healing items! Search for 🍎🍖🧪 drops from enemies.'); return prev; }
-
-      const hpPct = prev.player.stats.hp / prev.player.stats.maxHp;
-      const missingHp = prev.player.stats.maxHp - prev.player.stats.hp;
-      let best: { it: EmojiItem; idx: number };
-      if (hpPct <= 0.4) {
-        // Low health — use the biggest heal available
-        best = healCandidates.reduce((a, b) => (b.it.healAmount ?? 0) > (a.it.healAmount ?? 0) ? b : a);
-      } else {
-        // Near full — prefer the smallest heal that covers the gap, avoid wasting big ones
-        const fitsGap = healCandidates.filter(({ it }) => (it.healAmount ?? 0) <= missingHp);
-        const pool = fitsGap.length > 0 ? fitsGap : healCandidates;
-        best = pool.reduce((a, b) => (b.it.healAmount ?? 0) < (a.it.healAmount ?? 0) ? b : a);
-      }
-      const healIndex = best.idx;
-
-      const item = best.it;
-      const amount = item.healAmount ?? 2;
-      const stats = { ...prev.player.stats };
-      const wasLow = stats.hp / stats.maxHp <= 0.3;
-
-      stats.hp = Math.min(stats.maxHp, stats.hp + amount);
-      // Tick active buffs each time food is used (costs 1 turn)
-      Object.assign(stats, tickActiveBuffs(stats));
-
-      // Handle cooked food bonus effects
-      if (item.cookedBuff) {
-        const newBuff: ActiveBuff = {
-          stat: item.cookedBuff.stat,
-          amount: item.cookedBuff.amount,
-          turnsLeft: item.cookedBuff.turns,
-          label: `+${item.cookedBuff.amount} ${item.cookedBuff.stat === 'attack' ? 'ATK' : 'DEF'}`,
-        };
-        stats.activeBuffs = [...(stats.activeBuffs ?? []), newBuff];
-        stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + (wasLow ? 40 : 15));
-        addLog(`${item.emoji} ${item.name}: +${amount} HP & ${newBuff.label} for ${item.cookedBuff.turns} turns!`);
-      } else if (item.emoji === '🍲') {
-        // Mushroom Stew — 40% chance to lift bad mood
-        const clearsDebuff = Math.random() < 0.4 && stats.moodValue < 0;
-        if (clearsDebuff) stats.moodValue = 0;
-        stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + (wasLow ? 40 : 10));
-        addLog(clearsDebuff
-          ? `🍲 Mushroom Stew: +${amount} HP & the fog lifts — mood restored!`
-          : `🍲 Mushroom Stew: +${amount} HP restored.`);
-      } else if (item.isCooked) {
-        // Baked Apple / Cooked Berries — mood boost
-        stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + (wasLow ? 50 : 25));
-        addLog(`${item.emoji} ${item.name}: +${amount} HP & mood boost!`);
-      } else {
-        stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + (wasLow ? 40 : 10));
-        addLog(wasLow
-          ? `${item.emoji} ${item.name}: +${amount} HP — relief floods through you! Mood surges!`
-          : `${item.emoji} ${item.name}: +${amount} HP restored.`
-        );
-      }
-
-      const consumed = prev.player.inventory.filter((_, idx) => idx !== healIndex);
-      const { inventory: newInventory, bank: newBank } = refillBagFromBank(consumed, prev.player.bank);
-
-      const midState = { ...prev, player: { ...prev.player, stats, inventory: newInventory, bank: newBank }, turn: prev.turn + 1 };
-      return applyEnemyTurns(midState, runEnemyTurns(midState));
-    });
-  }, [addLog, setGameState]);
-
-  const handleCook = useCallback(() => {
-    setGameState(prev => {
-      if (!prev || prev.gameOver) return prev;
-      const { x: cpx, y: cpy } = prev.player.pos;
-      const nearFire = [-1, 0, 1].some(dy =>
-        [-1, 0, 1].some(dx => prev.map[cpy + dy]?.[cpx + dx]?.type === 'campfire')
-      );
-      const nearRestCook = [-1, 0, 1].some(dy =>
-        [-1, 0, 1].some(dx => prev.map[cpy + dy]?.[cpx + dx]?.type === 'restaurant')
-      );
-      if (!nearFire && !nearRestCook) {
-        addLog('🔥 You need to be next to a campfire (🔥) or restaurant (🏪) to cook food.');
-        return prev;
-      }
-      if (nearRestCook && !nearFire && restaurantClosedRef.current) {
-        addLog('🏪 The kitchen is closed — thank you for cooking for us today!');
-        return prev;
-      }
-      const rawIdx = prev.player.inventory.findIndex(
-        it => !it.consumed && it.healAmount !== undefined && COOKABLE_EMOJIS.has(it.emoji)
-      );
-      if (rawIdx === -1) {
-        addLog('🔥 Nothing to cook — need raw food (🍎 🍞 🍖 🍄 🍇) in your bag.');
-        return prev;
-      }
-      const raw = prev.player.inventory[rawIdx];
-      const cooked = cookFood(raw);
-      if (!cooked) return prev;
-      const cookedItem: EmojiItem = { ...cooked, id: `cooked-${Math.random()}`, consumed: false };
-      const newInventory = [...prev.player.inventory];
-      newInventory[rawIdx] = cookedItem;
-      addLog(`🔥 Cooked ${raw.emoji} → ${cookedItem.emoji} ${cookedItem.name}!`);
-      const midState = { ...prev, player: { ...prev.player, inventory: newInventory }, turn: prev.turn + 1 };
-      return withVisibility(applyEnemyTurns(midState, runEnemyTurns(midState)));
-    });
-  }, [addLog, setGameState]);
-
-  const applyWizardMode = useCallback((mode: 'nearest' | 'furthest' | 'manual' | 'holdfire') => {
-    const state = gameStateRef.current;
-    if (!state || state.gameOver || state.player.characterClass !== '🧙') return;
-    const current = wizardTacticsRef.current;
-    const LABELS = { nearest: '🎯 Nearest', furthest: '🎯 Furthest', manual: '🎯 Manual', holdfire: '✨ Blink' };
-
-    if (mode === 'holdfire') {
-      const elapsed = state.turn - blinkTurnRef.current;
-      if (elapsed < BLINK_ACTIVE + BLINK_CD) {
-        const remaining = (BLINK_ACTIVE + BLINK_CD) - elapsed;
-        addLog(`✨ Blink cooling down… (${remaining}t)`);
-        return;
-      }
-      blinkTurnRef.current = state.turn;
-      setBlinkTurn(state.turn);
-      setAutoExplore(false);
-      setAutoRest(false);
-      addLog(`✨ Blink — phasing through gaps & enemies for ${BLINK_ACTIVE} turns!`);
-    } else if (current.mode === 'holdfire') {
-      addLog(`🧙 Readying Arcane Barrage → ${LABELS[mode]}`);
-      setGameState(prev => {
-        if (!prev || prev.gameOver) return prev;
-        const mid = { ...prev, turn: prev.turn + 1 };
-        return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
-      });
-    } else {
-      addLog(`Tactics: ${LABELS[mode]}`);
-    }
-
-    const next = { mode, manualTargetId: mode === 'manual' ? current.manualTargetId : null };
-    wizardTacticsRef.current = next;
-    setWizardTactics(next);
-  }, [addLog, gameStateRef, wizardTacticsRef, blinkTurnRef, setGameState, setAutoExplore, setAutoRest, setWizardTactics, setBlinkTurn]);
-
-  const handleCycleRangedTarget = useCallback((dir: 1 | -1) => {
-    const state = gameStateRef.current;
-    if (!state || state.gameOver) return;
-    const { player } = state;
-    const targets = state.enemies
-      .filter(e => state.map[e.pos.y]?.[e.pos.x]?.visible)
-      .sort((a, b) => chebyshev(player.pos, a.pos) - chebyshev(player.pos, b.pos));
-    if (targets.length === 0) { addLog('No visible enemies to target.'); return; }
-    const idx = targets.findIndex(e => e.id === inspectedEnemyIdRef.current);
-    const next = targets[(idx + dir + targets.length) % targets.length];
-    setInspectedEnemyId(next.id);
-    if (player.characterClass === '🧙') {
-      const newT = { ...wizardTacticsRef.current, mode: 'manual' as const, manualTargetId: next.id };
-      wizardTacticsRef.current = newT;
-      setWizardTactics(newT);
-    }
-    addLog(`🎯 Targeting: ${next.emoji} ${next.name}`);
-  }, [addLog, gameStateRef, inspectedEnemyIdRef, wizardTacticsRef, setInspectedEnemyId, setWizardTactics]);
-
-  const applyNinjaMode = useCallback((stealth: boolean) => {
-    const state = gameStateRef.current;
-    if (!state || state.gameOver || state.player.characterClass !== '🥷') return;
-    setGameState(prev => prev ? { ...prev, stealthMode: stealth } : prev);
-    addLog(stealth ? '🥷 Stealth engaged — hug walls or dark tiles' : '🥷 Stealth off — moving freely');
-  }, [addLog, gameStateRef, setGameState]);
-
-  const toggleAutoStealth = useCallback(() => {
-    const state = gameStateRef.current;
-    if (!state || state.gameOver || state.player.characterClass !== '🥷') return;
-    const next = !autoStealthRef.current;
-    autoStealthRef.current = next;
-    setAutoStealth(next);
-    if (next) {
-      setGameState(prev => {
-        if (!prev) return prev;
-        const dirs8: [number, number][] = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
-        const nearWall = dirs8.some(([dy, dx]) => {
-          const ny = prev.player.pos.y + dy, nx = prev.player.pos.x + dx;
-          return ny >= 0 && ny < prev.map.length && nx >= 0 && nx < prev.map[0].length
-            && prev.map[ny][nx].type === 'wall';
-        });
-        return nearWall ? { ...prev, stealthMode: true } : prev;
-      });
-      addLog('🥷 Auto-Stealth ON — wall-hugging explore active');
-    } else {
-      addLog('🥷 Auto-Stealth OFF — manual stealth control');
-    }
-  }, [addLog, gameStateRef, autoStealthRef, setAutoStealth, setGameState]);
-
-  const applyRangerMode = useCallback((mode: 'ranged' | 'melee' | 'flee') => {
-    const state = gameStateRef.current;
-    if (!state || state.gameOver || state.player.characterClass !== '🧝') return;
-
-    if (mode === 'flee') {
-      const elapsed = state.turn - trailblazeTurnRef.current;
-      if (elapsed < BLINK_ACTIVE + BLINK_CD) {
-        const remaining = (BLINK_ACTIVE + BLINK_CD) - elapsed;
-        addLog(`💨 Trailblaze cooling down… (${remaining}t)`);
-        return;
-      }
-      trailblazeTurnRef.current = state.turn;
-      setTrailblazeTurn(state.turn);
-      addLog(`💨 Trailblaze — sprinting 2 tiles for ${BLINK_ACTIVE} turns!`);
-    } else {
-      const label = mode === 'melee' ? '⚔️ Melee mode — conserving ammo' : '🏹 Ranged mode — auto-fire bow';
-      addLog(label);
-    }
-
-    rangerModeRef.current = mode;
-    setRangerMode(mode);
-  }, [addLog, gameStateRef, rangerModeRef, trailblazeTurnRef, setRangerMode, setTrailblazeTurn]);
-
-  const handleCowboyTactics = useCallback(() => {
-    const state = gameStateRef.current;
-    if (!state || state.gameOver || state.player.characterClass !== '🤠') return;
-    const COOLDOWN = 45;
-    const elapsed = state.turn - yeehawTurnRef.current;
-    if (elapsed < COOLDOWN) {
-      addLog(`🤠 Settle down there, pardner… (${COOLDOWN - elapsed} turns)`);
-      return;
-    }
-    yeehawTurnRef.current = state.turn;
-    setYeehawTurn(state.turn);
-    setGameState(prev => {
-      if (!prev || prev.gameOver) return prev;
-      const newMoodValue = Math.min(100, prev.player.stats.moodValue + 25);
-      return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, moodValue: newMoodValue } } };
-    });
-    addLog('🤠 YEEHAW! Confidence surges!');
-  }, [addLog, gameStateRef, yeehawTurnRef, setYeehawTurn, setGameState]);
-
-  const handlePlantBomb = useCallback(() => {
-    setGameState(prev => {
-      if (!prev || prev.gameOver) return prev;
-      const bombItem = prev.player.inventory.find(it => it.activeKind === 'bomb' && !it.consumed && (it.charges ?? 0) > 0);
-      if (!bombItem) { addLog('No 💣 Bomb in inventory!'); return prev; }
-      const bomb: PlacedBomb = { id: `bomb-${Math.random()}`, pos: { ...prev.player.pos }, countdown: 3, radius: 1 };
-      addLog(`💣 You plant a bomb! It will explode in 3 turns!`);
-      const newInv = prev.player.inventory.map(it =>
-        it.id === bombItem.id ? { ...it, charges: (it.charges ?? 1) - 1, consumed: ((it.charges ?? 1) - 1) <= 0 } : it
-      );
-      const midState = { ...prev, player: { ...prev.player, inventory: newInv }, placedBombs: [...prev.placedBombs, bomb], turn: prev.turn + 1 };
-      return applyEnemyTurns(midState, runEnemyTurns(midState));
-    });
-  }, [addLog, setGameState]);
-
-  const handleFireProjectile = useCallback((kind: 'gun' | 'freeze' | 'boomerang' | 'bomb', dx: number, dy: number) => {
-    setGameState(prev => {
-      if (!prev || prev.gameOver) return prev;
-      if (prev.activeProjectile) {
-        addLog('A projectile is already in flight!');
-        return prev;
-      }
-      const kindEmoji = kind === 'gun' ? '🔫' : kind === 'freeze' ? '❄️' : kind === 'bomb' ? '💣' : '🪃';
-      const item = prev.player.inventory.find(it => it.activeKind === kind && !it.consumed && (it.charges === -1 || (it.charges ?? 0) > 0));
-      if (!item) { addLog(`No ${kindEmoji} in inventory!`); return prev; }
-      const throwLabel = kind === 'boomerang' ? 'throw the boomerang' : kind === 'bomb' ? 'throw the bomb' : kind === 'gun' ? 'fire the gun' : 'fire a freeze bolt';
-      const bankBoomerangs = kind === 'boomerang' ? prev.player.bank.filter(it => it.activeKind === 'boomerang' && !it.consumed).length : 0;
-      const boomerangPct = Math.round(Math.min(2.0, 1.0 + 0.25 * bankBoomerangs) * 100);
-      addLog(`${kindEmoji} You ${throwLabel}!${kind === 'boomerang' && bankBoomerangs > 0 ? ` (${boomerangPct}% ATK — ${bankBoomerangs} extra in Bank)` : ''}`);
-      const proj: ActiveProjectile = {
-        id: `proj-${Math.random()}`,
-        kind,
-        pos: { ...prev.player.pos },
-        dir: { x: dx, y: dy },
-        phase: 'outgoing',
-        maxRange: kind === 'boomerang' ? 5 : 8,
-        traveled: 0,
-      };
-      let newInv = prev.player.inventory;
-      let newProjBank = prev.player.bank;
-      if (kind === 'gun') {
-        const newCharges = (item.charges ?? 3) - 1;
-        if (newCharges <= 0) {
-          addLog('🔫 Gun is empty!');
-          const r = refillBagFromBank(prev.player.inventory.filter(it => it.id !== item.id), prev.player.bank);
-          newInv = r.inventory; newProjBank = r.bank;
-        } else {
-          newInv = prev.player.inventory.map(it => it.id === item.id ? { ...it, charges: newCharges } : it);
-        }
-      } else if (kind === 'freeze') {
-        const r = refillBagFromBank(prev.player.inventory.filter(it => it.id !== item.id), prev.player.bank);
-        newInv = r.inventory; newProjBank = r.bank;
-      } else if (kind === 'bomb') {
-        const newCharges = (item.charges ?? 1) - 1;
-        if (newCharges <= 0) {
-          const r = refillBagFromBank(prev.player.inventory.filter(it => it.id !== item.id), prev.player.bank);
-          newInv = r.inventory; newProjBank = r.bank;
-        } else {
-          newInv = prev.player.inventory.map(it => it.id === item.id ? { ...it, charges: newCharges } : it);
-        }
-      }
-      const midState = { ...prev, player: { ...prev.player, inventory: newInv, bank: newProjBank }, activeProjectile: proj, turn: prev.turn + 1 };
-      return applyEnemyTurns(midState, runEnemyTurns(midState));
-    });
-  }, [addLog, setGameState]);
-
-  const handleUseRope = useCallback(() => {
-    setGameState(prev => {
-      if (!prev || prev.gameOver) return prev;
-      const ropeItem = prev.player.inventory.find(it => it.activeKind === 'rope' && !it.consumed && (it.charges ?? 0) > 0);
-      if (!ropeItem) { addLog('No 🪢 Rope in inventory!'); return prev; }
-
-      const map = prev.map.map(row => row.map(t => ({ ...t })));
-      const mapH = map.length;
-      const mapW = map[0].length;
-
-      let vaultX = -1, vaultY = -1;
-      const vw = 6, vh = 5;
-      let tries = 0;
-      outer:
-      while (tries++ < 300) {
-        const tx = 1 + Math.floor(Math.random() * (mapW - vw - 2));
-        const ty = 1 + Math.floor(Math.random() * (mapH - vh - 2));
-        for (let ry = ty; ry < ty + vh; ry++) {
-          for (let rx = tx; rx < tx + vw; rx++) {
-            if (map[ry][rx].type !== 'wall') continue outer;
-          }
-        }
-        vaultX = tx; vaultY = ty; break;
-      }
-
-      let newPlayer = { ...prev.player };
-
-      if (vaultX === -1) {
-        addLog('🪢 The rope leads nowhere — but fate rewards you anyway!');
-        const rewards = Array.from({ length: 2 }, (_, i) => ({
-          ...getRandomActiveDrop(), id: `vault-fb-${i}-${Math.random()}`, consumed: false, pos: prev.player.pos,
-        }));
-        const { inventory: ropeInv, bank: ropeBank } = refillBagFromBank(prev.player.inventory.filter(it => it.id !== ropeItem.id), newPlayer.bank);
-        newPlayer = { ...newPlayer, inventory: ropeInv, bank: ropeBank };
-        return { ...prev, player: newPlayer, items: [...prev.items, ...rewards] };
-      }
-
-      for (let ry = vaultY; ry < vaultY + vh; ry++) {
-        for (let rx = vaultX; rx < vaultX + vw; rx++) {
-          map[ry][rx] = { type: 'floor', emoji: '⬜', seen: true, visible: true };
-        }
-      }
-
-      const midX = vaultX + Math.floor(vw / 2);
-      const midY = vaultY + Math.floor(vh / 2);
-      const PASSABLE_TO_CONNECT = new Set(['floor', 'grass', 'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'boss-floor', 'stairs', 'door-open', 'door-closed']);
-      const scanDirs = [
-        { sx: midX,        sy: vaultY - 1,  dx:  0, dy: -1 },
-        { sx: midX,        sy: vaultY + vh, dx:  0, dy:  1 },
-        { sx: vaultX - 1,  sy: midY,        dx: -1, dy:  0 },
-        { sx: vaultX + vw, sy: midY,        dx:  1, dy:  0 },
-      ];
-      const corridorCandidates: { sx: number; sy: number; dx: number; dy: number; dist: number }[] = [];
-      for (const { sx, sy, dx, dy } of scanDirs) {
-        if (sy < 0 || sy >= mapH || sx < 0 || sx >= mapW) continue;
-        let cx = sx, cy = sy, dist = 0;
-        while (cx >= 0 && cx < mapW && cy >= 0 && cy < mapH && dist < 20) {
-          if (PASSABLE_TO_CONNECT.has(map[cy][cx].type)) {
-            corridorCandidates.push({ sx, sy, dx, dy, dist });
-            break;
-          }
-          const ttype = map[cy][cx].type;
-          if (ttype === 'water') break;
-          cx += dx; cy += dy; dist++;
-        }
-      }
-      if (corridorCandidates.length > 0) {
-        corridorCandidates.sort((a, b) => a.dist - b.dist);
-        const { sx, sy, dx, dy, dist } = corridorCandidates[0];
-        for (let i = 0; i <= dist; i++) {
-          const cx = sx + dx * i, cy = sy + dy * i;
-          if (map[cy][cx].type === 'wall') {
-            map[cy][cx] = { type: 'floor', emoji: '⬜', seen: true, visible: true };
-          }
-        }
-      } else {
-        for (let rx = vaultX + vw; rx < Math.min(mapW - 1, vaultX + vw + 15); rx++) {
-          if (map[midY][rx].type !== 'wall') break;
-          map[midY][rx] = { type: 'floor', emoji: '⬜', seen: true, visible: true };
-        }
-      }
-
-      const entrancePos = { x: midX, y: midY };
-      newPlayer.pos = entrancePos;
-      const { inventory: vaultInv, bank: vaultBank } = refillBagFromBank(prev.player.inventory.filter(it => it.id !== ropeItem.id), newPlayer.bank);
-      newPlayer = { ...newPlayer, inventory: vaultInv, bank: vaultBank };
-
-      const isTrap = Math.random() < 0.35;
-      let newItems = [...prev.items];
-      let newLogs: Array<{ id: string; text: string; turn: number }> = [];
-      if (isTrap) {
-        const trapDmg = Math.max(1, Math.floor(newPlayer.stats.maxHp * 0.25));
-        newPlayer.stats = { ...newPlayer.stats, hp: Math.max(1, newPlayer.stats.hp - trapDmg) };
-        newLogs = [{ id: Math.random().toString(), text: `🪢 You enter the vault — TRAP! Spikes deal ${trapDmg} damage!`, turn: prev.turn }];
-        addLog(`🪢 You enter the vault — TRAP! Spikes deal ${trapDmg} damage!`);
-      } else {
-        const rewardCount = 2 + Math.floor(Math.random() * 2);
-        for (let i = 0; i < rewardCount; i++) {
-          const rx = vaultX + 1 + Math.floor(Math.random() * (vw - 2));
-          const ry = vaultY + 1 + Math.floor(Math.random() * (vh - 2));
-          let drop: Omit<EmojiItem, 'id' | 'consumed'>;
-          if (newPlayer.characterClass === '🤠' && Math.random() < 0.13) {
-            drop = getBulletDrop();
-          } else {
-            drop = Math.random() < 0.5 ? getRandomEmojiPower() : getRandomActiveDrop();
-          }
-          newItems.push({ ...drop, id: `vault-${i}-${Math.random()}`, consumed: false, pos: { x: rx, y: ry } });
-        }
-        addLog(`🪢 You descend into a hidden vault! Treasure awaits…`);
-      }
-
-      const midState = { ...prev, player: newPlayer, map, items: newItems, logs: [...newLogs, ...prev.logs].slice(0, 24), turn: prev.turn + 1 };
-      const withVis = withVisibility(midState);
-      return applyEnemyTurns(withVis, runEnemyTurns(withVis));
-    });
-  }, [addLog, setGameState]);
-
-  const handleUseSlot = useCallback((bagSlotIndex: number) => {
-    const gs = gameStateRef.current;
-    if (!gs || gs.gameOver) return;
-    const bagItems = sortBagSlots(gs.player.inventory);
-    const item = bagItems[bagSlotIndex];
-    if (!item || item.consumed) return;
-
-    if (item.isEquipment) {
-      setBagTab('equipment');
-      setBankOpen(true);
-      setSelectedItemId(item.id);
-      addLog(`${item.emoji} ${item.name} — select an equipment slot in the Bag window (B).`);
-      return;
-    }
-
-    if (item.activeKind === 'gun' || item.activeKind === 'boomerang' || item.activeKind === 'freeze' || item.activeKind === 'bomb') {
-      if (gs.activeProjectile) { addLog('A projectile is already in flight!'); return; }
-      dirPickModeRef.current = item.activeKind as 'gun' | 'freeze' | 'boomerang' | 'bomb';
-      setDirPickMode(item.activeKind as 'gun' | 'freeze' | 'boomerang' | 'bomb');
-      addLog(`${item.emoji} Pick a direction (arrow/numpad/WASD)…`);
-      return;
-    }
-
-    if (item.activeKind === 'rope') { handleUseRope(); return; }
-
-    if (item.emoji === '⛵') {
-      const tile = gs.map[gs.player.pos.y]?.[gs.player.pos.x];
-      if (tile?.type === 'water') {
-        setDrownWarnSlot(bagSlotIndex);
-        return;
-      }
-      if (!boatConfirmedRef.current) {
-        const totalBoats = gs.player.inventory.filter(i => i.emoji === '⛵' && !i.consumed).length
-                         + gs.player.bank.filter(i => i.emoji === '⛵' && !i.consumed).length;
-        if (totalBoats <= 1) {
-          setLastBoatWarnSlot(bagSlotIndex);
-          return;
-        }
-      }
-      boatConfirmedRef.current = false;
-    }
-
-    setGameState(prev => {
-      if (!prev || prev.gameOver) return prev;
-      const prevBagItems = sortBagSlots(prev.player.inventory);
-      const slotItem = prevBagItems[bagSlotIndex];
-      if (!slotItem) return prev;
-
-      if (slotItem.healAmount !== undefined) {
-        if (prev.player.stats.hp >= prev.player.stats.maxHp) { addLog('Already at full HP.'); return prev; }
-        const amount = slotItem.healAmount ?? 2;
-        const stats = { ...prev.player.stats };
-        const wasLow = stats.hp / stats.maxHp <= 0.3;
-        stats.hp = Math.min(stats.maxHp, stats.hp + amount);
-        stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + (wasLow ? 40 : 10));
-        const { inventory: healInv, bank: healBank } = refillBagFromBank(prev.player.inventory.filter(it => it.id !== slotItem.id), prev.player.bank);
-        addLog(wasLow
-          ? `${slotItem.emoji} ${slotItem.name}: +${amount} HP — relief floods through you! Mood surges!`
-          : `${slotItem.emoji} ${slotItem.name}: +${amount} HP restored.`
-        );
-        const mid = { ...prev, player: { ...prev.player, stats, inventory: healInv, bank: healBank }, turn: prev.turn + 1 };
-        return applyEnemyTurns(mid, runEnemyTurns(mid));
-      }
-
-      const stats = { ...prev.player.stats };
-      const effect = (slotItem as any).effect;
-
-      if (effect?.instakillNearest) {
-        const anyVisible = prev.enemies.some(e => prev.map[e.pos.y]?.[e.pos.x]?.visible);
-        if (!anyVisible) {
-          addLog(`${slotItem.emoji} No visible enemies to strike!`);
-          return prev;
-        }
-      }
-
-      if (effect) {
-        if (effect.hpBonus)      stats.hp        = Math.min(stats.maxHp + (effect.maxHpBonus ?? 0), stats.hp + effect.hpBonus);
-        if (effect.maxHpBonus)   stats.maxHp     = stats.maxHp + effect.maxHpBonus;
-        if (effect.attackBonus)  stats.attack    = stats.attack  + effect.attackBonus;
-        if (effect.defenseBonus) stats.defense   = stats.defense + effect.defenseBonus;
-        if (effect.speedBonus)   stats.speed     = (stats.speed   ?? 0) + effect.speedBonus;
-        if (effect.evasionBonus) stats.evasion   = (stats.evasion ?? 0) + effect.evasionBonus;
-        if (effect.luckBonus)    stats.luck      = (stats.luck    ?? 0) + effect.luckBonus;
-        if (effect.moodBonus)    stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + effect.moodBonus);
-        if (effect.xpBonus) {
-          const newXP = stats.xp + effect.xpBonus;
-          const newLevel = levelFromXP(newXP);
-          if (newLevel > stats.level) addLog(`✨ Level up! You are now level ${newLevel}!`);
-          stats.xp = newXP;
-          stats.level = newLevel;
-        }
-        if (slotItem.emoji === '⛵') { stats.gold = (stats.gold ?? 0) + 50; addLog(`${slotItem.emoji} ${effect.label} +50g from the voyage!`); }
-        else addLog(`${slotItem.emoji} ${effect.label}`);
-      } else {
-        addLog(`${slotItem.emoji} ${slotItem.name} activated!`);
-      }
-      const isWizard = prev.player.characterClass === '🧙';
-      const echo = isWizard && Math.random() < 0.25;
-      let newInventory: typeof prev.player.inventory;
-      let newSoulBank = prev.player.bank;
-      if (echo) {
-        addLog(`🧙 Spell Echo! ${slotItem.emoji} resonates — not consumed.`);
-        newInventory = [...prev.player.inventory];
-      } else if (isStackableBagPassive(slotItem) && (slotItem.stackCount ?? 1) > 1) {
-        newInventory = prev.player.inventory.map(it =>
-          it.id === slotItem.id ? { ...it, stackCount: (it.stackCount ?? 1) - 1 } : it
-        );
-        const r = refillBagFromBank(newInventory, prev.player.bank);
-        newInventory = r.inventory; newSoulBank = r.bank;
-      } else {
-        const r = refillBagFromBank(prev.player.inventory.filter(it => it.id !== slotItem.id), prev.player.bank);
-        newInventory = r.inventory; newSoulBank = r.bank;
-      }
-
-      let newPlayer: Player = { ...prev.player, stats, inventory: newInventory, bank: newSoulBank };
-      let newEnemies = prev.enemies;
-      let newItems = prev.items;
-      const floats: FloatingText[] = [];
-
-      let zapKillCounts = prev.killCounts;
-      if (effect?.instakillNearest) {
-        const visible = prev.enemies.filter(e => prev.map[e.pos.y]?.[e.pos.x]?.visible);
-        const target = visible.reduce((closest, e) => {
-          const d1 = Math.abs(e.pos.x - prev.player.pos.x) + Math.abs(e.pos.y - prev.player.pos.y);
-          const d2 = Math.abs(closest.pos.x - prev.player.pos.x) + Math.abs(closest.pos.y - prev.player.pos.y);
-          return d1 < d2 ? e : closest;
-        });
-        markEnemySeen(target.emoji);
-        markEnemyKilled(target.emoji);
-        zapKillCounts = { ...prev.killCounts, [target.emoji]: (prev.killCounts[target.emoji] ?? 0) + 1 };
-        addLog(`⚡ ZAP! ${target.emoji} ${target.name} is obliterated!`);
-        const xpGain = target.isBoss ? 25 : 5;
-        const newXP = newPlayer.stats.xp + xpGain;
-        const oldLevel = newPlayer.stats.level;
-        const newLevel = levelFromXP(newXP);
-        newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, xp: newXP } };
-        if (newLevel > oldLevel) {
-          const hpInc = hpBonusForLevel(newLevel) - hpBonusForLevel(oldLevel);
-          const newMaxHp = newPlayer.stats.maxHp + hpInc;
-          const lvlEmoji = { ...getRandomEmojiPower(), id: `zap-lvl-${Math.random()}`, consumed: false };
-          const { inventory: _inv, bank: _bnk, nonStackableBanked: _nsbZ, duplicateActiveBanked: _dabZ } = addToBag(newPlayer.inventory, newPlayer.bank, lvlEmoji);
-          markEmojiSeen(lvlEmoji.emoji);
-          _nsbZ.forEach(i => addLog(`Extra ${i.emoji} → Bank (already carried)`));
-          _dabZ.forEach(i => addLog(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
-          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, level: newLevel, maxHp: newMaxHp, hp: newMaxHp, moodValue: Math.min(moodMax(prev.player.characterClass), newPlayer.stats.moodValue + 30) }, inventory: _inv, bank: _bnk };
-          addLog(`✨ Level ${newLevel}! Full heal! +${hpInc} max HP! Got ${lvlEmoji.emoji}!`);
-        }
-        newEnemies = prev.enemies.filter(e => e.id !== target.id);
-        newPlayer = applyMonkeyDropOnKill(target, newPlayer);
-        if (target.isBoss || Math.random() < 0.50) {
-          const r2 = Math.random();
-          const drop = r2 < 0.12 ? getRandomEquipmentDrop(prev.currentFloor) : r2 < 0.28 ? getRandomActiveDrop() : getRandomHealDrop();
-          newItems = [...newItems, { ...drop, id: `zap-drop-${Math.random()}`, consumed: false, pos: target.pos }];
-        }
-        floats.push({ id: `zap-${target.id}-${prev.turn}`, pos: { ...target.pos }, text: '⚡ ZAP!', color: '#fbbf24', life: 3 });
-      }
-
-      const midState = { ...prev, killCounts: zapKillCounts, player: newPlayer, enemies: newEnemies, items: newItems, floatingTexts: floats, turn: prev.turn + 1 };
-      return withVisibility(applyEnemyTurns(midState, runEnemyTurns(midState)));
-    });
-  }, [handleUseRope, addLog, gameStateRef, setGameState, setBagTab, setBankOpen, setSelectedItemId, dirPickModeRef, setDirPickMode, setDrownWarnSlot, setLastBoatWarnSlot, boatConfirmedRef]);
-
-  const handleBankMove = useCallback((sourceId: string, dest: string | number | 'bank') => {
-    setGameState(prev => {
-      if (!prev) return prev;
-      const inv  = [...prev.player.inventory];
-      const bank = [...prev.player.bank];
-
-      const srcInvIdx  = inv.findIndex(i => i.id === sourceId);
-      const srcBankIdx = bank.findIndex(i => i.id === sourceId);
-
-      if (dest === 'bank') {
-        if (srcInvIdx !== -1) {
-          const [item] = inv.splice(srcInvIdx, 1);
-          bank.push(item);
-        }
-      } else if (typeof dest === 'number') {
-        const bagItems = sortBagSlots(inv);
-        if (srcInvIdx !== -1) {
-          const srcBagIdx = bagItems.findIndex(i => i.id === sourceId);
-          const dstBagItem = bagItems[dest] ?? null;
-          if (srcBagIdx !== -1 && srcBagIdx !== dest) {
-            const srcActualIdx = inv.indexOf(bagItems[srcBagIdx]);
-            if (dstBagItem) {
-              const dstActualIdx = inv.indexOf(dstBagItem);
-              [inv[srcActualIdx], inv[dstActualIdx]] = [inv[dstActualIdx], inv[srcActualIdx]];
-            } else if (bagItems.length < 9) {
-              const [item] = inv.splice(srcActualIdx, 1);
-              inv.push(item);
-            }
-          }
-        } else if (srcBankIdx !== -1) {
-          const srcItem = bank[srcBankIdx];
-          if (isNonStackableBagPassiveDuplicate(srcItem, inv) || isActiveKindDuplicate(srcItem, inv)) {
-            return prev; // prevent pulling duplicate non-stackable or active into hotbar
-          }
-          const [srcItemMoved] = bank.splice(srcBankIdx, 1);
-          const dstBagItem = bagItems[dest] ?? null;
-          if (dstBagItem) {
-            const dstActualIdx = inv.indexOf(dstBagItem);
-            bank.push(inv[dstActualIdx]);
-            inv[dstActualIdx] = srcItemMoved;
-          } else if (bagItems.length < 9) {
-            inv.push(srcItemMoved);
-          } else {
-            bank.push(srcItemMoved);
-          }
-        }
-      } else {
-        const dstInvIdx  = inv.findIndex(i => i.id === dest);
-        const dstBankIdx = bank.findIndex(i => i.id === dest);
-        const srcItem = srcInvIdx !== -1 ? inv[srcInvIdx] : srcBankIdx !== -1 ? bank[srcBankIdx] : null;
-        const dstItem = dstInvIdx !== -1 ? inv[dstInvIdx] : dstBankIdx !== -1 ? bank[dstBankIdx] : null;
-        if (!srcItem || !dstItem) return prev;
-        if (srcBankIdx !== -1 && dstInvIdx !== -1 && (isNonStackableBagPassiveDuplicate(srcItem, inv) || isActiveKindDuplicate(srcItem, inv))) {
-          return prev; // prevent introducing duplicate non-stackable/active via bank->hotbar swap
-        }
-        if (srcInvIdx !== -1 && dstInvIdx !== -1) { inv[srcInvIdx] = dstItem; inv[dstInvIdx] = srcItem; }
-        else if (srcBankIdx !== -1 && dstBankIdx !== -1) { bank[srcBankIdx] = dstItem; bank[dstBankIdx] = srcItem; }
-        else if (srcInvIdx !== -1 && dstBankIdx !== -1) { inv[srcInvIdx] = dstItem; bank[dstBankIdx] = srcItem; }
-        else if (srcBankIdx !== -1 && dstInvIdx !== -1) { bank[srcBankIdx] = dstItem; inv[dstInvIdx] = srcItem; }
-      }
-
-      return { ...prev, player: { ...prev.player, inventory: inv, bank } };
-    });
-  }, [setGameState]);
-
-  const handleConsumeBankItem = useCallback((itemId: string) => {
-    setGameState(prev => {
-      if (!prev || prev.gameOver) return prev;
-      const item = prev.player.bank.find(i => i.id === itemId);
-      if (!item || item.consumed || item.isEquipment) return prev;
-
-      const stats = { ...prev.player.stats };
-
-      if (item.healAmount !== undefined) {
-        if (stats.hp >= stats.maxHp) { addLog('Already at full HP.'); return prev; }
-        const amount = item.healAmount ?? 2;
-        const wasLow = stats.hp / stats.maxHp <= 0.3;
-        stats.hp = Math.min(stats.maxHp, stats.hp + amount);
-        stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + (wasLow ? 40 : 10));
-        addLog(wasLow
-          ? `${item.emoji} ${item.name}: +${amount} HP — relief floods through you! Mood surges!`
-          : `${item.emoji} ${item.name}: +${amount} HP restored.`);
-        const newBank = prev.player.bank.filter(i => i.id !== itemId);
-        const mid = { ...prev, player: { ...prev.player, stats, bank: newBank }, turn: prev.turn + 1 };
-        return applyEnemyTurns(mid, runEnemyTurns(mid));
-      }
-
-      const effect = (item as any).effect;
-      if (effect?.instakillNearest) {
-        const anyVisible = prev.enemies.some(e => prev.map[e.pos.y]?.[e.pos.x]?.visible);
-        if (!anyVisible) { addLog(`${item.emoji} No visible enemies to strike!`); return prev; }
-      }
-      if (effect) {
-        if (effect.hpBonus)      stats.hp        = Math.min(stats.maxHp + (effect.maxHpBonus ?? 0), stats.hp + effect.hpBonus);
-        if (effect.maxHpBonus)   stats.maxHp     = stats.maxHp + effect.maxHpBonus;
-        if (effect.attackBonus)  stats.attack    = stats.attack  + effect.attackBonus;
-        if (effect.defenseBonus) stats.defense   = stats.defense + effect.defenseBonus;
-        if (effect.speedBonus)   stats.speed     = (stats.speed   ?? 0) + effect.speedBonus;
-        if (effect.evasionBonus) stats.evasion   = (stats.evasion ?? 0) + effect.evasionBonus;
-        if (effect.luckBonus)    stats.luck      = (stats.luck    ?? 0) + effect.luckBonus;
-        if (effect.moodBonus)    stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + effect.moodBonus);
-        if (effect.xpBonus) {
-          const newXP = stats.xp + effect.xpBonus;
-          const newLevel = levelFromXP(newXP);
-          if (newLevel > stats.level) addLog(`✨ Level up! You are now level ${newLevel}!`);
-          stats.xp = newXP; stats.level = newLevel;
-        }
-        addLog(`${item.emoji} ${effect.label}`);
-      } else {
-        addLog(`${item.emoji} ${item.name} activated!`);
-      }
-
-      const isWizard = prev.player.characterClass === '🧙';
-      const echo = isWizard && Math.random() < 0.25;
-      let newBank = prev.player.bank;
-      if (echo) {
-        addLog(`🧙 Spell Echo! ${item.emoji} resonates — not consumed.`);
-      } else if (isStackableBagPassive(item) && (item.stackCount ?? 1) > 1) {
-        newBank = prev.player.bank.map(it => it.id === itemId ? { ...it, stackCount: (it.stackCount ?? 1) - 1 } : it);
-      } else {
-        newBank = prev.player.bank.filter(i => i.id !== itemId);
-      }
-
-      let newPlayer = { ...prev.player, stats, bank: newBank };
-      let newEnemies = prev.enemies;
-      let newItems = prev.items;
-
-      if (effect?.instakillNearest) {
-        const visible = prev.enemies.filter(e => prev.map[e.pos.y]?.[e.pos.x]?.visible);
-        const target = visible.reduce((closest, e) => {
-          const d1 = Math.abs(e.pos.x - prev.player.pos.x) + Math.abs(e.pos.y - prev.player.pos.y);
-          const d2 = Math.abs(closest.pos.x - prev.player.pos.x) + Math.abs(closest.pos.y - prev.player.pos.y);
-          return d1 < d2 ? e : closest;
-        });
-        markEnemySeen(target.emoji); markEnemyKilled(target.emoji);
-        addLog(`⚡ ZAP! ${target.emoji} ${target.name} is obliterated!`);
-        newEnemies = prev.enemies.filter(e => e.id !== target.id);
-        newPlayer = applyMonkeyDropOnKill(target, newPlayer);
-        if (target.isBoss || Math.random() < 0.50) {
-          const r2 = Math.random();
-          const drop = r2 < 0.12 ? getRandomEquipmentDrop(prev.currentFloor) : r2 < 0.28 ? getRandomActiveDrop() : getRandomHealDrop();
-          newItems = [...newItems, { ...drop, id: `zap-drop-${Math.random()}`, consumed: false, pos: target.pos }];
-        }
-      }
-
-      const mid = { ...prev, player: newPlayer, enemies: newEnemies, items: newItems, turn: prev.turn + 1 };
-      return applyEnemyTurns(mid, runEnemyTurns(mid));
-    });
-  }, [addLog, setGameState]);
-
-  const handleEquip = useCallback((itemId: string, slot: EquipSlot) => {
-    setGameState(prev => {
-      if (!prev || prev.gameOver) return prev;
-      const { player } = prev;
-      const invIdx  = player.inventory.findIndex(i => i.id === itemId);
-      const bankIdx = player.bank.findIndex(i => i.id === itemId);
-      const item = invIdx >= 0 ? player.inventory[invIdx] : bankIdx >= 0 ? player.bank[bankIdx] : null;
-      if (!item || !item.isEquipment) return prev;
-      if (!item.equipSlots?.includes(slot)) { addLog(`${item.emoji} can't go in ${slot} slot.`); return prev; }
-
-      const cls = player.characterClass;
-      if (item.specialAmmoKind && cls !== '🧝') { addLog(`${item.emoji} Special arrows are Ranger-only.`); return prev; }
-      if ((slot === 'mainHand' || slot === 'offHand') && item.weaponKind) {
-        if (cls === '🧙' && item.weaponKind !== 'staff') { addLog(`🧙 Wizard main/off-hand: staves & wands only.`); return prev; }
-        if (cls === '🥷' && item.weaponKind !== 'blade') { addLog(`🥷 Ninja main/off-hand: blades only.`); return prev; }
-        if (cls === '🧝' && slot === 'mainHand' && !['bow', 'gun'].includes(item.weaponKind)) { addLog(`🧝 Ranger main hand: bow or gun only.`); return prev; }
-        if (cls === '🤠' && item.weaponKind !== 'gun') { addLog(`🤠 Only real Cowboys fight with their fists!`); return prev; }
-      }
-      if (item.armorKind === 'shield' && slot !== 'offHand') { addLog(`Shield goes in the off-hand slot.`); return prev; }
-      if (item.armorKind && (slot === 'mainHand' || slot === 'offHand') && item.armorKind !== 'shield' && cls !== '🤠') {
-        addLog(`Armor goes in the Body slot.`); return prev;
-      }
-
-      let newInv = [...player.inventory];
-      let newBank = [...player.bank];
-      const currentEquipped = player.equipment[slot];
-      if (currentEquipped) {
-        const result = addToBag(newInv, newBank, currentEquipped);
-        newInv = result.inventory; newBank = result.bank;
-        result.nonStackableBanked.forEach(i => addLog(`Extra ${i.emoji} → Bank (already carried)`));
-        result.duplicateActiveBanked.forEach(i => addLog(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
-      }
-      if (invIdx >= 0) newInv = newInv.filter(i => i.id !== itemId);
-      else newBank = newBank.filter(i => i.id !== itemId);
-
-      const bonusStr = Object.entries(item.equipBonus ?? {}).filter(([,v]) => (v ?? 0) !== 0).map(([k, v]) => `${(v ?? 0) > 0 ? '+' : ''}${v}${k.substring(0,3).toUpperCase()}`).join(' ');
-      addLog(`${item.emoji} ${item.name} equipped${bonusStr ? ` (${bonusStr})` : ''}.`);
-      const newEquipment = { ...player.equipment, [slot]: item };
-      const wasAlreadyDualGun = player.equipment.mainHand?.weaponKind === 'gun' && player.equipment.offHand?.weaponKind === 'gun';
-      if (cls === '🤠' && item.weaponKind === 'gun' && !wasAlreadyDualGun && newEquipment.mainHand?.weaponKind === 'gun' && newEquipment.offHand?.weaponKind === 'gun') {
-        addLog(`🤠 Real Cowboys fight with their fists... but a Real American Hero fights with his two Peacemakers!`);
-      }
-      return { ...prev, player: { ...player, inventory: newInv, bank: newBank, equipment: newEquipment } };
-    });
-  }, [addLog, setGameState]);
-
-  const handleUnequip = useCallback((slot: EquipSlot) => {
-    setGameState(prev => {
-      if (!prev || prev.gameOver) return prev;
-      const { player } = prev;
-      const item = player.equipment[slot];
-      if (!item) return prev;
-      const { inventory, bank, nonStackableBanked: _nsbU, duplicateActiveBanked: _dabU } = addToBag(player.inventory, player.bank, item);
-      _nsbU.forEach(i => addLog(`Extra ${i.emoji} → Bank (already carried)`));
-      _dabU.forEach(i => addLog(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
-      const newEquipment = { ...player.equipment };
-      delete newEquipment[slot];
-      addLog(`${item.emoji} ${item.name} unequipped.`);
-      return { ...prev, player: { ...player, inventory, bank, equipment: newEquipment } };
-    });
-  }, [addLog, setGameState]);
-
-  const handleBlinkStrikeOnTarget = useCallback((targetId: string) => {
-    setGameState(prev => {
-      if (!prev || prev.gameOver || prev.player.characterClass !== '🥷') return prev;
-      const cooldown = prev.player.stats.blinkStrikeCooldown ?? 0;
-      if (cooldown > 0) {
-        addLog(`🥷 Blink Strike not ready — ${cooldown}t remaining.`);
-        return prev;
-      }
-      const target = prev.enemies.find(e => e.id === targetId);
-      if (!target) { addLog('🥷 Blink Strike — target lost.'); return prev; }
-      if (target.tag === 'Friendly' || (target.tag === 'Neutral' && !target.engaged)) {
-        addLog(`🥷 Blink Strike — ${target.name} is not hostile.`);
-        return prev;
-      }
-      const dist = chebyshev(prev.player.pos, target.pos);
-      if (dist < 1 || dist > 6 || !hasLOSBetween(prev.map, prev.player.pos, target.pos) || !prev.map[target.pos.y]?.[target.pos.x]?.visible) {
-        addLog('🥷 Blink Strike — target out of range or LOS broken.');
-        return prev;
-      }
-
-      const dirs8: [number, number][] = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
-      const adjFree = dirs8
-        .map(([dy, dx]) => ({ x: target.pos.x + dx, y: target.pos.y + dy }))
-        .filter(p => {
-          const tile = prev.map[p.y]?.[p.x];
-          return tile && PLAYER_PASSABLE_TILES.has(tile.type) &&
-            !prev.enemies.some(e => e.id !== target.id && e.pos.x === p.x && e.pos.y === p.y);
-        });
-      const blinkPos = adjFree.length > 0 ? adjFree[0] : prev.player.pos;
-
-      const _blinkPassives = computeBagPassives(prev.player.inventory);
-      const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
-      const blinkEffPlayer = applyEquipmentAndPassives({ ...prev.player, pos: blinkPos });
-      const boostedPlayer = { ...blinkEffPlayer, pos: blinkPos, stats: { ...blinkEffPlayer.stats, attack: Math.round(blinkEffPlayer.stats.attack * 2) } };
-
-      addLog(`🥷 Blink Strike → ${target.emoji} ${target.name}!`);
-      const combatResult = resolveCombat(boostedPlayer, target, addLog, { mood, advantage: _blinkPassives.advantageDice, execBlow: _blinkPassives.execBlow });
-
-      let actuallyKilled = combatResult.enemyDied;
-      const blinkDmg = target.hp - Math.max(0, combatResult.enemyHp);
-
-      const blinkFloats: FloatingText[] = [];
-      if (blinkDmg > 0) blinkFloats.push({ id: `blink-e-${target.id}-${prev.turn}`, pos: { ...target.pos }, text: `-${blinkDmg}`, color: '#818cf8', life: 2 });
-      const dmgToPlayer = prev.player.stats.hp - combatResult.playerHp;
-      if (dmgToPlayer > 0) blinkFloats.push({ id: `blink-p-${prev.turn}`, pos: { ...blinkPos }, text: `-${dmgToPlayer}`, color: '#f97316', life: 2 });
-
-      let newEnemies = [...prev.enemies];
-      const targetIdx = newEnemies.findIndex(e => e.id === target.id);
-      let newKillCounts = { ...prev.killCounts };
-      let ninjaFreeMoves = prev.ninjaFreeMoves ?? 0;
-
-      let newPlayer: Player = {
-        ...prev.player,
-        pos: blinkPos,
-        stats: { ...prev.player.stats, hp: combatResult.playerHp, blinkStrikeCooldown: 8, moodValue: Math.max(-100, prev.player.stats.moodValue - 5) },
-      };
-
-      if (combatResult.enemyDied && target.godBlessed) {
-        const gb = handleGodBlessedImmunity(target, newEnemies, targetIdx, newPlayer.stats.hp, prev.turn, addLog, blinkFloats);
-        if (gb.proc) {
-          actuallyKilled = false;
-          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, hp: gb.newPlayerHp } };
-          newEnemies = gb.newEnemies;
-          if (gb.newPlayerHp <= 0) {
-            return { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, gameOver: true, killer: { name: target.name, emoji: target.emoji }, floatingTexts: [...blinkFloats, ...prev.floatingTexts] };
-          }
-        }
-      }
-
-      if (actuallyKilled) {
-        markEnemyKilled(target.emoji);
-        newKillCounts[target.emoji] = (newKillCounts[target.emoji] ?? 0) + 1;
-        if (targetIdx !== -1) newEnemies.splice(targetIdx, 1);
-        newPlayer = applyMonkeyDropOnKill(target, newPlayer);
-        const blinkInstakill = target.hp >= target.maxHp;
-        const currentChain = prev.player.stats.blinkStrikeInstakillChain ?? 0;
-        if (blinkInstakill && currentChain < 3) {
-          const newChain = currentChain + 1;
-          newPlayer.stats.blinkStrikeCooldown = 0;
-          newPlayer.stats.blinkStrikeInstakillChain = newChain;
-          addLog(`🥷 Blink Kill! Chain ${newChain}/3 — instant reset!`);
-        } else if (blinkInstakill) {
-          newPlayer.stats.blinkStrikeCooldown = 3;
-          newPlayer.stats.blinkStrikeInstakillChain = currentChain;
-          addLog(`🥷 Blink Kill! Chain maxed — 3t cooldown.`);
-        } else {
-          newPlayer.stats.blinkStrikeCooldown = 7;
-          newPlayer.stats.blinkStrikeInstakillChain = 0;
-          addLog(`🥷 Blink Kill! Cooldown: 7t.`);
-        }
-        newPlayer.stats.moodValue = Math.min(moodMax('🥷'), prev.player.stats.moodValue + 15);
-        const freeMovesGain = prev.stealthMode ? 2 : 1;
-        ninjaFreeMoves += freeMovesGain;
-        addLog(`🥷 Assassin's Edge — ${freeMovesGain} free move${freeMovesGain > 1 ? 's' : ''}!`);
-      } else if (!target.godBlessed || !combatResult.enemyDied) {
-        if (targetIdx !== -1) newEnemies[targetIdx] = { ...target, hp: combatResult.enemyHp, engaged: true };
-        newPlayer.stats.blinkStrikeInstakillChain = 0;
-        addLog(`🥷 Blink Strike — 8 turn cooldown started.`);
-      } else {
-        newPlayer.stats.blinkStrikeInstakillChain = 0;
-        addLog(`🥷 Blink Strike — 8 turn cooldown started.`);
-      }
-
-      if (combatResult.playerDied) {
-        return { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, gameOver: true, killer: { name: target.name, emoji: target.emoji }, floatingTexts: [...blinkFloats, ...prev.floatingTexts] };
-      }
-
-      newPlayer.stats.blinkStrikeInstakillOutOfCombat = 0;
-      const midState: GameState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, killCounts: newKillCounts, floatingTexts: [...blinkFloats, ...prev.floatingTexts], ninjaFreeMoves };
-      return applyEnemyTurns(withVisibility(midState), runEnemyTurns(midState));
-    });
-  }, [addLog, setGameState]);
-
-  const handleBlinkStrike = useCallback(() => {
-    setGameState(prev => {
-      if (!prev || prev.gameOver || prev.player.characterClass !== '🥷') return prev;
-      const cooldown = prev.player.stats.blinkStrikeCooldown ?? 0;
-      if (cooldown > 0) {
-        addLog(`🥷 Blink Strike not ready — ${cooldown} turn${cooldown > 1 ? 's' : ''} remaining.`);
-        return prev;
-      }
-
-      const targets = prev.enemies.filter(e => {
-        const dist = chebyshev(prev.player.pos, e.pos);
-        return dist >= 1 && dist <= 6 && hasLOSBetween(prev.map, prev.player.pos, e.pos) && prev.map[e.pos.y]?.[e.pos.x]?.visible
-          && (e.tag === 'Hostile' || e.engaged);
-      });
-      if (targets.length === 0) {
-        addLog('🥷 Blink Strike — no targets in range (6 tiles, requires LOS).');
-        return prev;
-      }
-      const target = targets.reduce((a, b) =>
-        chebyshev(prev.player.pos, a.pos) <= chebyshev(prev.player.pos, b.pos) ? a : b
-      );
-
-      const dirs8: [number, number][] = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
-      const adjFree = dirs8
-        .map(([dy, dx]) => ({ x: target.pos.x + dx, y: target.pos.y + dy }))
-        .filter(p => {
-          const tile = prev.map[p.y]?.[p.x];
-          return tile && PLAYER_PASSABLE_TILES.has(tile.type) &&
-            !prev.enemies.some(e => e.id !== target.id && e.pos.x === p.x && e.pos.y === p.y);
-        });
-      const blinkPos = adjFree.length > 0 ? adjFree[0] : prev.player.pos;
-
-      const _blinkPassives = computeBagPassives(prev.player.inventory);
-      const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
-      const blinkEffPlayer = applyEquipmentAndPassives({ ...prev.player, pos: blinkPos });
-      const boostedPlayer = { ...blinkEffPlayer, pos: blinkPos, stats: { ...blinkEffPlayer.stats, attack: Math.round(blinkEffPlayer.stats.attack * 2) } };
-
-      addLog(`🥷 Blink Strike → ${target.emoji} ${target.name}!`);
-      const combatResult = resolveCombat(boostedPlayer, target, addLog, { mood, advantage: _blinkPassives.advantageDice, execBlow: _blinkPassives.execBlow });
-
-      let actuallyKilledX = combatResult.enemyDied;
-      const blinkDmg = target.hp - Math.max(0, combatResult.enemyHp);
-
-      const blinkFloats: FloatingText[] = [];
-      if (blinkDmg > 0) blinkFloats.push({ id: `blink-e-${target.id}-${prev.turn}`, pos: { ...target.pos }, text: `-${blinkDmg}`, color: '#818cf8', life: 2 });
-      const dmgToPlayer = prev.player.stats.hp - combatResult.playerHp;
-      if (dmgToPlayer > 0) blinkFloats.push({ id: `blink-p-${prev.turn}`, pos: { ...blinkPos }, text: `-${dmgToPlayer}`, color: '#f97316', life: 2 });
-
-      let newEnemies = [...prev.enemies];
-      const targetIdx = newEnemies.findIndex(e => e.id === target.id);
-      let newKillCounts = { ...prev.killCounts };
-      let ninjaFreeMoves = prev.ninjaFreeMoves ?? 0;
-
-      let newPlayer: Player = {
-        ...prev.player,
-        pos: blinkPos,
-        stats: { ...prev.player.stats, hp: combatResult.playerHp, blinkStrikeCooldown: 8, moodValue: Math.max(-100, prev.player.stats.moodValue - 5) },
-      };
-
-      if (combatResult.enemyDied && target.godBlessed) {
-        const gb = handleGodBlessedImmunity(target, newEnemies, targetIdx, newPlayer.stats.hp, prev.turn, addLog, blinkFloats);
-        if (gb.proc) {
-          actuallyKilledX = false;
-          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, hp: gb.newPlayerHp } };
-          newEnemies = gb.newEnemies;
-          if (gb.newPlayerHp <= 0) {
-            return { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, gameOver: true, killer: { name: target.name, emoji: target.emoji }, floatingTexts: [...blinkFloats, ...prev.floatingTexts] };
-          }
-        }
-      }
-
-      if (actuallyKilledX) {
-        markEnemyKilled(target.emoji);
-        newKillCounts[target.emoji] = (newKillCounts[target.emoji] ?? 0) + 1;
-        if (targetIdx !== -1) newEnemies.splice(targetIdx, 1);
-        newPlayer = applyMonkeyDropOnKill(target, newPlayer);
-        const blinkInstakillX = target.hp >= target.maxHp;
-        const currentChainX = prev.player.stats.blinkStrikeInstakillChain ?? 0;
-        if (blinkInstakillX && currentChainX < 3) {
-          const newChain = currentChainX + 1;
-          newPlayer.stats.blinkStrikeCooldown = 0;
-          newPlayer.stats.blinkStrikeInstakillChain = newChain;
-          addLog(`🥷 Blink Kill! Chain ${newChain}/3 — instant reset!`);
-        } else if (blinkInstakillX) {
-          newPlayer.stats.blinkStrikeCooldown = 3;
-          newPlayer.stats.blinkStrikeInstakillChain = currentChainX;
-          addLog(`🥷 Blink Kill! Chain maxed — 3t cooldown.`);
-        } else {
-          newPlayer.stats.blinkStrikeCooldown = 7;
-          newPlayer.stats.blinkStrikeInstakillChain = 0;
-          addLog(`🥷 Blink Kill! Cooldown: 7t.`);
-        }
-        newPlayer.stats.moodValue = Math.min(moodMax('🥷'), prev.player.stats.moodValue + 15);
-        const freeMovesGain = prev.stealthMode ? 2 : 1;
-        ninjaFreeMoves += freeMovesGain;
-        addLog(`🥷 Assassin's Edge — ${freeMovesGain} free move${freeMovesGain > 1 ? 's' : ''}!`);
-      } else if (!target.godBlessed || !combatResult.enemyDied) {
-        if (targetIdx !== -1) newEnemies[targetIdx] = { ...target, hp: combatResult.enemyHp, engaged: true };
-        newPlayer.stats.blinkStrikeInstakillChain = 0;
-        addLog(`🥷 Blink Strike — 8 turn cooldown started.`);
-      } else {
-        newPlayer.stats.blinkStrikeInstakillChain = 0;
-        addLog(`🥷 Blink Strike — 8 turn cooldown started.`);
-      }
-
-      if (combatResult.playerDied) {
-        return { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, gameOver: true, killer: { name: target.name, emoji: target.emoji }, floatingTexts: [...blinkFloats, ...prev.floatingTexts] };
-      }
-
-      newPlayer.stats.blinkStrikeInstakillOutOfCombat = 0;
-      const midState: GameState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, killCounts: newKillCounts, floatingTexts: [...blinkFloats, ...prev.floatingTexts], ninjaFreeMoves };
-      return applyEnemyTurns(withVisibility(midState), runEnemyTurns(midState));
-    });
-  }, [addLog, setGameState]);
+  const {
+    applyWizardMode, handleCycleRangedTarget, applyNinjaMode,
+    toggleAutoStealth, applyRangerMode, handleCowboyTactics,
+  } = useTacticsActions(refs, setters, addLog);
+
+  const {
+    handleUseHeal, handleCook, handleUseRope, handleUseSlot,
+  } = useItemActions(refs, setters, addLog, applyMonkeyDropOnKill);
+
+  const {
+    handlePlantBomb, handleFireProjectile, handleBlinkStrikeOnTarget, handleBlinkStrike,
+  } = useCombatActions(setters, addLog, applyMonkeyDropOnKill);
+
+  const {
+    handleBankMove, handleConsumeBankItem, handleEquip, handleUnequip,
+  } = useInventoryActions(setters, addLog, applyMonkeyDropOnKill);
 
   return {
     addLog,
