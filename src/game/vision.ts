@@ -1,5 +1,6 @@
 import { GameState, MapGrid, Position } from './types';
 import { computeBagPassives } from './inventory';
+import { markEnemySeen } from './discoveries';
 
 export const VISION_RADIUS = 4;
 
@@ -27,6 +28,15 @@ export function hasLineOfSight(map: MapGrid, from: Position, to: Position): bool
     if (!tile || OPAQUE_TILES.has(tile.type)) return false;
   }
   return true;
+}
+
+/** Mark any enemy currently in the player's vision as encountered (bestiary). */
+export function markVisibleEnemiesSeen(state: GameState): void {
+  for (const enemy of state.enemies) {
+    if (state.map[enemy.pos.y]?.[enemy.pos.x]?.visible) {
+      markEnemySeen(enemy.emoji);
+    }
+  }
 }
 
 export function computeVisibility(map: MapGrid, playerPos: Position, radius = VISION_RADIUS): MapGrid {
@@ -66,5 +76,7 @@ export function withVisibility(state: GameState): GameState {
       }
     }
   }
-  return { ...state, map: newMap };
+  const nextState = { ...state, map: newMap };
+  markVisibleEnemiesSeen(nextState);
+  return nextState;
 }

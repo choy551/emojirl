@@ -1,6 +1,15 @@
 import { EmojiItem, MapGrid, Position } from './types';
 import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, cookFood, HEAL_DROPS } from './emojis';
 
+/** Gold stolen by a 🐦‍⬛ Crow on a successful hit. Scales with dungeon floor. */
+export function crowGoldSteal(floor: number, playerGold: number): number {
+  if (playerGold <= 0) return 0;
+  const flat = floor;
+  const pct = 0.10 + (floor - 1) * 0.015; // D:1 → 10%, +1.5% per floor
+  const stolen = Math.floor(flat + playerGold * pct);
+  return Math.min(playerGold, Math.max(1, stolen));
+}
+
 export function getItemSellValue(item: EmojiItem, multiplier = 1): number {
   if (item.isEquipment) return 15 * multiplier;
   if (item.activeKind) return 10 * multiplier;

@@ -1,4 +1,5 @@
 import { Player, Enemy, MoodType } from './types';
+import { crowGoldSteal } from './economy';
 
 export interface MoodModifiers {
   damageMult: number;
@@ -52,6 +53,7 @@ export interface CombatResult {
   stunned: boolean;
   dodged: boolean;
   fled: boolean;
+  goldStolen?: number;
 }
 
 export function getCowboyUnarmedBonus(level: number): number {
@@ -64,7 +66,7 @@ export function resolveCombat(
   player: Player,
   enemy: Enemy,
   addLog: (msg: string) => void,
-  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean } = {}
+  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean; floor?: number } = {}
 ): CombatResult {
   const cls = player.characterClass;
   const mods = getMoodModifiers(opts.mood ?? 'neutral', player.stats.hp, player.stats.maxHp, opts.cowboyMoodValue);
@@ -78,7 +80,7 @@ export function resolveCombat(
   // ── 1. Flee check (mood-based) ─────────────────────────────────────────────
   if (mods.fleeChance > 0 && Math.random() * 100 < mods.fleeChance) {
     addLog(`You flee from ${enemy.emoji} ${enemy.name}!`);
-    return { enemyHp: enemy.hp, playerHp: player.stats.hp, playerDied: false, enemyDied: false, stunned: false, dodged: false, fled: true };
+    return { enemyHp: enemy.hp, playerHp: player.stats.hp, playerDied: false, enemyDied: false, stunned: false, dodged: false, fled: true, goldStolen: 0 };
   }
 
   // ── 2. Hit resolution ──────────────────────────────────────────────────────
@@ -202,9 +204,20 @@ export function resolveCombat(
   let newPlayerHp = player.stats.hp;
   let dodged = false;
   let playerDied = false;
+  let goldStolen = 0;
+  let goldRemaining = player.stats.gold;
 
   if (newEnemyHp > 0 && !stunned) {
     const fastEnemy = enemy.speed > (player.stats.speed ?? 1);
+
+    const tryCrowSteal = () => {
+      if (!enemy.crow || goldRemaining <= 0 || opts.floor == null) return;
+      const stolen = crowGoldSteal(opts.floor, goldRemaining);
+      if (stolen <= 0) return;
+      goldStolen += stolen;
+      goldRemaining -= stolen;
+      addLog(`🐦‍⬛ ${enemy.name} pecks you and flies off with ${stolen}g!`);
+    };
 
     const performAttack = (label: string) => {
       if (opts.shieldWall && Math.random() < 0.25) {
@@ -217,7 +230,9 @@ export function resolveCombat(
         addLog(`${label}${enemy.emoji} swings — you dodge!`);
         return;
       }
-      const rawEnemy = Math.max(1, enemy.attack - Math.floor((player.stats.defense ?? 0) / 2));
+      const rawEnemy = enemy.crow
+        ? 1
+        : Math.max(1, enemy.attack - Math.floor((player.stats.defense ?? 0) / 2));
       const incoming = Math.round(rawEnemy * mods.incomingMult);
       const shieldDR = Math.min(incoming, opts.shieldWall ?? 0);
       const finalDmg = incoming - shieldDR;
@@ -227,6 +242,7 @@ export function resolveCombat(
         addLog(`${label}${enemy.emoji} attacks — shields absorb it all! 🛡️`);
       } else {
         addLog(`${label}${enemy.emoji} hits you for ${finalDmg} dmg${shieldNote}!`);
+        tryCrowSteal();
       }
       if (newPlayerHp <= 0) playerDied = true;
     };
@@ -245,5 +261,6 @@ export function resolveCombat(
     stunned,
     dodged,
     fled: false,
+    goldStolen,
   };
 }

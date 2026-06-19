@@ -12,6 +12,7 @@ export const ENEMY_TYPES = [
   { emoji: '🧜‍♂️', name: 'Merman',     hp: 8,  attack: 4, defense: 2, speed: 6,  weight: 1, tag: 'Neutral' as const, waterAggro: true },
   { emoji: '🧚‍♀️', name: 'Cute Fairy', hp: 1,  attack: 0, defense: 0, speed: 3,  weight: 1, tag: 'Friendly' as const },
   { emoji: '🐒', name: 'Monkey',         hp: 4,  attack: 2, defense: 0, speed: 5,  weight: 2, tag: 'Neutral' as const, monkey: true },
+  { emoji: '🐦‍⬛', name: 'Crow',          hp: 3,  attack: 1, defense: 0, speed: 8,  weight: 2, cowardly: true, crow: true },
   { emoji: '🧝‍♀️', name: 'Elf Archer',    hp: 7,  attack: 3, defense: 1, speed: 5,  weight: 2, ranged: true },
 ];
 

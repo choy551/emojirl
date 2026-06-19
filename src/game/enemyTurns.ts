@@ -5,7 +5,7 @@ import { withVisibility, visionRadiusFor } from './vision';
 import { bfsStepToward, fleeStep, hasLOSBetween, detectionRadius } from './pathfinding';
 import { PLAYER_PASSABLE_TILES, MERMAN_PASSABLE_TILES } from './tiles';
 import { _flashSignals } from './flashSignals';
-import { nearRestaurant } from './economy';
+import { nearRestaurant, crowGoldSteal } from './economy';
 import { computeNinjaEvasion } from './progression';
 
 export interface EnemyTurnResult {
@@ -21,6 +21,7 @@ export interface EnemyTurnResult {
   kitePos?: Position;
   trailblazerCooldown?: number;
   moodDrain: number;
+  goldDrain: number;
   playerInventoryRemovals: string[];
   playerInventoryAdditions: EmojiItem[];
   enemyBeam?: { positions: Position[]; color: string };
@@ -41,11 +42,29 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
   const newFloatingTexts: FloatingText[] = [];
   const explosionPositions: Position[] = [];
   let moodDrain = 0;
+  let goldDrain = 0;
+  let playerGold = player.stats.gold;
   const playerInventoryRemovals: string[] = [];
   const playerInventoryAdditions: EmojiItem[] = [];
 
   const log = (text: string) =>
     newLogs.push({ id: Math.random().toString(), text, turn: state.turn });
+
+  const stealGoldOnCrowHit = (enemy: Enemy) => {
+    if (!enemy.crow || playerGold <= 0) return;
+    const stolen = crowGoldSteal(state.currentFloor, playerGold);
+    if (stolen <= 0) return;
+    goldDrain += stolen;
+    playerGold -= stolen;
+    log(`🐦‍⬛ ${enemy.name} pecks you and flies off with ${stolen}g!`);
+    newFloatingTexts.push({
+      id: `crow-steal-${enemy.id}-${state.turn}-${Math.random()}`,
+      pos: { ...player.pos },
+      text: `-${stolen}g`,
+      color: '#facc15',
+      life: 2,
+    });
+  };
 
   let newBombs: PlacedBomb[] = [];
   let enemyBeam: { positions: Position[]; color: string } | undefined;
@@ -616,7 +635,9 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
         if (Math.random() * 100 < dodgeChance) {
           log(`${enemy.emoji} ${enemy.name} attacks — you dodge!`);
         } else {
-          const dmg = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+          const dmg = enemy.crow
+            ? 1
+            : Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
           playerHp -= dmg;
           log(`${enemy.emoji} ${enemy.name} hits you for ${dmg} dmg!`);
           if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
@@ -627,6 +648,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
             color: '#f97316',
             life: 2,
           });
+          if (!playerDied) stealGoldOnCrowHit(enemy);
           if (enemy.berserker && !playerDied) {
             const dodgeChance2 = player.characterClass === '🥷' ? computeNinjaEvasion(effectivePlayer) : Math.min(50, effectivePlayer.stats.evasion ?? 0);
             if (Math.random() * 100 < dodgeChance2) {
@@ -782,7 +804,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
     }
   }
 
-  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam };
+  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam };
 }
 
 export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): GameState {
@@ -804,7 +826,10 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
   const newMoodValue = result.moodDrain > 0
     ? Math.max(-100, state.player.stats.moodValue - result.moodDrain)
     : state.player.stats.moodValue;
-  const hasExtraChanges = result.playerInventoryRemovals.length > 0 || result.playerInventoryAdditions.length > 0 || result.moodDrain > 0;
+  const newGold = result.goldDrain > 0
+    ? Math.max(0, state.player.stats.gold - result.goldDrain)
+    : state.player.stats.gold;
+  const hasExtraChanges = result.playerInventoryRemovals.length > 0 || result.playerInventoryAdditions.length > 0 || result.moodDrain > 0 || result.goldDrain > 0;
 
   if (result.newLogs.length === 0 && result.playerHp === state.player.stats.hp && mergedFloating.length === 0 && state.floatingTexts.length === 0 && !hasExtraChanges) {
     return withVisibility({ ...state, enemies: result.enemies, floatingTexts: mergedFloating, placedBombs: result.placedBombs, activeProjectile: result.activeProjectile, pendingExplosion: result.explosionPositions.length > 0 ? result.explosionPositions : undefined, pendingBeam: result.enemyBeam ?? state.pendingBeam, player: { ...state.player, trailblazerCooldown: result.trailblazerCooldown } });
@@ -816,7 +841,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     player: {
       ...state.player,
       pos: result.kitePos ?? state.player.pos,
-      stats: { ...state.player.stats, hp: result.playerHp, moodValue: newMoodValue },
+      stats: { ...state.player.stats, hp: result.playerHp, moodValue: newMoodValue, gold: newGold },
       inventory: newInventory,
       bank: newBank,
       trailblazerCooldown: result.trailblazerCooldown,

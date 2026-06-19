@@ -296,7 +296,6 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               } else {
                 const { pos: _pos, ...pickedUp } = item;
                 const isUnequippable = pickedUp.isEquipment && !canEquipItem(pickedUp, bumpedPlayer.characterClass);
-                const bagCount = bumpedPlayer.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment).length;
                 if (pickedUp.isEquipment) {
                   const autoSlot = !isUnequippable
                     ? (pickedUp.equipSlots ?? []).find(s => !bumpedPlayer.equipment[s as import('../game/types').EquipSlot])
@@ -310,12 +309,13 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                       ? `Picked up ${pickedUp.emoji} ${pickedUp.name} — can't equip, sent to bank.`
                       : `Picked up ${pickedUp.emoji} ${pickedUp.name} → Equip tab (⚔️).`);
                   }
-                } else if (pickedUp.healAmount !== undefined || bagCount < 9) {
-                  bumpedPlayer.inventory = [...bumpedPlayer.inventory, pickedUp];
-                  addLog(`Picked up ${pickedUp.emoji} ${pickedUp.name} (${pickedUp.description})`);
                 } else {
-                  bumpedPlayer.bank = [...bumpedPlayer.bank, pickedUp];
-                  addLog(`Picked up ${pickedUp.emoji} ${pickedUp.name} — bag full, sent to bank.`);
+                  const { inventory: _bInv, bank: _bBnk } = addToBag(bumpedPlayer.inventory, bumpedPlayer.bank, pickedUp);
+                  const wentToBank = _bBnk.length > bumpedPlayer.bank.length;
+                  bumpedPlayer = { ...bumpedPlayer, inventory: _bInv, bank: _bBnk };
+                  addLog(wentToBank
+                    ? `🎒 Bag full! Picked up ${pickedUp.emoji} ${pickedUp.name} — sent to bank.`
+                    : `Picked up ${pickedUp.emoji} ${pickedUp.name} (${pickedUp.description})`);
                 }
               }
               const midState = { ...prev, player: bumpedPlayer, items: newItems, turn: prev.turn + 1 };
@@ -438,7 +438,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const ninjaEvaCombatPlayer = cls === '🥷'
           ? { ...combatPlayer, stats: { ...combatPlayer.stats, evasion: computeNinjaEvasion(combatPlayer) } }
           : combatPlayer;
-        const combatResult = resolveCombat(ninjaEvaCombatPlayer, enemy, addLog, { weakMelee, wizardMelee, pistolWhip: isPistolWhip, mood, cowboyMoodValue: cls === '🤠' ? prev.player.stats.moodValue : undefined, dualStrike: false, quadStrike: hasDualBlades, advantage: _meleePassives.advantageDice, execBlow: _meleePassives.execBlow, shieldWall: _meleePassives.shieldWall });
+        const combatResult = resolveCombat(ninjaEvaCombatPlayer, enemy, addLog, { weakMelee, wizardMelee, pistolWhip: isPistolWhip, mood, cowboyMoodValue: cls === '🤠' ? prev.player.stats.moodValue : undefined, dualStrike: false, quadStrike: hasDualBlades, advantage: _meleePassives.advantageDice, execBlow: _meleePassives.execBlow, shieldWall: _meleePassives.shieldWall, floor: prev.currentFloor });
 
         if (cls === '🤠' && !combatResult.fled) {
           const dmgDealt = enemy.hp - Math.max(0, combatResult.enemyHp);
@@ -459,9 +459,21 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
         let newEnemies = [...prev.enemies];
         let newPlayer: Player = { ...player, stats: { ...player.stats, hp: combatResult.playerHp } };
+        if (combatResult.goldStolen && combatResult.goldStolen > 0) {
+          newPlayer.stats.gold = Math.max(0, newPlayer.stats.gold - combatResult.goldStolen);
+        }
 
         let skipFightId: string | undefined;
         const meleeBaseFloats: FloatingText[] = [];
+        if (combatResult.goldStolen && combatResult.goldStolen > 0) {
+          meleeBaseFloats.push({
+            id: `crow-steal-melee-${enemy.id}-${prev.turn}`,
+            pos: { ...player.pos },
+            text: `-${combatResult.goldStolen}g`,
+            color: '#facc15',
+            life: 2,
+          });
+        }
         let godBlessedProc = false;
         if (combatResult.enemyDied && enemy.godBlessed) {
           const gb = handleGodBlessedImmunity(enemy, newEnemies, enemyIndex, newPlayer.stats.hp, prev.turn, addLog, meleeBaseFloats);
@@ -671,7 +683,6 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         } else {
           const { pos: _pos, ...pickedUp } = item;
           const isUnequippable = pickedUp.isEquipment && !canEquipItem(pickedUp, newPlayer.characterClass);
-          const bagCount = newPlayer.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment).length;
           if (pickedUp.isEquipment) {
             const autoSlot = !isUnequippable
               ? (pickedUp.equipSlots ?? []).find(s => !newPlayer.equipment[s as import('../game/types').EquipSlot])
@@ -685,12 +696,13 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                 ? `Picked up ${pickedUp.emoji} ${pickedUp.name} — can't equip, sent to bank.`
                 : `Picked up ${pickedUp.emoji} ${pickedUp.name} → Equip tab (⚔️).`);
             }
-          } else if (pickedUp.healAmount !== undefined || bagCount < 9) {
-            newPlayer.inventory = [...newPlayer.inventory, pickedUp];
-            addLog(`Picked up ${pickedUp.emoji} ${pickedUp.name} (${pickedUp.description})`);
           } else {
-            newPlayer = { ...newPlayer, bank: [...newPlayer.bank, pickedUp] };
-            addLog(`🎒 Bag full! ${pickedUp.emoji} ${pickedUp.name} sent to bank. (B to open)`);
+            const { inventory: _pInv, bank: _pBnk } = addToBag(newPlayer.inventory, newPlayer.bank, pickedUp);
+            const wentToBank = _pBnk.length > newPlayer.bank.length;
+            newPlayer = { ...newPlayer, inventory: _pInv, bank: _pBnk };
+            addLog(wentToBank
+              ? `🎒 Bag full! ${pickedUp.emoji} ${pickedUp.name} sent to bank. (B to open)`
+              : `Picked up ${pickedUp.emoji} ${pickedUp.name} (${pickedUp.description})`);
           }
           if (!pickedUp.healAmount) markEmojiSeen(pickedUp.emoji);
           newPlayer.stats.moodValue = Math.min(moodMax(cls), newPlayer.stats.moodValue + 5);
@@ -709,7 +721,6 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               addLog(`🧲 ${pickedUp.emoji} +${pickedUp.ammoAmount} ${_magnetAmmoWord} — ${newPlayer.ammo} total`);
             } else {
               const isUnequippableMagnet = pickedUp.isEquipment && !canEquipItem(pickedUp, newPlayer.characterClass);
-              const bagCount = newPlayer.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment).length;
               if (pickedUp.isEquipment) {
                 const autoSlotMagnet = !isUnequippableMagnet
                   ? (pickedUp.equipSlots ?? []).find(s => !newPlayer.equipment[s as import('../game/types').EquipSlot])
@@ -723,12 +734,13 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                     ? `🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you — can't equip, sent to bank.`
                     : `🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you → Equip tab (⚔️).`);
                 }
-              } else if (pickedUp.healAmount !== undefined || bagCount < 9) {
-                newPlayer.inventory = [...newPlayer.inventory, pickedUp];
-                addLog(`🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you!`);
               } else {
-                newPlayer = { ...newPlayer, bank: [...newPlayer.bank, pickedUp] };
-                addLog(`🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you — bag full, sent to bank.`);
+                const { inventory: _mInv, bank: _mBnk } = addToBag(newPlayer.inventory, newPlayer.bank, pickedUp);
+                const magnetWentToBank = _mBnk.length > newPlayer.bank.length;
+                newPlayer = { ...newPlayer, inventory: _mInv, bank: _mBnk };
+                addLog(magnetWentToBank
+                  ? `🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you — bag full, sent to bank.`
+                  : `🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you!`);
               }
               if (!pickedUp.healAmount) markEmojiSeen(pickedUp.emoji);
               newPlayer.stats.moodValue = Math.min(moodMax(cls), newPlayer.stats.moodValue + 3);
@@ -870,6 +882,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               : [...boltCandidates].sort((a, b) => chebyshev(newPlayer.pos, a.pos) - chebyshev(newPlayer.pos, b.pos))[0];
 
         if (boltTarget && (newPlayer.stats.mana ?? 0) > 0) {
+          markEnemySeen(boltTarget.emoji);
           newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, mana: Math.max(0, (newPlayer.stats.mana ?? 0) - 1) } };
           const boltMood = getMood(newPlayer.stats.moodValue, newPlayer.stats.hp, newPlayer.stats.maxHp, newPlayer.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
           const _boltPassives = computeBagPassives(newPlayer.inventory);
@@ -1028,6 +1041,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               : [...boltCandidates].sort((a, b) => chebyshev(waitPlayer.pos, a.pos) - chebyshev(waitPlayer.pos, b.pos))[0];
 
         if (boltTarget && (waitPlayer.stats.mana ?? 0) > 0) {
+          markEnemySeen(boltTarget.emoji);
           waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, mana: Math.max(0, (waitPlayer.stats.mana ?? 0) - 1) } };
           const boltMood = getMood(waitPlayer.stats.moodValue, waitPlayer.stats.hp, waitPlayer.stats.maxHp, waitPlayer.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
           const _boltPassives = computeBagPassives(waitPlayer.inventory);

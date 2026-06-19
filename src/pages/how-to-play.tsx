@@ -9,6 +9,7 @@ import {
   getSeenEmojis,
   getSeenEnemies,
   getEnemyKillCounts,
+  normalizeEmojiKey,
 } from "../game/discoveries";
 
 function Kbd({ children }: { children: React.ReactNode }) {
@@ -73,7 +74,7 @@ export default function HowToPlay({
     seenEmojis.has(e.emoji),
   ).length;
   const seenEnemyCount = ENEMY_TYPES.filter((e) =>
-    seenEnemies.has(e.emoji),
+    seenEnemies.has(normalizeEmojiKey(e.emoji)),
   ).length;
 
   return (
@@ -753,7 +754,8 @@ export default function HowToPlay({
 
         <div className="grid grid-cols-1 gap-2">
           {ENEMY_TYPES.map((enemy) => {
-            const seen = seenEnemies.has(enemy.emoji);
+            const enemyKey = normalizeEmojiKey(enemy.emoji);
+            const seen = seenEnemies.has(enemyKey);
             return (
               <div
                 key={enemy.emoji}
@@ -770,9 +772,9 @@ export default function HowToPlay({
                       <span className="font-semibold text-sm">
                         {enemy.name}
                       </span>
-                      {(displayKills[enemy.emoji] ?? 0) > 0 && (
+                      {(displayKills[enemyKey] ?? 0) > 0 && (
                         <span className="text-xs text-muted-foreground/70 tabular-nums">
-                          ⚔️ {displayKills[enemy.emoji]} defeated{" "}
+                          ⚔️ {displayKills[enemyKey]} defeated{" "}
                           <span className="opacity-50">({killsLabel})</span>
                         </span>
                       )}
@@ -792,6 +794,7 @@ export default function HowToPlay({
                       ("madScientist" in enemy && enemy.madScientist) ||
                       ("waterAggro" in enemy && enemy.waterAggro) ||
                       ("monkey" in enemy && enemy.monkey) ||
+                      ("crow" in enemy && enemy.crow) ||
                       ("ranged" in enemy && enemy.ranged) ||
                       ("tag" in enemy && (enemy.tag === 'Neutral' || enemy.tag === 'Friendly'))) && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
@@ -913,6 +916,17 @@ export default function HowToPlay({
                             </span>
                             <span className="text-muted-foreground">
                               — steals your soul emojis
+                            </span>
+                          </span>
+                        )}
+                        {"crow" in enemy && enemy.crow && (
+                          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-yellow-500/15 border border-yellow-500/25">
+                            <span>🐦‍⬛</span>
+                            <span className="font-semibold text-yellow-300">
+                              Pickpocket
+                            </span>
+                            <span className="text-muted-foreground">
+                              — steals gold on hit (scales with floor)
                             </span>
                           </span>
                         )}
