@@ -11,7 +11,7 @@ export function ContextActionButton({ descriptor, onAct }: ContextActionButtonPr
   return (
     <button
       data-testid="context-action-button"
-      onPointerDown={e => { e.preventDefault(); onAct(); }}
+      onPointerDown={e => { e.preventDefault(); e.stopPropagation(); onAct(); }}
       className={[
         'flex flex-col items-center justify-center rounded-2xl border shadow-2xl select-none touch-none',
         'transition-transform duration-75 active:scale-90',

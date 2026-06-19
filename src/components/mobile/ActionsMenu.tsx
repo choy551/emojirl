@@ -20,7 +20,7 @@ interface ActionsMenuProps {
 function ActionTile({ item, onClose }: { item: ActionItem; onClose: () => void }) {
   return (
     <button
-      onPointerDown={e => { e.preventDefault(); if (!item.disabled) { item.onUse(); onClose(); } }}
+      onPointerDown={e => { e.preventDefault(); e.stopPropagation(); if (!item.disabled) { item.onUse(); onClose(); } }}
       disabled={item.disabled}
       className={[
         'flex flex-col items-center justify-center gap-0.5 py-2.5 rounded-xl border select-none touch-none',
@@ -46,10 +46,12 @@ export function ActionsMenu({ general, abilities, onOpenTactics, onClose }: Acti
     <div
       className="fixed inset-0 z-[55] flex items-end justify-center bg-black/60 backdrop-blur-sm"
       onClick={onClose}
+      onPointerDown={e => e.stopPropagation()}
     >
       <div
         className="w-full max-w-md bg-card border-t border-x border-border rounded-t-2xl shadow-2xl p-4 pb-6 max-h-[80vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
+        onPointerDown={e => e.stopPropagation()}
       >
         <div className="flex justify-center mb-3">
           <span className="w-10 h-1 rounded-full bg-muted-foreground/30" />

@@ -2454,7 +2454,7 @@ export default function Game() {
 
         {/* Combat Log */}
         <div
-          onClick={() => setLogOpen(true)}
+          onClick={() => { if (actionsMenuOpen) return; setLogOpen(true); }}
           className={`absolute left-4 right-4 h-36 bg-black/60 border border-border/60 p-3 rounded-lg overflow-hidden flex flex-col justify-end gap-0.5 cursor-pointer hover:border-border/90 transition-colors ${isMobile ? 'bottom-48' : 'bottom-4'}`}
           style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)' }}
           title="Click or press / to open full log"
@@ -2831,7 +2831,7 @@ export default function Game() {
                     {actionSide === 'left' && <ContextActionButton descriptor={mobileContextDescriptor} onAct={doContextAction} />}
                     <button
                       data-testid="actions-menu-button"
-                      onPointerDown={e => { e.preventDefault(); setActionsMenuOpen(true); }}
+                      onPointerDown={e => { e.preventDefault(); e.stopPropagation(); setActionsMenuOpen(true); }}
                       className="flex flex-col items-center justify-center rounded-2xl bg-slate-700/75 border border-slate-300/40 text-white shadow-2xl select-none touch-none transition-transform duration-75 active:scale-90"
                       style={{ width: 56, height: 72 }}
                       aria-label="All actions"
