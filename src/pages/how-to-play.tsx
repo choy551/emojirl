@@ -341,7 +341,7 @@ export default function HowToPlay({
           </div>
 
           <div className="text-xs text-muted-foreground mt-1">
-            <strong>Companions (recruited adventurers):</strong> Bump into them (move into their tile) to swap places — very useful in 1×1 hallways to avoid blocking/soft-locks. They follow you, fight hostiles, and can be commanded somewhat via the bag.
+            <strong>Companions (recruited adventurers):</strong> Bump into them (move into their tile) to swap places — very useful in 1×1 hallways to avoid blocking/soft-locks. They follow you and fight nearby hostiles on their own; there is no separate command menu.
           </div>
         </div>
       </Section>
