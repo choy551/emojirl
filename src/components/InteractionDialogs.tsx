@@ -389,9 +389,13 @@ export function CompanionTalkDialog({ gameState, setGameState, companionId, onCl
         if (eff.maxHpBonus)   { newComp.maxHp    = newComp.maxHp + eff.maxHpBonus; parts.push(`+${eff.maxHpBonus} max HP`); }
       }
       const summary = parts.length > 0 ? ` (${parts.join(', ')})` : '';
+      const newInventory = prev.player.inventory.flatMap(it => {
+        if (it.id !== item.id) return [it];
+        return (it.stackCount ?? 1) > 1 ? [{ ...it, stackCount: (it.stackCount ?? 1) - 1 }] : [];
+      });
       return {
         ...prev,
-        player: { ...prev.player, inventory: prev.player.inventory.filter(it => it.id !== item.id) },
+        player: { ...prev.player, inventory: newInventory },
         enemies: prev.enemies.map(e => e.id === companionId ? newComp : e),
         logs: [{
           id: Math.random().toString(),
@@ -408,9 +412,13 @@ export function CompanionTalkDialog({ gameState, setGameState, companionId, onCl
       if (!prev) return prev;
       const comp = prev.enemies.find(e => e.id === companionId);
       if (!comp) return prev;
+      const newInventory = prev.player.inventory.flatMap(it => {
+        if (it.id !== item.id) return [it];
+        return (it.stackCount ?? 1) > 1 ? [{ ...it, stackCount: (it.stackCount ?? 1) - 1 }] : [];
+      });
       return {
         ...prev,
-        player: { ...prev.player, inventory: prev.player.inventory.filter(it => it.id !== item.id) },
+        player: { ...prev.player, inventory: newInventory },
         enemies: prev.enemies.map(e =>
           e.id === companionId ? { ...e, companionSoulEmoji: item } : e
         ),

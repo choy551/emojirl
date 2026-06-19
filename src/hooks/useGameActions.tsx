@@ -375,8 +375,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const enemy = prev.enemies[enemyIndex];
         markEnemySeen(enemy.emoji);
 
-        if (enemy.isAdventurer && enemy.isRecruited) {
-          // DCSS-style: bump into recruited companion swaps positions (prevents soft-locks in 1x1 hallways)
+        if ((enemy.isAdventurer || enemy.bear) && enemy.isRecruited) {
+          // DCSS-style: bump into recruited companion (adventurer or bear) swaps positions
           const companion = prev.enemies[enemyIndex];
           const newEnemies = [...prev.enemies];
           newEnemies[enemyIndex] = { ...companion, pos: { x: player.pos.x, y: player.pos.y } };

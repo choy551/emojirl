@@ -71,7 +71,7 @@ export function resolveContextAction(state: GameState): ContextActionDescriptor 
   const monkey = adjEnemy(e => !!e.monkey && !e.engaged);
   if (monkey) return { kind: 'monkey', label: 'Monkey', icon: '🐒', dir: dirTo(monkey) };
 
-  const bear = adjEnemy(e => !!e.bear && !e.engaged && e.tag !== 'Hostile');
+  const bear = adjEnemy(e => !!e.bear && !e.isRecruited && !e.engaged && e.tag !== 'Hostile');
   if (bear) return { kind: 'bear', label: bear.tag === 'Friendly' ? 'Offer Food 🐻' : 'Feed Bear 🐻', icon: '🐻', dir: dirTo(bear) };
 
   const companion = adjEnemy(e => !!e.isRecruited && e.tag === 'Friendly');
