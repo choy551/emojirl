@@ -1,4 +1,5 @@
-import { GameState } from '../game/types';
+import { useState } from 'react';
+import { GameState, Enemy, EmojiItem } from '../game/types';
 import { addToBag } from '../game/gameHelpers';
 
 type SetGameState = React.Dispatch<React.SetStateAction<GameState | null>>;
@@ -273,6 +274,403 @@ export function AdventurerInteractionDialog({ gameState, setGameState, adventure
             onClick={onClose}
           >
             Exit dialogue 👋
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── CompanionTalkDialog ────────────────────────────────────────────────────
+
+interface CompanionTalkProps {
+  gameState: GameState;
+  setGameState: SetGameState;
+  companionId: string;
+  onClose: () => void;
+}
+
+type TalkSection = 'main' | 'heal' | 'give' | 'soul';
+
+const BEHAVIOR_OPTIONS: { value: Enemy['companionBehavior']; icon: string; label: string; desc: string }[] = [
+  { value: 'close',      icon: '🤝', label: 'Stay Close',    desc: 'Follow tightly, charge engaged enemies near you' },
+  { value: 'far',        icon: '🏹', label: 'Hang Back',     desc: 'Keep distance (7 tiles), only strike enemies that reach you' },
+  { value: 'flee',       icon: '🏃', label: 'Flee at Low HP', desc: 'Retreat toward you when below 50% HP' },
+  { value: 'aggressive', icon: '⚔️', label: 'Fight to Death', desc: 'Charge any visible foe — reckless but relentless' },
+];
+
+function soulEmojiStatPreview(item: EmojiItem): string {
+  const eff = (item as unknown as Record<string, Record<string, number>>).effect;
+  if (!eff) return '';
+  const parts: string[] = [];
+  if (eff.attackBonus)  parts.push(`+${eff.attackBonus} ATK`);
+  if (eff.defenseBonus) parts.push(`+${eff.defenseBonus} DEF`);
+  if (eff.speedBonus)   parts.push(`+${eff.speedBonus} SPD`);
+  if (eff.evasionBonus) parts.push(`+${eff.evasionBonus} EVA`);
+  if (eff.luckBonus)    parts.push(`+${eff.luckBonus} LCK`);
+  if (eff.hpBonus)      parts.push(`+${eff.hpBonus} HP`);
+  if (eff.maxHpBonus)   parts.push(`+${eff.maxHpBonus} max HP`);
+  return parts.join(', ');
+}
+
+export function CompanionTalkDialog({ gameState, setGameState, companionId, onClose }: CompanionTalkProps) {
+  const [section, setSection] = useState<TalkSection>('main');
+
+  const companion = gameState.enemies.find(e => e.id === companionId);
+  if (!companion) return null;
+
+  const hpPct = Math.round((companion.hp / companion.maxHp) * 100);
+  const behavior = companion.companionBehavior ?? 'close';
+
+  // Player item pools
+  const healItems = gameState.player.inventory.filter(it => !it.consumed && it.healAmount !== undefined);
+  const soulItems = gameState.player.inventory.filter(it =>
+    !it.consumed && !it.isEquipment && !it.activeKind && it.healAmount === undefined && it.bagPassive
+  );
+
+  // ── Actions ──────────────────────────────────────────────────────────────
+
+  const toggleFavorite = () => {
+    setGameState(prev => {
+      if (!prev) return prev;
+      const nowFavorite = !companion.isFavoriteCompanion;
+      return {
+        ...prev,
+        enemies: prev.enemies.map(e =>
+          e.id === companionId
+            ? { ...e, isFavoriteCompanion: nowFavorite }
+            : e.isRecruited ? { ...e, isFavoriteCompanion: false } : e
+        ),
+        logs: [{
+          id: Math.random().toString(),
+          text: nowFavorite
+            ? `⭐ ${companion.emoji} ${companion.name} is now your Favorite Companion — they'll descend with you!`
+            : `${companion.emoji} ${companion.name} is no longer your Favorite.`,
+          turn: prev.turn,
+        }, ...prev.logs].slice(0, 24),
+      };
+    });
+  };
+
+  const handleHeal = (item: EmojiItem) => {
+    setGameState(prev => {
+      if (!prev) return prev;
+      const comp = prev.enemies.find(e => e.id === companionId);
+      if (!comp) return prev;
+      const amount = item.healAmount ?? 0;
+      const newHp = Math.min(comp.maxHp, comp.hp + amount);
+      return {
+        ...prev,
+        player: { ...prev.player, inventory: prev.player.inventory.filter(it => it.id !== item.id) },
+        enemies: prev.enemies.map(e => e.id === companionId ? { ...e, hp: newHp } : e),
+        logs: [{
+          id: Math.random().toString(),
+          text: `💊 ${comp.emoji} ${comp.name} is healed for ${amount} HP with ${item.emoji} ${item.name}. (${newHp}/${comp.maxHp} HP)`,
+          turn: prev.turn,
+        }, ...prev.logs].slice(0, 24),
+      };
+    });
+    setSection('main');
+  };
+
+  const handleGiveEmoji = (item: EmojiItem) => {
+    setGameState(prev => {
+      if (!prev) return prev;
+      const comp = prev.enemies.find(e => e.id === companionId);
+      if (!comp) return prev;
+      const eff = (item as unknown as Record<string, Record<string, number>>).effect;
+      let newComp = { ...comp };
+      const parts: string[] = [];
+      if (eff) {
+        if (eff.attackBonus)  { newComp.attack  = (newComp.attack  ?? 0) + eff.attackBonus;  parts.push(`+${eff.attackBonus} ATK`); }
+        if (eff.defenseBonus) { newComp.defense  = (newComp.defense ?? 0) + eff.defenseBonus; parts.push(`+${eff.defenseBonus} DEF`); }
+        if (eff.speedBonus)   { newComp.speed    = (newComp.speed   ?? 0) + eff.speedBonus;   parts.push(`+${eff.speedBonus} SPD`); }
+        if (eff.hpBonus)      { newComp.hp       = Math.min(newComp.maxHp + (eff.maxHpBonus ?? 0), newComp.hp + eff.hpBonus); parts.push(`+${eff.hpBonus} HP`); }
+        if (eff.maxHpBonus)   { newComp.maxHp    = newComp.maxHp + eff.maxHpBonus; parts.push(`+${eff.maxHpBonus} max HP`); }
+      }
+      const summary = parts.length > 0 ? ` (${parts.join(', ')})` : '';
+      return {
+        ...prev,
+        player: { ...prev.player, inventory: prev.player.inventory.filter(it => it.id !== item.id) },
+        enemies: prev.enemies.map(e => e.id === companionId ? newComp : e),
+        logs: [{
+          id: Math.random().toString(),
+          text: `🎁 ${comp.emoji} ${comp.name} absorbs ${item.emoji} ${item.name}!${summary}`,
+          turn: prev.turn,
+        }, ...prev.logs].slice(0, 24),
+      };
+    });
+    setSection('main');
+  };
+
+  const handleGiftSoul = (item: EmojiItem) => {
+    setGameState(prev => {
+      if (!prev) return prev;
+      const comp = prev.enemies.find(e => e.id === companionId);
+      if (!comp) return prev;
+      return {
+        ...prev,
+        player: { ...prev.player, inventory: prev.player.inventory.filter(it => it.id !== item.id) },
+        enemies: prev.enemies.map(e =>
+          e.id === companionId ? { ...e, companionSoulEmoji: item } : e
+        ),
+        logs: [{
+          id: Math.random().toString(),
+          text: `🌟 ${comp.emoji} ${comp.name} holds ${item.emoji} ${item.name} as their soul — its power flows through them!`,
+          turn: prev.turn,
+        }, ...prev.logs].slice(0, 24),
+      };
+    });
+    setSection('main');
+  };
+
+  const handleBehavior = (val: Enemy['companionBehavior']) => {
+    setGameState(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        enemies: prev.enemies.map(e =>
+          e.id === companionId ? { ...e, companionBehavior: val } : e
+        ),
+      };
+    });
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const borderColor = companion.isFavoriteCompanion ? 'border-yellow-400/60' : 'border-cyan-400/40';
+
+  // Sub-panel: heal
+  if (section === 'heal') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className={`bg-card border ${borderColor} rounded-xl p-5 shadow-2xl max-w-sm w-full mx-4`}>
+          <div className="text-sm font-bold text-cyan-300 mb-3">💊 Heal {companion.emoji} {companion.name}</div>
+          <div className="text-xs text-muted-foreground mb-3">
+            Current HP: <span className="text-white font-semibold">{companion.hp}/{companion.maxHp}</span>
+          </div>
+          {healItems.length === 0 ? (
+            <div className="text-xs text-slate-400 italic mb-3">No healing items in your bag.</div>
+          ) : (
+            <div className="space-y-1.5 max-h-52 overflow-y-auto mb-3">
+              {healItems.map(it => {
+                const wouldHeal = Math.min(it.healAmount!, companion.maxHp - companion.hp);
+                const full = companion.hp >= companion.maxHp;
+                return (
+                  <button
+                    key={it.id}
+                    className={`w-full text-left px-3 py-2 rounded-lg border text-xs flex items-center justify-between gap-2 transition-colors ${
+                      full
+                        ? 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
+                        : 'bg-green-500/15 border-green-500/30 text-green-200 hover:bg-green-500/25 cursor-pointer'
+                    }`}
+                    onClick={() => !full && handleHeal(it)}
+                    disabled={full}
+                  >
+                    <span>{it.emoji} {it.name}</span>
+                    <span className="text-green-400 font-semibold">+{wouldHeal} HP{full ? ' (full)' : ''}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <button
+            className="w-full py-2 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-xs font-semibold hover:bg-slate-500/30 transition-colors"
+            onClick={() => setSection('main')}
+          >
+            ← Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Sub-panel: give emoji for stat boost
+  if (section === 'give') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className={`bg-card border ${borderColor} rounded-xl p-5 shadow-2xl max-w-sm w-full mx-4`}>
+          <div className="text-sm font-bold text-cyan-300 mb-1">🎁 Give Emoji for Stats</div>
+          <div className="text-xs text-muted-foreground mb-3">The companion consumes it for a permanent boost.</div>
+          {soulItems.length === 0 ? (
+            <div className="text-xs text-slate-400 italic mb-3">No soul emojis in your bag.</div>
+          ) : (
+            <div className="space-y-1.5 max-h-52 overflow-y-auto mb-3">
+              {soulItems.map(it => {
+                const preview = soulEmojiStatPreview(it);
+                return (
+                  <button
+                    key={it.id}
+                    className="w-full text-left px-3 py-2 rounded-lg border bg-violet-500/15 border-violet-500/30 text-violet-200 hover:bg-violet-500/25 text-xs transition-colors cursor-pointer"
+                    onClick={() => handleGiveEmoji(it)}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold">{it.emoji} {it.name}</span>
+                      {preview && <span className="text-violet-400 shrink-0">{preview}</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <button
+            className="w-full py-2 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-xs font-semibold hover:bg-slate-500/30 transition-colors"
+            onClick={() => setSection('main')}
+          >
+            ← Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Sub-panel: gift soul emoji passive
+  if (section === 'soul') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className={`bg-card border ${borderColor} rounded-xl p-5 shadow-2xl max-w-sm w-full mx-4`}>
+          <div className="text-sm font-bold text-cyan-300 mb-1">🌟 Gift Soul Emoji Passive</div>
+          <div className="text-xs text-muted-foreground mb-1">One passive slot — replaces any previous gift.</div>
+          {companion.companionSoulEmoji && (
+            <div className="text-xs text-amber-400/80 bg-amber-900/20 border border-amber-700/30 rounded px-2 py-1 mb-3">
+              Current: {companion.companionSoulEmoji.emoji} {companion.companionSoulEmoji.name}
+              <span className="block text-[10px] text-amber-400/60">{companion.companionSoulEmoji.bagPassive?.description}</span>
+            </div>
+          )}
+          {soulItems.length === 0 ? (
+            <div className="text-xs text-slate-400 italic mb-3">No soul emojis in your bag.</div>
+          ) : (
+            <div className="space-y-1.5 max-h-44 overflow-y-auto mb-3">
+              {soulItems.map(it => (
+                <button
+                  key={it.id}
+                  className="w-full text-left px-3 py-2 rounded-lg border bg-amber-500/15 border-amber-500/30 text-amber-200 hover:bg-amber-500/25 text-xs transition-colors cursor-pointer"
+                  onClick={() => handleGiftSoul(it)}
+                >
+                  <div className="font-semibold">{it.emoji} {it.name}</div>
+                  {it.bagPassive?.description && (
+                    <div className="text-amber-400/70 text-[10px] mt-0.5">{it.bagPassive.description}</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            className="w-full py-2 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-xs font-semibold hover:bg-slate-500/30 transition-colors"
+            onClick={() => setSection('main')}
+          >
+            ← Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Main panel
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className={`bg-card border ${borderColor} rounded-xl p-5 shadow-2xl max-w-sm w-full mx-4`}>
+        {/* Header */}
+        <div className="flex items-start gap-3 mb-4">
+          <div className="text-4xl leading-none">{companion.emoji}</div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-sm font-bold text-cyan-300">{companion.name}</span>
+              {companion.isFavoriteCompanion && <span className="text-yellow-400 text-base">⭐</span>}
+              {companion.companionSoulEmoji && (
+                <span title={`Soul: ${companion.companionSoulEmoji.name}`} className="text-sm">
+                  {companion.companionSoulEmoji.emoji}
+                </span>
+              )}
+            </div>
+            {/* HP bar */}
+            <div className="flex items-center gap-1.5 mt-1">
+              <div className="flex-1 h-1.5 bg-secondary/30 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${hpPct > 50 ? 'bg-green-500' : hpPct > 25 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                  style={{ width: `${hpPct}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-muted-foreground tabular-nums">{companion.hp}/{companion.maxHp}</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">
+              ATK {companion.attack} · DEF {companion.defense} · SPD {companion.speed}
+            </div>
+          </div>
+        </div>
+
+        {/* Combat AI behavior */}
+        <div className="mb-4">
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1.5">Combat Behavior</div>
+          <div className="grid grid-cols-2 gap-1">
+            {BEHAVIOR_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                title={opt.desc}
+                className={`px-2 py-1.5 rounded-lg border text-xs font-semibold text-left transition-colors ${
+                  behavior === opt.value
+                    ? 'bg-cyan-500/25 border-cyan-400/60 text-cyan-200'
+                    : 'bg-slate-700/30 border-slate-600/30 text-slate-400 hover:bg-slate-600/30'
+                }`}
+                onClick={() => handleBehavior(opt.value)}
+              >
+                {opt.icon} {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="space-y-1.5">
+          <button
+            className={`w-full py-2 rounded-lg border text-xs font-semibold transition-colors text-left px-3 ${
+              companion.isFavoriteCompanion
+                ? 'bg-yellow-500/20 border-yellow-400/40 text-yellow-200 hover:bg-yellow-500/30'
+                : 'bg-slate-600/20 border-slate-500/30 text-slate-300 hover:bg-slate-600/30'
+            }`}
+            onClick={toggleFavorite}
+          >
+            {companion.isFavoriteCompanion ? '⭐ Remove Favorite' : '⭐ Set as Favorite Companion'}
+          </button>
+
+          <button
+            className="w-full py-2 px-3 rounded-lg border bg-green-500/15 border-green-500/30 text-green-300 text-xs font-semibold hover:bg-green-500/25 transition-colors text-left"
+            onClick={() => setSection('heal')}
+          >
+            💊 Heal {companion.name}
+            {healItems.length > 0
+              ? <span className="text-green-400/70 ml-1">({healItems.length} item{healItems.length !== 1 ? 's' : ''} available)</span>
+              : <span className="text-slate-500 ml-1">(none in bag)</span>
+            }
+          </button>
+
+          <button
+            className="w-full py-2 px-3 rounded-lg border bg-violet-500/15 border-violet-500/30 text-violet-300 text-xs font-semibold hover:bg-violet-500/25 transition-colors text-left"
+            onClick={() => setSection('give')}
+          >
+            🎁 Give Emoji for +Stats
+            {soulItems.length > 0
+              ? <span className="text-violet-400/70 ml-1">({soulItems.length} available)</span>
+              : <span className="text-slate-500 ml-1">(none in bag)</span>
+            }
+          </button>
+
+          <button
+            className="w-full py-2 px-3 rounded-lg border bg-amber-500/15 border-amber-500/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/25 transition-colors text-left"
+            onClick={() => setSection('soul')}
+          >
+            🌟 Gift Soul Emoji Passive
+            {companion.companionSoulEmoji
+              ? <span className="text-amber-400/70 ml-1">(current: {companion.companionSoulEmoji.emoji})</span>
+              : <span className="text-slate-500 ml-1">(none set)</span>
+            }
+          </button>
+
+          <button
+            className="w-full py-2 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-xs font-semibold hover:bg-slate-500/30 transition-colors"
+            onClick={onClose}
+          >
+            Farewell 👋
           </button>
         </div>
       </div>

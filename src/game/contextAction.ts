@@ -3,7 +3,7 @@ import { COOKABLE_EMOJIS } from './emojis';
 import { chebyshev } from './geo';
 
 export type ContextActionKind =
-  | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear'
+  | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear' | 'talk'
   | 'cook' | 'close-door'
   | 'open-shop' | 'open-cache' | 'open-restaurant'
   | 'descend' | 'shrine' | 'pickup' | 'wait';
@@ -73,6 +73,9 @@ export function resolveContextAction(state: GameState): ContextActionDescriptor 
 
   const bear = adjEnemy(e => !!e.bear && !e.engaged && e.tag !== 'Hostile');
   if (bear) return { kind: 'bear', label: bear.tag === 'Friendly' ? 'Offer Food 🐻' : 'Feed Bear 🐻', icon: '🐻', dir: dirTo(bear) };
+
+  const companion = adjEnemy(e => !!e.isRecruited && e.tag === 'Friendly');
+  if (companion) return { kind: 'talk', label: `Talk to ${companion.emoji}`, icon: '💬', dir: dirTo(companion) };
 
   const shrineDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'shrine');
   if (shrineDir) return { kind: 'shrine', label: 'Pray', icon: '⛩️', dir: shrineDir };

@@ -31,7 +31,7 @@ import { ShopModal } from '../components/ShopModal';
 import { AmmoCacheModal } from '../components/AmmoCacheModal';
 import { RestaurantModal } from '../components/RestaurantModal';
 import { ItemStatCard } from '../components/ItemStatCard';
-import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog } from '../components/InteractionDialogs';
+import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog, CompanionTalkDialog } from '../components/InteractionDialogs';
 import { TacticsMenu } from '../components/TacticsMenu';
 import { EquipmentTab } from '../components/EquipmentTab';
 import { canEquipItem } from '../components/itemUtils';
@@ -244,6 +244,7 @@ export default function Game() {
   const [pendingMonkeyInteraction, setPendingMonkeyInteraction] = useState<{ id: string; wants: string } | null>(null);
   const [pendingAdventurerInteraction, setPendingAdventurerInteraction] = useState<string | null>(null);
   const [pendingBearInteraction, setPendingBearInteraction] = useState<{ id: string; stage: 'neutral' | 'friendly'; offerId: string | null } | null>(null);
+  const [pendingCompanionTalkId, setPendingCompanionTalkId] = useState<string | null>(null);
 
   // Emoji-less flash: full-screen red vignette when player has no soul emojis
   useEffect(() => {
@@ -779,6 +780,16 @@ export default function Game() {
       case 'open-restaurant': setRestaurantOpen(true); break;
       case 'close-door': setTravelTarget(null); handleCloseDoor(); break;
       case 'cook': setTravelTarget(null); handleCook(); break;
+      case 'talk': {
+        const gs = gameStateRef.current;
+        if (gs && action.dir) {
+          const px = gs.player.pos.x + action.dir.dx;
+          const py = gs.player.pos.y + action.dir.dy;
+          const comp = gs.enemies.find(e => e.pos.x === px && e.pos.y === py && e.isRecruited && e.tag === 'Friendly');
+          if (comp) { setPendingCompanionTalkId(comp.id); }
+        }
+        break;
+      }
       case 'attack':
       case 'recruit':
       case 'fairy':
@@ -1224,6 +1235,21 @@ export default function Game() {
       if (e.key === 'c') { e.preventDefault(); handleCloseDoor(); return; }
       // Class tactics: t opens the tactics menu
       if (e.key === 't') { e.preventDefault(); setTacticsMenuOpen(v => !v); return; }
+      // Talk to adjacent recruited companion: Shift+T
+      if (e.key === 'T') {
+        e.preventDefault();
+        const gs = gameStateRef.current;
+        if (gs && !gs.gameOver) {
+          const { x: px, y: py } = gs.player.pos;
+          const comp = gs.enemies.find(e =>
+            e.isRecruited && e.tag === 'Friendly' &&
+            Math.max(Math.abs(e.pos.x - px), Math.abs(e.pos.y - py)) === 1
+          );
+          if (comp) setPendingCompanionTalkId(comp.id);
+          else addLog('No companion adjacent to talk to.');
+        }
+        return;
+      }
       // Ninja blink strike shortcut: x → instant strike on nearest enemy
       if ((e.key === 'x' || e.key === 'X') && gameStateRef.current?.player.characterClass === '🥷') { e.preventDefault(); handleBlinkStrike(); return; }
 
@@ -2693,6 +2719,15 @@ export default function Game() {
           stage={pendingBearInteraction.stage}
           offerId={pendingBearInteraction.offerId}
           onClose={() => setPendingBearInteraction(null)}
+        />
+      )}
+
+      {pendingCompanionTalkId && gameState && (
+        <CompanionTalkDialog
+          gameState={gameState}
+          setGameState={setGameState}
+          companionId={pendingCompanionTalkId}
+          onClose={() => setPendingCompanionTalkId(null)}
         />
       )}
 

@@ -357,19 +357,48 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
 
     if (enemy.tag === 'Friendly') {
       if (enemy.isAdventurer || (enemy.bear && enemy.isRecruited)) {
-        // Recruited companion (adventurer or bear): attack nearby hostiles, follow player
+        // Recruited companion: attack nearby hostiles, follow player.
+        // Behavior mode (default 'close'):
+        //   'close'      — follow within 3 tiles; chase & attack engaged hostiles near player
+        //   'far'        — follow within 7 tiles; only attack adjacent enemies (hang back role)
+        //   'flee'       — retreat toward player when HP < 50% and hostiles are near; else close
+        //   'aggressive' — charge any visible hostile on the floor, ignoring engaged flag
+        const behavior = enemy.companionBehavior ?? 'close';
         const searchRadius = enemy.bear ? 5 : 6;
-        const hostileTargets = newEnemies.filter((e, ei) =>
-          ei !== i && e.hp > 0 && e.tag !== 'Friendly' && e.tag !== 'Neutral' &&
-          e.engaged && chebyshev(e.pos, player.pos) <= searchRadius
-        );
+        // Soul-emoji passive bonus to attack
+        const soulAtkBonus = enemy.companionSoulEmoji?.bagPassive?.attackBonus ?? 0;
+        const soulVampire  = !!(enemy.companionSoulEmoji?.bagPassive?.vampiricStrike);
+
+        // Build the set of hostile targets based on behavior mode
+        const hostileTargets = newEnemies.filter((e, ei) => {
+          if (ei === i || e.hp <= 0 || e.tag === 'Friendly' || e.tag === 'Neutral') return false;
+          if (behavior === 'aggressive') {
+            // Any hostile within extended search radius (not just engaged)
+            return chebyshev(e.pos, player.pos) <= searchRadius + 3;
+          }
+          return e.engaged && chebyshev(e.pos, player.pos) <= searchRadius;
+        });
         hostileTargets.sort((a, b) => chebyshev(a.pos, enemy.pos) - chebyshev(b.pos, enemy.pos));
         const companionTarget = hostileTargets[0];
-        if (companionTarget) {
+
+        // Flee logic: when HP < 50% and a hostile is nearby, run toward player
+        const hpRatio = enemy.hp / enemy.maxHp;
+        if (behavior === 'flee' && hpRatio < 0.5 && companionTarget && chebyshev(enemy.pos, companionTarget.pos) <= 3) {
+          const nextPos = bfsStepToward(map, enemy.pos, player.pos, occupied);
+          if (nextPos && !(nextPos.x === player.pos.x && nextPos.y === player.pos.y)) {
+            newEnemies[i] = { ...newEnemies[i], pos: nextPos };
+            occupied.add(`${nextPos.x},${nextPos.y}`);
+          } else {
+            occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
+          }
+        } else if (companionTarget) {
           const distToTarget = chebyshev(enemy.pos, companionTarget.pos);
+          // 'far' mode: don't chase — only strike if already adjacent
+          const shouldChase = behavior !== 'far' || distToTarget <= 1;
           if (distToTarget <= 1) {
             const ti = newEnemies.findIndex(e => e.id === companionTarget.id);
-            const dmg = Math.max(1, enemy.attack - Math.floor((companionTarget.defense ?? 0) / 2));
+            const effectiveAtk = enemy.attack + soulAtkBonus;
+            const dmg = Math.max(1, effectiveAtk - Math.floor((companionTarget.defense ?? 0) / 2));
             const newTargetHp = companionTarget.hp - dmg;
             const logPrefix = enemy.bear ? '🐻' : '🤝';
             newFloatingTexts.push({ id: `companion-${enemy.id}-${state.turn}`, pos: { ...companionTarget.pos }, text: `-${dmg}`, color: enemy.bear ? '#f59e0b' : '#22d3ee', life: 2 });
@@ -379,8 +408,12 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
             } else {
               newEnemies[ti] = { ...companionTarget, hp: newTargetHp };
             }
+            // Vampiric soul-emoji passive: heal 1 HP on hit
+            if (soulVampire && enemy.hp < enemy.maxHp) {
+              newEnemies[i] = { ...newEnemies[i], hp: Math.min(enemy.maxHp, enemy.hp + 1) };
+            }
             occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
-          } else {
+          } else if (shouldChase) {
             const nextPos = bfsStepToward(map, enemy.pos, companionTarget.pos, occupied);
             if (nextPos) {
               newEnemies[i] = { ...newEnemies[i], pos: nextPos };
@@ -388,17 +421,24 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
             } else {
               occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
             }
-          }
-        } else if (dist > 3) {
-          const nextPos = bfsStepToward(map, enemy.pos, player.pos, occupied);
-          if (nextPos && !(nextPos.x === player.pos.x && nextPos.y === player.pos.y)) {
-            newEnemies[i] = { ...newEnemies[i], pos: nextPos };
-            occupied.add(`${nextPos.x},${nextPos.y}`);
           } else {
+            // 'far' mode with distant target — don't chase, hold position
             occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
           }
         } else {
-          occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
+          // No target — follow player if too far
+          const followThreshold = behavior === 'far' ? 7 : 3;
+          if (dist > followThreshold) {
+            const nextPos = bfsStepToward(map, enemy.pos, player.pos, occupied);
+            if (nextPos && !(nextPos.x === player.pos.x && nextPos.y === player.pos.y)) {
+              newEnemies[i] = { ...newEnemies[i], pos: nextPos };
+              occupied.add(`${nextPos.x},${nextPos.y}`);
+            } else {
+              occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
+            }
+          } else {
+            occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
+          }
         }
       } else if (enemy.bear && !enemy.isRecruited) {
         // Friendly non-recruited bear: guards its position, attacks nearby hostiles near the player but does not follow

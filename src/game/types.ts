@@ -211,6 +211,12 @@ export interface Enemy {
   isRecruited?: boolean;
   favoriteEmoji?: string;
   ranged?: boolean;
+  /** Player-designated favorite companion — descends with the player; others stay behind. */
+  isFavoriteCompanion?: boolean;
+  /** Combat AI mode set by the player via the companion talk dialog. */
+  companionBehavior?: 'close' | 'far' | 'flee' | 'aggressive';
+  /** One soul emoji gifted by the player — grants its bagPassive benefit in combat. */
+  companionSoulEmoji?: EmojiItem;
 }
 
 export interface FloatingText {

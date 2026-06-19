@@ -842,12 +842,50 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         newState.map = computeVisibility(map, startPos, visionRadiusFor(newPlayer.characterClass, newPlayer.stats.level));
         newPlayer.pos = startPos;
         newState.currentFloor = nextFloor;
-        newState.enemies = spawnEnemies(nextFloor, rooms, startPos, prev.difficultyTier ?? 0, map);
-        newState.items = spawnVaultItems(rooms, newPlayer.characterClass, nextFloor);
         newState.placedBombs = [];
         newState.activeProjectile = null;
         newState.pendingExplosion = undefined;
         newState.pendingBeam = undefined;
+
+        // Companion descent: favorite companion (or random if none) descends with the player.
+        const recruitedCompanions = prev.enemies.filter(e =>
+          e.isRecruited && e.tag === 'Friendly' && e.hp > 0
+        );
+        const favoriteCompanion = recruitedCompanions.find(e => e.isFavoriteCompanion);
+        const descendingCompanion = favoriteCompanion ??
+          (recruitedCompanions.length > 0
+            ? recruitedCompanions[Math.floor(Math.random() * recruitedCompanions.length)]
+            : null);
+        const leftBehind = recruitedCompanions.filter(e => descendingCompanion && e.id !== descendingCompanion.id);
+        if (leftBehind.length > 0) {
+          addLog(`🏕️ New recruits stay behind in the safer levels of the Dungeon!`);
+        }
+
+        const freshEnemies = spawnEnemies(nextFloor, rooms, startPos, prev.difficultyTier ?? 0, map);
+        if (descendingCompanion) {
+          // Place descending companion adjacent to the player's start position
+          const adjacentOffsets = [
+            { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
+            { x: 1, y: 1 }, { x: -1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: -1 },
+          ];
+          const spawnedSet = new Set(freshEnemies.map(e => `${e.pos.x},${e.pos.y}`));
+          const slot = adjacentOffsets
+            .map(o => ({ x: startPos.x + o.x, y: startPos.y + o.y }))
+            .find(p => {
+              const t = map[p.y]?.[p.x];
+              return t && (t.type === 'floor' || t.type === 'safe-floor') && !spawnedSet.has(`${p.x},${p.y}`);
+            });
+          const companionPos = slot ?? startPos;
+          freshEnemies.push({ ...descendingCompanion, pos: companionPos });
+          if (!favoriteCompanion && recruitedCompanions.length > 1) {
+            addLog(`🤝 ${descendingCompanion.emoji} ${descendingCompanion.name} follows you deeper into the dungeon!`);
+          } else if (favoriteCompanion) {
+            addLog(`⭐ ${descendingCompanion.emoji} ${descendingCompanion.name} stays by your side as you descend.`);
+          }
+        }
+        newState.enemies = freshEnemies;
+        newState.items = spawnVaultItems(rooms, newPlayer.characterClass, nextFloor);
+
         if (nextFloor % 5 === 0) {
           addLog(`⚠️ Floor ${nextFloor} — a boss lurks here! Prepare yourself!`);
         } else {

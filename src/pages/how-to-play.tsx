@@ -347,7 +347,7 @@ export default function HowToPlay({
           </div>
 
           <div className="text-xs text-muted-foreground mt-1">
-            <strong>Companions (recruited adventurers):</strong> Bump into them (move into their tile) to swap places — very useful in 1×1 hallways to avoid blocking/soft-locks. They follow you and fight nearby hostiles on their own; there is no separate command menu.
+            <strong>Companions (recruited adventurers):</strong> Bump into them to swap places (prevents hallway soft-locks). They follow you and fight nearby hostiles automatically. Press <strong>Shift+T</strong> (or Spacebar context action) while adjacent to Talk — set a <em>Favorite Companion</em> to descend with you (others stay behind), heal them with food, gift soul emojis for stat boosts or an ongoing passive, and set their combat behavior (Stay Close / Hang Back / Flee at Low HP / Fight to Death).
           </div>
         </div>
       </Section>
