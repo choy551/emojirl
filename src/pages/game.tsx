@@ -12,6 +12,7 @@ import { saveGame, loadGame, clearSave, getRawSave } from '../game/save';
 import { isStackableBagPassive } from '../game/passives';
 import { useIsMobile } from '../hooks/use-mobile';
 import { useControlSettings } from '../hooks/useControlSettings';
+import { useAndroidBackButton } from '../hooks/useAndroidBackButton';
 import { useTouchGestures } from '../hooks/useTouchGestures';
 import { resolveContextAction } from '../game/contextAction';
 import { ContextActionButton } from '../components/mobile/ContextActionButton';
@@ -179,6 +180,35 @@ export default function Game() {
   useEffect(() => { focusedBagIdxRef.current = focusedBagIdx; }, [focusedBagIdx]);
   useEffect(() => { bagTabRef.current = bagTab; }, [bagTab]);
   useEffect(() => { if (bankOpen) setFocusedBagIdx(0); }, [bankOpen]);
+
+  // Android hardware/gesture back button — closes modals in priority order
+  useAndroidBackButton({
+    dirPickMode,
+    setDirPickMode,
+    statsExpanded,
+    setStatsExpanded,
+    actionsMenuOpen,
+    setActionsMenuOpen,
+    shopOpen,
+    setShopOpen,
+    bankOpen,
+    setBankOpen,
+    ammoCacheOpen,
+    setAmmoCacheOpen,
+    restaurantOpen,
+    setRestaurantOpen,
+    logOpen,
+    setLogOpen,
+    tacticsMenuOpen,
+    setTacticsMenuOpen,
+    showRTFM,
+    setShowRTFM,
+    optionsOpen,
+    setOptionsOpen,
+    pauseMenuOpen,
+    setPauseMenuOpen,
+    onNavigateHome: () => navigate('/'),
+  });
 
   // Open shop when player steps onto a 🏪 tile
   useEffect(() => {

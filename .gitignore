@@ -30,4 +30,7 @@ lerna-debug.log*
 # OS
 Thumbs.db
 
-pnpm-workspace.yaml
+# keystores — NEVER commit these
+*.jks
+*.jks.old
+*.keystore

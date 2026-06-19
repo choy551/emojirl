@@ -20,7 +20,10 @@ export function MobileTopBar({ player, className, level, currentFloor, xpProgres
   const isWizard = player.characterClass === '🧙';
 
   return (
-    <div className="bg-sidebar border-b border-border/40 flex items-center gap-2 px-2 py-1.5 shrink-0 z-10 shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
+    <div
+      className="bg-sidebar border-b border-border/40 flex items-center gap-2 px-2 py-1.5 shrink-0 z-10 shadow-[0_4px_16px_rgba(0,0,0,0.4)]"
+      style={{ paddingTop: 'calc(0.375rem + env(safe-area-inset-top))' }}
+    >
       <button
         onClick={onExpand}
         className="flex items-center gap-2 flex-1 min-w-0 text-left active:opacity-70 transition-opacity"

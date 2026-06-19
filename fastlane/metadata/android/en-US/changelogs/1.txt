@@ -1,0 +1,8 @@
+Initial release.
+
+* All 4 classes playable: Wizard, Ninja, Ranger, Cowboy
+* Procedurally generated floors with line-of-sight fog of war
+* Equipment system with 4 slots
+* Mood system and enemy personalities
+* Mobile touch controls: d-pad, swipe, tap-to-move
+* Fully offline — no internet required

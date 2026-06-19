@@ -1,0 +1,23 @@
+EmojiRL is a casual roguelike where emojis are the tileset and the core gameplay mechanic.
+
+Your emoji collection IS your soul. Collect, equip, and strategically store emojis that grant powers, passives, and stats as you descend through procedurally generated floors.
+
+CLASSES
+* Wizard — Ranged autobattler with powerful area abilities
+* Ninja — High mobility and stealth mechanics
+* Ranger — Ranged specialist with ammo and survival mechanics
+* Cowboy — Unarmed brawler who dual-wields guns when found
+
+FEATURES
+* Emoji as core identity — emojis function as equipment, passive bonuses, and active abilities
+* 4 equipment slots — Body, Main Hand, Off Hand, and Accessory
+* Line of sight with raycasted fog of war and memory of explored areas
+* Mood system — your emotional state affects gameplay
+* Enemy personalities — cowardly, berserker, packHunter, and silent enemies
+* Autoexplore — let the game explore for you
+* Procedurally generated floors
+* Fully offline — no internet required, no accounts, no ads
+* All progress saved locally on your device
+
+PRIVACY
+EmojiRL collects no data whatsoever. All game state is stored locally on your device.

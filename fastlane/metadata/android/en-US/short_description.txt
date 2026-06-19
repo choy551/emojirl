@@ -1,0 +1,1 @@
+A turn-based emoji roguelike. Collect soul emojis, equip gear, descend as deep as you can.

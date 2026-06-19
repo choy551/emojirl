@@ -49,7 +49,8 @@ export function ActionsMenu({ general, abilities, onOpenTactics, onClose }: Acti
       onPointerDown={e => e.stopPropagation()}
     >
       <div
-        className="w-full max-w-md bg-card border-t border-x border-border rounded-t-2xl shadow-2xl p-4 pb-6 max-h-[80vh] overflow-y-auto"
+        className="w-full max-w-md bg-card border-t border-x border-border rounded-t-2xl shadow-2xl p-4 max-h-[80vh] overflow-y-auto"
+        style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
         onClick={e => e.stopPropagation()}
         onPointerDown={e => e.stopPropagation()}
       >

@@ -113,7 +113,13 @@ export function VirtualDpad({ onMove, onWait, side: sideProp, onToggleSide }: Vi
         'fixed bottom-4 z-40 flex flex-col items-center gap-1',
         side === 'right' ? 'right-3' : 'left-3',
       ].join(' ')}
-      style={{ userSelect: 'none' }}
+      style={{
+        userSelect: 'none',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        ...(side === 'right'
+          ? { paddingRight: 'env(safe-area-inset-right)' }
+          : { paddingLeft: 'env(safe-area-inset-left)' }),
+      }}
     >
       <div
         className="grid gap-1 p-1.5 rounded-2xl bg-black/50 backdrop-blur-sm border border-white/10 shadow-2xl"
