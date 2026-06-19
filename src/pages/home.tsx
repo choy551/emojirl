@@ -41,7 +41,16 @@ export default function Home() {
           <h1 className="text-6xl font-black mb-4 text-primary tracking-tighter drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]">EmojiRL</h1>
           <p className="text-muted-foreground text-lg">Your emoji collection IS your soul.</p>
           <p className="mt-3 text-xs text-amber-400/70 border border-amber-700/30 bg-amber-950/20 rounded-lg px-3 py-2 inline-block">
-            🖥️ Primarily developed for desktop browsers — mobile support coming soon!
+            🖥️ Best on desktop, but 📱 experimental mobile touch controls are now live (WIP)!
+            {' '}Got feedback?{' '}
+            <a
+              href="https://github.com/choy551/emojirl/issues"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-amber-300 underline underline-offset-2 hover:text-amber-100 transition-colors font-semibold"
+            >
+              Leave comments, criticisms &amp; suggestions on GitHub
+            </a>.
           </p>
         </div>
 
