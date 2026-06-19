@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { Player, Enemy, Position, FloatingText } from '../game/types';
 import { resolveCombat, getCowboyUnarmedBonus } from '../game/combat';
-import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop } from '../game/emojis';
+import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, getFoodHealItems } from '../game/emojis';
 import { getMood } from '../game/moods';
 import { generateMap } from '../game/mapgen';
 import { markEnemySeen, markEmojiSeen, markEnemyKilled } from '../game/discoveries';
@@ -33,7 +33,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
   const {
     setGameState, setWizardTactics, setRangerMode,
     setPendingFairyId, setPendingMonkeyInteraction,
-    setPendingAdventurerInteraction,
+    setPendingAdventurerInteraction, setPendingBearInteraction,
     setBlinkTurn, setTrailblazeTurn,
   } = setters;
 
@@ -417,6 +417,12 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const MONKEY_FOODS = ['🍎', '🍖', '🧪', '🍇', '🫀', '🍞', '🧅', '🍄'];
           const wants = MONKEY_FOODS[Math.floor(Math.random() * MONKEY_FOODS.length)];
           setPendingMonkeyInteraction({ id: enemy.id, wants });
+          return prev;
+        }
+        if (enemy.bear && !enemy.engaged && enemy.tag !== 'Hostile') {
+          const foodItems = getFoodHealItems(prev.player.inventory);
+          const offerItem = foodItems.length > 0 ? foodItems[Math.floor(Math.random() * foodItems.length)] : null;
+          setPendingBearInteraction({ id: enemy.id, stage: enemy.tag === 'Friendly' ? 'friendly' : 'neutral', offerId: offerItem?.id ?? null });
           return prev;
         }
         const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, cls === '🤠');

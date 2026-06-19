@@ -31,7 +31,7 @@ import { ShopModal } from '../components/ShopModal';
 import { AmmoCacheModal } from '../components/AmmoCacheModal';
 import { RestaurantModal } from '../components/RestaurantModal';
 import { ItemStatCard } from '../components/ItemStatCard';
-import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog } from '../components/InteractionDialogs';
+import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog } from '../components/InteractionDialogs';
 import { TacticsMenu } from '../components/TacticsMenu';
 import { EquipmentTab } from '../components/EquipmentTab';
 import { canEquipItem } from '../components/itemUtils';
@@ -243,6 +243,7 @@ export default function Game() {
   useEffect(() => { pendingFairyIdRef.current = pendingFairyId; }, [pendingFairyId]);
   const [pendingMonkeyInteraction, setPendingMonkeyInteraction] = useState<{ id: string; wants: string } | null>(null);
   const [pendingAdventurerInteraction, setPendingAdventurerInteraction] = useState<string | null>(null);
+  const [pendingBearInteraction, setPendingBearInteraction] = useState<{ id: string; stage: 'neutral' | 'friendly'; offerId: string | null } | null>(null);
 
   // Emoji-less flash: full-screen red vignette when player has no soul emojis
   useEffect(() => {
@@ -460,6 +461,7 @@ export default function Game() {
       setPendingFairyId,
       setPendingMonkeyInteraction,
       setPendingAdventurerInteraction,
+      setPendingBearInteraction,
       setBlinkTurn,
       setTrailblazeTurn,
     },
@@ -781,6 +783,7 @@ export default function Game() {
       case 'recruit':
       case 'fairy':
       case 'monkey':
+      case 'bear':
       case 'shrine':
       case 'descend':
       case 'pickup':
@@ -1193,6 +1196,12 @@ export default function Game() {
           }
         }
       }
+      // Context-sensitive Space: perform the most relevant action for the current surroundings
+      if (e.code === 'Space') {
+        e.preventDefault();
+        doContextAction();
+        return;
+      }
       // Wait 1 turn: z or Numpad5
       if (e.key === 'z' || e.code === 'Numpad5') {
         e.preventDefault();
@@ -1257,7 +1266,7 @@ export default function Game() {
       window.removeEventListener('keyup', handleKeyUp);
 
     };
-  }, [handleMove, handleWait, handleUseHeal, handleCook, handleCloseDoor, handleUseSlot, handleBankMove, setAutoRest, applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, handleBlinkStrike, handleBlinkStrikeOnTarget, enterBlinkTargetMode, exitBlinkTargetMode, applyRangerMode, handleCowboyTactics, handleFireProjectile, addLog]);
+  }, [handleMove, handleWait, handleUseHeal, handleCook, handleCloseDoor, handleUseSlot, handleBankMove, setAutoRest, applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, handleBlinkStrike, handleBlinkStrikeOnTarget, enterBlinkTargetMode, exitBlinkTargetMode, applyRangerMode, handleCowboyTactics, handleFireProjectile, addLog, doContextAction]);
 
   // ── render ────────────────────────────────────────────────────────────────
   if (!gameState) return <div className="p-8 text-center text-muted-foreground">Loading depths...</div>;
@@ -2673,6 +2682,17 @@ export default function Game() {
           setGameState={setGameState}
           adventurerId={pendingAdventurerInteraction}
           onClose={() => setPendingAdventurerInteraction(null)}
+        />
+      )}
+
+      {pendingBearInteraction && gameState && (
+        <BearInteractionDialog
+          gameState={gameState}
+          setGameState={setGameState}
+          bearId={pendingBearInteraction.id}
+          stage={pendingBearInteraction.stage}
+          offerId={pendingBearInteraction.offerId}
+          onClose={() => setPendingBearInteraction(null)}
         />
       )}
 

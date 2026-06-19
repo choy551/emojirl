@@ -34,6 +34,7 @@ export interface GameSetters {
   setPendingFairyId: React.Dispatch<React.SetStateAction<string | null>>;
   setPendingMonkeyInteraction: React.Dispatch<React.SetStateAction<{ id: string; wants: string } | null>>;
   setPendingAdventurerInteraction: React.Dispatch<React.SetStateAction<string | null>>;
+  setPendingBearInteraction: React.Dispatch<React.SetStateAction<{ id: string; stage: 'neutral' | 'friendly'; offerId: string | null } | null>>;
   setBlinkTurn: React.Dispatch<React.SetStateAction<number>>;
   setTrailblazeTurn: React.Dispatch<React.SetStateAction<number>>;
 }

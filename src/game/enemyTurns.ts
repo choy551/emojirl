@@ -356,29 +356,32 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
     const playerKey = `${player.pos.x},${player.pos.y}`;
 
     if (enemy.tag === 'Friendly') {
-      if (enemy.isAdventurer) {
+      if (enemy.isAdventurer || (enemy.bear && enemy.isRecruited)) {
+        // Recruited companion (adventurer or bear): attack nearby hostiles, follow player
+        const searchRadius = enemy.bear ? 5 : 6;
         const hostileTargets = newEnemies.filter((e, ei) =>
           ei !== i && e.hp > 0 && e.tag !== 'Friendly' && e.tag !== 'Neutral' &&
-          e.engaged && chebyshev(e.pos, player.pos) <= 6
+          e.engaged && chebyshev(e.pos, player.pos) <= searchRadius
         );
         hostileTargets.sort((a, b) => chebyshev(a.pos, enemy.pos) - chebyshev(b.pos, enemy.pos));
-        const advTarget = hostileTargets[0];
-        if (advTarget) {
-          const distToTarget = chebyshev(enemy.pos, advTarget.pos);
+        const companionTarget = hostileTargets[0];
+        if (companionTarget) {
+          const distToTarget = chebyshev(enemy.pos, companionTarget.pos);
           if (distToTarget <= 1) {
-            const ti = newEnemies.findIndex(e => e.id === advTarget.id);
-            const dmg = Math.max(1, enemy.attack - Math.floor((advTarget.defense ?? 0) / 2));
-            const newTargetHp = advTarget.hp - dmg;
-            newFloatingTexts.push({ id: `adv-${enemy.id}-${state.turn}`, pos: { ...advTarget.pos }, text: `-${dmg}`, color: '#22d3ee', life: 2 });
+            const ti = newEnemies.findIndex(e => e.id === companionTarget.id);
+            const dmg = Math.max(1, enemy.attack - Math.floor((companionTarget.defense ?? 0) / 2));
+            const newTargetHp = companionTarget.hp - dmg;
+            const logPrefix = enemy.bear ? '🐻' : '🤝';
+            newFloatingTexts.push({ id: `companion-${enemy.id}-${state.turn}`, pos: { ...companionTarget.pos }, text: `-${dmg}`, color: enemy.bear ? '#f59e0b' : '#22d3ee', life: 2 });
             if (newTargetHp <= 0) {
-              newEnemies[ti] = { ...advTarget, hp: 0 };
-              log(`🤝 ${enemy.emoji} ${enemy.name} takes down ${advTarget.emoji} ${advTarget.name}!`);
+              newEnemies[ti] = { ...companionTarget, hp: 0 };
+              log(`${logPrefix} ${enemy.emoji} ${enemy.name} takes down ${companionTarget.emoji} ${companionTarget.name}!`);
             } else {
-              newEnemies[ti] = { ...advTarget, hp: newTargetHp };
+              newEnemies[ti] = { ...companionTarget, hp: newTargetHp };
             }
             occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
           } else {
-            const nextPos = bfsStepToward(map, enemy.pos, advTarget.pos, occupied);
+            const nextPos = bfsStepToward(map, enemy.pos, companionTarget.pos, occupied);
             if (nextPos) {
               newEnemies[i] = { ...newEnemies[i], pos: nextPos };
               occupied.add(`${nextPos.x},${nextPos.y}`);
@@ -393,6 +396,40 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
             occupied.add(`${nextPos.x},${nextPos.y}`);
           } else {
             occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
+          }
+        } else {
+          occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
+        }
+      } else if (enemy.bear && !enemy.isRecruited) {
+        // Friendly non-recruited bear: guards its position, attacks nearby hostiles near the player but does not follow
+        const guardTargets = newEnemies.filter((e, ei) =>
+          ei !== i && e.hp > 0 && e.tag !== 'Friendly' && e.tag !== 'Neutral' &&
+          e.engaged && chebyshev(e.pos, enemy.pos) <= 3 && chebyshev(e.pos, player.pos) <= 5
+        );
+        guardTargets.sort((a, b) => chebyshev(a.pos, enemy.pos) - chebyshev(b.pos, enemy.pos));
+        const guardTarget = guardTargets[0];
+        if (guardTarget) {
+          const distToTarget = chebyshev(enemy.pos, guardTarget.pos);
+          if (distToTarget <= 1) {
+            const ti = newEnemies.findIndex(e => e.id === guardTarget.id);
+            const dmg = Math.max(1, enemy.attack - Math.floor((guardTarget.defense ?? 0) / 2));
+            const newTargetHp = guardTarget.hp - dmg;
+            newFloatingTexts.push({ id: `bear-guard-${enemy.id}-${state.turn}`, pos: { ...guardTarget.pos }, text: `-${dmg}`, color: '#f59e0b', life: 2 });
+            if (newTargetHp <= 0) {
+              newEnemies[ti] = { ...guardTarget, hp: 0 };
+              log(`🐻 ${enemy.emoji} ${enemy.name} defends the area, taking down ${guardTarget.emoji} ${guardTarget.name}!`);
+            } else {
+              newEnemies[ti] = { ...guardTarget, hp: newTargetHp };
+            }
+            occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
+          } else {
+            const nextPos = bfsStepToward(map, enemy.pos, guardTarget.pos, occupied);
+            if (nextPos) {
+              newEnemies[i] = { ...newEnemies[i], pos: nextPos };
+              occupied.add(`${nextPos.x},${nextPos.y}`);
+            } else {
+              occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
+            }
           }
         } else {
           occupied.add(`${enemy.pos.x},${enemy.pos.y}`);

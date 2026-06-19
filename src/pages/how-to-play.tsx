@@ -206,6 +206,12 @@ export default function HowToPlay({
                   — wait 1 turn / rest (heals +1 HP; +2 near campfire or restaurant). Click your own tile to wait.
                 </span>
               </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Kbd>Space</Kbd>
+                <span className="text-muted-foreground">
+                  — context-sensitive action: automatically performs the most relevant action for your surroundings — attack an adjacent enemy, feed a nearby Bear, recruit an adventurer, cook at a campfire, enter a shop, close a door, pick up an item, or wait. Mirrors the mobile context button.
+                </span>
+              </div>
             </div>
           </div>
 
@@ -723,6 +729,12 @@ export default function HowToPlay({
                 color: "bg-amber-500/15 border-amber-500/30 text-amber-300",
                 label: "Thief",
                 desc: "Neutral — but steals a soul emoji from your bag each turn you stand adjacent. Provoke it and it fights back with your own stolen power. Kill it to reclaim your emojis.",
+              },
+              {
+                badge: "🐻",
+                color: "bg-orange-700/20 border-orange-600/40 text-orange-300",
+                label: "Tameable",
+                desc: "Neutral & Berserker — ignores you but fights back if attacked. Feed it a food item (Space or context button) to make it Friendly. Once Friendly, offer another food for a 50% chance to recruit it as a companion. On a failed recruit, it becomes permanently Friendly — guards the area and attacks enemies near you, but won't follow.",
               },
               {
                 badge: "🏹",

@@ -3,7 +3,7 @@ import { COOKABLE_EMOJIS } from './emojis';
 import { chebyshev } from './geo';
 
 export type ContextActionKind =
-  | 'attack' | 'recruit' | 'fairy' | 'monkey'
+  | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear'
   | 'cook' | 'close-door'
   | 'open-shop' | 'open-cache' | 'open-restaurant'
   | 'descend' | 'shrine' | 'pickup' | 'wait';
@@ -57,18 +57,22 @@ export function resolveContextAction(state: GameState): ContextActionDescriptor 
   const hostile = adjEnemy(e =>
     e.tag !== 'Friendly' &&
     !(e.isAdventurer && !e.isRecruited && !e.engaged) &&
-    !(e.monkey && !e.engaged)
+    !(e.monkey && !e.engaged) &&
+    !(e.bear && !e.engaged && e.tag !== 'Hostile')
   );
   if (hostile) return { kind: 'attack', label: `Attack ${hostile.emoji}`, icon: '⚔️', dir: dirTo(hostile) };
 
   const adv = adjEnemy(e => !!e.isAdventurer && !e.isRecruited && !e.engaged);
   if (adv) return { kind: 'recruit', label: 'Recruit', icon: '🤝', dir: dirTo(adv) };
 
-  const fairy = adjEnemy(e => e.tag === 'Friendly' && !e.isAdventurer && !e.monkey && !e.isRecruited);
+  const fairy = adjEnemy(e => e.tag === 'Friendly' && !e.isAdventurer && !e.monkey && !e.bear && !e.isRecruited);
   if (fairy) return { kind: 'fairy', label: 'Wish', icon: '🧚', dir: dirTo(fairy) };
 
   const monkey = adjEnemy(e => !!e.monkey && !e.engaged);
   if (monkey) return { kind: 'monkey', label: 'Monkey', icon: '🐒', dir: dirTo(monkey) };
+
+  const bear = adjEnemy(e => !!e.bear && !e.engaged && e.tag !== 'Hostile');
+  if (bear) return { kind: 'bear', label: bear.tag === 'Friendly' ? 'Offer Food 🐻' : 'Feed Bear 🐻', icon: '🐻', dir: dirTo(bear) };
 
   const shrineDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'shrine');
   if (shrineDir) return { kind: 'shrine', label: 'Pray', icon: '⛩️', dir: shrineDir };

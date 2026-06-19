@@ -26,6 +26,16 @@ export const RAW_TO_COOKED: Record<string, Omit<EmojiItem, 'id' | 'consumed'>> =
 
 export const COOKABLE_EMOJIS = new Set(Object.keys(RAW_TO_COOKED));
 
+/** Food items that can be fed to a Bear (excludes non-food healables like potions and hearts). */
+export const FOOD_EMOJI_SET = new Set([
+  '🍎', '🍖', '🍇', '🍞', '🧅', '🍄', // raw food
+  '🍏', '🥩', '🍓', '🥪', '🍲',         // cooked food
+]);
+
+export function getFoodHealItems(inventory: import('./types').EmojiItem[]) {
+  return inventory.filter(it => !it.consumed && it.healAmount !== undefined && FOOD_EMOJI_SET.has(it.emoji));
+}
+
 export function cookFood(item: Omit<EmojiItem, 'id' | 'consumed'>): Omit<EmojiItem, 'id' | 'consumed'> | null {
   return RAW_TO_COOKED[item.emoji] ?? null;
 }

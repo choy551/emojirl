@@ -279,3 +279,131 @@ export function AdventurerInteractionDialog({ gameState, setGameState, adventure
     </div>
   );
 }
+
+interface BearDialogProps {
+  gameState: GameState;
+  setGameState: SetGameState;
+  bearId: string;
+  stage: 'neutral' | 'friendly';
+  offerId: string | null;
+  onClose: () => void;
+}
+
+export function BearInteractionDialog({ gameState, setGameState, bearId, stage, offerId, onClose }: BearDialogProps) {
+  const bear = gameState.enemies.find(e => e.id === bearId);
+  if (!bear) return null;
+
+  const offerItem = offerId
+    ? gameState.player.inventory.find(i => i.id === offerId && !i.consumed) ?? null
+    : null;
+
+  const handleFeed = () => {
+    if (!offerItem) return;
+    setGameState(prev => {
+      if (!prev) return prev;
+      const itemIdx = prev.player.inventory.findIndex(i => i.id === offerItem.id && !i.consumed);
+      if (itemIdx === -1) return prev;
+      const newInventory = prev.player.inventory.filter((_, idx) => idx !== itemIdx);
+
+      if (stage === 'neutral') {
+        return {
+          ...prev,
+          player: { ...prev.player, inventory: newInventory },
+          enemies: prev.enemies.map(e =>
+            e.id === bearId ? { ...e, tag: 'Friendly' as const, engaged: false } : e
+          ),
+          logs: [{ id: Math.random().toString(), text: `🐻 You offer ${offerItem.emoji} ${offerItem.name} — the Bear sniffs it and mellows. It's Friendly now!`, turn: prev.turn }, ...prev.logs].slice(0, 24),
+        };
+      } else {
+        const recruited = Math.random() < 0.5;
+        return {
+          ...prev,
+          player: { ...prev.player, inventory: newInventory },
+          enemies: prev.enemies.map(e =>
+            e.id === bearId
+              ? { ...e, tag: 'Friendly' as const, engaged: false, isRecruited: recruited }
+              : e
+          ),
+          logs: [
+            {
+              id: Math.random().toString(),
+              text: recruited
+                ? `🐻 You offer ${offerItem.emoji} ${offerItem.name} — the Bear huffs happily and lumbers after you! Recruited as a companion!`
+                : `🐻 You offer ${offerItem.emoji} ${offerItem.name} — the Bear gnaws contentedly. It'll stay here and guard the area. You're safe around it.`,
+              turn: prev.turn,
+            },
+            ...prev.logs,
+          ].slice(0, 24),
+        };
+      }
+    });
+    onClose();
+  };
+
+  const handleAttack = () => {
+    setGameState(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        enemies: prev.enemies.map(e =>
+          e.id === bearId ? { ...e, tag: 'Hostile' as const, engaged: true } : e
+        ),
+        logs: [{ id: Math.random().toString(), text: `🐻 The Bear ROARS — it's hostile now!`, turn: prev.turn }, ...prev.logs].slice(0, 24),
+      };
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-card border border-amber-700/50 rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
+        <div className="text-center mb-5">
+          <div className="text-5xl mb-2">{bear.emoji}</div>
+          <div className="text-sm font-bold text-amber-400 mb-1">{bear.name}</div>
+          <div className="text-xs text-amber-600/80 font-semibold mb-2 uppercase tracking-wide">
+            {stage === 'neutral' ? 'Neutral' : 'Friendly'}
+          </div>
+          <div className="text-xs text-muted-foreground leading-relaxed italic">
+            {stage === 'neutral'
+              ? '"Hrumph... *sniff* *sniff*..."'
+              : '"*WUFF* ...more?"'}
+          </div>
+          {stage === 'friendly' && (
+            <div className="mt-2 text-xs text-amber-400/70 leading-snug">
+              50% chance to recruit as a companion — or it stays and guards the area.
+            </div>
+          )}
+        </div>
+        <div className="space-y-2">
+          <button
+            className={`w-full py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
+              offerItem
+                ? 'bg-amber-500/20 border-amber-500/40 text-amber-200 hover:bg-amber-500/30 cursor-pointer'
+                : 'bg-slate-700/30 border-slate-600/30 text-slate-500 cursor-not-allowed'
+            }`}
+            onClick={handleFeed}
+            disabled={!offerItem}
+          >
+            {offerItem
+              ? `${stage === 'neutral' ? 'Feed' : 'Offer'} ${offerItem.emoji} ${offerItem.name}`
+              : 'No food in inventory'}
+          </button>
+          {stage === 'neutral' && (
+            <button
+              className="w-full py-2.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 text-sm font-semibold hover:bg-red-500/25 transition-colors"
+              onClick={handleAttack}
+            >
+              ⚔️ Attack — turns it hostile
+            </button>
+          )}
+          <button
+            className="w-full py-2.5 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-sm font-semibold hover:bg-slate-500/30 transition-colors"
+            onClick={onClose}
+          >
+            Back away slowly 🤫
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

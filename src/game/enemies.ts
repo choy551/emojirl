@@ -20,6 +20,7 @@ export const FOREST_ENEMY_TYPES = [
   { emoji: '🐺', name: 'Wolf',  hp: 7,  attack: 3, defense: 1, speed: 7,  weight: 2, packHunter: true },
   { emoji: '🦊', name: 'Fox',   hp: 4,  attack: 2, defense: 0, speed: 9,  weight: 3, cowardly: true },
   { emoji: '🐗', name: 'Boar',  hp: 9,  attack: 4, defense: 2, speed: 5,  weight: 2, berserker: true },
+  { emoji: '🐻', name: 'Bear',  hp: 20, attack: 7, defense: 3, speed: 4,  weight: 2, tag: 'Neutral' as const, bear: true, berserker: true },
 ];
 
 export const BOSS_TYPES = [

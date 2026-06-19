@@ -200,6 +200,7 @@ export interface Enemy {
   madScientist?: boolean;
   waterAggro?: boolean;
   monkey?: boolean;
+  bear?: boolean;
   crow?: boolean;
   healCooldown?: number;
   stolenEmojis?: EmojiItem[];
