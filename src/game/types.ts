@@ -252,11 +252,25 @@ export interface GameState {
   highestPressureTierWarned: number;
 }
 
-export interface Settings {
-  permadeath: boolean;
-  showMoodEffects: boolean;
-  controls: 'arrows' | 'wasd' | 'both';
+export interface ControlSettings {
+  swipeToMove: boolean;
+  tapTileToMove: boolean;
+  edgeTap: boolean;
+  showDpad: boolean;
+  showContextButtons: boolean;
+  showAbilityButtons: boolean;
+  dpadSide: 'left' | 'right';
 }
+
+export const DEFAULT_CONTROL_SETTINGS: ControlSettings = {
+  swipeToMove: true,
+  tapTileToMove: true,
+  edgeTap: true,
+  showDpad: true,
+  showContextButtons: true,
+  showAbilityButtons: true,
+  dpadSide: 'right',
+};
 
 export type BagPassiveSummary = {
   attack: number; defense: number; speed: number; evasion: number; luck: number;

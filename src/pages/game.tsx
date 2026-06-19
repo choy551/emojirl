@@ -11,7 +11,18 @@ import { saveScore } from '../game/leaderboard';
 import { saveGame, loadGame, clearSave, getRawSave } from '../game/save';
 import { isStackableBagPassive } from '../game/passives';
 import { useIsMobile } from '../hooks/use-mobile';
+import { useControlSettings } from '../hooks/useControlSettings';
+import { useTouchGestures } from '../hooks/useTouchGestures';
+import { resolveContextAction } from '../game/contextAction';
+import { ContextActionButton } from '../components/mobile/ContextActionButton';
+import { AbilityButtons } from '../components/mobile/AbilityButtons';
+import { ActionsMenu, ActionItem } from '../components/mobile/ActionsMenu';
+import { getClassAbilities } from '../components/mobile/classAbilities';
+import { MobileTopBar } from '../components/mobile/MobileTopBar';
+import { MobileBagStrip } from '../components/mobile/MobileBagStrip';
+import { StatsModal } from '../components/mobile/StatsModal';
 import { VirtualDpad } from '../components/VirtualDpad';
+import { OptionsMenu } from '../components/OptionsMenu';
 import { EnemyCard } from '../components/EnemyCard';
 import HowToPlay from './how-to-play';
 import { HotbarPanel } from '../components/HotbarPanel';
@@ -41,6 +52,7 @@ import { useGameActions } from '../hooks/useGameActions';
 export default function Game() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [autoExplore, setAutoExplore] = useState(false);
+  const [travelTarget, setTravelTarget] = useState<{ x: number; y: number; enemyId?: string } | null>(null);
   const [autoRest, setAutoRest] = useState(false);
   const [wizardTactics, setWizardTactics] = useState<{
     mode: 'nearest' | 'furthest' | 'manual' | 'holdfire';
@@ -77,6 +89,16 @@ export default function Game() {
   const scoreSaved = useRef(false);
   const [, navigate] = useLocation();
   const isMobile = useIsMobile();
+  const { settings: controlSettings, setSetting: setControlSetting, toggleSetting: toggleControlSetting } = useControlSettings();
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const [statsExpanded, setStatsExpanded] = useState(false);
+  const [viewportW, setViewportW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  useEffect(() => {
+    const onResize = () => setViewportW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
   useEffect(() => { inspectedEnemyIdRef.current = inspectedEnemyId; }, [inspectedEnemyId]);
   useEffect(() => { blinkTargetModeRef.current = blinkTargetMode; }, [blinkTargetMode]);
@@ -626,9 +648,149 @@ export default function Game() {
     return () => clearInterval(interval);
   }, [autoExplore, handleMove, addLog]);
 
+  // ── tap-to-move auto-path interval ───────────────────────────────────────
+  // Walks the player one step per tick toward travelTarget, stopping on arrival,
+  // when a hostile comes into view, or when the path is blocked. Manual input
+  // (keyboard, d-pad, swipe) clears travelTarget which tears this interval down.
+  useEffect(() => {
+    if (!travelTarget) return;
+    const interval = setInterval(() => {
+      const state = gameStateRef.current;
+      if (!state || state.gameOver) { setTravelTarget(null); return; }
+      const { player, enemies } = state;
+
+      // Resolve the live target position. When chasing an enemy it moves each turn,
+      // and we stop once adjacent so the player decides whether to strike.
+      let target = { x: travelTarget.x, y: travelTarget.y };
+      if (travelTarget.enemyId) {
+        const en = enemies.find(e => e.id === travelTarget.enemyId);
+        if (!en) { setTravelTarget(null); return; }
+        target = { x: en.pos.x, y: en.pos.y };
+        if (chebyshev(player.pos, en.pos) <= 1) { setTravelTarget(null); return; }
+      } else if (player.pos.x === target.x && player.pos.y === target.y) {
+        setTravelTarget(null);
+        return;
+      }
+
+      // Ambush: stop if a hostile other than the approach target is adjacent.
+      const ambush = enemies.some(e =>
+        e.tag !== 'Friendly' && e.id !== travelTarget.enemyId &&
+        chebyshev(player.pos, e.pos) <= 1 &&
+        state.map[e.pos.y]?.[e.pos.x]?.visible
+      );
+      if (ambush) { setTravelTarget(null); addLog('Travel stopped: enemy nearby!'); return; }
+
+      // For plain tile travel, also halt before walking up to a visible hostile.
+      if (!travelTarget.enemyId) {
+        const hostileNear = enemies.some(e =>
+          e.tag !== 'Friendly' &&
+          chebyshev(player.pos, e.pos) <= 2 &&
+          state.map[e.pos.y]?.[e.pos.x]?.visible
+        );
+        if (hostileNear) { setTravelTarget(null); addLog('Travel stopped: enemy in sight!'); return; }
+      }
+
+      const passives = computeBagPassives(player.inventory);
+      const targetType = state.map[target.y]?.[target.x]?.type;
+      const passable = new Set<string>([...PLAYER_PASSABLE_TILES]);
+      if (passives.canSwim) passable.add('water');
+      if (targetType) passable.add(targetType);
+      const occupiedSet = new Set(enemies.map(e => `${e.pos.x},${e.pos.y}`));
+      const nextPos = bfsStepToward(state.map, player.pos, target, occupiedSet, passable);
+      if (!nextPos) { setTravelTarget(null); return; }
+      handleMove(nextPos.x - player.pos.x, nextPos.y - player.pos.y);
+      if (!travelTarget.enemyId && nextPos.x === target.x && nextPos.y === target.y) {
+        setTravelTarget(null);
+      }
+    }, 150);
+    return () => clearInterval(interval);
+  }, [travelTarget, handleMove, addLog]);
+
   // Ref so autoexplore can call handleWait without stale closure
   const handleWaitRef = useRef<(() => void) | null>(null);
   useEffect(() => { handleWaitRef.current = handleWait; }, [handleWait]);
+
+  // Manual movement from touch controls (d-pad / swipe). Cancels any in-progress
+  // automation just like keyboard movement does.
+  const handleManualMove = useCallback((dx: number, dy: number) => {
+    setAutoExplore(false);
+    setAutoRest(false);
+    setTravelTarget(null);
+    handleMove(dx, dy);
+  }, [handleMove]);
+
+  const handleManualWait = useCallback(() => {
+    setAutoExplore(false);
+    setAutoRest(false);
+    setTravelTarget(null);
+    handleWait();
+  }, [handleWait]);
+
+  // A swipe / edge-tap fires on pointerup, which is followed by a tile click.
+  // Record when a gesture moved so the trailing tile tap is ignored (no double step).
+  const lastGestureMoveAtRef = useRef(0);
+  const handleGestureMove = useCallback((dx: number, dy: number) => {
+    lastGestureMoveAtRef.current = Date.now();
+    handleManualMove(dx, dy);
+  }, [handleManualMove]);
+
+  const touchGestures = useTouchGestures({
+    enableSwipe: isMobile && controlSettings.swipeToMove,
+    enableEdgeTap: isMobile && controlSettings.edgeTap,
+    onSwipeMove: handleGestureMove,
+  });
+
+  // Tap a tile: adjacent tiles move/bump/interact immediately; far tiles auto-path.
+  // Tapping an enemy paths to attack range (then a second tap strikes).
+  const handleTileTap = useCallback((mapX: number, mapY: number) => {
+    if (Date.now() - lastGestureMoveAtRef.current < 250) return; // consumed by a gesture
+    const state = gameStateRef.current;
+    if (!state || state.gameOver) return;
+    const { player, enemies } = state;
+    const dx = mapX - player.pos.x;
+    const dy = mapY - player.pos.y;
+    setAutoExplore(false);
+    setAutoRest(false);
+    if (dx === 0 && dy === 0) { setTravelTarget(null); handleWait(); return; }
+    if (Math.max(Math.abs(dx), Math.abs(dy)) <= 1) {
+      // Adjacent: a single step handles bump-attack, doors, shrines, pickups, etc.
+      setTravelTarget(null);
+      handleMove(Math.sign(dx), Math.sign(dy));
+      return;
+    }
+    const enemyAt = enemies.find(e => e.pos.x === mapX && e.pos.y === mapY);
+    if (enemyAt && enemyAt.tag !== 'Friendly') {
+      setTravelTarget({ x: mapX, y: mapY, enemyId: enemyAt.id });
+      return;
+    }
+    setTravelTarget({ x: mapX, y: mapY });
+  }, [handleMove, handleWait]);
+
+  // Dispatch the resolved context-sensitive action (HL-style "use" button).
+  const doContextAction = useCallback(() => {
+    const state = gameStateRef.current;
+    if (!state || state.gameOver) return;
+    const action = resolveContextAction(state);
+    switch (action.kind) {
+      case 'open-shop': setShopOpen(true); break;
+      case 'open-cache': setAmmoCacheOpen(true); break;
+      case 'open-restaurant': setRestaurantOpen(true); break;
+      case 'close-door': setTravelTarget(null); handleCloseDoor(); break;
+      case 'cook': setTravelTarget(null); handleCook(); break;
+      case 'attack':
+      case 'recruit':
+      case 'fairy':
+      case 'monkey':
+      case 'shrine':
+      case 'descend':
+      case 'pickup':
+        if (action.dir) handleManualMove(action.dir.dx, action.dir.dy);
+        break;
+      default:
+        handleManualWait();
+        break;
+    }
+  }, [handleCloseDoor, handleCook, handleManualMove, handleManualWait]);
 
   // ── auto-rest interval ────────────────────────────────────────────────────
   // Heals faster (shorter tick interval) the more HP the player currently has.
@@ -1074,6 +1236,7 @@ export default function Game() {
       if (!MOVE_KEYS.has(key)) return;
       e.preventDefault();
       setAutoExplore(false); // manual movement cancels autoexplore
+      setTravelTarget(null); // manual movement cancels tap-to-travel
       setAutoRest(false);    // manual movement cancels auto-rest
       setInspectedEnemyId(null); // movement dismisses inspect
       if (blinkTargetModeRef.current) exitBlinkTargetMode(); // movement cancels blink targeting
@@ -1130,6 +1293,33 @@ export default function Game() {
         gameState.map[ny][nx].type === 'door-open';
     });
   })();
+
+  // ── Mobile touch action data (context button / ability buttons / actions menu) ──
+  const mobileContextDescriptor = resolveContextAction(gameState);
+  const mobileAbilities = getClassAbilities({
+    player,
+    turn: gameState.turn,
+    blinkTurn,
+    trailblazeTurn,
+    yeehawTurn,
+    rangerMode,
+    wizardMode: wizardTactics.mode,
+    stealthOn: !!gameState.stealthMode,
+    applyWizardMode,
+    applyRangerMode,
+    handleCowboyTactics,
+    handleBlinkStrike,
+    applyNinjaMode,
+  });
+  const mobileGeneralActions: ActionItem[] = [
+    { id: 'heal', icon: '❤️', label: 'Heal', onUse: handleUseHeal },
+    { id: 'rest', icon: '💤', label: 'Rest', active: autoRest, onUse: () => { setTravelTarget(null); setAutoExplore(false); setAutoRest(v => !v); } },
+    { id: 'explore', icon: '🔭', label: 'Explore', active: autoExplore, onUse: () => { setTravelTarget(null); setAutoRest(false); setAutoExplore(v => !v); } },
+    { id: 'cook', icon: '🔥', label: 'Cook', onUse: handleCook },
+    { id: 'closedoor', icon: '🚪', label: 'Close Door', disabled: !isAdjacentToOpenDoor, onUse: handleCloseDoor },
+    { id: 'bag', icon: '🎒', label: 'Bag', onUse: () => setBankOpen(true) },
+    { id: 'wait', icon: '⏳', label: 'Wait', onUse: handleManualWait },
+  ];
 
   const viewWidth = 20;
   const viewHeight = 14;
@@ -1196,8 +1386,13 @@ export default function Game() {
         if (!tileData.seen) {
           row.push(<div key={`${x}-${y}`} className="w-8 h-8 bg-black" />);
         } else if (!tileData.visible) {
+          const seenTapToMove = isMobile && controlSettings.tapTileToMove && !gameState.gameOver;
           row.push(
-            <div key={`${x}-${y}`} className="w-8 h-8 flex items-center justify-center text-2xl select-none opacity-30 grayscale">
+            <div
+              key={`${x}-${y}`}
+              className={`w-8 h-8 flex items-center justify-center text-2xl select-none opacity-30 grayscale${seenTapToMove ? ' cursor-pointer active:scale-90 transition-transform' : ''}`}
+              onClick={seenTapToMove ? () => handleTileTap(mapX, mapY) : undefined}
+            >
               {tileData.emoji}
             </div>
           );
@@ -1239,8 +1434,12 @@ export default function Game() {
             <div
               key={`${x}-${y}`}
               style={tileBg ? { background: tileBg } : undefined}
-              className={`w-8 h-8 flex items-center justify-center text-2xl select-none relative${isPlayer ? ' cursor-pointer hover:brightness-125 active:scale-90 transition-transform' : ''}${enemy && !isPlayer ? ' cursor-help' : ''}`}
-              onClick={isPlayer ? handleWait : (enemy && !isPlayer ? () => setHoveredEnemyId(prev => prev === enemy.id ? null : enemy.id) : undefined)}
+              className={`w-8 h-8 flex items-center justify-center text-2xl select-none relative${(isPlayer || (isMobile && controlSettings.tapTileToMove)) ? ' cursor-pointer hover:brightness-125 active:scale-90 transition-transform' : ''}${enemy && !isPlayer && !(isMobile && controlSettings.tapTileToMove) ? ' cursor-help' : ''}`}
+              onClick={
+                isMobile && controlSettings.tapTileToMove && !gameState.gameOver
+                  ? () => handleTileTap(mapX, mapY)
+                  : (isPlayer ? handleWait : (enemy && !isPlayer ? () => setHoveredEnemyId(prev => prev === enemy.id ? null : enemy.id) : undefined))
+              }
               onMouseEnter={enemy && !isPlayer ? () => setHoveredEnemyId(enemy.id) : undefined}
               onMouseLeave={enemy && !isPlayer ? () => setHoveredEnemyId(null) : undefined}
               title={isPlayer ? 'Wait / rest (+1 HP)' : (enemy && !isPlayer ? `${enemy.name} — tap for stats` : undefined)}
@@ -1738,8 +1937,32 @@ export default function Game() {
           </div>
         </div>
       )}
-      {/* ── Top Bar ─────────────────────────────────────────────────── */}
-      <div className="h-13 bg-sidebar border-b border-border/40 flex items-center gap-2.5 px-3 shrink-0 z-10 shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
+      {/* ── Mobile compact stat bar + quick hotbar ──────────────────── */}
+      {isMobile && !gameState.gameOver && (
+        <>
+          <MobileTopBar
+            player={player}
+            className={cls.name}
+            level={player.stats.level}
+            currentFloor={currentFloor}
+            xpProgress={xpProgress}
+            onExpand={() => setStatsExpanded(true)}
+            onMenu={() => setPauseMenuOpen(true)}
+          />
+          <MobileBagStrip
+            bagSlots={bagSlots}
+            healSlots={healSlots}
+            activeProjectileKind={gameState.activeProjectile?.kind}
+            onUseSlot={handleUseSlot}
+            onUseHeal={handleUseHeal}
+            onOpenBag={() => setBankOpen(true)}
+            itemInspectProps={itemInspectProps}
+          />
+        </>
+      )}
+
+      {/* ── Top Bar (desktop) ───────────────────────────────────────── */}
+      <div className={`h-13 bg-sidebar border-b border-border/40 ${isMobile ? 'hidden' : 'flex'} items-center gap-2.5 px-3 shrink-0 z-10 shadow-[0_4px_16px_rgba(0,0,0,0.4)]`}>
         {/* Portrait + class + mode */}
         <div className="flex items-center gap-2 shrink-0">
           <div className="text-2xl">{player.emoji}</div>
@@ -2028,6 +2251,17 @@ export default function Game() {
               navigate('/');
             }}
           >Quit</Button>
+          <button
+            data-testid="button-hamburger"
+            onClick={() => setPauseMenuOpen(true)}
+            className="flex flex-col items-center justify-center gap-[3px] w-8 h-8 rounded-lg border border-border/50 bg-secondary/40 hover:bg-secondary/70 active:scale-90 transition-all shrink-0"
+            aria-label="Menu"
+            title="Menu (Esc)"
+          >
+            <span className="block w-4 h-0.5 bg-foreground/70 rounded-full" />
+            <span className="block w-4 h-0.5 bg-foreground/70 rounded-full" />
+            <span className="block w-4 h-0.5 bg-foreground/70 rounded-full" />
+          </button>
         </div>
       </div>
 
@@ -2072,8 +2306,17 @@ export default function Game() {
             </div>
           </div>
         ) : (
-          <div className="bg-card border border-border p-4 shadow-2xl rounded-lg">
-            <div className="flex flex-col relative">
+          <div
+            className="bg-card border border-border p-4 shadow-2xl rounded-lg"
+            style={isMobile ? { zoom: Math.max(0.45, Math.min(1, (viewportW - 12) / 674)) } : undefined}
+          >
+            <div
+              className="flex flex-col relative"
+              style={isMobile ? { touchAction: 'none' } : undefined}
+              onPointerDown={isMobile ? touchGestures.onPointerDown : undefined}
+              onPointerMove={isMobile ? touchGestures.onPointerMove : undefined}
+              onPointerUp={isMobile ? touchGestures.onPointerUp : undefined}
+            >
               {visibleMap}
               {/* Enemy stat tooltip — shown on hover or keyboard inspect */}
               {(() => {
@@ -2285,6 +2528,12 @@ export default function Game() {
                 📖 RTFM
               </button>
               <button
+                onClick={() => { setPauseMenuOpen(false); setOptionsOpen(true); }}
+                className="w-full py-2.5 px-4 rounded-lg bg-secondary/60 text-foreground font-medium text-sm hover:bg-secondary/80 active:scale-95 transition-all border border-border/40"
+              >
+                ⚙️ Options
+              </button>
+              <button
                 onClick={() => { if (gameState) saveGame(gameState); navigate('/'); }}
                 className="w-full py-2.5 px-4 rounded-lg bg-destructive/20 text-destructive font-medium text-sm hover:bg-destructive/30 active:scale-95 transition-all border border-destructive/30"
               >
@@ -2294,6 +2543,29 @@ export default function Game() {
             <p className="text-center text-[10px] text-muted-foreground/30 pb-3">ESC to resume</p>
           </div>
         </div>
+      )}
+
+      {optionsOpen && (
+        <OptionsMenu
+          settings={controlSettings}
+          setSetting={setControlSetting}
+          toggleSetting={toggleControlSetting}
+          isMobile={isMobile}
+          onClose={() => setOptionsOpen(false)}
+        />
+      )}
+
+      {statsExpanded && !gameState.gameOver && (
+        <StatsModal
+          player={player}
+          className={cls.name}
+          currentFloor={currentFloor}
+          moodEmoji={moodData.emoji}
+          moodName={moodData.name}
+          bagPassiveSummary={bagPassiveSummary}
+          gameState={gameState}
+          onClose={() => setStatsExpanded(false)}
+        />
       )}
 
       {/* Tactics Menu overlay */}
@@ -2529,8 +2801,15 @@ export default function Game() {
       {/* Virtual D-pad — touch/mobile only */}
       {isMobile && !gameState.gameOver && (
         <>
-          <VirtualDpad onMove={handleMove} onWait={handleWait} />
-          {isAdjacentToOpenDoor && (
+          {controlSettings.showDpad && (
+            <VirtualDpad
+              onMove={handleManualMove}
+              onWait={handleManualWait}
+              side={controlSettings.dpadSide}
+              onToggleSide={() => setControlSetting('dpadSide', controlSettings.dpadSide === 'right' ? 'left' : 'right')}
+            />
+          )}
+          {isAdjacentToOpenDoor && !controlSettings.showContextButtons && (
             <button
               data-testid="mobile-close-door"
               className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-black/60 backdrop-blur-sm border border-white/20 text-white/90 font-bold shadow-2xl transition-transform duration-75 active:scale-90 select-none touch-none"
@@ -2542,10 +2821,46 @@ export default function Game() {
               🚪 Close Door
             </button>
           )}
+          {(controlSettings.showContextButtons || controlSettings.showAbilityButtons) && (() => {
+            const actionSide: 'left' | 'right' = controlSettings.dpadSide === 'right' ? 'left' : 'right';
+            return (
+              <div className={`fixed bottom-4 z-40 flex flex-col gap-2 ${actionSide === 'right' ? 'right-3 items-end' : 'left-3 items-start'}`}>
+                {controlSettings.showAbilityButtons && <AbilityButtons abilities={mobileAbilities} align={actionSide} />}
+                {controlSettings.showContextButtons && (
+                  <div className="flex items-end gap-2">
+                    {actionSide === 'left' && <ContextActionButton descriptor={mobileContextDescriptor} onAct={doContextAction} />}
+                    <button
+                      data-testid="actions-menu-button"
+                      onPointerDown={e => { e.preventDefault(); setActionsMenuOpen(true); }}
+                      className="flex flex-col items-center justify-center rounded-2xl bg-slate-700/75 border border-slate-300/40 text-white shadow-2xl select-none touch-none transition-transform duration-75 active:scale-90"
+                      style={{ width: 56, height: 72 }}
+                      aria-label="All actions"
+                      title="All actions"
+                    >
+                      <span style={{ fontSize: '1.3rem', lineHeight: 1 }}>☰</span>
+                      <span className="text-[9px] font-bold mt-0.5">Menu</span>
+                    </button>
+                    {actionSide === 'right' && <ContextActionButton descriptor={mobileContextDescriptor} onAct={doContextAction} />}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </>
       )}
 
-      {/* ── Right Sidebar — Bag + Map ──────────────────────────────── */}
+      {/* Actions menu sheet — touch/mobile only */}
+      {actionsMenuOpen && !gameState.gameOver && (
+        <ActionsMenu
+          general={mobileGeneralActions}
+          abilities={mobileAbilities}
+          onOpenTactics={() => setTacticsMenuOpen(true)}
+          onClose={() => setActionsMenuOpen(false)}
+        />
+      )}
+
+      {/* ── Right Sidebar — Bag + Map (desktop only) ───────────────── */}
+      {!isMobile && (
       <RightSidebar
         player={player}
         gameState={gameState}
@@ -2560,6 +2875,7 @@ export default function Game() {
         setSelectedItemId={setSelectedItemId}
         onShowStatCard={setStatCardItem}
       />
+      )}
 
       </div>{/* end flex main content row */}
 

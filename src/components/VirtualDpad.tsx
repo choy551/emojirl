@@ -3,6 +3,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 interface VirtualDpadProps {
   onMove: (dx: number, dy: number) => void;
   onWait: () => void;
+  side?: 'left' | 'right';
+  onToggleSide?: () => void;
 }
 
 const REPEAT_DELAY_MS = 350;
@@ -89,14 +91,16 @@ function DpadCell({
 
 const STORAGE_KEY = 'emojirl_dpad_side';
 
-export function VirtualDpad({ onMove, onWait }: VirtualDpadProps) {
-  const [side, setSide] = useState<'left' | 'right'>(() => {
+export function VirtualDpad({ onMove, onWait, side: sideProp, onToggleSide }: VirtualDpadProps) {
+  const [internalSide, setInternalSide] = useState<'left' | 'right'>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     return stored === 'left' ? 'left' : 'right';
   });
+  const side = sideProp ?? internalSide;
 
   const toggleSide = () => {
-    setSide(prev => {
+    if (onToggleSide) { onToggleSide(); return; }
+    setInternalSide(prev => {
       const next = prev === 'right' ? 'left' : 'right';
       localStorage.setItem(STORAGE_KEY, next);
       return next;
