@@ -2558,6 +2558,7 @@ export default function Game() {
         setBankOpen={setBankOpen}
         setBagTab={setBagTab}
         setSelectedItemId={setSelectedItemId}
+        onShowStatCard={setStatCardItem}
       />
 
       </div>{/* end flex main content row */}

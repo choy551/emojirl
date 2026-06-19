@@ -3,6 +3,7 @@ import { Player, EmojiItem, GameState, EquipSlot, BagPassiveSummary } from '../g
 import { getPassiveTooltipSuffix } from '../game/passives';
 import { getCowboyUnarmedBonus } from '../game/combat';
 import { MiniMap } from './MiniMap';
+import { activeKindEmoji } from './itemUtils';
 
 const HEAL_DISPLAY_LIMIT = 9;
 
@@ -18,6 +19,7 @@ interface RightSidebarProps {
   setBankOpen: (open: boolean) => void;
   setBagTab: (tab: 'hotbar' | 'equipment' | 'bank') => void;
   setSelectedItemId: (id: string | null) => void;
+  onShowStatCard: (item: EmojiItem) => void;
 }
 
 export function RightSidebar({
@@ -32,8 +34,21 @@ export function RightSidebar({
   setBankOpen,
   setBagTab,
   setSelectedItemId,
+  onShowStatCard,
 }: RightSidebarProps) {
   const p = bagPassiveSummary;
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const itemInspectProps = (item: EmojiItem | null) => ({
+    onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); if (item) onShowStatCard(item); },
+    onPointerDown: (e: React.PointerEvent) => {
+      if (item && (e.pointerType === 'touch' || e.pointerType === 'pen')) {
+        longPressTimerRef.current = setTimeout(() => onShowStatCard(item), 500);
+      }
+    },
+    onPointerUp:     () => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } },
+    onPointerLeave:  () => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } },
+    onPointerCancel: () => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } },
+  });
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [overflowAnchor, setOverflowAnchor] = useState<{ top: number; right: number } | null>(null);
   const overflowBtnRef = useRef<HTMLButtonElement>(null);
@@ -99,7 +114,7 @@ export function RightSidebar({
                 </div>
               );
             }
-            const kindEmoji = item.activeKind === 'bomb' ? '💣' : item.activeKind === 'gun' ? '🔫' : item.activeKind === 'boomerang' ? '🪃' : item.activeKind === 'rope' ? '🪢' : item.activeKind === 'freeze' ? '❄️' : null;
+            const kindEmoji = activeKindEmoji(item.activeKind);
             const isInFlight = !!item.activeKind && !!gameState.activeProjectile && gameState.activeProjectile.kind === item.activeKind;
             const bankDupes = !item.isEquipment
               ? player.bank.filter(b => !b.isEquipment && !b.consumed && b.emoji === item.emoji).length
@@ -109,7 +124,8 @@ export function RightSidebar({
                 key={item.id}
                 data-testid={`soul-slot-${i + 1}`}
                 onClick={() => handleUseSlot(i)}
-                title={`[${i + 1}] ${item.name}: ${item.description.replace(/ · Bag: [^·]+$/, '')}${item.charges !== undefined && item.charges >= 0 ? ` (${item.charges}×)` : ''}${getPassiveTooltipSuffix(item)}${bankDupes > 0 ? ` · ${bankDupes} more in Bank` : ''}`}
+                {...itemInspectProps(item)}
+                title={`[${i + 1}] ${item.name}: ${item.description.replace(/ · Bag: [^·]+$/, '')}${item.charges !== undefined && item.charges >= 0 ? ` (${item.charges}×)` : ''}${getPassiveTooltipSuffix(item)}${bankDupes > 0 ? ` · ${bankDupes} more in Bank` : ''} · Right-click for details`}
                 className={`relative aspect-square bg-card border rounded flex items-center justify-center text-xl transition-all
                   ${item.isEquipment
                     ? 'border-amber-500/60 hover:border-amber-300 cursor-pointer shadow-sm hover:scale-105 active:scale-95 shadow-amber-900/30'
@@ -158,7 +174,8 @@ export function RightSidebar({
                 key={item.id}
                 data-testid={`heal-slot-${item.id}`}
                 onClick={handleUseHeal}
-                title={`${item.name}: ${item.description}`}
+                {...itemInspectProps(item)}
+                title={`${item.name}: ${item.description} · Right-click for details`}
                 className="relative w-9 h-9 bg-card border border-emerald-500/40 rounded flex items-center justify-center text-lg hover:border-emerald-400 hover:scale-105 transition-all cursor-pointer shadow-sm"
               >
                 {item.emoji}
@@ -244,7 +261,8 @@ export function RightSidebar({
                 <button
                   key={slot}
                   onClick={() => { setBagTab('equipment'); setBankOpen(true); setSelectedItemId(null); }}
-                  title={`${label} ${item.name}: ${item.description} — click to manage`}
+                  {...itemInspectProps(item)}
+                  title={`${label} ${item.name}: ${item.description} — click to manage, right-click for details`}
                   className="flex items-center gap-1 px-1.5 py-1 bg-card border border-amber-600/30 rounded text-sm hover:border-amber-400 transition-all cursor-pointer"
                 >
                   <span className="text-[9px] text-muted-foreground/40">{label}</span>
