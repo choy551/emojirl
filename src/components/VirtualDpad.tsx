@@ -73,8 +73,8 @@ function DpadCell({
         'flex items-center justify-center select-none touch-none rounded-lg',
         'transition-transform duration-75 active:scale-90',
         cell.isCenter
-          ? 'bg-amber-900/60 border border-amber-500/50 text-amber-400/90 font-bold text-lg'
-          : 'bg-white/10 border border-white/15 text-white/80 font-bold',
+          ? 'bg-amber-900/45 border border-amber-500/35 text-amber-400/90 font-bold text-lg'
+          : 'bg-white/8 border border-white/12 text-white/75 font-bold',
       ].join(' ')}
       style={{ minWidth: 48, minHeight: 48, fontSize: cell.isCenter ? '1.3rem' : '1.05rem' }}
       onPointerDown={e => { e.preventDefault(); startRepeat(); }}
@@ -122,7 +122,7 @@ export function VirtualDpad({ onMove, onWait, side: sideProp, onToggleSide }: Vi
       }}
     >
       <div
-        className="grid gap-1 p-1.5 rounded-2xl bg-black/50 backdrop-blur-sm border border-white/10 shadow-2xl"
+        className="grid gap-1 p-1.5 rounded-2xl bg-black/35 backdrop-blur-sm border border-white/8 shadow-2xl"
         style={{ gridTemplateColumns: 'repeat(3, 1fr)', width: 168 }}
       >
         {CELLS.map((cell, i) => (

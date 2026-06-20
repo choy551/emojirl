@@ -16,8 +16,8 @@ export function ContextActionButton({ descriptor, onAct }: ContextActionButtonPr
         'flex flex-col items-center justify-center rounded-2xl border shadow-2xl select-none touch-none',
         'transition-transform duration-75 active:scale-90',
         danger
-          ? 'bg-red-700/75 border-red-400/50 text-white'
-          : 'bg-emerald-700/75 border-emerald-300/50 text-white',
+          ? 'bg-red-700/55 border-red-400/40 text-white'
+          : 'bg-emerald-700/55 border-emerald-300/40 text-white',
       ].join(' ')}
       style={{ width: 72, height: 72 }}
       aria-label={descriptor.label}

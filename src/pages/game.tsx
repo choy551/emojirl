@@ -2517,32 +2517,36 @@ export default function Game() {
           </div>
         )}
 
-        {/* Combat Log */}
+        {/* Combat Log — on mobile sit above the d-pad / action button stack */}
         <div
           onClick={() => { if (actionsMenuOpen) return; setLogOpen(true); }}
-          className={`absolute left-4 right-4 h-36 bg-black/60 border border-border/60 p-3 rounded-lg overflow-hidden flex flex-col justify-end gap-0.5 cursor-pointer hover:border-border/90 transition-colors ${isMobile ? 'bottom-48' : 'bottom-4'}`}
+          className={`absolute left-3 right-3 overflow-hidden flex flex-col justify-end gap-0.5 cursor-pointer transition-colors ${
+            isMobile
+              ? 'bottom-[18rem] h-24 bg-black/40 border border-border/40 p-2 rounded-lg hover:border-border/60'
+              : 'bottom-4 h-36 bg-black/60 border border-border/60 p-3 rounded-lg hover:border-border/90'
+          }`}
           style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)' }}
           title="Click or press / to open full log"
         >
           {gameState.logs.slice(0, 8).reverse().map((log, i) => (
             <div
               key={log.id}
-              className="text-xs text-muted-foreground leading-tight animate-in fade-in slide-in-from-bottom-1"
+              className={`leading-tight animate-in fade-in slide-in-from-bottom-1 ${isMobile ? 'text-[11px]' : 'text-xs'} text-muted-foreground`}
               style={{ opacity: Math.max(0.5, 1 - i * 0.07) }}
             >{log.text}</div>
           ))}
-          <span className="absolute top-1.5 right-2 text-[9px] text-muted-foreground/30 select-none pointer-events-none">/ for full log</span>
+          <span className={`absolute top-1 right-1.5 select-none pointer-events-none ${isMobile ? 'text-[8px] text-muted-foreground/40' : 'text-[9px] text-muted-foreground/30'}`}>/ log</span>
         </div>
       </div>
 
       {/* Full Combat Log Modal */}
       {logOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center pb-4 px-4 bg-black/60 backdrop-blur-sm"
+          className={`fixed inset-0 z-50 flex justify-center px-4 bg-black/60 backdrop-blur-sm ${isMobile ? 'items-center py-8' : 'items-end pb-4'}`}
           onClick={() => setLogOpen(false)}
         >
           <div
-            className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg max-h-[70vh] flex flex-col"
+            className={`bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg flex flex-col ${isMobile ? 'max-h-[55vh]' : 'max-h-[70vh]'}`}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex justify-between items-center px-4 py-3 border-b border-border/50 shrink-0">
@@ -2917,7 +2921,7 @@ export default function Game() {
                     <button
                       data-testid="actions-menu-button"
                       onPointerDown={e => { e.preventDefault(); e.stopPropagation(); setActionsMenuOpen(true); }}
-                      className="flex flex-col items-center justify-center rounded-2xl bg-slate-700/75 border border-slate-300/40 text-white shadow-2xl select-none touch-none transition-transform duration-75 active:scale-90"
+                      className="flex flex-col items-center justify-center rounded-2xl bg-slate-700/50 border border-slate-300/30 text-white shadow-2xl select-none touch-none transition-transform duration-75 active:scale-90"
                       style={{ width: 56, height: 72 }}
                       aria-label="All actions"
                       title="All actions"

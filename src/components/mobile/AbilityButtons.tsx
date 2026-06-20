@@ -20,10 +20,10 @@ export function AbilityButtons({ abilities, align }: AbilityButtonsProps) {
             'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border shadow-lg select-none touch-none',
             'transition-transform duration-75 active:scale-90',
             a.disabled
-              ? 'bg-black/40 border-white/10 text-white/35'
+              ? 'bg-black/30 border-white/8 text-white/35'
               : a.active
-                ? 'bg-violet-700/75 border-violet-300/50 text-white'
-                : 'bg-indigo-800/70 border-indigo-300/40 text-white',
+                ? 'bg-violet-700/55 border-violet-300/40 text-white'
+                : 'bg-indigo-800/50 border-indigo-300/35 text-white',
           ].join(' ')}
           title={`${a.label}${a.detail ? ` — ${a.detail}` : ''}`}
           aria-label={a.label}
