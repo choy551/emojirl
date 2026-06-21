@@ -95,3 +95,9 @@ This is an early but playable version of EmojiRL. Core roguelike systems (combat
 ## Deployment
 
 This project is configured for easy static deployment (Vercel, Netlify, etc.). The included `vercel.json` handles SPA routing.
+
+## License
+
+EmojiRL is licensed under the **GNU General Public License v3.0 or later** (GPL-3.0-or-later). See [LICENSE](LICENSE).
+
+You may use, modify, and share this game under the GPL. Derivatives and redistributions must remain under the same license and include corresponding source. The base game includes four character classes; additional classes or content may be offered separately in the future.

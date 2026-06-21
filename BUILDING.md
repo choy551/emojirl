@@ -80,7 +80,7 @@ adb install app\build\outputs\apk\debug\app-debug.apk
 ## F-Droid submission
 
 F-Droid builds from source. Requirements:
-- MIT `LICENSE` file — present at repo root
+- GPL-3.0-or-later `LICENSE` file — present at repo root
 - No proprietary network calls — fonts are now self-hosted
 - Fastlane metadata — present at `fastlane/metadata/android/`
 - Source builds cleanly: `pnpm install && pnpm build && npx cap sync android`
