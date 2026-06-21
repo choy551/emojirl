@@ -406,13 +406,6 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           setPendingAdventurerInteraction(enemy.id);
           return prev;
         }
-        if (enemy.tag === 'Friendly' && !enemy.isAdventurer) {
-          // Only genuine fairies reach here. Adventurers with tag 'Friendly' who are
-          // engaged (e.g. splash-damaged) are intentionally allowed to fall through to
-          // melee — the player caused it and deserves to be able to fight back.
-          setPendingFairyId(enemy.id);
-          return prev;
-        }
         if (enemy.monkey && !enemy.engaged) {
           const MONKEY_FOODS = ['🍎', '🍖', '🧪', '🍇', '🫀', '🍞', '🧅', '🍄'];
           const wants = MONKEY_FOODS[Math.floor(Math.random() * MONKEY_FOODS.length)];
@@ -423,6 +416,11 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const foodItems = getFoodHealItems(prev.player.inventory);
           const offerItem = foodItems.length > 0 ? foodItems[Math.floor(Math.random() * foodItems.length)] : null;
           setPendingBearInteraction({ id: enemy.id, stage: enemy.tag === 'Friendly' ? 'friendly' : 'neutral', offerId: offerItem?.id ?? null });
+          return prev;
+        }
+        if (enemy.tag === 'Friendly' && !enemy.isAdventurer && !enemy.bear) {
+          // Only genuine fairies reach here. Friendly bears/adventurers are handled above.
+          setPendingFairyId(enemy.id);
           return prev;
         }
         const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, cls === '🤠');
