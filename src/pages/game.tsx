@@ -538,9 +538,13 @@ export default function Game() {
       const exploreCls = player.characterClass;
 
       const hostileEnemies = enemies.filter(e => e.tag !== 'Friendly');
+      // Use LOS, not tile.visible — Crystal Ball (trueVision) reveals enemies through walls
+      // but autoexplore should only stop for foes the player can actually engage.
+      const enemyInEngageSight = (e: typeof enemies[0]) =>
+        hasLOSBetween(state.map, player.pos, e.pos);
       const visibleHostile = hostileEnemies.filter(e =>
         chebyshev(player.pos, e.pos) <= VISION_RADIUS + 1 &&
-        state.map[e.pos.y]?.[e.pos.x]?.visible
+        enemyInEngageSight(e)
       );
       if (exploreCls === '🧙' && visibleHostile.length > 0) {
         setAutoExplore(false);
@@ -638,9 +642,7 @@ export default function Game() {
       const exploreIsWizard = player.characterClass === '🧙';
       const exploreMpFull = !exploreIsWizard || (player.stats.mana ?? 0) >= (player.stats.maxMana ?? 4);
       if (player.stats.hp < player.stats.maxHp || !exploreMpFull) {
-        const anyVisibleEnemy = enemies.some(
-          e => state.map[e.pos.y]?.[e.pos.x]?.visible
-        );
+        const anyVisibleEnemy = enemies.some(e => enemyInEngageSight(e));
         if (!anyVisibleEnemy) {
           handleWaitRef.current?.();
           return;
