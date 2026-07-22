@@ -35,7 +35,24 @@ export default function Home() {
   const cls = getClassDef(selected);
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center py-12 px-4">
+    <div className="min-h-screen w-full flex flex-col">
+      <div
+        role="status"
+        className="w-full shrink-0 px-4 py-3 bg-amber-950/90 border-b border-amber-600/50 text-amber-100 text-sm leading-snug text-center"
+      >
+        <span className="font-semibold text-amber-200">2026/07/21:</span>{" "}
+        Development on EmojiRL is currently suspended/on hiatus. Please direct all concerns/comments/requests for the dev to get off his lazyass &amp; finish working on the game @{" "}
+        <a
+          href="https://github.com/choy551/emojirl"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-amber-300 underline underline-offset-2 hover:text-amber-100 font-medium break-all"
+        >
+          https://github.com/choy551/emojirl
+        </a>
+      </div>
+
+      <div className="flex flex-col items-center py-12 px-4 flex-1 w-full">
       <div className="text-center max-w-md w-full space-y-8">
         <div>
           <h1 className="text-6xl font-black mb-4 text-primary tracking-tighter drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]">EmojiRL</h1>
@@ -179,6 +196,7 @@ export default function Home() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );
