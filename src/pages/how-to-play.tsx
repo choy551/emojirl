@@ -209,7 +209,7 @@ export default function HowToPlay({
               <div className="flex items-center gap-2 flex-wrap">
                 <Kbd>Space</Kbd>
                 <span className="text-muted-foreground">
-                  — context-sensitive action: automatically performs the most relevant action for your surroundings — attack an adjacent enemy, feed a nearby Bear, recruit an adventurer, cook at a campfire, enter a shop, close a door, pick up an item, or wait. Mirrors the mobile context button.
+                  — context-sensitive action: automatically performs the most relevant action for your surroundings — attack an adjacent enemy, feed a nearby Bear, recruit an adventurer, cook at a campfire, enter a shop, close a door, pick up an item, or wait. On mobile the context button idles as Auto-Explore instead of wait (tap again to stop).
                 </span>
               </div>
             </div>

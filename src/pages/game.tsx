@@ -812,10 +812,11 @@ export default function Game() {
   }, [handleMove, handleWait]);
 
   // Dispatch the resolved context-sensitive action (HL-style "use" button).
-  const doContextAction = useCallback(() => {
+  // Mobile idle fallback is Auto-Explore; keyboard Space still waits (Z / d-pad center also wait).
+  const doContextAction = useCallback((idle: 'wait' | 'explore' = 'wait') => {
     const state = gameStateRef.current;
     if (!state || state.gameOver) return;
-    const action = resolveContextAction(state);
+    const action = resolveContextAction(state, idle);
     switch (action.kind) {
       case 'open-shop': setShopOpen(true); break;
       case 'open-cache': setAmmoCacheOpen(true); break;
@@ -841,6 +842,11 @@ export default function Game() {
       case 'descend':
       case 'pickup':
         if (action.dir) handleManualMove(action.dir.dx, action.dir.dy);
+        break;
+      case 'explore':
+        setTravelTarget(null);
+        setAutoRest(false);
+        setAutoExplore(v => !v);
         break;
       default:
         handleManualWait();
@@ -1372,7 +1378,11 @@ export default function Game() {
   })();
 
   // ── Mobile touch action data (context button / ability buttons / actions menu) ──
-  const mobileContextDescriptor = resolveContextAction(gameState);
+  const mobileContextDescriptor = (() => {
+    const d = resolveContextAction(gameState, 'explore');
+    if (d.kind === 'explore' && autoExplore) return { kind: 'explore' as const, label: 'Stop', icon: '⏹' };
+    return d;
+  })();
   const mobileAbilities = getClassAbilities({
     player,
     turn: gameState.turn,
@@ -2945,7 +2955,13 @@ export default function Game() {
                 {controlSettings.showAbilityButtons && <AbilityButtons abilities={mobileAbilities} align={actionSide} />}
                 {controlSettings.showContextButtons && (
                   <div className="flex items-end gap-1.5">
-                    {actionSide === 'left' && <ContextActionButton descriptor={mobileContextDescriptor} onAct={doContextAction} />}
+                    {actionSide === 'left' && (
+                      <ContextActionButton
+                        descriptor={mobileContextDescriptor}
+                        onAct={() => doContextAction('explore')}
+                        exploring={autoExplore && mobileContextDescriptor.kind === 'explore'}
+                      />
+                    )}
                     <button
                       data-testid="actions-menu-button"
                       onPointerDown={e => { e.preventDefault(); e.stopPropagation(); setActionsMenuOpen(true); }}
@@ -2957,7 +2973,13 @@ export default function Game() {
                       <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>☰</span>
                       <span className="text-[8px] font-bold mt-0.5">Menu</span>
                     </button>
-                    {actionSide === 'right' && <ContextActionButton descriptor={mobileContextDescriptor} onAct={doContextAction} />}
+                    {actionSide === 'right' && (
+                      <ContextActionButton
+                        descriptor={mobileContextDescriptor}
+                        onAct={() => doContextAction('explore')}
+                        exploring={autoExplore && mobileContextDescriptor.kind === 'explore'}
+                      />
+                    )}
                   </div>
                 )}
               </div>

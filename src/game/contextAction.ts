@@ -6,7 +6,7 @@ export type ContextActionKind =
   | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear' | 'talk'
   | 'cook' | 'close-door'
   | 'open-shop' | 'open-cache' | 'open-restaurant'
-  | 'descend' | 'shrine' | 'pickup' | 'wait';
+  | 'descend' | 'shrine' | 'pickup' | 'wait' | 'explore';
 
 export interface ContextActionDescriptor {
   kind: ContextActionKind;
@@ -21,7 +21,10 @@ export interface ContextActionDescriptor {
  * and returns the single most relevant action. Pure — the caller dispatches it.
  * Priority mirrors the implicit precedence in handleMove / the keyboard handlers.
  */
-export function resolveContextAction(state: GameState): ContextActionDescriptor {
+export function resolveContextAction(
+  state: GameState,
+  idle: 'wait' | 'explore' = 'wait',
+): ContextActionDescriptor {
   const { player, map, items, enemies } = state;
   const { x: px, y: py } = player.pos;
   const tileAt = (x: number, y: number) => map[y]?.[x];
@@ -86,5 +89,6 @@ export function resolveContextAction(state: GameState): ContextActionDescriptor 
   const itemDir = neighbours.find(d => items.some(it => it.pos.x === px + d.dx && it.pos.y === py + d.dy));
   if (itemDir) return { kind: 'pickup', label: 'Pick up', icon: '🫳', dir: itemDir };
 
+  if (idle === 'explore') return { kind: 'explore', label: 'Explore', icon: '🔭' };
   return { kind: 'wait', label: 'Wait', icon: '⏳' };
 }
