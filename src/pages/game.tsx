@@ -34,6 +34,7 @@ import { RestaurantModal } from '../components/RestaurantModal';
 import { ItemStatCard } from '../components/ItemStatCard';
 import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog, CompanionTalkDialog } from '../components/InteractionDialogs';
 import { TacticsMenu } from '../components/TacticsMenu';
+import { GoToMenu } from '../components/GoToMenu';
 import { EquipmentTab } from '../components/EquipmentTab';
 import { canEquipItem } from '../components/itemUtils';
 import { RightSidebar } from '../components/RightSidebar';
@@ -47,7 +48,7 @@ import {
   bfsStepToward, bfsNextStep, bfsNextStepWallHug, PLAYER_PASSABLE_TILES,
   getDungeonPressure,
   isAutoexploreThreat, autoexploreOccupiedKeys, autoexploreFriendlyBlockKeys,
-  classifyStairsFinish,
+  classifyStairsFinish, scanGotoDestinations,
 } from '../game/gameHelpers';
 import { useGameActions } from '../hooks/useGameActions';
 
@@ -78,6 +79,9 @@ export default function Game() {
   const trailblazeTurnRef = useRef(-999);
   const [tacticsMenuOpen, setTacticsMenuOpen] = useState(false);
   const tacticsMenuOpenRef = useRef(false);
+  const [gotoMenuOpen, setGotoMenuOpen] = useState(false);
+  const gotoMenuOpenRef = useRef(false);
+  const gotoDestsRef = useRef<ReturnType<typeof scanGotoDestinations>>([]);
   const [hoveredEnemyId, setHoveredEnemyId] = useState<string | null>(null);
   const [inspectedEnemyId, setInspectedEnemyId] = useState<string | null>(null);
   const inspectedEnemyIdRef = useRef<string | null>(null);
@@ -112,6 +116,7 @@ export default function Game() {
   useEffect(() => { blinkTurnRef.current = blinkTurn; }, [blinkTurn]);
   useEffect(() => { trailblazeTurnRef.current = trailblazeTurn; }, [trailblazeTurn]);
   useEffect(() => { tacticsMenuOpenRef.current = tacticsMenuOpen; }, [tacticsMenuOpen]);
+  useEffect(() => { gotoMenuOpenRef.current = gotoMenuOpen; }, [gotoMenuOpen]);
   useEffect(() => { dirPickModeRef.current = dirPickMode; }, [dirPickMode]);
   const [bankOpen, setBankOpen] = useState(false);
   const bankOpenRef = useRef(false);
@@ -203,6 +208,8 @@ export default function Game() {
     setLogOpen,
     tacticsMenuOpen,
     setTacticsMenuOpen,
+    gotoMenuOpen,
+    setGotoMenuOpen,
     showRTFM,
     setShowRTFM,
     optionsOpen,
@@ -1117,6 +1124,29 @@ export default function Game() {
         return;
       }
 
+      // ── Go to menu intercept ───────────────────────────────────────────────
+      if (gotoMenuOpenRef.current) {
+        e.preventDefault();
+        if (e.key === 'Escape' || e.key === 'G') { setGotoMenuOpen(false); return; }
+        const dests = gotoDestsRef.current;
+        let idx = -1;
+        if (e.key >= '1' && e.key <= '9') idx = parseInt(e.key, 10) - 1;
+        else if (e.key.length === 1 && e.key >= 'a' && e.key <= 'z') idx = e.key.charCodeAt(0) - 97;
+        if (idx >= 0 && idx < dests.length) {
+          const d = dests[idx];
+          setGotoMenuOpen(false);
+          if (d.dist === 0) {
+            addLog(`You're already at the ${d.icon} ${d.label}.`);
+          } else {
+            setAutoExplore(false);
+            setAutoRest(false);
+            setTravelTarget({ x: d.pos.x, y: d.pos.y });
+            addLog(`Going to ${d.icon} ${d.label}…`);
+          }
+        }
+        return;
+      }
+
       // ── Tactics menu intercept ─────────────────────────────────────────────
       if (tacticsMenuOpenRef.current) {
         e.preventDefault();
@@ -1302,6 +1332,23 @@ export default function Game() {
       if (e.key === 'c') { e.preventDefault(); handleCloseDoor(); return; }
       // Class tactics: t opens the tactics menu
       if (e.key === 't') { e.preventDefault(); setTacticsMenuOpen(v => !v); return; }
+      // Go to (DCSS-style): Shift+G lists known destinations on this floor
+      if (e.key === 'G') {
+        e.preventDefault();
+        const gs = gameStateRef.current;
+        if (!gs || gs.gameOver) return;
+        const dests = scanGotoDestinations(gs.map, gs.player.pos, {
+          shopSoldOut: shopStockFloor.current === gs.currentFloor && shopItems.length === 0,
+          cacheSoldOut: ammoCacheStockFloor.current === gs.currentFloor && ammoCacheItems.length === 0,
+        });
+        if (dests.length === 0) {
+          addLog('No known destinations on this floor.');
+          return;
+        }
+        gotoDestsRef.current = dests;
+        setGotoMenuOpen(true);
+        return;
+      }
       // Talk to adjacent recruited companion: Shift+T
       if (e.key === 'T') {
         e.preventDefault();
@@ -1359,7 +1406,7 @@ export default function Game() {
       window.removeEventListener('keyup', handleKeyUp);
 
     };
-  }, [handleMove, handleWait, handleUseHeal, handleCook, handleCloseDoor, handleUseSlot, handleBankMove, setAutoRest, applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, handleBlinkStrike, handleBlinkStrikeOnTarget, enterBlinkTargetMode, exitBlinkTargetMode, applyRangerMode, handleCowboyTactics, handleFireProjectile, addLog, doContextAction]);
+  }, [handleMove, handleWait, handleUseHeal, handleCook, handleCloseDoor, handleUseSlot, handleBankMove, setAutoRest, applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, handleBlinkStrike, handleBlinkStrikeOnTarget, enterBlinkTargetMode, exitBlinkTargetMode, applyRangerMode, handleCowboyTactics, handleFireProjectile, addLog, doContextAction, shopItems, ammoCacheItems]);
 
   // ── render ────────────────────────────────────────────────────────────────
   if (!gameState) return <div className="p-8 text-center text-muted-foreground">Loading depths...</div>;
@@ -1421,11 +1468,26 @@ export default function Game() {
     { id: 'heal', icon: '❤️', label: 'Heal', onUse: handleUseHeal },
     { id: 'rest', icon: '💤', label: 'Rest', active: autoRest, onUse: () => { setTravelTarget(null); setAutoExplore(false); setAutoRest(v => !v); } },
     { id: 'explore', icon: '🔭', label: 'Explore', active: autoExplore, onUse: () => { setTravelTarget(null); setAutoRest(false); setAutoExplore(v => !v); } },
+    { id: 'goto', icon: '🗺️', label: 'Go to', onUse: () => {
+      const dests = scanGotoDestinations(gameState.map, player.pos, {
+        shopSoldOut: shopStockFloor.current === gameState.currentFloor && shopItems.length === 0,
+        cacheSoldOut: ammoCacheStockFloor.current === gameState.currentFloor && ammoCacheItems.length === 0,
+      });
+      if (dests.length === 0) { addLog('No known destinations on this floor.'); return; }
+      gotoDestsRef.current = dests;
+      setGotoMenuOpen(true);
+    } },
     { id: 'cook', icon: '🔥', label: 'Cook', onUse: handleCook },
     { id: 'closedoor', icon: '🚪', label: 'Close Door', disabled: !isAdjacentToOpenDoor, onUse: handleCloseDoor },
     { id: 'bag', icon: '🎒', label: 'Bag', onUse: () => setBankOpen(true) },
     { id: 'wait', icon: '⏳', label: 'Wait', onUse: handleManualWait },
   ];
+
+  const gotoDestinations = scanGotoDestinations(gameState.map, player.pos, {
+    shopSoldOut: shopStockFloor.current === gameState.currentFloor && shopItems.length === 0,
+    cacheSoldOut: ammoCacheStockFloor.current === gameState.currentFloor && ammoCacheItems.length === 0,
+  });
+  gotoDestsRef.current = gotoDestinations;
 
   const viewWidth = 20;
   const viewHeight = 14;
@@ -2688,6 +2750,25 @@ export default function Game() {
           bagPassiveSummary={bagPassiveSummary}
           gameState={gameState}
           onClose={() => setStatsExpanded(false)}
+        />
+      )}
+
+      {gotoMenuOpen && !gameState.gameOver && (
+        <GoToMenu
+          floor={gameState.currentFloor}
+          destinations={gotoDestinations}
+          onPick={d => {
+            setGotoMenuOpen(false);
+            if (d.dist === 0) {
+              addLog(`You're already at the ${d.icon} ${d.label}.`);
+              return;
+            }
+            setAutoExplore(false);
+            setAutoRest(false);
+            setTravelTarget({ x: d.pos.x, y: d.pos.y });
+            addLog(`Going to ${d.icon} ${d.label}…`);
+          }}
+          onClose={() => setGotoMenuOpen(false)}
         />
       )}
 

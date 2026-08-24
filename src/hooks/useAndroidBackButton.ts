@@ -21,6 +21,8 @@ export interface AndroidBackButtonHandlers {
   setLogOpen: (v: boolean) => void;
   tacticsMenuOpen: boolean;
   setTacticsMenuOpen: (v: boolean) => void;
+  gotoMenuOpen: boolean;
+  setGotoMenuOpen: (v: boolean) => void;
   showRTFM: boolean;
   setShowRTFM: (v: boolean) => void;
   optionsOpen: boolean;
@@ -51,6 +53,7 @@ export function useAndroidBackButton(handlers: AndroidBackButtonHandlers) {
         restaurantOpen, setRestaurantOpen,
         logOpen, setLogOpen,
         tacticsMenuOpen, setTacticsMenuOpen,
+        gotoMenuOpen, setGotoMenuOpen,
         showRTFM, setShowRTFM,
         optionsOpen, setOptionsOpen,
         pauseMenuOpen, setPauseMenuOpen,
@@ -66,6 +69,7 @@ export function useAndroidBackButton(handlers: AndroidBackButtonHandlers) {
       if (restaurantOpen)        { setRestaurantOpen(false);       return; }
       if (logOpen)               { setLogOpen(false);              return; }
       if (tacticsMenuOpen)       { setTacticsMenuOpen(false);      return; }
+      if (gotoMenuOpen)          { setGotoMenuOpen(false);         return; }
       if (showRTFM)              { setShowRTFM(false);             return; }
       if (optionsOpen)           { setOptionsOpen(false);          return; }
       if (pauseMenuOpen)         { setPauseMenuOpen(false);        return; }
@@ -87,6 +91,7 @@ export function useAndroidBackButton(handlers: AndroidBackButtonHandlers) {
     handlers.restaurantOpen,
     handlers.logOpen,
     handlers.tacticsMenuOpen,
+    handlers.gotoMenuOpen,
     handlers.showRTFM,
     handlers.optionsOpen,
     handlers.pauseMenuOpen,

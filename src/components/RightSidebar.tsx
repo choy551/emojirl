@@ -361,7 +361,7 @@ export function RightSidebar({
       <div className="mt-auto text-[10px] text-muted-foreground/40 space-y-0.5 border-t border-border/40 pt-2">
         <div>Move: arrows / WASD / numpad · click a tile</div>
         <div>1–9 use emoji · H heal · B bag</div>
-        <div>Z wait · R rest · O explore · / log</div>
+        <div>Z wait · R rest · O explore · G go to · / log</div>
         <div>Tab/Shift-Tab target · T tactics</div>
         {player.characterClass === '🧝' && <div className="text-amber-400/50">Ranger: step close to shoot</div>}
         {player.characterClass === '🧙' && <div className="text-violet-400/50">Wizard: Tab to lock target</div>}

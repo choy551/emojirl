@@ -304,6 +304,12 @@ export default function HowToPlay({
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
+                <Kbd>G</Kbd>
+                <span className="text-muted-foreground">
+                  — Go to (Shift+G): list known destinations on this floor (shops, bartenders, altars, downstairs, restaurants, campfires, ammo caches). Used altars, emptied shops, and drunk-from bartenders are omitted. 1–9 / a–z select, Esc closes.
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
                 <Kbd>O</Kbd>
                 <span className="text-muted-foreground">or</span>
                 <Kbd>Numpad +</Kbd>

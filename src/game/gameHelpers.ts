@@ -11,3 +11,4 @@ export * from './spawning';
 export * from './enemyTurns';
 export * from './autoexplore';
 export * from './monkeyLoot';
+export * from './goto';
