@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { GotoDestination } from '../game/goto';
 
 interface GoToMenuProps {
@@ -9,15 +10,22 @@ interface GoToMenuProps {
 
 /** DCSS-style Go to list of known destinations on the current floor. */
 export function GoToMenu({ floor, destinations, onPick, onClose }: GoToMenuProps) {
+  const openedAt = useRef(Date.now());
+  const dismiss = () => {
+    if (Date.now() - openedAt.current < 400) return;
+    onClose();
+  };
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-[70] flex items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.55)' }}
-      onClick={onClose}
+      onClick={dismiss}
+      onPointerDown={dismiss}
     >
       <div
         className="bg-card border border-border rounded-xl p-4 shadow-2xl w-[min(22rem,92vw)] max-h-[80vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
+        onPointerDown={e => e.stopPropagation()}
       >
         <div className="text-sm font-bold uppercase tracking-widest text-center mb-1 text-muted-foreground">
           Go to

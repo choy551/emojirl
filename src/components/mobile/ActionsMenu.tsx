@@ -14,6 +14,7 @@ interface ActionsMenuProps {
   general: ActionItem[];
   abilities: AbilityDescriptor[];
   onOpenTactics: () => void;
+  onOpenGoto: () => void;
   onClose: () => void;
 }
 
@@ -41,7 +42,7 @@ function ActionTile({ item, onClose }: { item: ActionItem; onClose: () => void }
 }
 
 /** Bottom sheet listing every available action plus per-class abilities and Tactics. */
-export function ActionsMenu({ general, abilities, onOpenTactics, onClose }: ActionsMenuProps) {
+export function ActionsMenu({ general, abilities, onOpenTactics, onOpenGoto, onClose }: ActionsMenuProps) {
   return (
     <div
       className="fixed inset-0 z-[55] flex items-end justify-center bg-black/60 backdrop-blur-sm"
@@ -80,6 +81,10 @@ export function ActionsMenu({ general, abilities, onOpenTactics, onClose }: Acti
           ))}
           <ActionTile
             item={{ id: 'tactics', icon: '🧭', label: 'Tactics', onUse: onOpenTactics }}
+            onClose={onClose}
+          />
+          <ActionTile
+            item={{ id: 'goto', icon: '🗺️', label: 'Go to', onUse: onOpenGoto }}
             onClose={onClose}
           />
         </div>

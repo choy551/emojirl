@@ -1468,15 +1468,6 @@ export default function Game() {
     { id: 'heal', icon: '❤️', label: 'Heal', onUse: handleUseHeal },
     { id: 'rest', icon: '💤', label: 'Rest', active: autoRest, onUse: () => { setTravelTarget(null); setAutoExplore(false); setAutoRest(v => !v); } },
     { id: 'explore', icon: '🔭', label: 'Explore', active: autoExplore, onUse: () => { setTravelTarget(null); setAutoRest(false); setAutoExplore(v => !v); } },
-    { id: 'goto', icon: '🗺️', label: 'Go to', onUse: () => {
-      const dests = scanGotoDestinations(gameState.map, player.pos, {
-        shopSoldOut: shopStockFloor.current === gameState.currentFloor && shopItems.length === 0,
-        cacheSoldOut: ammoCacheStockFloor.current === gameState.currentFloor && ammoCacheItems.length === 0,
-      });
-      if (dests.length === 0) { addLog('No known destinations on this floor.'); return; }
-      gotoDestsRef.current = dests;
-      setGotoMenuOpen(true);
-    } },
     { id: 'cook', icon: '🔥', label: 'Cook', onUse: handleCook },
     { id: 'closedoor', icon: '🚪', label: 'Close Door', disabled: !isAdjacentToOpenDoor, onUse: handleCloseDoor },
     { id: 'bag', icon: '🎒', label: 'Bag', onUse: () => setBankOpen(true) },
@@ -3099,6 +3090,18 @@ export default function Game() {
           general={mobileGeneralActions}
           abilities={mobileAbilities}
           onOpenTactics={() => setTacticsMenuOpen(true)}
+          onOpenGoto={() => {
+            const dests = scanGotoDestinations(gameState.map, player.pos, {
+              shopSoldOut: shopStockFloor.current === gameState.currentFloor && shopItems.length === 0,
+              cacheSoldOut: ammoCacheStockFloor.current === gameState.currentFloor && ammoCacheItems.length === 0,
+            });
+            if (dests.length === 0) {
+              addLog('No known destinations on this floor.');
+              return;
+            }
+            gotoDestsRef.current = dests;
+            window.setTimeout(() => setGotoMenuOpen(true), 50);
+          }}
           onClose={() => setActionsMenuOpen(false)}
         />
       )}
