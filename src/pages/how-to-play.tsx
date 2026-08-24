@@ -253,9 +253,9 @@ export default function HowToPlay({
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <Kbd>T</Kbd>
+                <Kbd>t</Kbd>
                 <span className="text-muted-foreground">
-                  — open tactics menu (class-specific abilities &amp; modes). Use number keys 1–4 inside the menu:
+                  — lowercase <strong className="text-foreground">t</strong> — open tactics menu (class-specific abilities &amp; modes). Not the same as uppercase T (Talk). Use number keys 1–4 inside the menu:
                 </span>
               </div>
               <div className="ml-4 text-xs text-muted-foreground space-y-0.5">
@@ -263,6 +263,12 @@ export default function HowToPlay({
                 • <strong>Ninja 🥷</strong>: 1 enter Blink target mode / 2–3 stealth modes / 4 toggle auto-stealth<br />
                 • <strong>Ranger 🧝</strong>: 1 ranged / 2 melee / 3 flee (Trailblaze)<br />
                 • <strong>Cowboy 🤠</strong>: 1 yeehaw tactics (special flavor/ability)
+              </div>
+              <div className="flex items-center gap-2">
+                <Kbd>T</Kbd>
+                <span className="text-muted-foreground">
+                  — uppercase <strong className="text-foreground">T</strong> (Shift+t) — Talk to an adjacent recruited companion. Spacebar context action also works. Lowercase t opens tactics, not Talk.
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <Kbd>X</Kbd>
@@ -347,7 +353,7 @@ export default function HowToPlay({
           </div>
 
           <div className="text-xs text-muted-foreground mt-1">
-            <strong>Companions (recruited adventurers):</strong> Bump into them to swap places (prevents hallway soft-locks). They follow you and fight nearby hostiles automatically. Press <strong>Shift+T</strong> (or Spacebar context action) while adjacent to Talk — set a <em>Favorite Companion</em> to descend with you (others stay behind), heal them with food, gift soul emojis for stat boosts or an ongoing passive, and set their combat behavior (Stay Close / Hang Back / Flee at Low HP / Fight to Death).
+            <strong>Companions (recruited adventurers):</strong> Bump into them to swap places (prevents hallway soft-locks). They follow you and fight nearby hostiles automatically. Press uppercase <Kbd>T</Kbd> (Shift+t, or Spacebar context action) while adjacent to Talk — set a <em>Favorite Companion</em> to descend with you (others stay behind), heal them with food, gift soul emojis for stat boosts or an ongoing passive, and set their combat behavior (Stay Close / Hang Back / Flee at Low HP / Fight to Death). Lowercase <Kbd>t</Kbd> is tactics, not Talk.
           </div>
         </div>
       </Section>
