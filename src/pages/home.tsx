@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CHARACTER_CLASSES, getClassDef } from "../game/classes";
 import { getScores, clearScores, LeaderboardEntry } from "../game/leaderboard";
@@ -7,9 +8,14 @@ import { hasSave, clearSave } from "../game/save";
 
 const VESSELS = ["🧙", "🥷", "🧝", "🤠"] as const;
 const VESSEL_KEY = "emojirl_vessel";
+const ANNOUNCE_DISMISS_KEY = "emojirl_announce_dismissed_2026-07-21";
 
 function loadVessel(): string {
   return localStorage.getItem(VESSEL_KEY) ?? "🧙";
+}
+
+function loadAnnounceDismissed(): boolean {
+  return localStorage.getItem(ANNOUNCE_DISMISS_KEY) === "1";
 }
 
 function formatDate(ts: number): string {
@@ -21,6 +27,12 @@ export default function Home() {
   const [selected, setSelected] = useState<string>(loadVessel);
   const [scores, setScores] = useState<LeaderboardEntry[]>(getScores);
   const [savedRun, setSavedRun] = useState<boolean>(hasSave);
+  const [announceDismissed, setAnnounceDismissed] = useState(loadAnnounceDismissed);
+
+  function dismissAnnounce() {
+    setAnnounceDismissed(true);
+    localStorage.setItem(ANNOUNCE_DISMISS_KEY, "1");
+  }
 
   function select(v: string) {
     setSelected(v);
@@ -36,21 +48,31 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full flex flex-col">
-      <div
-        role="status"
-        className="w-full shrink-0 px-4 py-3 bg-amber-950/90 border-b border-amber-600/50 text-amber-100 text-sm leading-snug text-center"
-      >
-        <span className="font-semibold text-amber-200">2026/07/21:</span>{" "}
-        Development on EmojiRL is currently suspended/on hiatus. Please direct all concerns/comments/requests for the dev to get off his lazyass &amp; finish working on the game @{" "}
-        <a
-          href="https://github.com/choy551/emojirl"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-amber-300 underline underline-offset-2 hover:text-amber-100 font-medium break-all"
+      {!announceDismissed && (
+        <div
+          role="status"
+          className="relative w-full shrink-0 px-4 py-3 pr-11 bg-amber-950/90 border-b border-amber-600/50 text-amber-100 text-sm leading-snug text-center"
         >
-          https://github.com/choy551/emojirl
-        </a>
-      </div>
+          <span className="font-semibold text-amber-200">2026/07/21:</span>{" "}
+          Development on EmojiRL is currently suspended/on hiatus. Please direct all concerns/comments/requests for the dev to get off his lazyass &amp; finish working on the game @{" "}
+          <a
+            href="https://github.com/choy551/emojirl"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-amber-300 underline underline-offset-2 hover:text-amber-100 font-medium break-all"
+          >
+            https://github.com/choy551/emojirl
+          </a>
+          <button
+            type="button"
+            onClick={dismissAnnounce}
+            aria-label="Dismiss announcement"
+            className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-md text-amber-200/80 hover:bg-amber-800/70 hover:text-amber-50 transition-colors"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col items-center py-12 px-4 flex-1 w-full">
       <div className="text-center max-w-md w-full space-y-8">
