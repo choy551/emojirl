@@ -207,6 +207,12 @@ export default function HowToPlay({
                 </span>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
+                <Kbd>Click</Kbd>
+                <span className="text-muted-foreground">
+                  — click a tile to walk there (auto-paths). Adjacent clicks bump: attack, pick up, open doors, pray, shop, recruit. Click an enemy to approach; a second click (once adjacent) attacks. Click yourself to wait. Toggle in Options.
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
                 <Kbd>Space</Kbd>
                 <span className="text-muted-foreground">
                   — context-sensitive action: automatically performs the most relevant action for your surroundings — attack an adjacent enemy, feed a nearby Bear, recruit an adventurer, cook at a campfire, enter a shop, close a door, pick up an item, or wait. On mobile the context button idles as Auto-Explore instead of wait (tap again to stop).

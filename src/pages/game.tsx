@@ -1462,6 +1462,8 @@ export default function Game() {
     return [...candidates].sort((a, b) => chebyshev(player.pos, a.pos) - chebyshev(player.pos, b.pos))[0];
   })();
 
+  const clickToMove = controlSettings.tapTileToMove && !gameState.gameOver;
+
   const visibleMap = [];
   for (let y = 0; y < viewHeight; y++) {
     const row = [];
@@ -1470,17 +1472,19 @@ export default function Game() {
       const mapX = startX + x;
       if (mapY >= 0 && mapY < gameState.map.length && mapX >= 0 && mapX < gameState.map[0].length) {
         const tileData = gameState.map[mapY][mapX];
+        const isTravelDest = !!travelTarget && travelTarget.x === mapX && travelTarget.y === mapY;
         if (!tileData.seen) {
           row.push(<div key={`${x}-${y}`} className="w-8 h-8 bg-black" />);
         } else if (!tileData.visible) {
-          const seenTapToMove = isMobile && controlSettings.tapTileToMove && !gameState.gameOver;
           row.push(
             <div
               key={`${x}-${y}`}
-              className={`w-8 h-8 flex items-center justify-center text-2xl select-none opacity-30 grayscale${seenTapToMove ? ' cursor-pointer active:scale-90 transition-transform' : ''}`}
-              onClick={seenTapToMove ? () => handleTileTap(mapX, mapY) : undefined}
+              className={`relative w-8 h-8 flex items-center justify-center text-2xl select-none opacity-30 grayscale${clickToMove ? ' cursor-pointer hover:brightness-125 active:scale-90 transition-transform' : ''}`}
+              onClick={clickToMove ? () => handleTileTap(mapX, mapY) : undefined}
+              title={clickToMove ? 'Walk here' : undefined}
             >
               {tileData.emoji}
+              {isTravelDest && <span className="absolute inset-0 rounded border-2 border-cyan-400/80 pointer-events-none" />}
             </div>
           );
         } else {
@@ -1521,15 +1525,15 @@ export default function Game() {
             <div
               key={`${x}-${y}`}
               style={tileBg ? { background: tileBg } : undefined}
-              className={`w-8 h-8 flex items-center justify-center text-2xl select-none relative${(isPlayer || (isMobile && controlSettings.tapTileToMove)) ? ' cursor-pointer hover:brightness-125 active:scale-90 transition-transform' : ''}${enemy && !isPlayer && !(isMobile && controlSettings.tapTileToMove) ? ' cursor-help' : ''}`}
+              className={`w-8 h-8 flex items-center justify-center text-2xl select-none relative${(isPlayer || clickToMove) ? ' cursor-pointer hover:brightness-125 active:scale-90 transition-transform' : ''}${enemy && !isPlayer && !clickToMove ? ' cursor-help' : ''}`}
               onClick={
-                isMobile && controlSettings.tapTileToMove && !gameState.gameOver
+                clickToMove
                   ? () => handleTileTap(mapX, mapY)
                   : (isPlayer ? handleWait : (enemy && !isPlayer ? () => setHoveredEnemyId(prev => prev === enemy.id ? null : enemy.id) : undefined))
               }
               onMouseEnter={enemy && !isPlayer ? () => setHoveredEnemyId(enemy.id) : undefined}
               onMouseLeave={enemy && !isPlayer ? () => setHoveredEnemyId(null) : undefined}
-              title={isPlayer ? 'Wait / rest (+1 HP)' : (enemy && !isPlayer ? `${enemy.name} — tap for stats` : undefined)}
+              title={isPlayer ? 'Wait / rest (+1 HP)' : (enemy && !isPlayer ? (clickToMove ? `${enemy.name} — click to approach` : `${enemy.name} — click for stats`) : (clickToMove ? 'Walk here' : undefined))}
               data-testid={isPlayer ? 'player-tile' : (enemy && !isPlayer ? `enemy-tile-${enemy.id}` : undefined)}
             >
               {displayChar}
@@ -1897,6 +1901,7 @@ export default function Game() {
                   </span>
                 </>
               )}
+              {isTravelDest && <span className="absolute inset-0 rounded border-2 border-cyan-400/80 pointer-events-none z-10" />}
             </div>
           );
         }

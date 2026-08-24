@@ -54,39 +54,50 @@ export function OptionsMenu({ settings, setSetting, toggleSetting, isMobile, onC
         </div>
 
         <div className="flex flex-col gap-3 p-4">
-          {!isMobile && (
-            <p className="text-[10px] text-amber-400/70 bg-amber-900/15 border border-amber-700/30 rounded-lg px-3 py-2 leading-snug">
-              Touch controls are active on touch devices and narrow screens. These toggles take effect there.
-            </p>
-          )}
-
           <div className="flex flex-col gap-1.5">
             <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 px-1">Movement</div>
-            <ToggleRow label="Tap tile to move" hint="Tap a tile to auto-walk there" checked={settings.tapTileToMove} onChange={() => toggleSetting('tapTileToMove')} />
-            <ToggleRow label="Swipe to move" hint="Swipe on the board to step / bump" checked={settings.swipeToMove} onChange={() => toggleSetting('swipeToMove')} />
-            <ToggleRow label="Edge tap to move" hint="Tap near a screen edge to step that way" checked={settings.edgeTap} onChange={() => toggleSetting('edgeTap')} />
+            <ToggleRow
+              label={isMobile ? 'Tap tile to move' : 'Click tile to move'}
+              hint={isMobile ? 'Tap a tile to auto-walk there' : 'Click a tile to walk, attack, or interact'}
+              checked={settings.tapTileToMove}
+              onChange={() => toggleSetting('tapTileToMove')}
+            />
+            {isMobile && (
+              <>
+                <ToggleRow label="Swipe to move" hint="Swipe on the board to step / bump" checked={settings.swipeToMove} onChange={() => toggleSetting('swipeToMove')} />
+                <ToggleRow label="Edge tap to move" hint="Tap near a screen edge to step that way" checked={settings.edgeTap} onChange={() => toggleSetting('edgeTap')} />
+              </>
+            )}
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 px-1">On-screen controls</div>
-            <ToggleRow label="Virtual D-pad" hint="9-key numpad-style movement pad" checked={settings.showDpad} onChange={() => toggleSetting('showDpad')} />
-            <ToggleRow label="Context buttons" hint="Use + Actions menu buttons" checked={settings.showContextButtons} onChange={() => toggleSetting('showContextButtons')} />
-            <ToggleRow label="Ability buttons" hint="Quick class ability buttons" checked={settings.showAbilityButtons} onChange={() => toggleSetting('showAbilityButtons')} />
-          </div>
+          {isMobile ? (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 px-1">On-screen controls</div>
+                <ToggleRow label="Virtual D-pad" hint="9-key numpad-style movement pad" checked={settings.showDpad} onChange={() => toggleSetting('showDpad')} />
+                <ToggleRow label="Context buttons" hint="Use + Actions menu buttons" checked={settings.showContextButtons} onChange={() => toggleSetting('showContextButtons')} />
+                <ToggleRow label="Ability buttons" hint="Quick class ability buttons" checked={settings.showAbilityButtons} onChange={() => toggleSetting('showAbilityButtons')} />
+              </div>
 
-          <div className="flex flex-col gap-1.5">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 px-1">Layout</div>
-            <button
-              onClick={() => setSetting('dpadSide', settings.dpadSide === 'right' ? 'left' : 'right')}
-              className="w-full flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-secondary/40 border border-border/40 hover:bg-secondary/60 active:scale-[0.98] transition-all text-left"
-            >
-              <span className="flex flex-col">
-                <span className="text-xs font-medium text-foreground">D-pad side</span>
-                <span className="text-[10px] text-muted-foreground/50 leading-tight">Which corner the d-pad sits in</span>
-              </span>
-              <span className="text-xs font-bold text-primary uppercase">{settings.dpadSide}</span>
-            </button>
-          </div>
+              <div className="flex flex-col gap-1.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 px-1">Layout</div>
+                <button
+                  onClick={() => setSetting('dpadSide', settings.dpadSide === 'right' ? 'left' : 'right')}
+                  className="w-full flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-secondary/40 border border-border/40 hover:bg-secondary/60 active:scale-[0.98] transition-all text-left"
+                >
+                  <span className="flex flex-col">
+                    <span className="text-xs font-medium text-foreground">D-pad side</span>
+                    <span className="text-[10px] text-muted-foreground/50 leading-tight">Which corner the d-pad sits in</span>
+                  </span>
+                  <span className="text-xs font-bold text-primary uppercase">{settings.dpadSide}</span>
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="text-[10px] text-muted-foreground/50 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 leading-snug">
+              D-pad, swipe, and on-screen buttons appear on phones and tablets.
+            </p>
+          )}
         </div>
 
         <div className="p-4 pt-0">
