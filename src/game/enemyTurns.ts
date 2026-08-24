@@ -2,6 +2,7 @@ import { Enemy, EmojiItem, GameState, Position, FloatingText, PlacedBomb, Active
 import { chebyshev } from './geo';
 import { applyEquipmentAndPassives, addToBag, computeBagPassives } from './inventory';
 import { stealOneSoulEmoji, applySoulThefts, stolenEmojiSummary } from './monkeyLoot';
+import { resolveProjectileFlight } from './projectiles';
 import { withVisibility, visionRadiusFor } from './vision';
 import { bfsStepToward, fleeStep, hasLOSBetween, detectionRadius } from './pathfinding';
 import { PLAYER_PASSABLE_TILES, MERMAN_PASSABLE_TILES } from './tiles';
@@ -118,166 +119,28 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
 
   let newProjectile: ActiveProjectile | null = state.activeProjectile;
   if (newProjectile) {
-    const proj = newProjectile;
-    const nextX = proj.pos.x + proj.dir.x;
-    const nextY = proj.pos.y + proj.dir.y;
-    const outOfBounds = nextY < 0 || nextY >= map.length || nextX < 0 || nextX >= map[0].length;
-    const hitWall = !outOfBounds && map[nextY][nextX].type === 'wall';
-
-    if (proj.phase === 'outgoing') {
-      // Co-location check: an enemy may have stepped onto the boomerang's current tile
-      // last turn (both moving 1 tile/turn toward each other — they "swap" positions and
-      // the normal nextX/nextY check would miss entirely).
-      const colocIdx = proj.traveled > 0
-        ? newEnemies.findIndex(e => e.pos.x === proj.pos.x && e.pos.y === proj.pos.y)
-        : -1;
-      if (colocIdx !== -1) {
-        const colocTarget = newEnemies[colocIdx];
-        if (proj.kind === 'boomerang') {
-          const bankBoomerangs = state.player.bank.filter(it => it.activeKind === 'boomerang' && !it.consumed).length;
-          const boomerangMultiplier = Math.min(2.0, 1.0 + 0.25 * bankBoomerangs);
-          const dmg = Math.max(1, Math.floor(player.stats.attack * boomerangMultiplier) - (colocTarget.defense ?? 0));
-          const pctLabel = Math.round(boomerangMultiplier * 100);
-          log(`🪃 Boomerang hits ${colocTarget.emoji} ${colocTarget.name} for ${dmg} dmg! (${pctLabel}% ATK)`);
-          newFloatingTexts.push({ id: `boom-coloc-${colocTarget.id}`, pos: { ...colocTarget.pos }, text: `-${dmg}`, color: '#fde68a', life: 2 });
-          const colocNewHp = colocTarget.hp - dmg;
-          if (colocNewHp <= 0) { newEnemies.splice(colocIdx, 1); }
-          else { newEnemies[colocIdx] = { ...colocTarget, hp: colocNewHp, engaged: true }; }
-          newProjectile = { ...proj, dir: { x: -proj.dir.x, y: -proj.dir.y }, phase: 'returning', traveled: 0 };
-        } else if (proj.kind === 'gun') {
-          const dmg = Math.max(1, player.stats.attack - (colocTarget.defense ?? 0));
-          log(`🔫 Bullet hits ${colocTarget.emoji} ${colocTarget.name} for ${dmg} dmg!`);
-          newFloatingTexts.push({ id: `gun-coloc-${colocTarget.id}`, pos: { ...colocTarget.pos }, text: `-${dmg}`, color: '#ef4444', life: 2 });
-          const colocNewHp = colocTarget.hp - dmg;
-          if (colocNewHp <= 0) { newEnemies.splice(colocIdx, 1); } else { newEnemies[colocIdx] = { ...colocTarget, hp: colocNewHp, engaged: true }; }
-          newProjectile = null;
-        } else if (proj.kind === 'freeze') {
-          const dmg = Math.max(1, player.stats.attack - (colocTarget.defense ?? 0));
-          log(`❄️ Freeze hits ${colocTarget.emoji} ${colocTarget.name} for ${dmg} dmg! Frozen for 3 turns!`);
-          newFloatingTexts.push({ id: `freeze-coloc-${colocTarget.id}`, pos: { ...colocTarget.pos }, text: `❄️-${dmg}`, color: '#93c5fd', life: 2 });
-          const colocNewHp = colocTarget.hp - dmg;
-          if (colocNewHp <= 0) { reclaimMonkeyLoot(colocTarget); newEnemies.splice(colocIdx, 1); } else { newEnemies[colocIdx] = { ...colocTarget, hp: colocNewHp, engaged: true, frozenTurns: 3, slowedTurns: 0 }; }
-          newProjectile = null;
-        }
-        // bomb co-location: AOE still triggers below via nextX/nextY on the next tick
-      } else if (outOfBounds || hitWall || proj.traveled >= proj.maxRange) {
-        if (proj.kind === 'boomerang') {
-          newProjectile = {
-            ...proj,
-            pos: { x: nextX, y: nextY },
-            dir: { x: -proj.dir.x, y: -proj.dir.y },
-            phase: 'returning',
-            traveled: 0,
-          };
-        } else {
-          newProjectile = null;
-        }
-      } else {
-        const hitIdx = newEnemies.findIndex(e => e.pos.x === nextX && e.pos.y === nextY);
-        if (hitIdx !== -1) {
-          const target = newEnemies[hitIdx];
-          if (proj.kind === 'gun') {
-            const dmg = Math.max(1, player.stats.attack - (target.defense ?? 0));
-            log(`🔫 Bullet hits ${target.emoji} ${target.name} for ${dmg} dmg!`);
-            newFloatingTexts.push({ id: `gun-hit-${target.id}`, pos: { ...target.pos }, text: `-${dmg}`, color: '#ef4444', life: 2 });
-            const newHp = target.hp - dmg;
-            if (newHp <= 0) {
-              reclaimMonkeyLoot(target);
-              newEnemies.splice(hitIdx, 1);
-            } else {
-              newEnemies[hitIdx] = { ...target, hp: newHp, engaged: true };
-            }
-            newProjectile = null;
-          } else if (proj.kind === 'freeze') {
-            const dmg = Math.max(1, player.stats.attack - (target.defense ?? 0));
-            log(`❄️ Freeze hits ${target.emoji} ${target.name} for ${dmg} dmg! Frozen for 3 turns!`);
-            newFloatingTexts.push({ id: `freeze-hit-${target.id}`, pos: { ...target.pos }, text: `❄️-${dmg}`, color: '#93c5fd', life: 2 });
-            const newHp = target.hp - dmg;
-            if (newHp <= 0) {
-              reclaimMonkeyLoot(target);
-              newEnemies.splice(hitIdx, 1);
-            } else {
-              newEnemies[hitIdx] = { ...target, hp: newHp, engaged: true, frozenTurns: 3, slowedTurns: 0 };
-            }
-            newProjectile = null;
-          } else if (proj.kind === 'boomerang') {
-            const bankBoomerangs = state.player.bank.filter(it => it.activeKind === 'boomerang' && !it.consumed).length;
-            const boomerangMultiplier = Math.min(2.0, 1.0 + 0.25 * bankBoomerangs);
-            const dmg = Math.max(1, Math.floor(player.stats.attack * boomerangMultiplier) - (target.defense ?? 0));
-            const pctLabel = Math.round(boomerangMultiplier * 100);
-            log(`🪃 Boomerang hits ${target.emoji} ${target.name} for ${dmg} dmg! (${pctLabel}% ATK)`);
-            newFloatingTexts.push({ id: `boom-hit-${target.id}`, pos: { ...target.pos }, text: `-${dmg}`, color: '#fde68a', life: 2 });
-            const newHp = target.hp - dmg;
-            if (newHp <= 0) {
-              reclaimMonkeyLoot(target);
-              newEnemies.splice(hitIdx, 1);
-            } else {
-              newEnemies[hitIdx] = { ...target, hp: newHp, engaged: true };
-            }
-            newProjectile = {
-              ...proj,
-              pos: { x: nextX, y: nextY },
-              dir: { x: -proj.dir.x, y: -proj.dir.y },
-              phase: 'returning',
-              traveled: 0,
-            };
-          } else if (proj.kind === 'bomb') {
-            // Instant 3×3 AOE explosion on hitting an enemy
-            const blastPos = { x: nextX, y: nextY };
-            const blastRadius = 1;
-            log(`💥 BOOM! Bomb detonates on ${target.emoji} ${target.name}!`);
-            newFloatingTexts.push({ id: `bomb-proj-exp-${proj.id}`, pos: { ...blastPos }, text: '💥', color: '#f97316', life: 3 });
-            for (let fy = blastPos.y - blastRadius; fy <= blastPos.y + blastRadius; fy++) {
-              for (let fx = blastPos.x - blastRadius; fx <= blastPos.x + blastRadius; fx++) {
-                if (chebyshev({ x: fx, y: fy }, blastPos) <= blastRadius) {
-                  explosionPositions.push({ x: fx, y: fy });
-                }
-              }
-            }
-            const bombAtk = player.stats.attack * 2;
-            for (let ei = newEnemies.length - 1; ei >= 0; ei--) {
-              const e = newEnemies[ei];
-              if (chebyshev(e.pos, blastPos) <= blastRadius) {
-                const dmg = Math.max(1, bombAtk - (e.defense ?? 0));
-                log(`💥 Explosion hits ${e.emoji} ${e.name} for ${dmg} dmg!`);
-                newFloatingTexts.push({ id: `bomb-proj-hit-${e.id}`, pos: { ...e.pos }, text: `-${dmg}`, color: '#f97316', life: 2 });
-                const newHp = e.hp - dmg;
-                if (newHp <= 0) {
-                  reclaimMonkeyLoot(e);
-                  newEnemies.splice(ei, 1);
-                } else {
-                  newEnemies[ei] = { ...e, hp: newHp, engaged: true };
-                }
-              }
-            }
-            // Player caught in blast?
-            if (chebyshev(player.pos, blastPos) <= blastRadius) {
-              const selfDmg = Math.max(1, bombAtk);
-              playerHp = Math.max(0, playerHp - selfDmg);
-              log(`💥 You're caught in your own explosion! -${selfDmg} HP!`);
-              newFloatingTexts.push({ id: `bomb-self-${proj.id}`, pos: { ...player.pos }, text: `-${selfDmg}`, color: '#f97316', life: 2 });
-              if (playerHp <= 0) { playerDied = true; killer = { name: 'your own bomb', emoji: '💣' }; }
-            }
-            newProjectile = null;
-          }
-        } else {
-          newProjectile = { ...proj, pos: { x: nextX, y: nextY }, traveled: proj.traveled + 1 };
-        }
-      }
-    } else {
-      if (outOfBounds || hitWall) {
-        newProjectile = null;
-      } else if (nextX === player.pos.x && nextY === player.pos.y) {
-        log('🪃 The boomerang returns to your hand!');
-        newProjectile = null;
-      } else {
-        newProjectile = { ...proj, pos: { x: nextX, y: nextY }, traveled: proj.traveled + 1 };
-        if (proj.traveled >= proj.maxRange * 2) newProjectile = null;
-      }
+    const extraBooms = newProjectile.kind === 'boomerang'
+      ? state.player.bank.filter(it => it.activeKind === 'boomerang' && !it.consumed).length
+      : 0;
+    const shot = resolveProjectileFlight(newProjectile, map, newEnemies, player, state.turn, extraBooms);
+    newEnemies.length = 0;
+    newEnemies.push(...shot.enemies);
+    newLogs.push(...shot.logs);
+    newFloatingTexts.push(...shot.floats);
+    explosionPositions.push(...shot.explosions);
+    playerInventoryAdditions.push(...shot.stolenReturns);
+    if (shot.beam) enemyBeam = shot.beam;
+    if (shot.playerDamage > 0) {
+      playerHp = Math.max(0, playerHp - shot.playerDamage);
     }
+    if (shot.playerDied) {
+      playerDied = true;
+      killer = shot.killer;
+    }
+    newProjectile = shot.projectile;
   }
 
-  const occupied = new Set<string>(state.enemies.map(e => `${e.pos.x},${e.pos.y}`));
+  const occupied = new Set<string>(newEnemies.map(e => `${e.pos.x},${e.pos.y}`));
 
   const playerOnWater = map[player.pos.y]?.[player.pos.x]?.type === 'water';
   const playerNearWater = playerOnWater || [[-1,0],[1,0],[0,-1],[0,1]].some(

@@ -355,7 +355,7 @@ export default function HowToPlay({
           </div>
 
           <div className="text-xs text-muted-foreground mt-2">
-            <strong>Special modes:</strong> When using bombs, guns, boomerang, rope, or freeze (from hotbar 1–9 or tactics), you enter direction-pick mode — use any movement keys (arrows/WASD/numpad) to fire in that direction. Esc cancels.
+            <strong>Special modes:</strong> When using bombs, guns, boomerang, rope, or freeze (from hotbar 1–9), you enter direction-pick mode — click a tile, use the d-pad, or press movement keys (arrows/WASD/numpad) to fire in that direction. The shot travels the whole line immediately (hits the first hostile, skips companions). Esc cancels.
           </div>
 
           <div className="text-xs text-muted-foreground mt-1">

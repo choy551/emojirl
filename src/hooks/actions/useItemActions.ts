@@ -269,7 +269,7 @@ export function useItemActions(
       if (gs.activeProjectile) { addLog('A projectile is already in flight!'); return; }
       dirPickModeRef.current = item.activeKind as 'gun' | 'freeze' | 'boomerang' | 'bomb';
       setDirPickMode(item.activeKind as 'gun' | 'freeze' | 'boomerang' | 'bomb');
-      addLog(`${item.emoji} Pick a direction (arrow/numpad/WASD)…`);
+      addLog(`${item.emoji} Pick a direction (click a tile, d-pad, or arrow/numpad/WASD)…`);
       return;
     }
 

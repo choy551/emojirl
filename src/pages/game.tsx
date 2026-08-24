@@ -758,11 +758,18 @@ export default function Game() {
   // Manual movement from touch controls (d-pad / swipe). Cancels any in-progress
   // automation just like keyboard movement does.
   const handleManualMove = useCallback((dx: number, dy: number) => {
+    if (dirPickModeRef.current) {
+      const kind = dirPickModeRef.current;
+      dirPickModeRef.current = null;
+      setDirPickMode(null);
+      handleFireProjectile(kind, dx, dy);
+      return;
+    }
     setAutoExplore(false);
     setAutoRest(false);
     setTravelTarget(null);
     handleMove(dx, dy);
-  }, [handleMove]);
+  }, [handleMove, handleFireProjectile]);
 
   const handleManualWait = useCallback(() => {
     setAutoExplore(false);
@@ -794,6 +801,18 @@ export default function Game() {
     const { player, enemies } = state;
     const dx = mapX - player.pos.x;
     const dy = mapY - player.pos.y;
+    if (dirPickModeRef.current) {
+      const adx = Math.sign(dx);
+      const ady = Math.sign(dy);
+      if (adx === 0 && ady === 0) return;
+      const kind = dirPickModeRef.current;
+      dirPickModeRef.current = null;
+      setDirPickMode(null);
+      setAutoExplore(false);
+      setAutoRest(false);
+      handleFireProjectile(kind, adx, ady);
+      return;
+    }
     setAutoExplore(false);
     setAutoRest(false);
     if (dx === 0 && dy === 0) { setTravelTarget(null); handleWait(); return; }
@@ -809,7 +828,7 @@ export default function Game() {
       return;
     }
     setTravelTarget({ x: mapX, y: mapY });
-  }, [handleMove, handleWait]);
+  }, [handleMove, handleWait, handleFireProjectile]);
 
   // Dispatch the resolved context-sensitive action (HL-style "use" button).
   // Mobile idle fallback is Auto-Explore; keyboard Space still waits (Z / d-pad center also wait).
@@ -2537,7 +2556,7 @@ export default function Game() {
         {dirPickMode && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-xl bg-yellow-950/95 border border-yellow-500/80 text-yellow-200 text-sm font-bold shadow-lg animate-pulse pointer-events-none select-none flex items-center gap-2">
             <span className="text-xl">{dirPickMode === 'gun' ? '🔫' : dirPickMode === 'freeze' ? '❄️' : '🪃'}</span>
-            {dirPickMode === 'gun' ? 'Gun' : dirPickMode === 'freeze' ? 'Freeze' : 'Boomerang'} — pick a direction · Esc to cancel
+            {dirPickMode === 'gun' ? 'Gun' : dirPickMode === 'freeze' ? 'Freeze' : dirPickMode === 'bomb' ? 'Bomb' : 'Boomerang'} — click a tile or press a direction · Esc to cancel
           </div>
         )}
 
