@@ -10,3 +10,4 @@ export * from './inventory';
 export * from './spawning';
 export * from './enemyTurns';
 export * from './autoexplore';
+export * from './monkeyLoot';

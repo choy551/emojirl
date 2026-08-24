@@ -12,7 +12,7 @@ import {
   addToBag, levelFromXP,
   mpBonusForLevel, computeNinjaEvasion, getRandomCowboyFlavor, spawnEnemies,
   spawnVaultItems, handleGodBlessedImmunity,
-  getDungeonPressure, _flashSignals,
+  getDungeonPressure, _flashSignals, restoreStolenEmojis, stolenEmojiSummary,
 } from '../game/gameHelpers';
 import { canEquipItem } from '../components/itemUtils';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
@@ -50,9 +50,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
   // Used in all kill paths (melee/ranged/bolt/blink/zap/arc/etc) to fix incomplete returns.
   const applyMonkeyDropOnKill = (killed: any, p: Player) => {
     if (killed?.monkey && killed.stolenEmojis?.length) {
-      const { inventory: ii, bank: bb } = addToBag(p.inventory, p.bank, ...killed.stolenEmojis);
-      addLog(`🐒 ${killed.emoji} Monkey dropped your ${killed.stolenEmojis.map((e: any) => e.emoji).join('')}! Soul restored.`);
-      return { ...p, inventory: ii, bank: bb };
+      const restored = restoreStolenEmojis(p, killed.stolenEmojis);
+      const bankNote = restored.banked > 0 ? ` (${restored.banked} overflowed to bank)` : '';
+      addLog(`🐒 ${killed.emoji} Monkey dropped your ${stolenEmojiSummary(killed.stolenEmojis)}! Soul restored.${bankNote}`);
+      return { ...p, inventory: restored.inventory, bank: restored.bank };
     }
     return p;
   };

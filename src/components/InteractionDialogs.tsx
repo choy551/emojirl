@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { GameState, Enemy, EmojiItem } from '../game/types';
-import { addToBag } from '../game/gameHelpers';
+import { restoreStolenEmojis, stolenEmojiSummary } from '../game/gameHelpers';
 
 type SetGameState = React.Dispatch<React.SetStateAction<GameState | null>>;
 
@@ -26,12 +26,15 @@ export function MonkeyInteractionDialog({ gameState, setGameState, interaction, 
       const itemIdx = prev.player.inventory.findIndex(i => !i.consumed && i.emoji === wants);
       if (itemIdx === -1) return prev;
       const remainingInv = prev.player.inventory.filter((_, i) => i !== itemIdx);
-      const { inventory: _inv, bank: _bnk } = addToBag(remainingInv, prev.player.bank, ...(monkey.stolenEmojis ?? []));
+      const restored = restoreStolenEmojis(
+        { inventory: remainingInv, bank: prev.player.bank },
+        monkey.stolenEmojis ?? [],
+      );
       return {
         ...prev,
-        player: { ...prev.player, inventory: _inv, bank: _bnk },
+        player: { ...prev.player, inventory: restored.inventory, bank: restored.bank },
         enemies: prev.enemies.filter(e => e.id !== interaction.id),
-        logs: [{ id: Math.random().toString(), text: `🐒 ${monkey.name} happily takes the ${wants} and drops your emojis! 🎉`, turn: prev.turn }, ...prev.logs].slice(0, 24),
+        logs: [{ id: Math.random().toString(), text: `🐒 ${monkey.name} happily takes the ${wants} and drops your ${stolenEmojiSummary(monkey.stolenEmojis ?? []) || 'emojis'}! 🎉`, turn: prev.turn }, ...prev.logs].slice(0, 24),
       };
     });
     onClose();
@@ -64,7 +67,7 @@ export function MonkeyInteractionDialog({ gameState, setGameState, interaction, 
           </div>
           {stolenCount > 0 && (
             <div className="mt-2 text-xs text-amber-400/80">
-              Holding <span className="font-semibold">{stolenCount}</span> stolen emoji{stolenCount !== 1 ? 's' : ''}: {(monkey.stolenEmojis ?? []).map(s => s.emoji).join('')}
+              Holding <span className="font-semibold">{stolenCount}</span> stolen emoji{stolenCount !== 1 ? 's' : ''}: {stolenEmojiSummary(monkey.stolenEmojis ?? [])}
             </div>
           )}
         </div>

@@ -31,13 +31,29 @@ export function addToBag(
     }
     if (isStackableBagPassive(item)) {
       const cap = STACKABLE_BAG_CAPS[item.emoji] ?? 9;
+      const addCount = Math.max(1, item.stackCount ?? 1);
       const existingIdx = newInv.findIndex(i => i.emoji === item.emoji && isStackableBagPassive(i));
       if (existingIdx !== -1) {
         const existing = newInv[existingIdx];
         const cur = existing.stackCount ?? 1;
-        if (cur < cap) { newInv[existingIdx] = { ...existing, stackCount: cur + 1 }; continue; }
-        else { newBank.push(item); continue; }
+        const room = Math.max(0, cap - cur);
+        if (room === 0) { newBank.push({ ...item, stackCount: addCount }); continue; }
+        const toStack = Math.min(room, addCount);
+        newInv[existingIdx] = { ...existing, stackCount: cur + toStack };
+        if (addCount > toStack) {
+          newBank.push({ ...item, id: `${item.id}-overflow`, stackCount: addCount - toStack });
+        }
+        continue;
       }
+      const bagCount = newInv.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment).length;
+      if (bagCount >= 9) { newBank.push({ ...item, stackCount: addCount }); continue; }
+      if (addCount > cap) {
+        newInv.push({ ...item, stackCount: cap });
+        newBank.push({ ...item, id: `${item.id}-overflow`, stackCount: addCount - cap });
+        continue;
+      }
+      newInv.push({ ...item, stackCount: addCount });
+      continue;
     }
     const bagCount = newInv.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment).length;
     if (item.healAmount !== undefined || item.ammoAmount !== undefined || bagCount < 9) {

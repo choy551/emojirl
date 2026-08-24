@@ -1,6 +1,7 @@
 import { Enemy, EmojiItem, GameState, Position, FloatingText, PlacedBomb, ActiveProjectile } from './types';
 import { chebyshev } from './geo';
 import { applyEquipmentAndPassives, addToBag, computeBagPassives } from './inventory';
+import { stealOneSoulEmoji, applySoulThefts, stolenEmojiSummary } from './monkeyLoot';
 import { withVisibility, visionRadiusFor } from './vision';
 import { bfsStepToward, fleeStep, hasLOSBetween, detectionRadius } from './pathfinding';
 import { PLAYER_PASSABLE_TILES, MERMAN_PASSABLE_TILES } from './tiles';
@@ -50,6 +51,15 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
   const log = (text: string) =>
     newLogs.push({ id: Math.random().toString(), text, turn: state.turn });
 
+  const reclaimMonkeyLoot = (e: Enemy) => {
+    if (e.monkey && e.stolenEmojis?.length) {
+      playerInventoryAdditions.push(...e.stolenEmojis);
+      log(`🐒 ${e.name} dropped your ${stolenEmojiSummary(e.stolenEmojis)}!`);
+    }
+  };
+
+  const stealTakenFrom: Record<string, number> = {};
+
   const stealGoldOnCrowHit = (enemy: Enemy) => {
     if (!enemy.crow || playerGold <= 0) return;
     const stolen = crowGoldSteal(state.currentFloor, playerGold);
@@ -94,10 +104,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
           log(`💥 Explosion hits ${e.emoji} ${e.name} for ${dmg} dmg!`);
           newFloatingTexts.push({ id: `bomb-hit-${e.id}`, pos: { ...e.pos }, text: `-${dmg}`, color: '#f97316', life: 2 });
           if (newHp <= 0) {
-            if (e.stolenEmojis?.length) {
-              playerInventoryAdditions.push(...e.stolenEmojis);
-              log(`🐒 ${e.name} dropped your ${e.stolenEmojis.map(s => s.emoji).join('')}!`);
-            }
+            reclaimMonkeyLoot(e);
             newEnemies.splice(ei, 1);
           } else {
             newEnemies[ei] = { ...e, hp: newHp, engaged: true };
@@ -149,7 +156,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
           log(`❄️ Freeze hits ${colocTarget.emoji} ${colocTarget.name} for ${dmg} dmg! Frozen for 3 turns!`);
           newFloatingTexts.push({ id: `freeze-coloc-${colocTarget.id}`, pos: { ...colocTarget.pos }, text: `❄️-${dmg}`, color: '#93c5fd', life: 2 });
           const colocNewHp = colocTarget.hp - dmg;
-          if (colocNewHp <= 0) { newEnemies.splice(colocIdx, 1); } else { newEnemies[colocIdx] = { ...colocTarget, hp: colocNewHp, engaged: true, frozenTurns: 3, slowedTurns: 0 }; }
+          if (colocNewHp <= 0) { reclaimMonkeyLoot(colocTarget); newEnemies.splice(colocIdx, 1); } else { newEnemies[colocIdx] = { ...colocTarget, hp: colocNewHp, engaged: true, frozenTurns: 3, slowedTurns: 0 }; }
           newProjectile = null;
         }
         // bomb co-location: AOE still triggers below via nextX/nextY on the next tick
@@ -175,6 +182,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
             newFloatingTexts.push({ id: `gun-hit-${target.id}`, pos: { ...target.pos }, text: `-${dmg}`, color: '#ef4444', life: 2 });
             const newHp = target.hp - dmg;
             if (newHp <= 0) {
+              reclaimMonkeyLoot(target);
               newEnemies.splice(hitIdx, 1);
             } else {
               newEnemies[hitIdx] = { ...target, hp: newHp, engaged: true };
@@ -186,6 +194,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
             newFloatingTexts.push({ id: `freeze-hit-${target.id}`, pos: { ...target.pos }, text: `❄️-${dmg}`, color: '#93c5fd', life: 2 });
             const newHp = target.hp - dmg;
             if (newHp <= 0) {
+              reclaimMonkeyLoot(target);
               newEnemies.splice(hitIdx, 1);
             } else {
               newEnemies[hitIdx] = { ...target, hp: newHp, engaged: true, frozenTurns: 3, slowedTurns: 0 };
@@ -200,6 +209,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
             newFloatingTexts.push({ id: `boom-hit-${target.id}`, pos: { ...target.pos }, text: `-${dmg}`, color: '#fde68a', life: 2 });
             const newHp = target.hp - dmg;
             if (newHp <= 0) {
+              reclaimMonkeyLoot(target);
               newEnemies.splice(hitIdx, 1);
             } else {
               newEnemies[hitIdx] = { ...target, hp: newHp, engaged: true };
@@ -233,10 +243,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
                 newFloatingTexts.push({ id: `bomb-proj-hit-${e.id}`, pos: { ...e.pos }, text: `-${dmg}`, color: '#f97316', life: 2 });
                 const newHp = e.hp - dmg;
                 if (newHp <= 0) {
-                  if (e.stolenEmojis?.length) {
-                    playerInventoryAdditions.push(...e.stolenEmojis);
-                    log(`🐒 ${e.name} dropped your ${e.stolenEmojis.map(s => s.emoji).join('')}!`);
-                  }
+                  reclaimMonkeyLoot(e);
                   newEnemies.splice(ei, 1);
                 } else {
                   newEnemies[ei] = { ...e, hp: newHp, engaged: true };
@@ -306,15 +313,13 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
     const enemy = newEnemies[i];
 
     if (enemy.id === skipId) continue;
+    if (enemy.hp <= 0) continue;
 
     if ((enemy.burningTurns ?? 0) > 0) {
       const newBurning = enemy.burningTurns! - 1;
       const newHp = enemy.hp - 1;
       if (newHp <= 0) {
-        if (enemy.stolenEmojis?.length) {
-          playerInventoryAdditions.push(...enemy.stolenEmojis);
-          log(`🐒 ${enemy.name} dropped your ${enemy.stolenEmojis.map(s => s.emoji).join('')}!`);
-        }
+        reclaimMonkeyLoot(enemy);
         newEnemies[i] = { ...enemy, hp: 0, burningTurns: 0 };
         log(`🔥 ${enemy.name} burns to ash!`);
         continue;
@@ -403,6 +408,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
             const logPrefix = enemy.bear ? '🐻' : '🤝';
             newFloatingTexts.push({ id: `companion-${enemy.id}-${state.turn}`, pos: { ...companionTarget.pos }, text: `-${dmg}`, color: enemy.bear ? '#f59e0b' : '#22d3ee', life: 2 });
             if (newTargetHp <= 0) {
+              reclaimMonkeyLoot(companionTarget);
               newEnemies[ti] = { ...companionTarget, hp: 0 };
               log(`${logPrefix} ${enemy.emoji} ${enemy.name} takes down ${companionTarget.emoji} ${companionTarget.name}!`);
             } else {
@@ -456,6 +462,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
             const newTargetHp = guardTarget.hp - dmg;
             newFloatingTexts.push({ id: `bear-guard-${enemy.id}-${state.turn}`, pos: { ...guardTarget.pos }, text: `-${dmg}`, color: '#f59e0b', life: 2 });
             if (newTargetHp <= 0) {
+              reclaimMonkeyLoot(guardTarget);
               newEnemies[ti] = { ...guardTarget, hp: 0 };
               log(`🐻 ${enemy.emoji} ${enemy.name} defends the area, taking down ${guardTarget.emoji} ${guardTarget.name}!`);
             } else {
@@ -486,17 +493,12 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
     }
 
     if (enemy.monkey && dist <= 1 && !playerDied) {
-      const stealable = player.inventory.filter(i =>
-        !i.consumed && !i.isEquipment && i.bagPassive && !i.activeKind &&
-        i.healAmount == null && i.ammoAmount == null &&
-        !playerInventoryRemovals.includes(i.id)
-      );
-      if (stealable.length > 0) {
-        const stolen = stealable[Math.floor(Math.random() * stealable.length)];
-        playerInventoryRemovals.push(stolen.id);
-        const currentStolen = [...(newEnemies[i].stolenEmojis ?? []), stolen];
+      const theft = stealOneSoulEmoji(player.inventory, stealTakenFrom);
+      if (theft) {
+        playerInventoryRemovals.push(theft.sourceId);
+        const currentStolen = [...(newEnemies[i].stolenEmojis ?? []), theft.stolen];
         newEnemies[i] = { ...newEnemies[i], stolenEmojis: currentStolen };
-        log(`🐒 ${enemy.emoji} ${enemy.name} snatched your ${stolen.emoji}! (${currentStolen.length} stolen)`);
+        log(`🐒 ${enemy.emoji} ${enemy.name} snatched your ${theft.stolen.emoji}! (${currentStolen.length} stolen)`);
         newFloatingTexts.push({ id: `monkey-steal-${enemy.id}-${state.turn}-${Math.random()}`, pos: { ...enemy.pos }, text: '🐒💨', color: '#f59e0b', life: 2 });
       }
     }
@@ -893,7 +895,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
   let newInventory = state.player.inventory;
   let newBank = state.player.bank;
   if (result.playerInventoryRemovals.length > 0) {
-    newInventory = newInventory.filter(i => !result.playerInventoryRemovals.includes(i.id));
+    newInventory = applySoulThefts(newInventory, result.playerInventoryRemovals);
   }
   if (result.playerInventoryAdditions.length > 0) {
     const added = addToBag(newInventory, newBank, ...result.playerInventoryAdditions);
