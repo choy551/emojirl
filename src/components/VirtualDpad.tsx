@@ -76,7 +76,7 @@ function DpadCell({
           ? 'bg-amber-900/45 border border-amber-500/35 text-amber-400/90 font-bold text-lg'
           : 'bg-white/8 border border-white/12 text-white/75 font-bold',
       ].join(' ')}
-      style={{ minWidth: 48, minHeight: 48, fontSize: cell.isCenter ? '1.3rem' : '1.05rem' }}
+      style={{ minWidth: 40, minHeight: 40, width: 40, height: 40, fontSize: cell.isCenter ? '1.15rem' : '0.95rem' }}
       onPointerDown={e => { e.preventDefault(); startRepeat(); }}
       onPointerUp={stopRepeat}
       onPointerLeave={stopRepeat}
@@ -110,20 +110,20 @@ export function VirtualDpad({ onMove, onWait, side: sideProp, onToggleSide }: Vi
   return (
     <div
       className={[
-        'fixed bottom-4 z-40 flex flex-col items-center gap-1',
-        side === 'right' ? 'right-3' : 'left-3',
+        'fixed z-40 flex flex-col items-center gap-0.5',
+        side === 'right' ? 'right-2' : 'left-2',
       ].join(' ')}
       style={{
         userSelect: 'none',
-        paddingBottom: 'env(safe-area-inset-bottom)',
+        bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))',
         ...(side === 'right'
-          ? { paddingRight: 'env(safe-area-inset-right)' }
-          : { paddingLeft: 'env(safe-area-inset-left)' }),
+          ? { paddingRight: 'env(safe-area-inset-right, 0px)' }
+          : { paddingLeft: 'env(safe-area-inset-left, 0px)' }),
       }}
     >
       <div
-        className="grid gap-1 p-1.5 rounded-2xl bg-black/35 backdrop-blur-sm border border-white/8 shadow-2xl"
-        style={{ gridTemplateColumns: 'repeat(3, 1fr)', width: 168 }}
+        className="grid gap-0.5 p-1 rounded-xl bg-black/35 backdrop-blur-sm border border-white/8 shadow-2xl"
+        style={{ gridTemplateColumns: 'repeat(3, 1fr)', width: 132 }}
       >
         {CELLS.map((cell, i) => (
           <DpadCell key={i} cell={cell} onMove={onMove} onWait={onWait} />
@@ -132,7 +132,7 @@ export function VirtualDpad({ onMove, onWait, side: sideProp, onToggleSide }: Vi
 
       <button
         onClick={toggleSide}
-        className="text-[10px] text-white/30 hover:text-white/60 transition-colors px-2 py-0.5 rounded"
+        className="text-[9px] text-white/30 hover:text-white/60 transition-colors px-1.5 py-0 leading-tight rounded"
         aria-label="Swap d-pad side"
       >
         ⇄ move {side === 'right' ? 'left' : 'right'}

@@ -33,11 +33,22 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
   const dodge = player.characterClass === '🥷' ? computeNinjaEvasion(eff) : Math.min(50, eff.stats.evasion ?? 0);
   const pressure = getDungeonPressure(currentFloor);
   const p = bagPassiveSummary;
+  const hp = player.stats.hp;
+  const maxHp = player.stats.maxHp;
+  const overheal = hp > maxHp;
+  const hpPct = overheal ? Math.min(100, (hp / (maxHp * 1.5)) * 100) : (hp / Math.max(1, maxHp)) * 100;
+  const hpColor = overheal ? '#f59e0b' : hpPct > 60 ? '#22c55e' : hpPct > 30 ? '#f59e0b' : '#ef4444';
+  const mana = player.stats.mana ?? 0;
+  const maxMana = player.stats.maxMana ?? 4;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/70 backdrop-blur-sm overflow-y-auto" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[60] flex items-start justify-center bg-black/70 backdrop-blur-sm overflow-y-auto"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      onClick={onClose}
+    >
       <div
-        className="bg-card border border-border rounded-2xl shadow-2xl w-[92vw] max-w-md my-6 p-4 flex flex-col gap-3"
+        className="bg-card border border-border rounded-2xl shadow-2xl w-[92vw] max-w-md my-4 p-3 flex flex-col gap-3"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-border/50 pb-3">
@@ -51,14 +62,27 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
 
         {/* Resource bars */}
         <div className="flex flex-col gap-1.5">
-          <div className="flex justify-between text-[11px]">
-            <span className="font-bold text-destructive">❤️ HP</span>
-            <span className="tabular-nums font-bold">{player.stats.hp}/{player.stats.maxHp}</span>
+          <div>
+            <div className="flex justify-between text-[11px] mb-0.5">
+              <span className="font-bold text-destructive">❤️ HP</span>
+              <span className="tabular-nums font-bold" style={{ color: hpColor }}>{overheal ? '✨' : ''}{hp}/{maxHp}</span>
+            </div>
+            <div className="h-2 bg-black/40 rounded-full overflow-hidden border border-white/10">
+              <div className="h-full rounded-full transition-all" style={{ width: `${hpPct}%`, backgroundColor: hpColor }} />
+            </div>
           </div>
           {player.characterClass === '🧙' && (
-            <div className="flex justify-between text-[11px]">
-              <span className="font-bold text-violet-400">🔵 MP</span>
-              <span className="tabular-nums font-bold text-violet-300">{player.stats.mana ?? 0}/{player.stats.maxMana ?? 4}</span>
+            <div>
+              <div className="flex justify-between text-[11px] mb-0.5">
+                <span className="font-bold text-violet-400">🔵 MP</span>
+                <span className="tabular-nums font-bold text-violet-300">{mana}/{maxMana}</span>
+              </div>
+              <div className="h-2 bg-black/40 rounded-full overflow-hidden border border-white/10">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${(mana / Math.max(1, maxMana)) * 100}%`, backgroundColor: mana > 0 ? '#8b5cf6' : '#6b7280' }}
+                />
+              </div>
             </div>
           )}
           <div className="flex justify-between text-[11px]">

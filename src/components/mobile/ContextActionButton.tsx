@@ -19,12 +19,12 @@ export function ContextActionButton({ descriptor, onAct }: ContextActionButtonPr
           ? 'bg-red-700/55 border-red-400/40 text-white'
           : 'bg-emerald-700/55 border-emerald-300/40 text-white',
       ].join(' ')}
-      style={{ width: 72, height: 72 }}
+      style={{ width: 56, height: 56 }}
       aria-label={descriptor.label}
       title={descriptor.label}
     >
-      <span style={{ fontSize: '1.7rem', lineHeight: 1 }}>{descriptor.icon}</span>
-      <span className="text-[9px] font-bold mt-0.5 max-w-[64px] truncate px-1">{descriptor.label}</span>
+      <span style={{ fontSize: '1.35rem', lineHeight: 1 }}>{descriptor.icon}</span>
+      <span className="text-[8px] font-bold mt-0.5 max-w-[52px] truncate px-0.5">{descriptor.label}</span>
     </button>
   );
 }

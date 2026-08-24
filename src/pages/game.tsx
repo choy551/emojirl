@@ -1931,7 +1931,11 @@ export default function Game() {
   const xpProgress  = Math.min(1, (player.stats.xp - xpThisLevel) / Math.max(1, xpNextLevel - xpThisLevel));
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden" data-testid="game-root">
+    <div
+      className="flex flex-col h-screen bg-background text-foreground overflow-hidden overscroll-none"
+      data-testid="game-root"
+      style={{ height: '100dvh' }}
+    >
       <style>{`
         @keyframes explode-flash {
           0%   { opacity: 0.92; transform: scale(1.18); }
@@ -2348,7 +2352,7 @@ export default function Game() {
       {/* Main Game Area */}
       <div
         className="flex-1 flex flex-col items-center justify-center relative"
-        style={isMobile && !gameState.gameOver ? { paddingBottom: 200 } : undefined}
+        style={isMobile && !gameState.gameOver ? { paddingBottom: 'calc(10rem + env(safe-area-inset-bottom, 0px))' } : undefined}
       >
         {gameState.gameOver ? (
           <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-50">
@@ -2384,8 +2388,8 @@ export default function Game() {
           </div>
         ) : (
           <div
-            className="bg-card border border-border p-4 shadow-2xl rounded-lg"
-            style={isMobile ? { zoom: Math.max(0.45, Math.min(1, (viewportW - 12) / 674)) } : undefined}
+            className={`bg-card border border-border shadow-2xl rounded-lg ${isMobile ? 'p-1' : 'p-4'}`}
+            style={isMobile ? { zoom: Math.max(0.42, Math.min(1, (viewportW - 8) / 650)) } : undefined}
           >
             <div
               className="flex flex-col relative"
@@ -2532,12 +2536,16 @@ export default function Game() {
         {/* Combat Log — on mobile sit above the d-pad / action button stack */}
         <div
           onClick={() => { if (actionsMenuOpen) return; setLogOpen(true); }}
-          className={`absolute left-3 right-3 overflow-hidden flex flex-col justify-end gap-0.5 cursor-pointer transition-colors ${
+          className={`overflow-hidden flex flex-col justify-end gap-0.5 cursor-pointer transition-colors ${
             isMobile
-              ? 'bottom-[18rem] h-24 bg-black/40 border border-border/40 p-2 rounded-lg hover:border-border/60'
-              : 'bottom-4 h-36 bg-black/60 border border-border/60 p-3 rounded-lg hover:border-border/90'
+              ? 'fixed left-2 right-2 z-30 h-[4.25rem] bg-black/45 border border-border/40 p-1.5 rounded-lg'
+              : 'absolute left-3 right-3 bottom-4 h-36 bg-black/60 border border-border/60 p-3 rounded-lg hover:border-border/90'
           }`}
-          style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)' }}
+          style={{
+            maskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)',
+            ...(isMobile ? { bottom: 'calc(10rem + env(safe-area-inset-bottom, 0px))' } : {}),
+          }}
           title="Click or press / to open full log"
         >
           {gameState.logs.slice(0, 8).reverse().map((log, i) => (
@@ -2913,8 +2921,8 @@ export default function Game() {
           {isAdjacentToOpenDoor && !controlSettings.showContextButtons && (
             <button
               data-testid="mobile-close-door"
-              className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-black/60 backdrop-blur-sm border border-white/20 text-white/90 font-bold shadow-2xl transition-transform duration-75 active:scale-90 select-none touch-none"
-              style={{ fontSize: '1rem' }}
+              className="fixed left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-2 rounded-xl bg-black/60 backdrop-blur-sm border border-white/20 text-white/90 font-bold shadow-2xl transition-transform duration-75 active:scale-90 select-none touch-none"
+              style={{ bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))', fontSize: '1rem' }}
               onPointerDown={e => { e.preventDefault(); handleCloseDoor(); }}
               aria-label="Close door"
               title="Close door (c)"
@@ -2925,21 +2933,29 @@ export default function Game() {
           {(controlSettings.showContextButtons || controlSettings.showAbilityButtons) && (() => {
             const actionSide: 'left' | 'right' = controlSettings.dpadSide === 'right' ? 'left' : 'right';
             return (
-              <div className={`fixed bottom-4 z-40 flex flex-col gap-2 ${actionSide === 'right' ? 'right-3 items-end' : 'left-3 items-start'}`}>
+              <div
+                className={`fixed z-40 flex flex-col gap-1.5 ${actionSide === 'right' ? 'right-2 items-end' : 'left-2 items-start'}`}
+                style={{
+                  bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))',
+                  ...(actionSide === 'right'
+                    ? { paddingRight: 'env(safe-area-inset-right, 0px)' }
+                    : { paddingLeft: 'env(safe-area-inset-left, 0px)' }),
+                }}
+              >
                 {controlSettings.showAbilityButtons && <AbilityButtons abilities={mobileAbilities} align={actionSide} />}
                 {controlSettings.showContextButtons && (
-                  <div className="flex items-end gap-2">
+                  <div className="flex items-end gap-1.5">
                     {actionSide === 'left' && <ContextActionButton descriptor={mobileContextDescriptor} onAct={doContextAction} />}
                     <button
                       data-testid="actions-menu-button"
                       onPointerDown={e => { e.preventDefault(); e.stopPropagation(); setActionsMenuOpen(true); }}
-                      className="flex flex-col items-center justify-center rounded-2xl bg-slate-700/50 border border-slate-300/30 text-white shadow-2xl select-none touch-none transition-transform duration-75 active:scale-90"
-                      style={{ width: 56, height: 72 }}
+                      className="flex flex-col items-center justify-center rounded-xl bg-slate-700/50 border border-slate-300/30 text-white shadow-2xl select-none touch-none transition-transform duration-75 active:scale-90"
+                      style={{ width: 48, height: 56 }}
                       aria-label="All actions"
                       title="All actions"
                     >
-                      <span style={{ fontSize: '1.3rem', lineHeight: 1 }}>☰</span>
-                      <span className="text-[9px] font-bold mt-0.5">Menu</span>
+                      <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>☰</span>
+                      <span className="text-[8px] font-bold mt-0.5">Menu</span>
                     </button>
                     {actionSide === 'right' && <ContextActionButton descriptor={mobileContextDescriptor} onAct={doContextAction} />}
                   </div>
