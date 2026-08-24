@@ -9,3 +9,4 @@ export * from './flashSignals';
 export * from './inventory';
 export * from './spawning';
 export * from './enemyTurns';
+export * from './autoexplore';

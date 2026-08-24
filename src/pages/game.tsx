@@ -46,6 +46,8 @@ import {
   _flashSignals,
   bfsStepToward, bfsNextStep, bfsNextStepWallHug, PLAYER_PASSABLE_TILES,
   getDungeonPressure,
+  isAutoexploreThreat, autoexploreOccupiedKeys, autoexploreFriendlyBlockKeys,
+  classifyStairsFinish,
 } from '../game/gameHelpers';
 import { useGameActions } from '../hooks/useGameActions';
 
@@ -537,9 +539,10 @@ export default function Game() {
       const { player, enemies, items } = state;
       const exploreCls = player.characterClass;
 
-      const hostileEnemies = enemies.filter(e => e.tag !== 'Friendly');
+      const hostileEnemies = enemies.filter(isAutoexploreThreat);
       // Use LOS, not tile.visible — Crystal Ball (trueVision) reveals enemies through walls
       // but autoexplore should only stop for foes the player can actually engage.
+      // Recruited companions are never threats — bumping them swaps, they are not enemies.
       const enemyInEngageSight = (e: typeof enemies[0]) =>
         hasLOSBetween(state.map, player.pos, e.pos);
       const visibleHostile = hostileEnemies.filter(e =>
@@ -570,10 +573,9 @@ export default function Game() {
         addLog('Autoexplore stopped: enemy nearby!');
         return;
       }
-      // Keep friendly entities (fairies) as routing obstacles so we don't bump into them
-      const friendlyBlockedSet = new Set(
-        enemies.filter(e => e.tag === 'Friendly').map(e => `${e.pos.x},${e.pos.y}`)
-      );
+      // Keep unrecruited friendlies (fairies) as routing obstacles so we don't bump-interact
+      // them. Recruited companions are excluded — bumping swaps, which prevents hallway loops.
+      const friendlyBlockedSet = autoexploreFriendlyBlockKeys(enemies);
       // Collect bar (🍺) tile positions so autoexplore routes around them
       const barBlockedSet = new Set<string>();
       // Collect stairs position so autoexplore never accidentally steps on it
@@ -619,7 +621,7 @@ export default function Game() {
 
       const visibleItems = items.filter(it => state.map[it.pos.y]?.[it.pos.x]?.visible);
       if (visibleItems.length > 0) {
-        const itemOccupiedSet = new Set([...enemies.map(e => `${e.pos.x},${e.pos.y}`), ...barBlockedSet]);
+        const itemOccupiedSet = new Set([...autoexploreOccupiedKeys(enemies), ...barBlockedSet]);
         const itemPassable = explorePassives.canSwim
           ? new Set([...PLAYER_PASSABLE_TILES, 'water'])
           : new Set([...PLAYER_PASSABLE_TILES]);
@@ -642,7 +644,7 @@ export default function Game() {
       const exploreIsWizard = player.characterClass === '🧙';
       const exploreMpFull = !exploreIsWizard || (player.stats.mana ?? 0) >= (player.stats.maxMana ?? 4);
       if (player.stats.hp < player.stats.maxHp || !exploreMpFull) {
-        const anyVisibleEnemy = enemies.some(e => enemyInEngageSight(e));
+        const anyVisibleEnemy = hostileEnemies.some(e => enemyInEngageSight(e));
         if (!anyVisibleEnemy) {
           handleWaitRef.current?.();
           return;
@@ -660,19 +662,27 @@ export default function Game() {
             if (state.map[sy][sx].type === 'stairs') stairsTarget = { x: sx, y: sy };
           }
         }
-        if (!stairsTarget || chebyshev(player.pos, stairsTarget) <= 1) {
-          setAutoExplore(false);
-          addLog(stairsTarget ? 'Autoexplore: floor cleared — 🕳️ stairs are right here!' : 'Autoexplore: nothing left to explore.');
-          return;
-        }
-        const occupiedSet = new Set([...enemies.map(e => `${e.pos.x},${e.pos.y}`), ...barBlockedSet]);
+        const occupiedSet = new Set([...autoexploreOccupiedKeys(enemies), ...barBlockedSet]);
         const stairsPassable = explorePassives.canSwim
           ? new Set([...PLAYER_PASSABLE_TILES, 'water', 'stairs'])
           : new Set([...PLAYER_PASSABLE_TILES, 'stairs']);
-        const nextPos = bfsStepToward(state.map, player.pos, stairsTarget, occupiedSet, stairsPassable);
-        if (!nextPos || (nextPos.x === stairsTarget.x && nextPos.y === stairsTarget.y)) {
+        const nextPos = stairsTarget
+          ? bfsStepToward(state.map, player.pos, stairsTarget, occupiedSet, stairsPassable)
+          : null;
+        const finish = classifyStairsFinish(player.pos, stairsTarget, nextPos);
+        if (finish === 'no-stairs') {
+          setAutoExplore(false);
+          addLog('Autoexplore: nothing left to explore.');
+          return;
+        }
+        if (finish === 'adjacent') {
           setAutoExplore(false);
           addLog('Autoexplore: floor cleared — 🕳️ stairs are right here!');
+          return;
+        }
+        if (finish === 'blocked' || !nextPos) {
+          setAutoExplore(false);
+          addLog('Autoexplore: floor cleared, but the path to the 🕳️ stairs is blocked.');
           return;
         }
         handleMove(nextPos.x - player.pos.x, nextPos.y - player.pos.y);
@@ -709,7 +719,7 @@ export default function Game() {
 
       // Ambush: stop if a hostile other than the approach target is adjacent.
       const ambush = enemies.some(e =>
-        e.tag !== 'Friendly' && e.id !== travelTarget.enemyId &&
+        isAutoexploreThreat(e) && e.id !== travelTarget.enemyId &&
         chebyshev(player.pos, e.pos) <= 1 &&
         state.map[e.pos.y]?.[e.pos.x]?.visible
       );
@@ -718,7 +728,7 @@ export default function Game() {
       // For plain tile travel, also halt before walking up to a visible hostile.
       if (!travelTarget.enemyId) {
         const hostileNear = enemies.some(e =>
-          e.tag !== 'Friendly' &&
+          isAutoexploreThreat(e) &&
           chebyshev(player.pos, e.pos) <= 2 &&
           state.map[e.pos.y]?.[e.pos.x]?.visible
         );
@@ -730,7 +740,7 @@ export default function Game() {
       const passable = new Set<string>([...PLAYER_PASSABLE_TILES]);
       if (passives.canSwim) passable.add('water');
       if (targetType) passable.add(targetType);
-      const occupiedSet = new Set(enemies.map(e => `${e.pos.x},${e.pos.y}`));
+      const occupiedSet = autoexploreOccupiedKeys(enemies);
       const nextPos = bfsStepToward(state.map, player.pos, target, occupiedSet, passable);
       if (!nextPos) { setTravelTarget(null); return; }
       handleMove(nextPos.x - player.pos.x, nextPos.y - player.pos.y);
