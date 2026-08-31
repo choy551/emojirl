@@ -1,6 +1,6 @@
 import { AbilityDescriptor } from './classAbilities';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './oneHandedLayout';
-import { useDismissGuard } from '../../hooks/useDismissGuard';
+import { swallowGhostClick, useDismissGuard } from '../../hooks/useDismissGuard';
 
 export interface ActionItem {
   id: string;
@@ -23,7 +23,13 @@ interface ActionsMenuProps {
 function ActionTile({ item, onClose }: { item: ActionItem; onClose: () => void }) {
   return (
     <button
-      onPointerDown={e => { e.preventDefault(); e.stopPropagation(); if (!item.disabled) { item.onUse(); onClose(); } }}
+      onPointerDown={e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (item.disabled) return;
+        item.onUse();
+        onClose();
+      }}
       disabled={item.disabled}
       className={[
         'flex flex-col items-center justify-center gap-0.5 py-2.5 rounded-xl border select-none touch-none',
@@ -46,7 +52,13 @@ function ActionTile({ item, onClose }: { item: ActionItem; onClose: () => void }
 /** Bottom sheet listing every available action plus per-class abilities and Tactics. */
 export function ActionsMenu({ general, abilities, onOpenTactics, onOpenGoto, onClose }: ActionsMenuProps) {
   const hand = useMobileHand();
-  const dismiss = useDismissGuard(onClose);
+  const closeSheet = () => {
+    // Sheet unmounts on pointerdown; eat the trailing click so it cannot
+    // hit the combat log (or other UI) now sitting under the finger.
+    swallowGhostClick();
+    onClose();
+  };
+  const dismiss = useDismissGuard(closeSheet);
   return (
     <div
       className={`fixed inset-0 z-[55] flex bg-black/60 backdrop-blur-sm ${hand ? overlayFlexClass(hand) : 'items-end justify-center'}`}
@@ -71,7 +83,7 @@ export function ActionsMenu({ general, abilities, onOpenTactics, onOpenGoto, onC
                 <ActionTile
                   key={a.id}
                   item={{ id: a.id, icon: a.icon, label: a.label, detail: a.detail, disabled: a.disabled, active: a.active, onUse: a.onUse }}
-                  onClose={onClose}
+                  onClose={closeSheet}
                 />
               ))}
             </div>
@@ -81,15 +93,15 @@ export function ActionsMenu({ general, abilities, onOpenTactics, onOpenGoto, onC
         <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1.5 px-1">Actions</div>
         <div className="grid grid-cols-4 gap-2">
           {general.map(item => (
-            <ActionTile key={item.id} item={item} onClose={onClose} />
+            <ActionTile key={item.id} item={item} onClose={closeSheet} />
           ))}
           <ActionTile
             item={{ id: 'tactics', icon: '🧭', label: 'Tactics', onUse: onOpenTactics }}
-            onClose={onClose}
+            onClose={closeSheet}
           />
           <ActionTile
             item={{ id: 'goto', icon: '🗺️', label: 'Go to', onUse: onOpenGoto }}
-            onClose={onClose}
+            onClose={closeSheet}
           />
         </div>
       </div>

@@ -2670,7 +2670,7 @@ export default function Game() {
 
         {/* Combat Log — on mobile sit above the d-pad / action button stack */}
         <div
-          onClick={() => { if (actionsMenuOpen) return; setLogOpen(true); }}
+          onClick={() => { if (actionsMenuOpen || logOpen) return; setLogOpen(true); }}
           className={`overflow-hidden flex flex-col justify-end gap-0.5 cursor-pointer transition-colors ${
             isMobile
               ? 'fixed left-2 right-2 z-30 h-[4.25rem] bg-black/45 border border-border/40 p-1.5 rounded-lg'
