@@ -2668,18 +2668,29 @@ export default function Game() {
           </div>
         )}
 
-        {/* Combat Log — on mobile sit above the d-pad / action button stack */}
+        {/* Combat Log — two-handed: strip above both pads. One-handed: the empty
+            corner opposite the thumb cluster so the d-pad does not cover it. */}
         <div
           onClick={() => { if (actionsMenuOpen || logOpen) return; setLogOpen(true); }}
           className={`overflow-hidden flex flex-col justify-end gap-0.5 cursor-pointer transition-colors ${
             isMobile
-              ? 'fixed left-2 right-2 z-30 h-[4.25rem] bg-black/45 border border-border/40 p-1.5 rounded-lg'
+              ? `fixed z-30 bg-black/45 border border-border/40 p-1.5 rounded-lg ${oneHanded ? '' : 'left-2 right-2 h-[4.25rem]'}`
               : 'absolute left-3 right-3 bottom-4 h-36 bg-black/60 border border-border/60 p-3 rounded-lg hover:border-border/90'
           }`}
           style={{
             maskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)',
             WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)',
-            ...(isMobile ? { bottom: chromeBottom } : {}),
+            ...(isMobile && oneHanded
+              ? {
+                  bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))',
+                  height: '12.5rem',
+                  ...(thumbSide === 'left'
+                    ? { left: '9.25rem', right: '0.5rem' }
+                    : { right: '9.25rem', left: '0.5rem' }),
+                }
+              : isMobile
+                ? { bottom: chromeBottom }
+                : {}),
           }}
           title="Click or press / to open full log"
         >
