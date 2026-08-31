@@ -1,4 +1,5 @@
 import { MapGrid, Position, RoomTheme } from './types';
+import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI } from './lava';
 
 const MAP_WIDTH = 50;
 const MAP_HEIGHT = 28;
@@ -221,22 +222,63 @@ function placeAmmoCache(map: MapGrid, room: Room) {
   }
 }
 
-// ── Water feature generators ──────────────────────────────────────────────
+// ── Water / lava feature generators ───────────────────────────────────────
 
-/** Organic blob flood-fill — grows outward from a seed wall tile. */
-function placeWaterBlob(map: MapGrid, startY: number, startX: number, targetSize: number): void {
+const FLOODABLE_TYPES = new Set(['wall', 'floor', 'grass']);
+const FEATURE_PROTECTED_THEMES = new Set([
+  'shop', 'market', 'restaurant', 'treasure-vault', 'volcano', 'boss',
+]);
+
+function inRoom(r: Room, x: number, y: number): boolean {
+  return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+}
+
+function isFeatureProtected(x: number, y: number, rooms: Room[], startRoom?: Room): boolean {
+  if (startRoom && inRoom(startRoom, x, y)) return true;
+  for (const r of rooms) {
+    if (FEATURE_PROTECTED_THEMES.has(r.theme) && inRoom(r, x, y)) return true;
+  }
+  return false;
+}
+
+export function canFloodTile(map: MapGrid, x: number, y: number, rooms: Room[] = [], startRoom?: Room): boolean {
+  const H = map.length, W = map[0]?.length ?? 0;
+  if (y <= 0 || y >= H - 1 || x <= 0 || x >= W - 1) return false;
+  if (isFeatureProtected(x, y, rooms, startRoom)) return false;
+  return FLOODABLE_TYPES.has(map[y][x].type);
+}
+
+function paintLiquid(
+  map: MapGrid, x: number, y: number,
+  kind: 'water' | 'lava',
+  rooms: Room[], startRoom?: Room,
+): boolean {
+  if (!canFloodTile(map, x, y, rooms, startRoom)) return false;
+  map[y][x] = {
+    type: kind,
+    emoji: kind === 'lava' ? LAVA_EMOJI : '🌊',
+    seen: false,
+    visible: false,
+  };
+  return true;
+}
+
+/** Organic blob — grows into walls AND walkable floor so ponds actually show up. */
+export function placeWaterBlob(
+  map: MapGrid, startY: number, startX: number, targetSize: number,
+  rooms: Room[] = [], startRoom?: Room,
+  kind: 'water' | 'lava' = 'water',
+): number {
+  const H = map.length, W = map[0]?.length ?? 0;
   const frontier: [number, number][] = [[startY, startX]];
-  const seen = new Set<string>();
-  seen.add(`${startY},${startX}`);
+  const seen = new Set<string>([`${startY},${startX}`]);
   let placed = 0;
 
   while (frontier.length > 0 && placed < targetSize) {
     const idx = Math.floor(Math.random() * frontier.length);
     const [y, x] = frontier.splice(idx, 1)[0];
-    if (y <= 0 || y >= MAP_HEIGHT - 1 || x <= 0 || x >= MAP_WIDTH - 1) continue;
-    if (map[y][x].type !== 'wall') continue;
-
-    map[y][x] = { type: 'water', emoji: '🌊', seen: false, visible: false };
+    if (y <= 0 || y >= H - 1 || x <= 0 || x >= W - 1) continue;
+    if (!paintLiquid(map, x, y, kind, rooms, startRoom)) continue;
     placed++;
 
     const dirs: [number, number][] = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
@@ -249,36 +291,61 @@ function placeWaterBlob(map: MapGrid, startY: number, startX: number, targetSize
       }
     }
   }
+  return placed;
 }
 
-/** Drunkard's walk river that enters from one edge and exits the opposite. */
-function placeRiver(map: MapGrid): void {
+function pickShorelineSeed(map: MapGrid, rooms: Room[], startRoom?: Room): [number, number] | null {
+  const H = map.length, W = map[0]?.length ?? 0;
+  const seeds: [number, number][] = [];
+  const n4: [number, number][] = [[-1,0],[1,0],[0,-1],[0,1]];
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      if (!canFloodTile(map, x, y, rooms, startRoom)) continue;
+      const t = map[y][x].type;
+      let nearFloor = false, nearWall = false;
+      for (const [dy, dx] of n4) {
+        const nt = map[y + dy]?.[x + dx]?.type;
+        if (nt === 'floor' || nt === 'grass' || nt === 'door-open' || nt === 'door-closed') nearFloor = true;
+        if (nt === 'wall') nearWall = true;
+      }
+      // Prefer the dungeon shoreline: floor next to rock, or rock next to floor.
+      if ((t === 'floor' && nearWall) || (t === 'wall' && nearFloor)) seeds.push([y, x]);
+    }
+  }
+  if (seeds.length === 0) return null;
+  return seeds[Math.floor(Math.random() * seeds.length)];
+}
+
+/** Drunkard's walk that carves through walls *and* rooms so the river is visible. */
+export function placeRiver(
+  map: MapGrid,
+  rooms: Room[] = [],
+  startRoom?: Room,
+  kind: 'water' | 'lava' = 'water',
+): void {
+  const H = map.length, W = map[0]?.length ?? 0;
   const horizontal = Math.random() < 0.5;
   const width = Math.random() < 0.45 ? 2 : 1;
 
   let curY: number, curX: number, targetX: number, targetY: number;
   if (horizontal) {
-    curY = 2 + Math.floor(Math.random() * (MAP_HEIGHT - 4));
+    curY = 2 + Math.floor(Math.random() * (H - 4));
     curX = 1;
-    targetY = 2 + Math.floor(Math.random() * (MAP_HEIGHT - 4));
-    targetX = MAP_WIDTH - 2;
+    targetY = 2 + Math.floor(Math.random() * (H - 4));
+    targetX = W - 2;
   } else {
-    curX = 2 + Math.floor(Math.random() * (MAP_WIDTH - 4));
+    curX = 2 + Math.floor(Math.random() * (W - 4));
     curY = 1;
-    targetX = 2 + Math.floor(Math.random() * (MAP_WIDTH - 4));
-    targetY = MAP_HEIGHT - 2;
+    targetX = 2 + Math.floor(Math.random() * (W - 4));
+    targetY = H - 2;
   }
 
-  const maxSteps = MAP_WIDTH + MAP_HEIGHT + 20;
+  const maxSteps = W + H + 20;
   for (let step = 0; step < maxSteps; step++) {
     for (let w = 0; w < width; w++) {
       const wy = horizontal ? curY + w : curY;
       const wx = horizontal ? curX : curX + w;
-      if (wy > 0 && wy < MAP_HEIGHT - 1 && wx > 0 && wx < MAP_WIDTH - 1) {
-        if (map[wy][wx].type === 'wall') {
-          map[wy][wx] = { type: 'water', emoji: '🌊', seen: false, visible: false };
-        }
-      }
+      paintLiquid(map, wx, wy, kind, rooms, startRoom);
     }
 
     if (horizontal) {
@@ -286,14 +353,51 @@ function placeRiver(map: MapGrid): void {
       curX++;
       if (Math.random() < 0.28) {
         curY += Math.sign(targetY - curY) || (Math.random() < 0.5 ? 1 : -1);
-        curY = Math.max(1, Math.min(MAP_HEIGHT - 2 - width, curY));
+        curY = Math.max(1, Math.min(H - 2 - width, curY));
       }
     } else {
       if (curY >= targetY) break;
       curY++;
       if (Math.random() < 0.28) {
         curX += Math.sign(targetX - curX) || (Math.random() < 0.5 ? 1 : -1);
-        curX = Math.max(1, Math.min(MAP_WIDTH - 2 - width, curX));
+        curX = Math.max(1, Math.min(W - 2 - width, curX));
+      }
+    }
+  }
+}
+
+/** Hedge of bushes: blocks walking, does not block sight or ranged attacks. */
+export function placeBushAmbush(map: MapGrid, room: Room): void {
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  const horizontal = room.w >= room.h;
+  const bushTile = { type: 'bush' as const, emoji: BUSH_EMOJI, seen: false, visible: false };
+
+  if (horizontal) {
+    for (let rx = room.x + 2; rx < room.x + room.w - 2; rx++) {
+      if (map[cy]?.[rx]?.type === 'floor') map[cy][rx] = { ...bushTile };
+    }
+  } else {
+    for (let ry = room.y + 2; ry < room.y + room.h - 2; ry++) {
+      if (map[ry]?.[cx]?.type === 'floor') map[ry][cx] = { ...bushTile };
+    }
+  }
+}
+
+/** Volcano at room center, lava ring, floor around it for loot. */
+export function placeVolcanoVault(map: MapGrid, room: Room): void {
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  for (let ry = room.y + 1; ry < room.y + room.h - 1; ry++) {
+    for (let rx = room.x + 1; rx < room.x + room.w - 1; rx++) {
+      if (!map[ry]?.[rx]) continue;
+      const dist = Math.max(Math.abs(rx - cx), Math.abs(ry - cy));
+      if (dist === 0) {
+        map[ry][rx] = { type: 'volcano', emoji: VOLCANO_EMOJI, seen: false, visible: false };
+      } else if (dist === 1) {
+        map[ry][rx] = { type: 'lava', emoji: LAVA_EMOJI, seen: false, visible: false };
+      } else if (dist === 2 && Math.random() < 0.35) {
+        map[ry][rx] = { type: 'lava', emoji: LAVA_EMOJI, seen: false, visible: false };
       }
     }
   }
@@ -367,40 +471,52 @@ function ensureStairsReachable(map: MapGrid, start: Position, stairs: Position):
     'floor', 'stairs', 'boss-floor', 'grass',
     'door-open', 'door-closed',
     'safe-floor', 'shop-item', 'shrine', 'shrine-used',
+    'campfire',
   ]);
   if (reach(map, start, stairs, DRY)) return;
 
-  // Path blocked by water — find route crossing water, then drain just those tiles
-  const WET = new Set([...DRY, 'water']);
+  // Path blocked by water/lava — find a route, then drain just those tiles
+  const WET = new Set([...DRY, 'water', 'lava']);
   const path = shortestPath(map, start, stairs, WET);
   if (!path) return; // fully disconnected — shouldn't occur in a connected dungeon
   for (const p of path) {
-    if (map[p.y][p.x].type === 'water') {
+    const t = map[p.y][p.x].type;
+    if (t === 'water' || t === 'lava') {
       map[p.y][p.x] = { type: 'floor', emoji: '⬜', seen: false, visible: false };
     }
   }
 }
 
-/** Replace scatterWater with coherent water features: ponds, lakes, and optional rivers. */
-function placeWaterFeatures(map: MapGrid, floor: number): void {
+/** Ponds, lakes, rivers (and optional lava rivers) that actually cut the dungeon. */
+function placeLiquidFeatures(map: MapGrid, floor: number, rooms: Room[], startRoom: Room): void {
   const numBlobs = 1 + Math.floor(Math.random() * 3);
 
   for (let i = 0; i < numBlobs; i++) {
-    for (let attempt = 0; attempt < 50; attempt++) {
-      const sx = 3 + Math.floor(Math.random() * (MAP_WIDTH - 6));
-      const sy = 3 + Math.floor(Math.random() * (MAP_HEIGHT - 6));
-      if (map[sy][sx].type !== 'wall') continue;
-      const isLake = Math.random() < 0.28;
-      const size = isLake
-        ? 28 + Math.floor(Math.random() * 22)
-        :  7 + Math.floor(Math.random() * 11);
-      placeWaterBlob(map, sy, sx, size);
-      break;
-    }
+    const seed = pickShorelineSeed(map, rooms, startRoom);
+    if (!seed) break;
+    const [sy, sx] = seed;
+    const isLake = Math.random() < 0.28;
+    const size = isLake
+      ? 28 + Math.floor(Math.random() * 22)
+      :  7 + Math.floor(Math.random() * 11);
+    placeWaterBlob(map, sy, sx, size, rooms, startRoom, 'water');
   }
 
-  const riverChance = Math.min(0.80, 0.10 + (floor - 1) * 0.10);
-  if (Math.random() < riverChance) placeRiver(map);
+  const riverChance = Math.min(0.55, 0.18 + (floor - 1) * 0.08);
+  if (Math.random() < riverChance) placeRiver(map, rooms, startRoom, 'water');
+
+  const lavaRiverChance = Math.min(0.32, 0.06 + (floor - 1) * 0.04);
+  if (Math.random() < lavaRiverChance) placeRiver(map, rooms, startRoom, 'lava');
+
+  const lavaPondChance = Math.min(0.22, 0.04 + (floor - 1) * 0.03);
+  if (Math.random() < lavaPondChance) {
+    const lavaSeed = pickShorelineSeed(map, rooms, startRoom);
+    if (lavaSeed) {
+      const [sy, sx] = lavaSeed;
+      const size = 8 + Math.floor(Math.random() * 14);
+      placeWaterBlob(map, sy, sx, size, rooms, startRoom, 'lava');
+    }
+  }
 }
 
 export function generateMap(floor: number): { map: MapGrid; startPos: Position; stairsPos: Position; rooms: Room[] } {
@@ -463,6 +579,8 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
   const marketChance      = Math.min(0.70, 0.25 + (floor - 1) * 0.06);
   const denChance         = Math.min(0.80, 0.20 + (floor - 1) * 0.08);
   const treasureChance    = Math.min(0.65, 0.20 + (floor - 1) * 0.06);
+  const bushAmbushChance  = Math.min(0.50, 0.16 + (floor - 1) * 0.05);
+  const volcanoChance     = isBossFloor ? 0 : Math.min(0.32, 0.08 + (floor - 1) * 0.04);
 
   let shrineAssigned      = false;
   let shopAssigned        = false;
@@ -470,6 +588,8 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
   let marketAssigned      = false;
   let denAssigned         = false;
   let treasureAssigned    = false;
+  let bushAmbushAssigned  = false;
+  let volcanoAssigned     = false;
 
   for (const idx of shuffled) {
     const r = rooms[idx];
@@ -506,6 +626,16 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
       treasureAssigned = true;
       continue;
     }
+    if (!bushAmbushAssigned && r.w >= 6 && r.h >= 4 && Math.random() < bushAmbushChance) {
+      rooms[idx] = { ...r, theme: 'bush-ambush' };
+      bushAmbushAssigned = true;
+      continue;
+    }
+    if (!volcanoAssigned && r.w >= 5 && r.h >= 4 && Math.random() < volcanoChance) {
+      rooms[idx] = { ...r, theme: 'volcano' };
+      volcanoAssigned = true;
+      continue;
+    }
   }
 
   // Forest rooms: any remaining normal room with enough space
@@ -530,7 +660,9 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
     else if (room.theme === 'boss')      placeBossRoom(map, room);
     else if (room.theme === 'market')    placeMarketVault(map, room);
     else if (room.theme === 'treasure-vault') placeWaterMoat(map, room);
-    // monster-den: no tile treatment — enemy packing is handled in game.tsx
+    else if (room.theme === 'bush-ambush')    placeBushAmbush(map, room);
+    else if (room.theme === 'volcano')        placeVolcanoVault(map, room);
+    // monster-den: no tile treatment — enemy packing is handled in spawning.ts
   }
 
   // Boss floors: place an ammo cache crate in the start room so players can resupply
@@ -538,16 +670,16 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
     placeAmmoCache(map, rooms[0]);
   }
 
-  // Place coherent water features: ponds, lakes, rivers
-  placeWaterFeatures(map, floor);
+  // Place coherent water (and occasional lava) features: ponds, lakes, rivers
+  placeLiquidFeatures(map, floor, rooms, rooms[0]);
 
   const startPos = roomCenter(rooms[0]);
   const lastRoom = rooms[rooms.length - 1];
   const stairsPos = roomCenter(lastRoom);
   map[stairsPos.y][stairsPos.x] = { type: 'stairs', emoji: '🕳️', seen: false, visible: false };
 
-  // Guarantee the stairs are reachable without swimming — drain any water tiles
-  // that block the shortest path between start and stairs.
+  // Guarantee the stairs are reachable without swimming or walking lava —
+  // drain the minimum water/lava tiles on the shortest path.
   ensureStairsReachable(map, startPos, stairsPos);
 
   return { map, startPos, stairsPos, rooms };

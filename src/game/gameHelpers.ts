@@ -12,3 +12,4 @@ export * from './enemyTurns';
 export * from './autoexplore';
 export * from './monkeyLoot';
 export * from './goto';
+export * from './lava';

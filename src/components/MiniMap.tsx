@@ -33,6 +33,9 @@ export function MiniMap({ map, playerPos, enemies }: MiniMapProps) {
         if (tile.visible) {
           if (tile.type === 'wall') color = '#44444f';
           else if (tile.type === 'water') color = '#2a5080';
+          else if (tile.type === 'lava') color = '#e04000';
+          else if (tile.type === 'volcano') color = '#ff2200';
+          else if (tile.type === 'bush') color = '#2d6a28';
           else if (tile.type === 'tree') color = '#1a5020';
           else if (tile.type === 'stairs') color = '#8060d0';
           else if (tile.type === 'shrine') color = '#3a2e00';
@@ -45,6 +48,9 @@ export function MiniMap({ map, playerPos, enemies }: MiniMapProps) {
         } else {
           if (tile.type === 'wall') color = '#252530';
           else if (tile.type === 'water') color = '#1a3050';
+          else if (tile.type === 'lava') color = '#801800';
+          else if (tile.type === 'volcano') color = '#a01000';
+          else if (tile.type === 'bush') color = '#1a3a18';
           else if (tile.type === 'tree') color = '#0f2d14';
           else if (tile.type === 'stairs') color = '#403060';
           else if (tile.type === 'shrine') color = '#1e1800';

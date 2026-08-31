@@ -6,6 +6,7 @@ import { resolveProjectileFlight } from './projectiles';
 import { withVisibility, visionRadiusFor } from './vision';
 import { bfsStepToward, fleeStep, hasLOSBetween, detectionRadius } from './pathfinding';
 import { PLAYER_PASSABLE_TILES, MERMAN_PASSABLE_TILES } from './tiles';
+import { tickVolcanoAndLava } from './lava';
 import { _flashSignals } from './flashSignals';
 import { nearRestaurant, crowGoldSteal } from './economy';
 import { computeNinjaEvasion } from './progression';
@@ -529,12 +530,17 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
           log(`👻 ${enemy.name}'s ethereal arrow chills your soul! (mood −1)`);
         }
         const dodgeChance = player.characterClass === '🥷' ? computeNinjaEvasion(effectivePlayer) : Math.min(50, effectivePlayer.stats.evasion ?? 0);
+        const rangedVerb = enemy.name.toLowerCase().includes('mage')
+          ? 'casts a bolt'
+          : enemy.name.toLowerCase().includes('eye')
+            ? 'fires a beam'
+            : 'shoots an arrow';
         if (Math.random() * 100 < dodgeChance) {
-          log(`The ${enemy.name} shoots an arrow — you dodge!`);
+          log(`The ${enemy.name} ${rangedVerb} — you dodge!`);
         } else {
           const dmg = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
           playerHp -= dmg;
-          log(`The ${enemy.name} shoots an arrow at you for ${dmg} damage!`);
+          log(`The ${enemy.name} ${rangedVerb} at you for ${dmg} damage!`);
           if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
           newFloatingTexts.push({
             id: `hit-p-${enemy.id}-ranged-${state.turn}-${Math.random()}`,
@@ -546,11 +552,11 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
           if (enemy.berserker && !playerDied) {
             const dodgeChance2 = player.characterClass === '🥷' ? computeNinjaEvasion(effectivePlayer) : Math.min(50, effectivePlayer.stats.evasion ?? 0);
             if (Math.random() * 100 < dodgeChance2) {
-              log(`🔥 The ${enemy.name} shoots an arrow again — you dodge!`);
+              log(`🔥 The ${enemy.name} ${rangedVerb} again — you dodge!`);
             } else {
               const dmg2 = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
               playerHp -= dmg2;
-              log(`🔥 The ${enemy.name} shoots an arrow again for ${dmg2} damage! (Berserk!)`);
+              log(`🔥 The ${enemy.name} ${rangedVerb} again for ${dmg2} damage! (Berserk!)`);
               if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
               newFloatingTexts.push({
                 id: `hit-p-${enemy.id}-ranged-berserk-${state.turn}-${Math.random()}`,
@@ -773,28 +779,42 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     : state.player.stats.gold;
   const hasExtraChanges = result.playerInventoryRemovals.length > 0 || result.playerInventoryAdditions.length > 0 || result.moodDrain > 0 || result.goldDrain > 0;
 
+  const pendingExplosion = result.explosionPositions.length > 0 ? result.explosionPositions : undefined;
+  const pendingBeam = result.enemyBeam ?? state.pendingBeam;
+
+  let next: GameState;
   if (result.newLogs.length === 0 && result.playerHp === state.player.stats.hp && mergedFloating.length === 0 && state.floatingTexts.length === 0 && !hasExtraChanges) {
-    return withVisibility({ ...state, enemies: result.enemies, floatingTexts: mergedFloating, placedBombs: result.placedBombs, activeProjectile: result.activeProjectile, pendingExplosion: result.explosionPositions.length > 0 ? result.explosionPositions : undefined, pendingBeam: result.enemyBeam ?? state.pendingBeam, player: { ...state.player, trailblazerCooldown: result.trailblazerCooldown } });
+    next = {
+      ...state,
+      enemies: result.enemies,
+      floatingTexts: mergedFloating,
+      placedBombs: result.placedBombs,
+      activeProjectile: result.activeProjectile,
+      pendingExplosion,
+      pendingBeam,
+      player: { ...state.player, trailblazerCooldown: result.trailblazerCooldown },
+    };
+  } else {
+    next = {
+      ...state,
+      enemies: result.enemies,
+      player: {
+        ...state.player,
+        pos: result.kitePos ?? state.player.pos,
+        stats: { ...state.player.stats, hp: result.playerHp, moodValue: newMoodValue, gold: newGold },
+        inventory: newInventory,
+        bank: newBank,
+        trailblazerCooldown: result.trailblazerCooldown,
+      },
+      logs: [...result.newLogs, ...state.logs].slice(0, 24),
+      floatingTexts: mergedFloating,
+      gameOver: state.gameOver || result.playerDied,
+      killer: state.killer ?? result.killer,
+      placedBombs: result.placedBombs,
+      activeProjectile: result.activeProjectile,
+      pendingExplosion,
+      pendingBeam,
+    };
   }
-  const mergedLogs = [...result.newLogs, ...state.logs].slice(0, 24);
-  return withVisibility({
-    ...state,
-    enemies: result.enemies,
-    player: {
-      ...state.player,
-      pos: result.kitePos ?? state.player.pos,
-      stats: { ...state.player.stats, hp: result.playerHp, moodValue: newMoodValue, gold: newGold },
-      inventory: newInventory,
-      bank: newBank,
-      trailblazerCooldown: result.trailblazerCooldown,
-    },
-    logs: mergedLogs,
-    floatingTexts: mergedFloating,
-    gameOver: state.gameOver || result.playerDied,
-    killer: state.killer ?? result.killer,
-    placedBombs: result.placedBombs,
-    activeProjectile: result.activeProjectile,
-    pendingExplosion: result.explosionPositions.length > 0 ? result.explosionPositions : undefined,
-    pendingBeam: result.enemyBeam ?? state.pendingBeam,
-  });
+  return withVisibility(tickVolcanoAndLava(next));
 }

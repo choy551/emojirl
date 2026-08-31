@@ -5,7 +5,7 @@ import { getMood } from '../../game/moods';
 import { markEnemyKilled } from '../../game/discoveries';
 import {
   moodMax, chebyshev, hasLOSBetween, PLAYER_PASSABLE_TILES, computeBagPassives,
-  applyEquipmentAndPassives, refillBagFromBank, withVisibility, runEnemyTurns, applyEnemyTurns,
+  applyEquipmentAndPassives, removeAndRefillBag, withVisibility, runEnemyTurns, applyEnemyTurns,
   handleGodBlessedImmunity, levelFromXP,
 } from '../../game/gameHelpers';
 import { applyLevelUp } from '../../game/playerTurn';
@@ -62,18 +62,18 @@ export function useCombatActions(
         const newCharges = (item.charges ?? 3) - 1;
         if (newCharges <= 0) {
           addLog('🔫 Gun is empty!');
-          const r = refillBagFromBank(prev.player.inventory.filter(it => it.id !== item.id), prev.player.bank);
+          const r = removeAndRefillBag(prev.player.inventory, prev.player.bank, item.id);
           newInv = r.inventory; newProjBank = r.bank;
         } else {
           newInv = prev.player.inventory.map(it => it.id === item.id ? { ...it, charges: newCharges } : it);
         }
       } else if (kind === 'freeze') {
-        const r = refillBagFromBank(prev.player.inventory.filter(it => it.id !== item.id), prev.player.bank);
+        const r = removeAndRefillBag(prev.player.inventory, prev.player.bank, item.id);
         newInv = r.inventory; newProjBank = r.bank;
       } else if (kind === 'bomb') {
         const newCharges = (item.charges ?? 1) - 1;
         if (newCharges <= 0) {
-          const r = refillBagFromBank(prev.player.inventory.filter(it => it.id !== item.id), prev.player.bank);
+          const r = removeAndRefillBag(prev.player.inventory, prev.player.bank, item.id);
           newInv = r.inventory; newProjBank = r.bank;
         } else {
           newInv = prev.player.inventory.map(it => it.id === item.id ? { ...it, charges: newCharges } : it);

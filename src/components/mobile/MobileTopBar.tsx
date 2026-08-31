@@ -8,6 +8,8 @@ interface MobileTopBarProps {
   xpProgress: number;
   onExpand: () => void;
   onMenu: () => void;
+  /** When set, the hamburger sits on this side for thumb reach. */
+  menuSide?: 'left' | 'right';
 }
 
 function MiniBar({ pct, color, label, value }: { pct: number; color: string; label: string; value: string }) {
@@ -28,7 +30,7 @@ function MiniBar({ pct, color, label, value }: { pct: number; color: string; lab
 }
 
 /** Slim always-visible stat strip for touch devices. Tapping it opens the full StatsModal. */
-export function MobileTopBar({ player, className, level, currentFloor, xpProgress, onExpand, onMenu }: MobileTopBarProps) {
+export function MobileTopBar({ player, className, level, currentFloor, xpProgress, onExpand, onMenu, menuSide = 'right' }: MobileTopBarProps) {
   const hp = player.stats.hp;
   const maxHp = player.stats.maxHp;
   const overheal = hp > maxHp;
@@ -46,6 +48,9 @@ export function MobileTopBar({ player, className, level, currentFloor, xpProgres
       className="bg-sidebar border-b border-border/40 flex items-center gap-1.5 px-1.5 py-1 shrink-0 z-10 shadow-[0_4px_16px_rgba(0,0,0,0.4)]"
       style={{ paddingTop: 'calc(0.25rem + env(safe-area-inset-top, 0px))' }}
     >
+      {menuSide === 'left' && (
+        <PauseEscButton onMenu={onMenu} />
+      )}
       <button
         onClick={onExpand}
         className="flex items-center gap-1.5 flex-1 min-w-0 text-left active:opacity-70 transition-opacity"
@@ -80,16 +85,24 @@ export function MobileTopBar({ player, className, level, currentFloor, xpProgres
           <MiniBar label="XP" value="" pct={xpProgress * 100} color="#22d3ee" />
         </div>
       </button>
-      <button
-        data-testid="button-hamburger"
-        onClick={onMenu}
-        className="flex flex-col items-center justify-center gap-[3px] w-8 h-8 rounded-lg border border-border/50 bg-secondary/40 active:scale-90 transition-all shrink-0"
-        aria-label="Menu"
-      >
-        <span className="block w-3.5 h-0.5 bg-foreground/70 rounded-full" />
-        <span className="block w-3.5 h-0.5 bg-foreground/70 rounded-full" />
-        <span className="block w-3.5 h-0.5 bg-foreground/70 rounded-full" />
-      </button>
+      {menuSide !== 'left' && (
+        <PauseEscButton onMenu={onMenu} />
+      )}
     </div>
+  );
+}
+
+function PauseEscButton({ onMenu }: { onMenu: () => void }) {
+  return (
+    <button
+      data-testid="button-hamburger"
+      onClick={onMenu}
+      className="flex flex-col items-center justify-center w-8 h-8 rounded-lg border border-border/50 bg-secondary/40 active:scale-90 transition-all shrink-0 leading-none"
+      aria-label="Pause (Esc)"
+      title="Pause (Esc)"
+    >
+      <span className="text-[13px] leading-none">⏸</span>
+      <span className="text-[7px] font-bold text-muted-foreground/80 tracking-wide">Esc</span>
+    </button>
   );
 }

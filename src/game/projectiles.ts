@@ -2,7 +2,7 @@ import { ActiveProjectile, Enemy, EmojiItem, FloatingText, Player, Position } fr
 import { applyEquipmentAndPassives } from './inventory';
 import { stolenEmojiSummary } from './monkeyLoot';
 
-const BLOCKING = new Set(['wall', 'tree', 'door-closed']);
+const BLOCKING = new Set(['wall', 'tree', 'door-closed', 'volcano']);
 
 export interface ProjectileResolution {
   projectile: ActiveProjectile | null;

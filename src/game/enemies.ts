@@ -110,3 +110,29 @@ export function adventurerSpawnChance(floor: number): number {
   // Upper floors: ~30%. Dwindles as depth increases. Floor 10: ~7.5%. Floor 15+: ~3% min.
   return Math.max(0.03, 0.30 - (floor - 1) * 0.025);
 }
+
+/** 1 most common, 5 extremely uncommon. */
+export function rollAmbushCount(): number {
+  const r = Math.random();
+  if (r < 0.50) return 1;
+  if (r < 0.75) return 2;
+  if (r < 0.90) return 3;
+  if (r < 0.97) return 4;
+  return 5;
+}
+
+function withRanged<T extends { ranged?: boolean }>(e: T): T & { ranged: true } {
+  return { ...e, ranged: true };
+}
+
+export function getAmbushRangedType() {
+  const archer = ENEMY_TYPES.find(e => e.ranged);
+  const mage = ENEMY_TYPES.find(e => e.emoji === '🧙‍♂️');
+  const eye = ENEMY_TYPES.find(e => e.emoji === '👁️');
+  const pool = [
+    archer,
+    mage ? withRanged(mage) : undefined,
+    eye ? withRanged(eye) : undefined,
+  ].filter((e): e is NonNullable<typeof e> => !!e);
+  return pool[Math.floor(Math.random() * pool.length)] ?? ENEMY_TYPES[0];
+}

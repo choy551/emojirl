@@ -1,4 +1,6 @@
 import { GameState, Player } from '../game/types';
+import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
+import { useDismissGuard } from '../hooks/useDismissGuard';
 
 type WizardMode = 'nearest' | 'furthest' | 'manual' | 'holdfire';
 type RangerMode = 'ranged' | 'melee' | 'flee';
@@ -26,15 +28,20 @@ export function TacticsMenu({
   autoStealth, rangerMode, applyWizardMode, enterBlinkTargetMode, applyNinjaMode,
   toggleAutoStealth, applyRangerMode, handleCowboyTactics, onClose,
 }: TacticsMenuProps) {
+  const hand = useMobileHand();
+  const dismiss = useDismissGuard(onClose);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className={`fixed inset-0 z-50 flex ${overlayFlexClass(hand)}`}
       style={{ background: 'rgba(0,0,0,0.55)' }}
-      onClick={onClose}
+      onClick={dismiss}
+      onPointerDown={dismiss}
     >
       <div
-        className="bg-card border border-border rounded-xl p-5 shadow-2xl min-w-[260px] max-w-xs"
+        className={`bg-card border border-border shadow-2xl min-w-[260px] max-w-xs p-5 ${hand ? overlayPanelClass(hand) : 'rounded-xl'}`}
+        style={overlayPanelStyle(hand)}
         onClick={e => e.stopPropagation()}
+        onPointerDown={e => e.stopPropagation()}
       >
         <div className="text-sm font-bold uppercase tracking-widest text-center mb-4 text-muted-foreground">
           {player.characterClass} Tactics

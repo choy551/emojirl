@@ -77,7 +77,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     }
 
     setGameState(prev => {
-      if (!prev || prev.gameOver) return prev;
+      if (!prev || prev.gameOver || prev.floorAnnouncement) return prev;
 
       const { player } = prev;
       const cls = player.characterClass;
@@ -277,7 +277,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         return prev;
       }
 
-      if (tile.type === 'water') {
+      if (tile.type === 'lava') {
+        // Walkable but deadly — damage is applied in tickVolcanoAndLava at end of turn.
+      } else if (tile.type === 'water') {
         const canSwim = computeBagPassives(prev.player.inventory).canSwim;
         if (!canSwim) {
           const hasEnemyThere = prev.enemies.some(e => e.pos.x === newPos.x && e.pos.y === newPos.y);
@@ -883,7 +885,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           }
         }
         newState.enemies = freshEnemies;
-        newState.items = spawnVaultItems(rooms, newPlayer.characterClass, nextFloor);
+        newState.items = spawnVaultItems(rooms, newPlayer.characterClass, nextFloor, map);
 
         if (nextFloor % 5 === 0) {
           addLog(`⚠️ Floor ${nextFloor} — a boss lurks here! Prepare yourself!`);
@@ -899,6 +901,15 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
         if (rooms.some(r => r.theme === 'monster-den')) addLog(`🦴 You sense a terrible presence nearby...`);
         if (rooms.some(r => r.theme === 'treasure-vault')) addLog(`💎 You sense hidden treasure surrounded by water...`);
+        if (rooms.some(r => r.theme === 'bush-ambush')) addLog(`🌿 You hear bowstrings drawn behind the bushes...`);
+        if (rooms.some(r => r.theme === 'volcano')) {
+          addLog(`🌋 There is a Volcano on this floor!`);
+          newState.floorAnnouncement = {
+            kind: 'volcano',
+            title: 'There is a Volcano on this floor!',
+            body: 'Hurry & pick up the valuable Emoji around it before it all burns in Lava!',
+          };
+        }
         newPlayer.stats.moodValue = Math.min(moodMax(cls), newPlayer.stats.moodValue + 15);
         if (cls === '🧙') newPlayer.stats.mana = newPlayer.stats.maxMana ?? 4;
         newState.stealthMode = false;
@@ -1028,7 +1039,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
   const handleWait = useCallback(() => {
     setGameState(prev => {
-      if (!prev || prev.gameOver) return prev;
+      if (!prev || prev.gameOver || prev.floorAnnouncement) return prev;
       const cls = prev.player.characterClass;
       const { x: px, y: py } = prev.player.pos;
       const nearCampfire = [-1, 0, 1].some(dy =>
@@ -1180,7 +1191,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
   const handleCloseDoor = useCallback(() => {
     setGameState(prev => {
-      if (!prev || prev.gameOver) return prev;
+      if (!prev || prev.gameOver || prev.floorAnnouncement) return prev;
       const { player } = prev;
       const dirs: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
       const openDoor = dirs

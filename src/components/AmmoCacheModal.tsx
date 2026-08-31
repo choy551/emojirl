@@ -1,5 +1,7 @@
 import { GameState, EmojiItem } from '../game/types';
 import { getItemBuyPrice, addToBag } from '../game/gameHelpers';
+import { useDismissGuard } from '../hooks/useDismissGuard';
+import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
 
 interface AmmoCacheModalProps {
   gameState: GameState;
@@ -11,14 +13,19 @@ interface AmmoCacheModalProps {
 }
 
 export function AmmoCacheModal({ gameState, setGameState, ammoCacheItems, setAmmoCacheItems, addLog, onClose }: AmmoCacheModalProps) {
+  const dismiss = useDismissGuard(onClose);
+  const hand = useMobileHand();
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
+      className={`fixed inset-0 z-[70] flex bg-black/60 backdrop-blur-sm ${overlayFlexClass(hand)}`}
+      onClick={dismiss}
+      onPointerDown={dismiss}
     >
       <div
-        className="bg-card border border-amber-600/40 rounded-xl p-5 shadow-2xl w-80 max-h-[80vh] overflow-y-auto"
+        className={`bg-card border border-amber-600/40 p-5 shadow-2xl w-80 max-h-[80vh] overflow-y-auto ${hand ? overlayPanelClass(hand) : 'rounded-xl'}`}
+        style={overlayPanelStyle(hand)}
         onClick={e => e.stopPropagation()}
+        onPointerDown={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex justify-between items-center mb-4">

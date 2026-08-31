@@ -7,7 +7,7 @@ import {
 import { markEnemySeen, markEmojiSeen, markEnemyKilled } from '../../game/discoveries';
 import { isStackableBagPassive } from '../../game/passives';
 import {
-  moodMax, addToBag, activeKindLabel, sortBagSlots, refillBagFromBank, levelFromXP,
+  moodMax, addToBag, activeKindLabel, sortBagSlots, refillBagFromBank, removeAndRefillBag, levelFromXP,
   hpBonusForLevel, tickActiveBuffs, withVisibility, runEnemyTurns, applyEnemyTurns,
 } from '../../game/gameHelpers';
 import type { GameRefs, GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
@@ -165,7 +165,7 @@ export function useItemActions(
         const rewards = Array.from({ length: 2 }, (_, i) => ({
           ...getRandomActiveDrop(), id: `vault-fb-${i}-${Math.random()}`, consumed: false, pos: prev.player.pos,
         }));
-        const { inventory: ropeInv, bank: ropeBank } = refillBagFromBank(prev.player.inventory.filter(it => it.id !== ropeItem.id), newPlayer.bank);
+        const { inventory: ropeInv, bank: ropeBank } = removeAndRefillBag(prev.player.inventory, newPlayer.bank, ropeItem.id);
         newPlayer = { ...newPlayer, inventory: ropeInv, bank: ropeBank };
         return { ...prev, player: newPlayer, items: [...prev.items, ...rewards] };
       }
@@ -217,7 +217,7 @@ export function useItemActions(
 
       const entrancePos = { x: midX, y: midY };
       newPlayer.pos = entrancePos;
-      const { inventory: vaultInv, bank: vaultBank } = refillBagFromBank(prev.player.inventory.filter(it => it.id !== ropeItem.id), newPlayer.bank);
+      const { inventory: vaultInv, bank: vaultBank } = removeAndRefillBag(prev.player.inventory, newPlayer.bank, ropeItem.id);
       newPlayer = { ...newPlayer, inventory: vaultInv, bank: vaultBank };
 
       const isTrap = Math.random() < 0.35;
@@ -305,7 +305,7 @@ export function useItemActions(
         const wasLow = stats.hp / stats.maxHp <= 0.3;
         stats.hp = Math.min(stats.maxHp, stats.hp + amount);
         stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + (wasLow ? 40 : 10));
-        const { inventory: healInv, bank: healBank } = refillBagFromBank(prev.player.inventory.filter(it => it.id !== slotItem.id), prev.player.bank);
+        const { inventory: healInv, bank: healBank } = removeAndRefillBag(prev.player.inventory, prev.player.bank, slotItem.id);
         addLog(wasLow
           ? `${slotItem.emoji} ${slotItem.name}: +${amount} HP — relief floods through you! Mood surges!`
           : `${slotItem.emoji} ${slotItem.name}: +${amount} HP restored.`
@@ -360,7 +360,7 @@ export function useItemActions(
         const r = refillBagFromBank(newInventory, prev.player.bank);
         newInventory = r.inventory; newSoulBank = r.bank;
       } else {
-        const r = refillBagFromBank(prev.player.inventory.filter(it => it.id !== slotItem.id), prev.player.bank);
+        const r = removeAndRefillBag(prev.player.inventory, prev.player.bank, slotItem.id);
         newInventory = r.inventory; newSoulBank = r.bank;
       }
 

@@ -116,6 +116,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     difficultyTier:           (raw.difficultyTier            as number)                  ?? 0,
     ninjaFreeMoves:           raw.ninjaFreeMoves             as number | undefined,
     highestPressureTierWarned: (raw.highestPressureTierWarned as number)                 ?? 0,
+    floorAnnouncement:        (raw.floorAnnouncement as GameState['floorAnnouncement']) ?? null,
   };
 }
 

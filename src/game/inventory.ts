@@ -86,6 +86,22 @@ export function sortBagSlots(inv: EmojiItem[]): EmojiItem[] {
   });
 }
 
+function isHotbarBagItem(item: EmojiItem): boolean {
+  return item.healAmount === undefined && item.ammoAmount === undefined && !item.isEquipment;
+}
+
+function isEligibleBankPull(item: EmojiItem, inventory: EmojiItem[]): boolean {
+  return !item.isEquipment &&
+    !isNonStackableBagPassiveDuplicate(item, inventory) &&
+    !isActiveKindDuplicate(item, inventory);
+}
+
+function wouldMergeIntoExistingStack(item: EmojiItem, inventory: EmojiItem[]): boolean {
+  if (!isStackableBagPassive(item)) return false;
+  const cap = STACKABLE_BAG_CAPS[item.emoji] ?? 9;
+  return inventory.some(i => i.emoji === item.emoji && isStackableBagPassive(i) && (i.stackCount ?? 1) < cap);
+}
+
 export function refillBagFromBank(inventory: EmojiItem[], bank: EmojiItem[]): { inventory: EmojiItem[]; bank: EmojiItem[] } {
   if (bank.length === 0) return { inventory, bank };
 
@@ -102,17 +118,45 @@ export function refillBagFromBank(inventory: EmojiItem[], bank: EmojiItem[]): { 
 
   // Find first *safe* non-equipment item in bank to pull into bag.
   // Skip duplicates of nonStackable bag passives or activeKind items (only one allowed in hotbar/inventory).
-  const bagCount = inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment).length;
+  const bagCount = inventory.filter(isHotbarBagItem).length;
   if (bagCount >= 9) return { inventory, bank };
-  const pullIdx = bank.findIndex(i =>
-    !i.isEquipment &&
-    !isNonStackableBagPassiveDuplicate(i, inventory) &&
-    !isActiveKindDuplicate(i, inventory)
-  );
+  const pullIdx = bank.findIndex(i => isEligibleBankPull(i, inventory));
   if (pullIdx === -1) return { inventory, bank };
   const pulled = bank[pullIdx];
   const newBank = [...bank.slice(0, pullIdx), ...bank.slice(pullIdx + 1)];
   return { inventory: [...inventory, pulled], bank: newBank };
+}
+
+/** Consume an inventory item and refill from Bank without reshuffling 1–9 hotbar keys. */
+export function removeAndRefillBag(
+  inventory: EmojiItem[],
+  bank: EmojiItem[],
+  consumedId: string,
+): { inventory: EmojiItem[]; bank: EmojiItem[] } {
+  const idx = inventory.findIndex(i => i.id === consumedId);
+  if (idx === -1) return refillBagFromBank(inventory, bank);
+
+  const consumed = inventory[idx];
+  const without = [...inventory.slice(0, idx), ...inventory.slice(idx + 1)];
+  const keepSlot = isHotbarBagItem(consumed);
+
+  if (keepSlot) {
+    const preferIdx = bank.findIndex(i => i.emoji === consumed.emoji && isEligibleBankPull(i, without));
+    const pullIdx = preferIdx !== -1
+      ? preferIdx
+      : bank.findIndex(i => isEligibleBankPull(i, without) && !wouldMergeIntoExistingStack(i, without));
+    if (pullIdx !== -1) {
+      const pulled = bank[pullIdx];
+      const newInv = [...inventory];
+      newInv[idx] = pulled;
+      return {
+        inventory: newInv,
+        bank: [...bank.slice(0, pullIdx), ...bank.slice(pullIdx + 1)],
+      };
+    }
+  }
+
+  return refillBagFromBank(without, bank);
 }
 
 export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {

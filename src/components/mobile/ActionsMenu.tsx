@@ -1,4 +1,6 @@
 import { AbilityDescriptor } from './classAbilities';
+import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './oneHandedLayout';
+import { useDismissGuard } from '../../hooks/useDismissGuard';
 
 export interface ActionItem {
   id: string;
@@ -43,15 +45,17 @@ function ActionTile({ item, onClose }: { item: ActionItem; onClose: () => void }
 
 /** Bottom sheet listing every available action plus per-class abilities and Tactics. */
 export function ActionsMenu({ general, abilities, onOpenTactics, onOpenGoto, onClose }: ActionsMenuProps) {
+  const hand = useMobileHand();
+  const dismiss = useDismissGuard(onClose);
   return (
     <div
-      className="fixed inset-0 z-[55] flex items-end justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
-      onPointerDown={e => e.stopPropagation()}
+      className={`fixed inset-0 z-[55] flex bg-black/60 backdrop-blur-sm ${hand ? overlayFlexClass(hand) : 'items-end justify-center'}`}
+      onClick={dismiss}
+      onPointerDown={dismiss}
     >
       <div
-        className="w-full max-w-md bg-card border-t border-x border-border rounded-t-2xl shadow-2xl p-4 max-h-[80vh] overflow-y-auto"
-        style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
+        className={`w-full max-w-md bg-card border-border shadow-2xl p-4 overflow-y-auto ${hand ? overlayPanelClass(hand) + ' border' : 'border-t border-x rounded-t-2xl max-h-[80vh]'}`}
+        style={hand ? overlayPanelStyle(hand) : { paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
         onClick={e => e.stopPropagation()}
         onPointerDown={e => e.stopPropagation()}
       >

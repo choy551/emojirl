@@ -12,6 +12,9 @@ export type TileType =
   | 'water'
   | 'grass'
   | 'tree'
+  | 'bush'
+  | 'lava'
+  | 'volcano'
   | 'shrine'
   | 'shrine-used'
   | 'safe-floor'
@@ -29,7 +32,7 @@ export interface Tile {
 
 export type MapGrid = Tile[][];
 
-export type RoomTheme = 'normal' | 'shrine' | 'shop' | 'restaurant' | 'forest' | 'boss' | 'market' | 'monster-den' | 'treasure-vault';
+export type RoomTheme = 'normal' | 'shrine' | 'shop' | 'restaurant' | 'forest' | 'boss' | 'market' | 'monster-den' | 'treasure-vault' | 'bush-ambush' | 'volcano';
 
 export type MoodType = 
   | 'happy' | 'very_happy' | 'sad' | 'crying' 
@@ -257,6 +260,8 @@ export interface GameState {
   difficultyTier: number;
   ninjaFreeMoves?: number;
   highestPressureTierWarned: number;
+  /** DCSS-style full-screen floor announcement (volcano, etc.). Cleared when dismissed. */
+  floorAnnouncement?: { kind: 'volcano'; title: string; body: string } | null;
 }
 
 export interface ControlSettings {
@@ -267,6 +272,8 @@ export interface ControlSettings {
   showContextButtons: boolean;
   showAbilityButtons: boolean;
   dpadSide: 'left' | 'right';
+  /** Park d-pad, actions, hotbar, and sheets on `dpadSide` for thumb reach. */
+  oneHanded: boolean;
 }
 
 export const DEFAULT_CONTROL_SETTINGS: ControlSettings = {
@@ -277,6 +284,7 @@ export const DEFAULT_CONTROL_SETTINGS: ControlSettings = {
   showContextButtons: true,
   showAbilityButtons: true,
   dpadSide: 'right',
+  oneHanded: false,
 };
 
 export type BagPassiveSummary = {

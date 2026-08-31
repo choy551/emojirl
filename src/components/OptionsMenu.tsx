@@ -1,4 +1,6 @@
 import { ControlSettings } from '../game/types';
+import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, overlayHand } from './mobile/oneHandedLayout';
+import { useDismissGuard } from '../hooks/useDismissGuard';
 
 interface OptionsMenuProps {
   settings: ControlSettings;
@@ -38,14 +40,19 @@ function ToggleRow({ label, hint, checked, onChange }: ToggleRowProps) {
 }
 
 export function OptionsMenu({ settings, setSetting, toggleSetting, isMobile, onClose }: OptionsMenuProps) {
+  const hand = overlayHand(settings, isMobile);
+  const dismiss = useDismissGuard(onClose);
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
-      onClick={onClose}
+      className={`fixed inset-0 z-[60] flex bg-black/70 backdrop-blur-sm ${overlayFlexClass(hand)}`}
+      onClick={dismiss}
+      onPointerDown={dismiss}
     >
       <div
-        className="bg-card border border-border rounded-2xl shadow-2xl w-80 max-w-[92vw] max-h-[85vh] overflow-y-auto flex flex-col"
+        className={`bg-card border border-border shadow-2xl w-80 max-w-[92vw] max-h-[85vh] overflow-y-auto flex flex-col ${hand ? overlayPanelClass(hand) : 'rounded-2xl'}`}
+        style={overlayPanelStyle(hand)}
         onClick={e => e.stopPropagation()}
+        onPointerDown={e => e.stopPropagation()}
       >
         <div className="px-6 pt-5 pb-3 border-b border-border/50 text-center sticky top-0 bg-card z-10">
           <div className="text-3xl mb-1">⚙️</div>
@@ -75,19 +82,27 @@ export function OptionsMenu({ settings, setSetting, toggleSetting, isMobile, onC
               <div className="flex flex-col gap-1.5">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 px-1">On-screen controls</div>
                 <ToggleRow label="Virtual D-pad" hint="9-key numpad-style movement pad" checked={settings.showDpad} onChange={() => toggleSetting('showDpad')} />
-                <ToggleRow label="Context buttons" hint="Use + Actions menu buttons" checked={settings.showContextButtons} onChange={() => toggleSetting('showContextButtons')} />
+                <ToggleRow label="Context buttons" hint="Use + expanded Act menu" checked={settings.showContextButtons} onChange={() => toggleSetting('showContextButtons')} />
                 <ToggleRow label="Ability buttons" hint="Quick class ability buttons" checked={settings.showAbilityButtons} onChange={() => toggleSetting('showAbilityButtons')} />
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 px-1">Layout</div>
+                <ToggleRow
+                  label="One-handed mode"
+                  hint="Park d-pad, actions, hotbar, and menus on one side for thumb reach"
+                  checked={settings.oneHanded}
+                  onChange={() => toggleSetting('oneHanded')}
+                />
                 <button
                   onClick={() => setSetting('dpadSide', settings.dpadSide === 'right' ? 'left' : 'right')}
                   className="w-full flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-secondary/40 border border-border/40 hover:bg-secondary/60 active:scale-[0.98] transition-all text-left"
                 >
                   <span className="flex flex-col">
-                    <span className="text-xs font-medium text-foreground">D-pad side</span>
-                    <span className="text-[10px] text-muted-foreground/50 leading-tight">Which corner the d-pad sits in</span>
+                    <span className="text-xs font-medium text-foreground">{settings.oneHanded ? 'Thumb side' : 'D-pad side'}</span>
+                    <span className="text-[10px] text-muted-foreground/50 leading-tight">
+                      {settings.oneHanded ? 'Which side every control sits on' : 'Which corner the d-pad sits in'}
+                    </span>
                   </span>
                   <span className="text-xs font-bold text-primary uppercase">{settings.dpadSide}</span>
                 </button>

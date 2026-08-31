@@ -5,6 +5,9 @@ interface VirtualDpadProps {
   onWait: () => void;
   side?: 'left' | 'right';
   onToggleSide?: () => void;
+  /** When false, the pad is laid out by its parent instead of `position: fixed`. */
+  anchored?: boolean;
+  oneHanded?: boolean;
 }
 
 const REPEAT_DELAY_MS = 350;
@@ -91,7 +94,7 @@ function DpadCell({
 
 const STORAGE_KEY = 'emojirl_dpad_side';
 
-export function VirtualDpad({ onMove, onWait, side: sideProp, onToggleSide }: VirtualDpadProps) {
+export function VirtualDpad({ onMove, onWait, side: sideProp, onToggleSide, anchored = true, oneHanded = false }: VirtualDpadProps) {
   const [internalSide, setInternalSide] = useState<'left' | 'right'>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     return stored === 'left' ? 'left' : 'right';
@@ -110,15 +113,18 @@ export function VirtualDpad({ onMove, onWait, side: sideProp, onToggleSide }: Vi
   return (
     <div
       className={[
-        'fixed z-40 flex flex-col items-center gap-0.5',
-        side === 'right' ? 'right-2' : 'left-2',
+        'flex flex-col items-center gap-0.5',
+        anchored ? 'fixed z-40' : '',
+        anchored ? (side === 'right' ? 'right-2' : 'left-2') : '',
       ].join(' ')}
       style={{
         userSelect: 'none',
-        bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))',
-        ...(side === 'right'
-          ? { paddingRight: 'env(safe-area-inset-right, 0px)' }
-          : { paddingLeft: 'env(safe-area-inset-left, 0px)' }),
+        ...(anchored ? {
+          bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))',
+          ...(side === 'right'
+            ? { paddingRight: 'env(safe-area-inset-right, 0px)' }
+            : { paddingLeft: 'env(safe-area-inset-left, 0px)' }),
+        } : {}),
       }}
     >
       <div
@@ -135,7 +141,7 @@ export function VirtualDpad({ onMove, onWait, side: sideProp, onToggleSide }: Vi
         className="text-[9px] text-white/30 hover:text-white/60 transition-colors px-1.5 py-0 leading-tight rounded"
         aria-label="Swap d-pad side"
       >
-        ⇄ move {side === 'right' ? 'left' : 'right'}
+        ⇄ {oneHanded ? 'switch hand' : `move ${side === 'right' ? 'left' : 'right'}`}
       </button>
     </div>
   );

@@ -1,5 +1,6 @@
-import { useRef } from 'react';
 import { GotoDestination } from '../game/goto';
+import { useDismissGuard } from '../hooks/useDismissGuard';
+import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
 
 interface GoToMenuProps {
   floor: number;
@@ -10,20 +11,18 @@ interface GoToMenuProps {
 
 /** DCSS-style Go to list of known destinations on the current floor. */
 export function GoToMenu({ floor, destinations, onPick, onClose }: GoToMenuProps) {
-  const openedAt = useRef(Date.now());
-  const dismiss = () => {
-    if (Date.now() - openedAt.current < 400) return;
-    onClose();
-  };
+  const dismiss = useDismissGuard(onClose);
+  const hand = useMobileHand();
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center"
+      className={`fixed inset-0 z-[70] flex ${overlayFlexClass(hand)}`}
       style={{ background: 'rgba(0,0,0,0.55)' }}
       onClick={dismiss}
       onPointerDown={dismiss}
     >
       <div
-        className="bg-card border border-border rounded-xl p-4 shadow-2xl w-[min(22rem,92vw)] max-h-[80vh] overflow-y-auto"
+        className={`bg-card border border-border shadow-2xl w-[min(22rem,92vw)] max-h-[80vh] overflow-y-auto p-4 ${hand ? overlayPanelClass(hand) : 'rounded-xl'}`}
+        style={overlayPanelStyle(hand)}
         onClick={e => e.stopPropagation()}
         onPointerDown={e => e.stopPropagation()}
       >

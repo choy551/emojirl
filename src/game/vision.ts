@@ -12,7 +12,7 @@ export function eagleEyeRange(level: number): number {
   return 4 + Math.floor((level - 1) / 3);
 }
 
-export const OPAQUE_TILES = new Set(['wall', 'tree', 'door-closed']);
+export const OPAQUE_TILES = new Set(['wall', 'tree', 'door-closed', 'volcano']);
 
 export function hasLineOfSight(map: MapGrid, from: Position, to: Position): boolean {
   if (from.x === to.x && from.y === to.y) return true;

@@ -12,7 +12,7 @@ import { saveGame, loadGame, clearSave, getRawSave } from '../game/save';
 import { isStackableBagPassive } from '../game/passives';
 import { useIsMobile } from '../hooks/use-mobile';
 import { useControlSettings } from '../hooks/useControlSettings';
-import { useAndroidBackButton } from '../hooks/useAndroidBackButton';
+import { closeTopOverlay, useAndroidBackButton } from '../hooks/useAndroidBackButton';
 import { useTouchGestures } from '../hooks/useTouchGestures';
 import { resolveContextAction } from '../game/contextAction';
 import { ContextActionButton } from '../components/mobile/ContextActionButton';
@@ -22,6 +22,7 @@ import { getClassAbilities } from '../components/mobile/classAbilities';
 import { MobileTopBar } from '../components/mobile/MobileTopBar';
 import { MobileBagStrip } from '../components/mobile/MobileBagStrip';
 import { StatsModal } from '../components/mobile/StatsModal';
+import { MobileHandContext, actionSide, overlayFlexClass, overlayHand, overlayPanelClass, overlayPanelStyle } from '../components/mobile/oneHandedLayout';
 import { VirtualDpad } from '../components/VirtualDpad';
 import { OptionsMenu } from '../components/OptionsMenu';
 import { EnemyCard } from '../components/EnemyCard';
@@ -188,36 +189,42 @@ export default function Game() {
   useEffect(() => { bagTabRef.current = bagTab; }, [bagTab]);
   useEffect(() => { if (bankOpen) setFocusedBagIdx(0); }, [bankOpen]);
 
-  // Android hardware/gesture back button — closes modals in priority order
-  useAndroidBackButton({
-    dirPickMode,
-    setDirPickMode,
-    statsExpanded,
-    setStatsExpanded,
-    actionsMenuOpen,
-    setActionsMenuOpen,
-    shopOpen,
-    setShopOpen,
-    bankOpen,
-    setBankOpen,
-    ammoCacheOpen,
-    setAmmoCacheOpen,
-    restaurantOpen,
-    setRestaurantOpen,
-    logOpen,
-    setLogOpen,
-    tacticsMenuOpen,
-    setTacticsMenuOpen,
-    gotoMenuOpen,
-    setGotoMenuOpen,
-    showRTFM,
-    setShowRTFM,
-    optionsOpen,
-    setOptionsOpen,
-    pauseMenuOpen,
-    setPauseMenuOpen,
-    onNavigateHome: () => navigate('/'),
-  });
+  // Android hardware/gesture Back and browser Back: close the top menu first.
+  useAndroidBackButton(
+    () => closeTopOverlay([
+      { id: 'announce', isOpen: () => !!gameStateRef.current?.floorAnnouncement, close: () => setGameState(prev => prev ? { ...prev, floorAnnouncement: null } : prev) },
+      { id: 'stat-card', isOpen: () => !!statCardItem, close: () => setStatCardItem(null) },
+      { id: 'boat-warn', isOpen: () => lastBoatWarnSlot !== null, close: () => setLastBoatWarnSlot(null) },
+      { id: 'drown-warn', isOpen: () => drownWarnSlot !== null, close: () => setDrownWarnSlot(null) },
+      { id: 'talk', isOpen: () => !!pendingCompanionTalkId, close: () => setPendingCompanionTalkId(null) },
+      { id: 'bear', isOpen: () => !!pendingBearInteraction, close: () => setPendingBearInteraction(null) },
+      { id: 'adventurer', isOpen: () => !!pendingAdventurerInteraction, close: () => setPendingAdventurerInteraction(null) },
+      { id: 'monkey', isOpen: () => !!pendingMonkeyInteraction, close: () => setPendingMonkeyInteraction(null) },
+      { id: 'fairy', isOpen: () => !!pendingFairyId, close: () => setPendingFairyId(null) },
+      { id: 'dir-pick', isOpen: () => dirPickModeRef.current !== null, close: () => { dirPickModeRef.current = null; setDirPickMode(null); } },
+      { id: 'blink', isOpen: () => blinkTargetModeRef.current, close: () => { setBlinkTargetMode(false); blinkTargetModeRef.current = false; } },
+      { id: 'goto', isOpen: () => gotoMenuOpen, close: () => setGotoMenuOpen(false) },
+      { id: 'tactics', isOpen: () => tacticsMenuOpen, close: () => setTacticsMenuOpen(false) },
+      { id: 'actions', isOpen: () => actionsMenuOpen, close: () => setActionsMenuOpen(false) },
+      { id: 'shop', isOpen: () => shopOpen, close: () => setShopOpen(false) },
+      { id: 'restaurant', isOpen: () => restaurantOpen, close: () => setRestaurantOpen(false) },
+      { id: 'cache', isOpen: () => ammoCacheOpen, close: () => setAmmoCacheOpen(false) },
+      { id: 'bank', isOpen: () => bankOpen, close: () => { if (selectedItemId) setSelectedItemId(null); else { setBankOpen(false); setSelectedItemId(null); } } },
+      { id: 'log', isOpen: () => logOpen, close: () => setLogOpen(false) },
+      { id: 'stats', isOpen: () => statsExpanded, close: () => setStatsExpanded(false) },
+      { id: 'options', isOpen: () => optionsOpen, close: () => setOptionsOpen(false) },
+      { id: 'rtfm', isOpen: () => showRTFM, close: () => { setShowRTFM(false); setPauseMenuOpen(true); } },
+      { id: 'pause', isOpen: () => pauseMenuOpen, close: () => setPauseMenuOpen(false) },
+    ]) !== null,
+    () => navigate('/', { replace: true }),
+  );
+
+  useEffect(() => {
+    if (!gameState?.floorAnnouncement) return;
+    setAutoExplore(false);
+    setAutoRest(false);
+    setTravelTarget(null);
+  }, [gameState?.floorAnnouncement]);
 
   // Open shop when player steps onto a 🏪 tile
   useEffect(() => {
@@ -426,7 +433,7 @@ export default function Game() {
       currentFloor: 1,
       map: computeVisibility(map, startPos),
       enemies: spawnEnemies(1, rooms, startPos, 0, map),
-      items: spawnVaultItems(rooms, vessel, 1),
+      items: spawnVaultItems(rooms, vessel, 1, map),
       turn: 1,
       logs: [{ id: 'l1', text: vessel === '🤠' ? `Welcome, Cowboy. Only real Cowboys fight with their fists! Descend and collect emojis.` : `Welcome, ${cls.name}. Descend and collect emojis.`, turn: 1 }],
       floatingTexts: [],
@@ -443,6 +450,13 @@ export default function Game() {
       killCounts: {},
       difficultyTier: 0,
       highestPressureTierWarned: 0,
+      floorAnnouncement: rooms.some(r => r.theme === 'volcano')
+        ? {
+            kind: 'volcano',
+            title: 'There is a Volcano on this floor!',
+            body: 'Hurry & pick up the valuable Emoji around it before it all burns in Lava!',
+          }
+        : null,
     });
   }, []);
 
@@ -971,6 +985,12 @@ export default function Game() {
       // ── RTFM overlay: let the browser scroll natively, only Esc closes ────
       if (showRTFMRef.current) {
         if (e.key === 'Escape') { e.preventDefault(); setShowRTFM(false); setPauseMenuOpen(true); }
+        return;
+      }
+      if (gameStateRef.current?.floorAnnouncement) {
+        e.preventDefault();
+        if (e.repeat) return;
+        setGameState(prev => prev ? { ...prev, floorAnnouncement: null } : prev);
         return;
       }
       if (e.code === 'NumLock') { e.preventDefault(); return; }
@@ -1592,6 +1612,10 @@ export default function Game() {
           else if (tileData.type === 'boss-floor') tileBg = 'rgba(200,30,30,0.22)';
           else if (tileData.type === 'campfire') tileBg = 'rgba(255,140,0,0.25)';
           else if (tileData.type === 'restaurant') tileBg = 'rgba(220,60,60,0.22)';
+          else if (tileData.type === 'lava') tileBg = 'rgba(255,60,0,0.45)';
+          else if (tileData.type === 'volcano') tileBg = 'rgba(220,30,0,0.55)';
+          else if (tileData.type === 'bush') tileBg = 'rgba(40,90,30,0.35)';
+          else if (tileData.type === 'water') tileBg = 'rgba(30,80,160,0.28)';
 
           row.push(
             <div
@@ -2016,8 +2040,16 @@ export default function Game() {
   const xpThisLevel = xpThresholdForLevel(player.stats.level);
   const xpNextLevel = xpThresholdForLevel(player.stats.level + 1);
   const xpProgress  = Math.min(1, (player.stats.xp - xpThisLevel) / Math.max(1, xpNextLevel - xpThisLevel));
+  const oneHanded = isMobile && controlSettings.oneHanded;
+  const thumbSide = controlSettings.dpadSide;
+  const ctxSide = actionSide(controlSettings);
+  const hand = overlayHand(controlSettings, isMobile);
+  const chromeBottom = oneHanded
+    ? 'calc(13.5rem + env(safe-area-inset-bottom, 0px))'
+    : 'calc(10rem + env(safe-area-inset-bottom, 0px))';
 
   return (
+    <MobileHandContext.Provider value={hand}>
     <div
       className="flex flex-col h-screen bg-background text-foreground overflow-hidden overscroll-none"
       data-testid="game-root"
@@ -2116,6 +2148,7 @@ export default function Game() {
             xpProgress={xpProgress}
             onExpand={() => setStatsExpanded(true)}
             onMenu={() => setPauseMenuOpen(true)}
+            menuSide={oneHanded ? thumbSide : 'right'}
           />
           <MobileBagStrip
             bagSlots={bagSlots}
@@ -2125,6 +2158,7 @@ export default function Game() {
             onUseHeal={handleUseHeal}
             onOpenBag={() => setBankOpen(true)}
             itemInspectProps={itemInspectProps}
+            align={oneHanded ? thumbSide : 'stretch'}
           />
         </>
       )}
@@ -2423,12 +2457,10 @@ export default function Game() {
             data-testid="button-hamburger"
             onClick={() => setPauseMenuOpen(true)}
             className="flex flex-col items-center justify-center gap-[3px] w-8 h-8 rounded-lg border border-border/50 bg-secondary/40 hover:bg-secondary/70 active:scale-90 transition-all shrink-0"
-            aria-label="Menu"
-            title="Menu (Esc)"
+            aria-label="Pause (Esc)"
+            title="Pause (Esc)"
           >
-            <span className="block w-4 h-0.5 bg-foreground/70 rounded-full" />
-            <span className="block w-4 h-0.5 bg-foreground/70 rounded-full" />
-            <span className="block w-4 h-0.5 bg-foreground/70 rounded-full" />
+            <span className="text-sm leading-none">⏸</span>
           </button>
         </div>
       </div>
@@ -2439,8 +2471,24 @@ export default function Game() {
       {/* Main Game Area */}
       <div
         className="flex-1 flex flex-col items-center justify-center relative"
-        style={isMobile && !gameState.gameOver ? { paddingBottom: 'calc(10rem + env(safe-area-inset-bottom, 0px))' } : undefined}
+        style={isMobile && !gameState.gameOver ? { paddingBottom: chromeBottom } : undefined}
       >
+        {gameState.floorAnnouncement ? (
+          <div
+            className="absolute inset-0 bg-black flex flex-col items-center justify-center z-[80] cursor-pointer px-6"
+            onClick={() => setGameState(prev => prev ? { ...prev, floorAnnouncement: null } : prev)}
+            data-testid="floor-announcement"
+          >
+            <div className="text-7xl mb-6">{gameState.floorAnnouncement.kind === 'volcano' ? '🌋' : '⚠️'}</div>
+            <h1 className="text-3xl sm:text-4xl font-black text-orange-400 mb-4 tracking-wide text-center max-w-lg">
+              {gameState.floorAnnouncement.title}
+            </h1>
+            <p className="text-lg text-orange-100/90 text-center max-w-md mb-8 leading-relaxed">
+              {gameState.floorAnnouncement.body}
+            </p>
+            <p className="text-sm text-white/50 tracking-widest uppercase">Press any key or tap to continue</p>
+          </div>
+        ) : null}
         {gameState.gameOver ? (
           <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-50">
             <div className="text-8xl mb-4">💀</div>
@@ -2631,7 +2679,7 @@ export default function Game() {
           style={{
             maskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)',
             WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)',
-            ...(isMobile ? { bottom: 'calc(10rem + env(safe-area-inset-bottom, 0px))' } : {}),
+            ...(isMobile ? { bottom: chromeBottom } : {}),
           }}
           title="Click or press / to open full log"
         >
@@ -2649,11 +2697,12 @@ export default function Game() {
       {/* Full Combat Log Modal */}
       {logOpen && (
         <div
-          className={`fixed inset-0 z-50 flex justify-center px-4 bg-black/60 backdrop-blur-sm ${isMobile ? 'items-center py-8' : 'items-end pb-4'}`}
+          className={`fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm ${hand ? overlayFlexClass(hand) : isMobile ? 'items-center justify-center py-8 px-4' : 'items-end justify-center pb-4 px-4'}`}
           onClick={() => setLogOpen(false)}
         >
           <div
-            className={`bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg flex flex-col ${isMobile ? 'max-h-[55vh]' : 'max-h-[70vh]'}`}
+            className={`bg-card border border-border shadow-2xl w-full max-w-lg flex flex-col ${hand ? overlayPanelClass(hand) : `rounded-xl ${isMobile ? 'max-h-[55vh]' : 'max-h-[70vh]'}`}`}
+            style={overlayPanelStyle(hand)}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex justify-between items-center px-4 py-3 border-b border-border/50 shrink-0">
@@ -2678,11 +2727,12 @@ export default function Game() {
       {/* ── Pause Menu ───────────────────────────────────────────────────── */}
       {pauseMenuOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          className={`fixed inset-0 z-50 flex bg-black/70 backdrop-blur-sm ${overlayFlexClass(hand)}`}
           onClick={() => setPauseMenuOpen(false)}
         >
           <div
-            className="bg-card border border-border rounded-2xl shadow-2xl w-72 flex flex-col overflow-hidden"
+            className={`bg-card border border-border shadow-2xl w-72 flex flex-col overflow-hidden ${hand ? overlayPanelClass(hand) : 'rounded-2xl'}`}
+            style={overlayPanelStyle(hand)}
             onClick={e => e.stopPropagation()}
           >
             <div className="px-6 pt-6 pb-4 border-b border-border/50 text-center">
@@ -2937,11 +2987,12 @@ export default function Game() {
       {/* Bank / Bag Modal */}
       {bankOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          className={`fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm ${overlayFlexClass(hand)}`}
           onClick={() => { setBankOpen(false); setSelectedItemId(null); }}
         >
           <div
-            className="bg-card border border-border rounded-xl p-5 shadow-2xl w-80 max-h-[90vh] overflow-y-auto"
+            className={`bg-card border border-border p-5 shadow-2xl w-80 max-h-[90vh] overflow-y-auto ${hand ? overlayPanelClass(hand) : 'rounded-xl'}`}
+            style={overlayPanelStyle(hand)}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-3">
@@ -3014,75 +3065,110 @@ export default function Game() {
       )}
 
       {/* Virtual D-pad — touch/mobile only */}
-      {isMobile && !gameState.gameOver && (
-        <>
-          {controlSettings.showDpad && (
-            <VirtualDpad
-              onMove={handleManualMove}
-              onWait={handleManualWait}
-              side={controlSettings.dpadSide}
-              onToggleSide={() => setControlSetting('dpadSide', controlSettings.dpadSide === 'right' ? 'left' : 'right')}
-            />
-          )}
-          {isAdjacentToOpenDoor && !controlSettings.showContextButtons && (
+      {isMobile && !gameState.gameOver && (() => {
+        const contextRow = controlSettings.showContextButtons ? (
+          <div className="flex items-end gap-1.5">
+            {ctxSide === 'left' && (
+              <ContextActionButton
+                descriptor={mobileContextDescriptor}
+                onAct={() => doContextAction('explore')}
+                exploring={autoExplore && mobileContextDescriptor.kind === 'explore'}
+              />
+            )}
             <button
-              data-testid="mobile-close-door"
-              className="fixed left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-2 rounded-xl bg-black/60 backdrop-blur-sm border border-white/20 text-white/90 font-bold shadow-2xl transition-transform duration-75 active:scale-90 select-none touch-none"
-              style={{ bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))', fontSize: '1rem' }}
-              onPointerDown={e => { e.preventDefault(); handleCloseDoor(); }}
-              aria-label="Close door"
-              title="Close door (c)"
+              data-testid="actions-menu-button"
+              onPointerDown={e => { e.preventDefault(); e.stopPropagation(); setActionsMenuOpen(true); }}
+              className="flex flex-col items-center justify-center rounded-xl bg-slate-700/50 border border-slate-300/30 text-white shadow-2xl select-none touch-none transition-transform duration-75 active:scale-90"
+              style={{ width: 48, height: 56 }}
+              aria-label="Expanded actions"
+              title="Expanded actions"
             >
-              🚪 Close Door
+              <span className="grid grid-cols-2 gap-[2px] w-3.5 h-3.5" aria-hidden>
+                <span className="block rounded-[1px] bg-white/85" />
+                <span className="block rounded-[1px] bg-white/85" />
+                <span className="block rounded-[1px] bg-white/85" />
+                <span className="block rounded-[1px] bg-white/85" />
+              </span>
+              <span className="text-[8px] font-bold mt-0.5">Act</span>
             </button>
-          )}
-          {(controlSettings.showContextButtons || controlSettings.showAbilityButtons) && (() => {
-            const actionSide: 'left' | 'right' = controlSettings.dpadSide === 'right' ? 'left' : 'right';
-            return (
+            {ctxSide === 'right' && (
+              <ContextActionButton
+                descriptor={mobileContextDescriptor}
+                onAct={() => doContextAction('explore')}
+                exploring={autoExplore && mobileContextDescriptor.kind === 'explore'}
+              />
+            )}
+          </div>
+        ) : null;
+
+        const abilityStack = controlSettings.showAbilityButtons
+          ? <AbilityButtons abilities={mobileAbilities} align={oneHanded ? thumbSide : ctxSide} />
+          : null;
+
+        const dpad = controlSettings.showDpad ? (
+          <VirtualDpad
+            onMove={handleManualMove}
+            onWait={handleManualWait}
+            side={thumbSide}
+            onToggleSide={() => setControlSetting('dpadSide', thumbSide === 'right' ? 'left' : 'right')}
+            anchored={!oneHanded}
+            oneHanded={oneHanded}
+          />
+        ) : null;
+
+        const closeDoor = isAdjacentToOpenDoor && !controlSettings.showContextButtons ? (
+          <button
+            data-testid="mobile-close-door"
+            className={`z-40 flex items-center gap-2 px-3 py-2 rounded-xl bg-black/60 backdrop-blur-sm border border-white/20 text-white/90 font-bold shadow-2xl transition-transform duration-75 active:scale-90 select-none touch-none ${oneHanded ? '' : 'fixed left-1/2 -translate-x-1/2'}`}
+            style={oneHanded ? { fontSize: '1rem' } : { bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))', fontSize: '1rem' }}
+            onPointerDown={e => { e.preventDefault(); handleCloseDoor(); }}
+            aria-label="Close door"
+            title="Close door (c)"
+          >
+            🚪 Close Door
+          </button>
+        ) : null;
+
+        if (oneHanded) {
+          return (
+            <div
+              className={`fixed z-40 flex flex-col gap-1.5 ${thumbSide === 'right' ? 'right-2 items-end' : 'left-2 items-start'}`}
+              style={{
+                bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))',
+                ...(thumbSide === 'right'
+                  ? { paddingRight: 'env(safe-area-inset-right, 0px)' }
+                  : { paddingLeft: 'env(safe-area-inset-left, 0px)' }),
+              }}
+            >
+              {abilityStack}
+              {contextRow}
+              {closeDoor}
+              {dpad}
+            </div>
+          );
+        }
+
+        return (
+          <>
+            {dpad}
+            {closeDoor}
+            {(controlSettings.showContextButtons || controlSettings.showAbilityButtons) && (
               <div
-                className={`fixed z-40 flex flex-col gap-1.5 ${actionSide === 'right' ? 'right-2 items-end' : 'left-2 items-start'}`}
+                className={`fixed z-40 flex flex-col gap-1.5 ${ctxSide === 'right' ? 'right-2 items-end' : 'left-2 items-start'}`}
                 style={{
                   bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))',
-                  ...(actionSide === 'right'
+                  ...(ctxSide === 'right'
                     ? { paddingRight: 'env(safe-area-inset-right, 0px)' }
                     : { paddingLeft: 'env(safe-area-inset-left, 0px)' }),
                 }}
               >
-                {controlSettings.showAbilityButtons && <AbilityButtons abilities={mobileAbilities} align={actionSide} />}
-                {controlSettings.showContextButtons && (
-                  <div className="flex items-end gap-1.5">
-                    {actionSide === 'left' && (
-                      <ContextActionButton
-                        descriptor={mobileContextDescriptor}
-                        onAct={() => doContextAction('explore')}
-                        exploring={autoExplore && mobileContextDescriptor.kind === 'explore'}
-                      />
-                    )}
-                    <button
-                      data-testid="actions-menu-button"
-                      onPointerDown={e => { e.preventDefault(); e.stopPropagation(); setActionsMenuOpen(true); }}
-                      className="flex flex-col items-center justify-center rounded-xl bg-slate-700/50 border border-slate-300/30 text-white shadow-2xl select-none touch-none transition-transform duration-75 active:scale-90"
-                      style={{ width: 48, height: 56 }}
-                      aria-label="All actions"
-                      title="All actions"
-                    >
-                      <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>☰</span>
-                      <span className="text-[8px] font-bold mt-0.5">Menu</span>
-                    </button>
-                    {actionSide === 'right' && (
-                      <ContextActionButton
-                        descriptor={mobileContextDescriptor}
-                        onAct={() => doContextAction('explore')}
-                        exploring={autoExplore && mobileContextDescriptor.kind === 'explore'}
-                      />
-                    )}
-                  </div>
-                )}
+                {abilityStack}
+                {contextRow}
               </div>
-            );
-          })()}
-        </>
-      )}
+            )}
+          </>
+        );
+      })()}
 
       {/* Actions menu sheet — touch/mobile only */}
       {actionsMenuOpen && !gameState.gameOver && (
@@ -3157,5 +3243,6 @@ export default function Game() {
         </div>
       )}
     </div>
+    </MobileHandContext.Provider>
   );
 }

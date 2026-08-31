@@ -146,6 +146,13 @@ export function getRandomEmojiPower(): Omit<EmojiItem, 'id' | 'consumed'> {
   return EMOJI_POWERS[Math.floor(Math.random() * EMOJI_POWERS.length)];
 }
 
+export function getEmojiPowerByEmoji(emoji: string): Omit<EmojiItem, 'id' | 'consumed'> {
+  const found = EMOJI_POWERS.find(e => e.emoji === emoji);
+  return found ? { ...found } : getRandomEmojiPower();
+}
+
+export const VOLCANO_VALUABLE_EMOJIS = ['💀', '🗡️', '⛵'] as const;
+
 // ── Tier 1: floors 1–9 ────────────────────────────────────────────────────
 export const EQUIPMENT_DROPS_T1: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   // Staves & Wands (Wizard mainHand)

@@ -1,7 +1,7 @@
 import { Enemy, EmojiItem, MapGrid, Position } from './types';
 import type { Room } from './geo';
-import { getRandomEnemy, getForestEnemy, getBossForFloor, getEchoEnemy, getRandomAdventurer, adventurerSpawnChance, ADVENTURER_FAVORITE_EMOJIS } from './enemies';
-import { getRandomEmojiPower, getBulletDrop, getRandomEquipmentDrop } from './emojis';
+import { getRandomEnemy, getForestEnemy, getBossForFloor, getEchoEnemy, getRandomAdventurer, adventurerSpawnChance, ADVENTURER_FAVORITE_EMOJIS, rollAmbushCount, getAmbushRangedType } from './enemies';
+import { getRandomEmojiPower, getBulletDrop, getRandomEquipmentDrop, getEmojiPowerByEmoji, VOLCANO_VALUABLE_EMOJIS } from './emojis';
 import { getDungeonPressure } from './progression';
 
 function floorScale<T extends { hp: number; attack: number; defense: number }>(type: T, floor: number): T {
@@ -43,7 +43,44 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
   for (let i = 1; i < rooms.length; i++) {
     const room = rooms[i];
     if (room.theme === 'shop' || room.theme === 'market' || room.theme === 'restaurant') continue;
-    if (room.theme === 'treasure-vault') continue;
+    if (room.theme === 'treasure-vault' || room.theme === 'volcano') continue;
+    if (room.theme === 'bush-ambush') {
+      const n = rollAmbushCount();
+      const cover: Position[] = [];
+      const open: Position[] = [];
+      for (let ry = room.y + 1; ry < room.y + room.h - 1; ry++) {
+        for (let rx = room.x + 1; rx < room.x + room.w - 1; rx++) {
+          if (map && map[ry][rx].type !== 'floor') continue;
+          if (!map) { open.push({ x: rx, y: ry }); continue; }
+          const nearBush = [-1, 0, 1].some(dy =>
+            [-1, 0, 1].some(dx => (dx || dy) && map[ry + dy]?.[rx + dx]?.type === 'bush')
+          );
+          (nearBush ? cover : open).push({ x: rx, y: ry });
+        }
+      }
+      const spots = [
+        ...cover.sort(() => Math.random() - 0.5),
+        ...open.sort(() => Math.random() - 0.5),
+      ];
+      for (let j = 0; j < n && j < spots.length; j++) {
+        const pos = spots[j];
+        const rawType = getAmbushRangedType();
+        const base = scaleEnemy(floorScale(rawType, floor), difficultyTier);
+        const type = pressure.atk > 0
+          ? { ...base, attack: base.attack + pressure.atk, defense: base.defense + pressure.def }
+          : base;
+        enemies.push({
+          ...type,
+          ranged: true,
+          id: `ambush-${i}-${j}-${Math.random()}`,
+          pos,
+          maxHp: type.hp,
+          engaged: false,
+          spawnRoomBounds: { x: room.x, y: room.y, w: room.w, h: room.h },
+        });
+      }
+      continue;
+    }
     if (room.theme === 'boss') {
       const rawBoss = getBossForFloor(floor);
       const bossBase = scaleBoss(floorScale(rawBoss, floor), difficultyTier);
@@ -162,26 +199,55 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
   return enemies;
 }
 
-export function spawnVaultItems(rooms: Room[], playerClass?: string, floor = 1): (EmojiItem & { pos: Position })[] {
+export function spawnVaultItems(rooms: Room[], playerClass?: string, floor = 1, map?: MapGrid): (EmojiItem & { pos: Position })[] {
   const items: (EmojiItem & { pos: Position })[] = [];
   for (const room of rooms) {
-    if (room.theme !== 'treasure-vault') continue;
-    const cx = room.x + Math.floor(room.w / 2);
-    const cy = room.y + Math.floor(room.h / 2);
-    const count = 2 + Math.floor(Math.random() * 2);
+    if (room.theme === 'treasure-vault') {
+      const cx = room.x + Math.floor(room.w / 2);
+      const cy = room.y + Math.floor(room.h / 2);
+      const count = 2 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < count; i++) {
+        let drop: Omit<EmojiItem, 'id' | 'consumed'>;
+        if (playerClass === '🤠' && Math.random() < 0.13) {
+          drop = getBulletDrop();
+        } else {
+          drop = Math.random() < 0.45 ? getRandomEquipmentDrop(floor) : getRandomEmojiPower();
+        }
+        const ox = i - Math.floor(count / 2);
+        items.push({
+          ...drop,
+          id: `vault-${room.x}-${room.y}-${i}-${Math.random()}`,
+          consumed: false,
+          pos: { x: cx + ox, y: cy },
+        });
+      }
+      continue;
+    }
+
+    if (room.theme !== 'volcano') continue;
+    const lootFloor = floor + 5 + Math.floor(Math.random() * 6);
+    const spots: Position[] = [];
+    for (let ry = room.y; ry < room.y + room.h; ry++) {
+      for (let rx = room.x; rx < room.x + room.w; rx++) {
+        const t = map?.[ry]?.[rx]?.type ?? 'floor';
+        if (t === 'floor' || t === 'grass') spots.push({ x: rx, y: ry });
+      }
+    }
+    const shuffled = spots.sort(() => Math.random() - 0.5);
+    const count = Math.min(shuffled.length, 3 + Math.floor(Math.random() * 3));
     for (let i = 0; i < count; i++) {
       let drop: Omit<EmojiItem, 'id' | 'consumed'>;
-      if (playerClass === '🤠' && Math.random() < 0.13) {
-        drop = getBulletDrop();
+      if (i === 0 || Math.random() < 0.45) {
+        const emoji = VOLCANO_VALUABLE_EMOJIS[Math.floor(Math.random() * VOLCANO_VALUABLE_EMOJIS.length)];
+        drop = getEmojiPowerByEmoji(emoji);
       } else {
-        drop = Math.random() < 0.45 ? getRandomEquipmentDrop(floor) : getRandomEmojiPower();
+        drop = getRandomEquipmentDrop(lootFloor);
       }
-      const ox = i - Math.floor(count / 2);
       items.push({
         ...drop,
-        id: `vault-${room.x}-${room.y}-${i}-${Math.random()}`,
+        id: `volcano-${room.x}-${room.y}-${i}-${Math.random()}`,
         consumed: false,
-        pos: { x: cx + ox, y: cy },
+        pos: shuffled[i],
       });
     }
   }

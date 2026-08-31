@@ -110,7 +110,7 @@ export function hasLOS(map: GameState['map'], from: Position, dx: number, dy: nu
     const tx = from.x + dx * n;
     const ty = from.y + dy * n;
     if (ty < 0 || ty >= map.length || tx < 0 || tx >= map[0].length) return false;
-    if (map[ty][tx].type === 'wall') return false;
+    if (map[ty][tx].type === 'wall' || map[ty][tx].type === 'volcano') return false;
   }
   return true;
 }
@@ -123,7 +123,7 @@ export function hasLOSBetween(map: GameState['map'], from: Position, to: Positio
     const tx = Math.round(from.x + (dx * n) / steps);
     const ty = Math.round(from.y + (dy * n) / steps);
     if (ty < 0 || ty >= map.length || tx < 0 || tx >= map[0].length) return false;
-    if (map[ty][tx].type === 'wall') return false;
+    if (map[ty][tx].type === 'wall' || map[ty][tx].type === 'volcano') return false;
   }
   return true;
 }

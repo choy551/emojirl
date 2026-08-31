@@ -2,6 +2,8 @@ import { Player, GameState, BagPassiveSummary } from '../../game/types';
 import { applyEquipmentAndPassives, computeNinjaEvasion, getDungeonPressure } from '../../game/gameHelpers';
 import { getCowboyUnarmedBonus } from '../../game/combat';
 import { MiniMap } from '../MiniMap';
+import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './oneHandedLayout';
+import { useDismissGuard } from '../../hooks/useDismissGuard';
 
 interface StatsModalProps {
   player: Player;
@@ -40,16 +42,21 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
   const hpColor = overheal ? '#f59e0b' : hpPct > 60 ? '#22c55e' : hpPct > 30 ? '#f59e0b' : '#ef4444';
   const mana = player.stats.mana ?? 0;
   const maxMana = player.stats.maxMana ?? 4;
+  const hand = useMobileHand();
+  const dismiss = useDismissGuard(onClose);
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-start justify-center bg-black/70 backdrop-blur-sm overflow-y-auto"
+      className={`fixed inset-0 z-[60] flex bg-black/70 backdrop-blur-sm overflow-y-auto ${hand ? overlayFlexClass(hand) : 'items-start justify-center'}`}
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-      onClick={onClose}
+      onClick={dismiss}
+      onPointerDown={dismiss}
     >
       <div
-        className="bg-card border border-border rounded-2xl shadow-2xl w-[92vw] max-w-md my-4 p-3 flex flex-col gap-3"
+        className={`bg-card border border-border shadow-2xl p-3 flex flex-col gap-3 ${hand ? overlayPanelClass(hand) : 'rounded-2xl w-[92vw] max-w-md my-4'}`}
+        style={overlayPanelStyle(hand)}
         onClick={e => e.stopPropagation()}
+        onPointerDown={e => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-border/50 pb-3">
           <span className="text-3xl">{player.emoji}</span>
