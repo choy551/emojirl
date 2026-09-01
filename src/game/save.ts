@@ -117,6 +117,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     ninjaFreeMoves:           raw.ninjaFreeMoves             as number | undefined,
     highestPressureTierWarned: (raw.highestPressureTierWarned as number)                 ?? 0,
     floorAnnouncement:        (raw.floorAnnouncement as GameState['floorAnnouncement']) ?? null,
+    volcanoNextSpewTurn:      raw.volcanoNextSpewTurn as number | undefined,
   };
 }
 

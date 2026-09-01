@@ -397,7 +397,7 @@ export default function HowToPlay({
             { icon: "📦", label: "Ammo Cache", desc: "Special shop tile (📦). Re-interact (z/Enter/Space on the tile) for class-specific ammo resupply before bosses." },
             { icon: "🌊", label: "Water", desc: "Rivers, ponds, and lakes. You cannot walk on water without a ⛵ Boat. Mermen lurk here." },
             { icon: "🌿", label: "Bush", desc: "Blocks movement like a wall, but you can see and shoot through it. Ranged enemies (archers, dark mages) like to hide behind these." },
-            { icon: "🌋", label: "Volcano", desc: "A rare vault. Spews lava every turn. Grab the high-tier loot around it before the lava eats it — and don't stand in the fire." },
+            { icon: "🌋", label: "Volcano", desc: "A rare vault. Spews lava every 5–10 turns. Grab the high-tier loot around it before the lava eats it — and don't stand in the fire." },
             { icon: "🔥", label: "Lava", desc: "Extreme heat: each turn standing in lava deals 50% of your max HP plus a flat amount (starts at +10, +5 per floor descended). Destroys items on the tile. Volcanoes and lava rivers both use this." },
           ].map((t) => (
             <div
@@ -414,7 +414,7 @@ export default function HowToPlay({
         </div>
 
         <div className="mt-3 text-xs text-muted-foreground">
-          <strong>Dungeon Pressure:</strong> Increases on deeper floors — nearby enemies get permanent stat bonuses (watch for on-screen warnings). <strong>Vaults &amp; special rooms:</strong> Use rope (from hotbar or tactics) to safely enter. Treasure vaults offer big rewards (risk of traps); monster dens are extra dangerous. Bush ambushes hide 1–5 ranged attackers behind 🌿 hedges. Volcano vaults pause the screen with a warning, then spew spreading lava that burns loot (Skull, Dagger, Boat, and deep-tier gear). Autoexplore stops at shops, restaurants, and bars.
+          <strong>Dungeon Pressure:</strong> Increases on deeper floors — nearby enemies get permanent stat bonuses (watch for on-screen warnings). <strong>Vaults &amp; special rooms:</strong> Use rope (from hotbar or tactics) to safely enter. Treasure vaults offer big rewards (risk of traps); monster dens are extra dangerous. Bush ambushes hide 1–5 ranged attackers behind 🌿 hedges. Volcano vaults pause the screen with a warning, then spew spreading lava every 5–10 turns that burns loot (Skull, Dagger, Boat, and deep-tier gear). Autoexplore stops at shops, restaurants, and bars.
         </div>
       </Section>
 

@@ -262,6 +262,8 @@ export interface GameState {
   highestPressureTierWarned: number;
   /** DCSS-style full-screen floor announcement (volcano, etc.). Cleared when dismissed. */
   floorAnnouncement?: { kind: 'volcano'; title: string; body: string } | null;
+  /** Turn number when a floor volcano next spews lava (every 5–10 turns). */
+  volcanoNextSpewTurn?: number;
 }
 
 export interface ControlSettings {

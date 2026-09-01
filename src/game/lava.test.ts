@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { EmojiItem, GameState, MapGrid, Player, Tile } from './types';
 import {
   lavaFlatDamage, lavaDamageForFloor, spreadVolcanoLava, tickVolcanoAndLava,
-  LAVA_EMOJI, VOLCANO_EMOJI,
+  volcanoSpewInterval, LAVA_EMOJI, VOLCANO_EMOJI,
 } from './lava';
 
 function tile(type: Tile['type'], emoji: string): Tile {
@@ -143,5 +143,52 @@ describe('tickVolcanoAndLava', () => {
     const next = tickVolcanoAndLava(baseState(map, { player: playerAt(1, 1, 20, 20) }));
     expect(next.player.stats.hp).toBe(20);
     expect(next.gameOver).toBe(false);
+  });
+
+  it('does not spew lava every turn — waits 5–10 turns between eruptions', () => {
+    const map = grid([
+      '#####',
+      '#.V.#',
+      '#...#',
+      '#####',
+    ]);
+    const floorCount = (m: MapGrid) => m.flat().filter(t => t.type === 'floor').length;
+
+    const scheduled = tickVolcanoAndLava(baseState(map, {
+      player: playerAt(1, 1),
+      turn: 3,
+    }));
+    expect(floorCount(scheduled.map)).toBe(floorCount(map));
+    expect(scheduled.volcanoNextSpewTurn).toBeGreaterThanOrEqual(8);
+    expect(scheduled.volcanoNextSpewTurn).toBeLessThanOrEqual(13);
+    expect(scheduled.logs.some(l => l.text.includes('spews'))).toBe(false);
+
+    const quiet = tickVolcanoAndLava(baseState(map, {
+      player: playerAt(1, 1),
+      turn: 4,
+      volcanoNextSpewTurn: 10,
+    }));
+    expect(floorCount(quiet.map)).toBe(floorCount(map));
+    expect(quiet.volcanoNextSpewTurn).toBe(10);
+
+    const erupted = tickVolcanoAndLava(baseState(map, {
+      player: playerAt(1, 1),
+      turn: 10,
+      volcanoNextSpewTurn: 10,
+    }));
+    expect(floorCount(erupted.map)).toBeLessThan(floorCount(map));
+    expect(erupted.volcanoNextSpewTurn).toBeGreaterThanOrEqual(15);
+    expect(erupted.volcanoNextSpewTurn).toBeLessThanOrEqual(20);
+    expect(erupted.logs.some(l => l.text.includes('spews'))).toBe(true);
+  });
+});
+
+describe('volcanoSpewInterval', () => {
+  it('is always 5–10 inclusive', () => {
+    for (let i = 0; i < 40; i++) {
+      const n = volcanoSpewInterval();
+      expect(n).toBeGreaterThanOrEqual(5);
+      expect(n).toBeLessThanOrEqual(10);
+    }
   });
 });

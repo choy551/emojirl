@@ -109,6 +109,11 @@ export function volcanoSpewCount(floor: number): number {
   return n;
 }
 
+/** Inclusive 5–10 turns until the next eruption. */
+export function volcanoSpewInterval(): number {
+  return 5 + Math.floor(Math.random() * 6);
+}
+
 function lavaOn(map: MapGrid, pos: Position): boolean {
   return map[pos.y]?.[pos.x]?.type === 'lava';
 }
@@ -125,15 +130,24 @@ export function tickVolcanoAndLava(state: GameState): GameState {
   const turn = state.turn;
 
   const volcano = findVolcano(map);
-  if (volcano) {
-    const { map: nextMap, converted } = spreadVolcanoLava(map, volcano, volcanoSpewCount(state.currentFloor));
-    map = nextMap;
-    if (converted.length > 0) {
-      logs.push({
-        id: `volcano-spew-${turn}-${Math.random()}`,
-        text: `🌋 The volcano spews fresh lava!`,
-        turn,
-      });
+  let volcanoNextSpewTurn = state.volcanoNextSpewTurn;
+  if (!volcano) {
+    volcanoNextSpewTurn = undefined;
+  } else {
+    if (volcanoNextSpewTurn === undefined) {
+      volcanoNextSpewTurn = turn + volcanoSpewInterval();
+    }
+    if (turn >= volcanoNextSpewTurn) {
+      const { map: nextMap, converted } = spreadVolcanoLava(map, volcano, volcanoSpewCount(state.currentFloor));
+      map = nextMap;
+      volcanoNextSpewTurn = turn + volcanoSpewInterval();
+      if (converted.length > 0) {
+        logs.push({
+          id: `volcano-spew-${turn}-${Math.random()}`,
+          text: `🌋 The volcano spews fresh lava!`,
+          turn,
+        });
+      }
     }
   }
 
@@ -201,12 +215,20 @@ export function tickVolcanoAndLava(state: GameState): GameState {
     if (playerHp <= 0) playerDied = true;
   }
 
-  if (logs.length === 0 && items.length === state.items.length && map === state.map && !playerDied && enemies.length === state.enemies.length) {
+  if (
+    logs.length === 0 &&
+    items.length === state.items.length &&
+    map === state.map &&
+    !playerDied &&
+    enemies.length === state.enemies.length &&
+    volcanoNextSpewTurn === state.volcanoNextSpewTurn
+  ) {
     return state;
   }
 
   return {
     ...state,
+    volcanoNextSpewTurn,
     map,
     items,
     enemies,
