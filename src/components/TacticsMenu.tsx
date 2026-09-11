@@ -1,6 +1,7 @@
 import { GameState, Player } from '../game/types';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
 import { useDismissGuard } from '../hooks/useDismissGuard';
+import { CloseHintButton } from './CloseHintButton';
 
 type WizardMode = 'nearest' | 'furthest' | 'manual' | 'holdfire';
 type RangerMode = 'ranged' | 'melee' | 'flee';
@@ -180,9 +181,9 @@ export function TacticsMenu({
           );
         })()}
 
-        <div className="mt-4 pt-3 border-t border-border/50 text-xs text-muted-foreground text-center">
+        <CloseHintButton onClose={dismiss}>
           press number to select · ESC or T to close
-        </div>
+        </CloseHintButton>
       </div>
     </div>
   );

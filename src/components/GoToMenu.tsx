@@ -1,5 +1,6 @@
 import { GotoDestination } from '../game/goto';
 import { useDismissGuard } from '../hooks/useDismissGuard';
+import { CloseHintButton } from './CloseHintButton';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
 
 interface GoToMenuProps {
@@ -58,9 +59,9 @@ export function GoToMenu({ floor, destinations, onPick, onClose }: GoToMenuProps
           </div>
         )}
 
-        <p className="text-[10px] text-muted-foreground/40 text-center mt-3">
+        <CloseHintButton onClose={dismiss} className="mt-3 pt-0 border-t-0 text-[10px] text-muted-foreground/40">
           1–9 / a–z select · Esc or G close
-        </p>
+        </CloseHintButton>
       </div>
     </div>
   );

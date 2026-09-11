@@ -1,6 +1,7 @@
 import { GameState, EmojiItem } from '../game/types';
 import { getItemBuyPrice, addToBag } from '../game/gameHelpers';
 import { useDismissGuard } from '../hooks/useDismissGuard';
+import { CloseHintButton } from './CloseHintButton';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
 
 interface AmmoCacheModalProps {
@@ -38,7 +39,7 @@ export function AmmoCacheModal({ gameState, setGameState, ammoCacheItems, setAmm
               <span className="text-base leading-none">💰</span>
               <span className="text-sm font-bold text-yellow-300 tabular-nums">{gameState.player.stats.gold}g</span>
             </div>
-            <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded">ESC</button>
+            <button onClick={dismiss} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded">ESC</button>
           </div>
         </div>
 
@@ -88,9 +89,7 @@ export function AmmoCacheModal({ gameState, setGameState, ammoCacheItems, setAmm
           })}
         </div>
 
-        <div className="mt-4 pt-3 border-t border-border/50 text-xs text-muted-foreground text-center">
-          Esc or B to close
-        </div>
+        <CloseHintButton onClose={dismiss} />
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { generateMap } from '../game/mapgen';
 import { Player, Enemy, EmojiItem, GameState, Position, EquipSlot } from '../game/types';
 import { getCowboyUnarmedBonus, isHostileCombatTarget } from '../game/combat';
@@ -12,6 +12,7 @@ import { saveGame, loadGame, clearSave, getRawSave } from '../game/save';
 import { isStackableBagPassive } from '../game/passives';
 import { useIsMobile } from '../hooks/use-mobile';
 import { useDismissGuard } from '../hooks/useDismissGuard';
+import { CloseHintButton } from '../components/CloseHintButton';
 import { useControlSettings } from '../hooks/useControlSettings';
 import { closeTopOverlay, useAndroidBackButton } from '../hooks/useAndroidBackButton';
 import { useTouchGestures } from '../hooks/useTouchGestures';
@@ -54,6 +55,17 @@ import {
 } from '../game/gameHelpers';
 import { useGameActions } from '../hooks/useGameActions';
 
+
+function DismissScope({
+  onClose,
+  children,
+}: {
+  onClose: () => void;
+  children: (dismiss: () => void) => ReactNode;
+}) {
+  const dismiss = useDismissGuard(onClose);
+  return <>{children(dismiss)}</>;
+}
 
 function FloorAnnouncementOverlay({
   announcement,
@@ -2782,9 +2794,11 @@ export default function Game() {
 
       {/* ── Pause Menu ───────────────────────────────────────────────────── */}
       {pauseMenuOpen && (
+        <DismissScope onClose={() => setPauseMenuOpen(false)}>
+          {dismissPause => (
         <div
           className={`fixed inset-0 z-50 flex bg-black/70 backdrop-blur-sm ${overlayFlexClass(hand)}`}
-          onClick={() => setPauseMenuOpen(false)}
+          onClick={dismissPause}
         >
           <div
             className={`bg-card border border-border shadow-2xl w-72 flex flex-col overflow-hidden ${hand ? overlayPanelClass(hand) : 'rounded-2xl'}`}
@@ -2798,7 +2812,7 @@ export default function Game() {
             </div>
             <div className="flex flex-col gap-2 p-4">
               <button
-                onClick={() => setPauseMenuOpen(false)}
+                onClick={dismissPause}
                 className="w-full py-2.5 px-4 rounded-lg bg-primary text-primary-foreground font-bold text-sm hover:opacity-90 active:scale-95 transition-all"
               >
                 ▶ Resume
@@ -2822,9 +2836,13 @@ export default function Game() {
                 💾 Save &amp; Exit
               </button>
             </div>
-            <p className="text-center text-[10px] text-muted-foreground/30 pb-3">ESC to resume</p>
+            <CloseHintButton onClose={dismissPause} className="mt-0 pt-0 border-t-0 pb-3 text-[10px] text-muted-foreground/30">
+              ESC to resume
+            </CloseHintButton>
           </div>
         </div>
+          )}
+        </DismissScope>
       )}
 
       {optionsOpen && (
@@ -3049,9 +3067,11 @@ export default function Game() {
 
       {/* Bank / Bag Modal */}
       {bankOpen && (
+        <DismissScope onClose={() => { setBankOpen(false); setSelectedItemId(null); }}>
+          {dismissBag => (
         <div
           className={`fixed inset-0 z-50 flex bg-black/60 backdrop-blur-sm ${overlayFlexClass(hand)}`}
-          onClick={() => { setBankOpen(false); setSelectedItemId(null); }}
+          onClick={dismissBag}
         >
           <div
             className={`bg-card border border-border p-5 shadow-2xl w-80 max-h-[90vh] overflow-y-auto ${hand ? overlayPanelClass(hand) : 'rounded-xl'}`}
@@ -3060,7 +3080,7 @@ export default function Game() {
           >
             <div className="flex justify-between items-center mb-3">
               <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">🎒 Bag</h2>
-              <button onClick={() => { setBankOpen(false); setSelectedItemId(null); }} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded">ESC</button>
+              <button onClick={dismissBag} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded">ESC</button>
             </div>
 
             {/* Tab bar */}
@@ -3121,10 +3141,14 @@ export default function Game() {
               {bagTab === 'hotbar' && <><div>arrows/WASD/numpad navigate · Enter select · 1–9 quick-assign</div><div>select item then navigate to slot + Enter to swap</div></>}
               {bagTab === 'equipment' && <div>arrows/WASD/numpad navigate · Enter to auto-equip selected gear</div>}
               {bagTab === 'bank' && <div>click to select · Pull to Hotbar or ✨ Consume from action panel · 1–9 to assign slot</div>}
-              <div className="text-muted-foreground/50">Tab/⇧Tab switch tabs · Space/Enter confirm · Shift/Esc cancel · B close</div>
+              <CloseHintButton onClose={dismissBag} className="mt-0 pt-0 border-t-0 text-muted-foreground/50">
+                Tab/⇧Tab switch tabs · Space/Enter confirm · Shift/Esc cancel · B close
+              </CloseHintButton>
             </div>
           </div>
         </div>
+          )}
+        </DismissScope>
       )}
 
       {/* Virtual D-pad — touch/mobile only */}
