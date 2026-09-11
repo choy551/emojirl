@@ -438,7 +438,7 @@ export default function HowToPlay({
               icon: "💎",
               label: "Treasure Vault",
               log: "💎 You sense hidden treasure surrounded by water...",
-              desc: "A water-moated island of loot. Big rewards, risk of traps. (Rope 🪢 also opens a dimensional treasure vault anywhere on the floor.)",
+              desc: "A water-moated island of loot. Big rewards, but you need a way to reach the treasure (⛵, 🧲, etc).",
             },
             {
               icon: "🦴",
