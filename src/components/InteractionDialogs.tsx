@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { GameState, Enemy, EmojiItem } from '../game/types';
 import { restoreStolenEmojis, stolenEmojiSummary } from '../game/gameHelpers';
+import { useDialogHotkeys } from '../hooks/useDialogHotkeys';
 
 type SetGameState = React.Dispatch<React.SetStateAction<GameState | null>>;
 
@@ -56,6 +57,8 @@ export function MonkeyInteractionDialog({ gameState, setGameState, interaction, 
     onClose();
   };
 
+  useDialogHotkeys(handleGive, onClose, playerHasIt);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-card border border-amber-400/40 rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
@@ -82,7 +85,7 @@ export function MonkeyInteractionDialog({ gameState, setGameState, interaction, 
             disabled={!playerHasIt}
           >
             {playerHasIt
-              ? `Give ${wants} — get your emojis back`
+              ? `Give ${wants} — get your emojis back ⏎`
               : `Give ${wants} — you don't have one`}
           </button>
           <button
@@ -95,7 +98,7 @@ export function MonkeyInteractionDialog({ gameState, setGameState, interaction, 
             className="w-full py-2.5 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-sm font-semibold hover:bg-slate-500/30 transition-colors"
             onClick={onClose}
           >
-            Back away slowly 🤫
+            Back away slowly 🤫 Esc
           </button>
         </div>
       </div>
@@ -125,6 +128,7 @@ export function FairyInteractionDialog({ gameState, setGameState, fairyId, onClo
     });
     onClose();
   };
+  useDialogHotkeys(handleYes, onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-card border border-pink-400/40 rounded-xl p-6 shadow-2xl max-w-xs w-full mx-4">
@@ -140,13 +144,13 @@ export function FairyInteractionDialog({ gameState, setGameState, fairyId, onClo
             className="flex-1 py-2.5 rounded-lg bg-pink-500/20 border border-pink-400/40 text-pink-200 text-sm font-semibold hover:bg-pink-500/35 transition-colors"
             onClick={handleYes}
           >
-            Yes please 💗
+            Yes please 💗 ⏎
           </button>
           <button
             className="flex-1 py-2.5 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-sm font-semibold hover:bg-slate-500/30 transition-colors"
             onClick={onClose}
           >
-            No thanks 🤚
+            No thanks 🤚 Esc
           </button>
         </div>
       </div>
@@ -239,6 +243,12 @@ export function AdventurerInteractionDialog({ gameState, setGameState, adventure
     onClose();
   };
 
+  useDialogHotkeys(
+    isAlreadyFriendly ? handleAcceptFriendly : handleGive,
+    onClose,
+    isAlreadyFriendly || playerHasIt,
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className={`bg-card border ${borderColor} rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4`}>
@@ -255,7 +265,7 @@ export function AdventurerInteractionDialog({ gameState, setGameState, adventure
               className="w-full py-2.5 rounded-lg border bg-cyan-500/20 border-cyan-400/40 text-cyan-200 hover:bg-cyan-500/30 text-sm font-semibold transition-colors"
               onClick={handleAcceptFriendly}
             >
-              Accept companion 🤝
+              Accept companion 🤝 ⏎
             </button>
           ) : (
             <button
@@ -268,7 +278,7 @@ export function AdventurerInteractionDialog({ gameState, setGameState, adventure
               disabled={!playerHasIt}
             >
               {playerHasIt
-                ? `Recruit — give ${fav} 🤝`
+                ? `Recruit — give ${fav} 🤝 ⏎`
                 : `Recruit — need ${fav} (you don't have one)`}
             </button>
           )}
@@ -276,7 +286,7 @@ export function AdventurerInteractionDialog({ gameState, setGameState, adventure
             className="w-full py-2.5 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-sm font-semibold hover:bg-slate-500/30 transition-colors"
             onClick={onClose}
           >
-            Exit dialogue 👋
+            Exit dialogue 👋 Esc
           </button>
         </div>
       </div>
@@ -318,6 +328,7 @@ function soulEmojiStatPreview(item: EmojiItem): string {
 
 export function CompanionTalkDialog({ gameState, setGameState, companionId, onClose }: CompanionTalkProps) {
   const [section, setSection] = useState<TalkSection>('main');
+  useDialogHotkeys(undefined, onClose, false);
 
   const companion = gameState.enemies.find(e => e.id === companionId);
   if (!companion) return null;
@@ -763,6 +774,8 @@ export function BearInteractionDialog({ gameState, setGameState, bearId, stage, 
     onClose();
   };
 
+  useDialogHotkeys(handleFeed, onClose, !!offerItem);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-card border border-amber-700/50 rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
@@ -794,7 +807,7 @@ export function BearInteractionDialog({ gameState, setGameState, bearId, stage, 
             disabled={!offerItem}
           >
             {offerItem
-              ? `${stage === 'neutral' ? 'Feed' : 'Offer'} ${offerItem.emoji} ${offerItem.name}`
+              ? `${stage === 'neutral' ? 'Feed' : 'Offer'} ${offerItem.emoji} ${offerItem.name} ⏎`
               : 'No food in inventory'}
           </button>
           {stage === 'neutral' && (
@@ -809,7 +822,7 @@ export function BearInteractionDialog({ gameState, setGameState, bearId, stage, 
             className="w-full py-2.5 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-sm font-semibold hover:bg-slate-500/30 transition-colors"
             onClick={onClose}
           >
-            Back away slowly 🤫
+            Back away slowly 🤫 Esc
           </button>
         </div>
       </div>
@@ -823,6 +836,7 @@ interface BedRestDialogProps {
 }
 
 export function BedRestDialog({ onConfirm, onClose }: BedRestDialogProps) {
+  useDialogHotkeys(() => { onConfirm(); onClose(); }, onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-card border border-sky-400/40 rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
@@ -844,13 +858,13 @@ export function BedRestDialog({ onConfirm, onClose }: BedRestDialogProps) {
             className="w-full py-2.5 rounded-lg bg-sky-500/20 border border-sky-400/40 text-sky-100 text-sm font-semibold hover:bg-sky-500/35 transition-colors"
             onClick={() => { onConfirm(); onClose(); }}
           >
-            Sleep
+            Sleep ⏎
           </button>
           <button
             className="w-full py-2.5 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-sm font-semibold hover:bg-slate-500/30 transition-colors"
             onClick={onClose}
           >
-            Not now
+            Not now Esc
           </button>
         </div>
       </div>

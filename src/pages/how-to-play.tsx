@@ -348,7 +348,7 @@ export default function HowToPlay({
               <div className="flex items-center gap-2">
                 <Kbd>Esc</Kbd>
                 <span className="text-muted-foreground">
-                  — close menus, cancel modes (inspect, blink target, direction pick, etc.), or open pause menu
+                  — close menus, NPC dialogues, cancel modes (inspect, blink target, direction pick, etc.), or open pause menu. In a dialogue, Enter/Space confirms (recruit, heal, feed, rest).
                 </span>
               </div>
               <div className="flex items-center gap-2">

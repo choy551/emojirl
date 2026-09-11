@@ -287,8 +287,6 @@ export default function Game() {
   }, [gameState?.turn]);
 
   const [pendingFairyId, setPendingFairyId] = useState<string | null>(null);
-  const pendingFairyIdRef = useRef<string | null>(null);
-  useEffect(() => { pendingFairyIdRef.current = pendingFairyId; }, [pendingFairyId]);
   const [pendingMonkeyInteraction, setPendingMonkeyInteraction] = useState<{ id: string; wants: string } | null>(null);
   const [pendingAdventurerInteraction, setPendingAdventurerInteraction] = useState<string | null>(null);
   const [pendingBearInteraction, setPendingBearInteraction] = useState<{ id: string; stage: 'neutral' | 'friendly'; offerId: string | null } | null>(null);
@@ -1027,30 +1025,6 @@ export default function Game() {
 
       // ── Bank modal intercept ───────────────────────────────────────────────
       if (e.key === '/' || e.code === 'NumpadDivide') { e.preventDefault(); setLogOpen(v => !v); return; }
-
-      // ── Fairy healing dialogue intercept ──────────────────────────────────
-      if (pendingFairyIdRef.current) {
-        e.preventDefault();
-        if (e.key === 'Enter' || e.code === 'Space') {
-          const fairyId = pendingFairyIdRef.current;
-          const fairy = gameStateRef.current?.enemies.find(en => en.id === fairyId);
-          if (fairy) {
-            setGameState(prev => {
-              if (!prev) return prev;
-              return {
-                ...prev,
-                player: { ...prev.player, stats: { ...prev.player.stats, hp: prev.player.stats.maxHp } },
-                enemies: prev.enemies.filter(e => e.id !== fairyId),
-                logs: [{ id: Math.random().toString(), text: `🧚‍♀️ ${fairy.name} heals you to full HP! ✨`, turn: prev.turn }, ...prev.logs].slice(0, 24),
-              };
-            });
-          }
-          setPendingFairyId(null);
-        } else if (e.key === 'Escape' || e.key === 'Shift') {
-          setPendingFairyId(null);
-        }
-        return;
-      }
 
       // ── Shop modal intercept ───────────────────────────────────────────────
       if (shopOpenRef.current) {
