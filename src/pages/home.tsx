@@ -8,7 +8,7 @@ import { hasSave, clearSave } from "../game/save";
 
 const VESSELS = ["🧙", "🥷", "🧝", "🤠"] as const;
 const VESSEL_KEY = "emojirl_vessel";
-const ANNOUNCE_DISMISS_KEY = "emojirl_announce_dismissed_2026-07-21";
+const ANNOUNCE_DISMISS_KEY = "emojirl_announce_dismissed_2026-09-10";
 
 function loadVessel(): string {
   return localStorage.getItem(VESSEL_KEY) ?? "🧙";
@@ -53,8 +53,8 @@ export default function Home() {
           role="status"
           className="relative w-full shrink-0 px-4 py-3 pr-11 bg-amber-950/90 border-b border-amber-600/50 text-amber-100 text-sm leading-snug text-center"
         >
-          <span className="font-semibold text-amber-200">2026/07/21:</span>{" "}
-          Development on EmojiRL is currently suspended/on hiatus. Please direct all concerns/comments/requests for the dev to get off his lazyass &amp; finish working on the game @{" "}
+          <span className="font-semibold text-amber-200">2026-9-10:</span>{" "}
+          Work on EmojiRL has been resumed once more! Visit{" "}
           <a
             href="https://github.com/choy551/emojirl"
             target="_blank"
@@ -63,6 +63,7 @@ export default function Home() {
           >
             https://github.com/choy551/emojirl
           </a>
+          {" "}for changelogs/comments/concerns/suggestions
           <button
             type="button"
             onClick={dismissAnnounce}
