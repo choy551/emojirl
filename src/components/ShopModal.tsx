@@ -1,5 +1,6 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
 import { getItemBuyPrice, getItemSellValue, addToBag } from '../game/gameHelpers';
+import { COOKABLE_EMOJIS } from '../game/emojis';
 import { canEquipItem } from './itemUtils';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
@@ -131,7 +132,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
           const food  = allSellable.filter(i => i.healAmount !== undefined);
           const isJunk = (i: EmojiItem) =>
             (i.isEquipment && !canEquipItem(i, cls)) ||
-            (i.healAmount !== undefined && !i.isCooked && !i.cookedBuff && i.healAmount <= 4);
+            (i.healAmount !== undefined && !i.isCooked && !i.cookedBuff && i.healAmount <= 4 && !COOKABLE_EMOJIS.has(i.emoji));
           const junk = allSellable.filter(isJunk);
           const junkGold = junk.reduce((s, i) => s + getItemSellValue(i), 0);
 
