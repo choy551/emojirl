@@ -3019,7 +3019,7 @@ export default function Game() {
         const check = evaluateBedSleep(gameState);
         const blockReason = !check.ok
           ? (check.reason === 'worn'
-            ? 'This bed is worn out. Find another.'
+            ? "You've already slept enough!"
             : `You can't sleep — ${check.threat?.emoji} ${check.threat?.name} is in sight.`)
           : undefined;
         return (

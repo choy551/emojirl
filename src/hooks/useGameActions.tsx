@@ -1228,7 +1228,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       const check = evaluateBedSleep(prev);
       if (!check.ok) {
         const text = check.reason === 'worn'
-          ? '🛏️ This bed is worn out. Find another.'
+          ? "🛏️ You've already slept enough!"
           : `🛏️ You can't sleep — ${check.threat?.emoji} ${check.threat?.name} is in sight!`;
         return {
           ...prev,

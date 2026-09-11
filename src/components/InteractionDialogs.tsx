@@ -841,7 +841,7 @@ interface BedRestDialogProps {
 export function BedRestDialog({ onConfirm, onClose, usesLeft, canSleep, blockReason }: BedRestDialogProps) {
   useDialogHotkeys(canSleep ? () => { onConfirm(); onClose(); } : undefined, onClose, canSleep);
   const usesLabel = usesLeft <= 0
-    ? 'This bed is worn out.'
+    ? "You've already slept enough!"
     : usesLeft === 1
       ? '1 rest left on this bed.'
       : `${usesLeft} rests left on this bed.`;
