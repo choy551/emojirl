@@ -4,10 +4,8 @@ interface VirtualDpadProps {
   onMove: (dx: number, dy: number) => void;
   onWait: () => void;
   side?: 'left' | 'right';
-  onToggleSide?: () => void;
   /** When false, the pad is laid out by its parent instead of `position: fixed`. */
   anchored?: boolean;
-  oneHanded?: boolean;
 }
 
 const REPEAT_DELAY_MS = 350;
@@ -94,26 +92,17 @@ function DpadCell({
 
 const STORAGE_KEY = 'emojirl_dpad_side';
 
-export function VirtualDpad({ onMove, onWait, side: sideProp, onToggleSide, anchored = true, oneHanded = false }: VirtualDpadProps) {
-  const [internalSide, setInternalSide] = useState<'left' | 'right'>(() => {
+export function VirtualDpad({ onMove, onWait, side: sideProp, anchored = true }: VirtualDpadProps) {
+  const [internalSide] = useState<'left' | 'right'>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     return stored === 'left' ? 'left' : 'right';
   });
   const side = sideProp ?? internalSide;
 
-  const toggleSide = () => {
-    if (onToggleSide) { onToggleSide(); return; }
-    setInternalSide(prev => {
-      const next = prev === 'right' ? 'left' : 'right';
-      localStorage.setItem(STORAGE_KEY, next);
-      return next;
-    });
-  };
-
   return (
     <div
       className={[
-        'flex flex-col items-center gap-0.5',
+        'flex flex-col items-center',
         anchored ? 'fixed z-40' : '',
         anchored ? (side === 'right' ? 'right-2' : 'left-2') : '',
       ].join(' ')}
@@ -135,14 +124,6 @@ export function VirtualDpad({ onMove, onWait, side: sideProp, onToggleSide, anch
           <DpadCell key={i} cell={cell} onMove={onMove} onWait={onWait} />
         ))}
       </div>
-
-      <button
-        onClick={toggleSide}
-        className="text-[9px] text-white/30 hover:text-white/60 transition-colors px-1.5 py-0 leading-tight rounded"
-        aria-label="Swap d-pad side"
-      >
-        ⇄ {oneHanded ? 'switch hand' : `move ${side === 'right' ? 'left' : 'right'}`}
-      </button>
     </div>
   );
 }

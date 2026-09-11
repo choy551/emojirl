@@ -3134,9 +3134,7 @@ export default function Game() {
             onMove={handleManualMove}
             onWait={handleManualWait}
             side={thumbSide}
-            onToggleSide={() => setControlSetting('dpadSide', thumbSide === 'right' ? 'left' : 'right')}
             anchored={!oneHanded}
-            oneHanded={oneHanded}
           />
         ) : null;
 
