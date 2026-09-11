@@ -415,8 +415,68 @@ export default function HowToPlay({
           ))}
         </div>
 
-        <div className="mt-3 text-xs text-muted-foreground">
-          <strong>Dungeon Pressure:</strong> Increases on deeper floors — nearby enemies get permanent stat bonuses (watch for on-screen warnings). <strong>Vaults &amp; special rooms:</strong> Use rope (from hotbar or tactics) to safely enter. Treasure vaults offer big rewards (risk of traps); monster dens are extra dangerous. Bush ambushes hide 1–5 ranged attackers behind 🌿 hedges. Volcano vaults pause the screen with a warning, then spew spreading lava every 5–10 turns that burns loot (Skull, Dagger, Boat, and deep-tier gear). Room vaults are smaller walled rooms nested inside a larger chamber, entered through a single 🚪, with a 🛏️ bed inside (sleep for 200% overheal / full mana / reset cooldowns; 100 turns pass; a hostile that finds you sneak-attacks at 200% and wakes you). Autoexplore stops at shops, restaurants, bars, and beds.
+        <div className="mt-3 text-xs text-muted-foreground space-y-3">
+          <p>
+            <strong className="text-foreground">Dungeon Pressure:</strong> Increases on deeper floors — nearby enemies get permanent stat bonuses (watch for on-screen warnings).
+          </p>
+          <p>
+            <strong className="text-foreground">🪢 Rope:</strong> Use rope 🪢 (from hotbar or tactics) to safely enter. This magical rope will transport you to a dimensional treasure vault that randomly intersects the current dungeon floor. Treasure vaults offer big rewards (risk of traps). Rope 🪢 can also be used as a quick &apos;teleport&apos;/&apos;get out of danger&apos; button, but beware of taking damage from traps if you&apos;re at low health!
+          </p>
+          <p>
+            Autoexplore stops at shops, restaurants, bars, and beds.
+          </p>
+        </div>
+      </Section>
+
+      <Section title="Vaults">
+        <p className="text-sm text-muted-foreground">
+          Some floors generate special vaults. When you descend, the combat log names each one:
+        </p>
+        <div className="space-y-2 text-sm">
+          {[
+            {
+              icon: "💎",
+              label: "Treasure Vault",
+              log: "💎 You sense hidden treasure surrounded by water...",
+              desc: "A water-moated island of loot. Big rewards, risk of traps. (Rope 🪢 also opens a dimensional treasure vault anywhere on the floor.)",
+            },
+            {
+              icon: "🦴",
+              label: "Monster Den",
+              log: "🦴 You sense a terrible presence nearby...",
+              desc: "A packed room of extra-dangerous enemies. Do not wander in unprepared.",
+            },
+            {
+              icon: "🌿",
+              label: "Am-Bushes",
+              log: "🌿 You hear bowstrings drawn behind the bushes...",
+              desc: "Hedges of 🌿 bushes that block movement but not sight or shots. 1–5 ranged attackers (archers, dark mages, etc.) hide behind them — 1 is common, 5 is rare.",
+            },
+            {
+              icon: "🌋",
+              label: "Volcano",
+              log: "🌋 There is a Volcano on this floor!",
+              desc: "Pauses the screen with a warning, then spews spreading 🟧 lava every 5–10 turns. Burns loot on the tile (Skull, Dagger, Boat, and deep-tier gear). Don't stand in the fire.",
+            },
+            {
+              icon: "🛏️",
+              label: "Bedroom",
+              log: "🛏️ A small room is tucked inside these halls...",
+              desc: "A small walled room nested inside a larger chamber, entered through a single 🚪, with a 🛏️ bed. Sleep for 200% overheal, full mana, and reset cooldowns; 100 turns pass. A hostile that finds you sneak-attacks at 200% and wakes you. Close the door first if you can.",
+            },
+          ].map((v) => (
+            <div
+              key={v.label}
+              className="flex items-start gap-2 bg-card/50 rounded-lg p-3 border border-border/40"
+            >
+              <span className="text-2xl shrink-0">{v.icon}</span>
+              <div className="min-w-0">
+                <div className="font-bold">{v.icon} {v.label}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{v.desc}</div>
+                <div className="text-[11px] text-amber-200/80 mt-1 italic">Combat log: {v.log}</div>
+              </div>
+            </div>
+          ))}
         </div>
       </Section>
 
