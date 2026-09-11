@@ -14,6 +14,7 @@ export type TileType =
   | 'tree'
   | 'bush'
   | 'lava'
+  | 'obsidian'
   | 'volcano'
   | 'shrine'
   | 'shrine-used'

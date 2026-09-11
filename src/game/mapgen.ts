@@ -1,5 +1,5 @@
 import { MapGrid, Position, RoomTheme } from './types';
-import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI } from './lava';
+import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, coolLavaWaterContacts } from './lava';
 import { BED_EMOJI } from './tiles';
 
 const MAP_WIDTH = 50;
@@ -292,7 +292,7 @@ function placeWaterMoat(map: MapGrid, room: Room) {
     for (let rx = room.x - moat; rx <= room.x + room.w - 1 + moat; rx++) {
       if (ry < 0 || ry >= MAP_HEIGHT || rx < 0 || rx >= MAP_WIDTH) continue;
       if (map[ry][rx].type === 'boss-floor') continue;
-      map[ry][rx] = { type: 'water', emoji: '🌊', seen: false, visible: false };
+      map[ry][rx] = { type: 'water', emoji: WATER_EMOJI, seen: false, visible: false };
     }
   }
   // Carve a 3×3 island at the room center (items spawn here, centered ±1 x)
@@ -420,7 +420,7 @@ function paintLiquid(
   if (!canFloodTile(map, x, y, rooms, startRoom)) return false;
   map[y][x] = {
     type: kind,
-    emoji: kind === 'lava' ? LAVA_EMOJI : '🌊',
+    emoji: kind === 'lava' ? LAVA_EMOJI : WATER_EMOJI,
     seen: false,
     visible: false,
   };
@@ -635,7 +635,7 @@ function ensureStairsReachable(map: MapGrid, start: Position, stairs: Position):
     'floor', 'stairs', 'boss-floor', 'grass',
     'door-open', 'door-closed',
     'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'bed',
-    'campfire',
+    'campfire', 'obsidian',
   ]);
   if (reach(map, start, stairs, DRY)) return;
 
@@ -855,9 +855,11 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
   const stairsPos = roomCenter(lastRoom);
   map[stairsPos.y][stairsPos.x] = { type: 'stairs', emoji: '🕳️', seen: false, visible: false };
 
+  const { map: cooled } = coolLavaWaterContacts(map);
+
   // Guarantee the stairs are reachable without swimming or walking lava —
   // drain the minimum water/lava tiles on the shortest path.
-  ensureStairsReachable(map, startPos, stairsPos);
+  ensureStairsReachable(cooled, startPos, stairsPos);
 
-  return { map, startPos, stairsPos, rooms };
+  return { map: cooled, startPos, stairsPos, rooms };
 }

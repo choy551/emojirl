@@ -1667,6 +1667,7 @@ export default function Game() {
           else if (tileData.type === 'bed') tileBg = 'rgba(80,140,200,0.28)';
           else if (tileData.type === 'restaurant') tileBg = 'rgba(220,60,60,0.22)';
           else if (tileData.type === 'lava') tileBg = 'rgba(255,60,0,0.45)';
+          else if (tileData.type === 'obsidian') tileBg = 'rgba(40,40,48,0.35)';
           else if (tileData.type === 'volcano') tileBg = 'rgba(220,30,0,0.55)';
           else if (tileData.type === 'bush') tileBg = 'rgba(40,90,30,0.35)';
           else if (tileData.type === 'water') tileBg = 'rgba(30,80,160,0.28)';

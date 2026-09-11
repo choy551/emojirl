@@ -8,7 +8,7 @@ import { hasLOSBetween } from './pathfinding';
 import { OPAQUE_TILES } from './vision';
 import { BED_EMOJI, PLAYER_PASSABLE_TILES, ENEMY_PASSABLE_TILES } from './tiles';
 import { rollAmbushCount } from './enemies';
-import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI } from './lava';
+import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI } from './lava';
 
 function tile(type: Tile['type'], emoji: string): Tile {
   return { type, emoji, seen: false, visible: false };
@@ -47,7 +47,10 @@ describe('water features paint walkable dungeon, not just hidden rock', () => {
     let waterOnFloorBand = 0;
     for (let y = 2; y < 10; y++) {
       for (let x = 2; x < 10; x++) {
-        if (map[y][x].type === 'water') waterOnFloorBand++;
+        if (map[y][x].type === 'water') {
+          expect(map[y][x].emoji).toBe(WATER_EMOJI);
+          waterOnFloorBand++;
+        }
       }
     }
     expect(waterOnFloorBand).toBeGreaterThan(0);
@@ -82,11 +85,12 @@ describe('water features paint walkable dungeon, not just hidden rock', () => {
       for (let y = 1; y < map.length - 1; y++) {
         for (let x = 1; x < map[0].length - 1; x++) {
           if (map[y][x].type !== 'water') continue;
+          expect(map[y][x].emoji).toBe(WATER_EMOJI);
           const nearWalk = [
             [0, 1], [0, -1], [1, 0], [-1, 0],
           ].some(([dx, dy]) => {
             const t = map[y + dy][x + dx].type;
-            return t === 'floor' || t === 'grass' || t === 'door-open' || t === 'door-closed' || t === 'stairs';
+            return t === 'floor' || t === 'grass' || t === 'door-open' || t === 'door-closed' || t === 'stairs' || t === 'obsidian';
           });
           if (nearWalk) visibleWaterFloors++;
         }

@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { EmojiItem, GameState, MapGrid, Player, Tile } from './types';
+import { PLAYER_PASSABLE_TILES, ENEMY_PASSABLE_TILES } from './tiles';
 import {
   lavaFlatDamage, lavaDamageForFloor, spreadVolcanoLava, tickVolcanoAndLava,
-  volcanoSpewInterval, LAVA_EMOJI, VOLCANO_EMOJI,
+  volcanoSpewInterval, volcanoMaxLava, countLavaTiles, coolLavaWaterContacts,
+  canConvertToLava, VOLCANO_MAX_RADIUS, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, OBSIDIAN_EMOJI,
 } from './lava';
 
 function tile(type: Tile['type'], emoji: string): Tile {
@@ -15,7 +17,8 @@ function grid(spec: string[]): MapGrid {
       if (ch === '#') return tile('wall', '⬛');
       if (ch === 'V') return tile('volcano', VOLCANO_EMOJI);
       if (ch === 'L') return tile('lava', LAVA_EMOJI);
-      if (ch === '~') return tile('water', '🌊');
+      if (ch === '~') return tile('water', WATER_EMOJI);
+      if (ch === 'O') return tile('obsidian', OBSIDIAN_EMOJI);
       if (ch === 'B') return tile('bush', '🌿');
       return tile('floor', '⬜');
     })
@@ -190,5 +193,125 @@ describe('volcanoSpewInterval', () => {
       expect(n).toBeGreaterThanOrEqual(5);
       expect(n).toBeLessThanOrEqual(10);
     }
+  });
+});
+
+describe('volcano lava cap', () => {
+  it('volcanoMaxLava is 16 + floor (at least 17)', () => {
+    expect(volcanoMaxLava(1)).toBe(17);
+    expect(volcanoMaxLava(5)).toBe(21);
+  });
+
+  it('countLavaTiles ignores the volcano itself', () => {
+    const map = grid([
+      '#####',
+      '#LVL#',
+      '#####',
+    ]);
+    expect(countLavaTiles(map)).toBe(2);
+  });
+
+  it('does not convert water or obsidian into lava', () => {
+    expect(canConvertToLava('water')).toBe(false);
+    expect(canConvertToLava('obsidian')).toBe(false);
+    const map = grid([
+      '#####',
+      '#~VO#',
+      '#####',
+    ]);
+    const { converted, map: next } = spreadVolcanoLava(map, { x: 2, y: 1 }, 8, 1);
+    expect(converted).toHaveLength(0);
+    expect(next[1][1].type).toBe('water');
+    expect(next[1][3].type).toBe('obsidian');
+  });
+
+  it('refuses candidates beyond VOLCANO_MAX_RADIUS', () => {
+    const size = VOLCANO_MAX_RADIUS + 6;
+    const spec = Array.from({ length: size }, () => '#'.repeat(size));
+    const map = grid(spec);
+    for (let y = 1; y < size - 1; y++) {
+      for (let x = 1; x < size - 1; x++) map[y][x] = tile('floor', '⬜');
+    }
+    const vx = 2, vy = 2;
+    map[vy][vx] = tile('volcano', VOLCANO_EMOJI);
+    const { converted } = spreadVolcanoLava(map, { x: vx, y: vy }, 40, 1);
+    expect(converted.length).toBeGreaterThan(0);
+    for (const p of converted) {
+      const d = Math.max(Math.abs(p.x - vx), Math.abs(p.y - vy));
+      expect(d).toBeLessThanOrEqual(VOLCANO_MAX_RADIUS);
+    }
+  });
+
+  it('will not grow past volcanoMaxLava', () => {
+    const map = grid([
+      '###########',
+      '#.........#',
+      '#....V....#',
+      '#.........#',
+      '###########',
+    ]);
+    const volcano = { x: 5, y: 2 };
+    // Fill almost to the cap with existing lava (still in-radius).
+    let placed = 0;
+    const cap = volcanoMaxLava(1);
+    for (let y = 1; y <= 3 && placed < cap; y++) {
+      for (let x = 1; x <= 9 && placed < cap; x++) {
+        if (x === volcano.x && y === volcano.y) continue;
+        map[y][x] = tile('lava', LAVA_EMOJI);
+        placed++;
+      }
+    }
+    expect(countLavaTiles(map)).toBe(cap);
+    const { converted } = spreadVolcanoLava(map, volcano, 8, 1);
+    expect(converted).toHaveLength(0);
+  });
+});
+
+describe('coolLavaWaterContacts', () => {
+  it('turns orthogonally adjacent water into obsidian', () => {
+    const map = grid([
+      '#####',
+      '#~L.#',
+      '#####',
+    ]);
+    const { map: next, cooled } = coolLavaWaterContacts(map);
+    expect(cooled).toEqual([{ x: 1, y: 1 }]);
+    expect(next[1][1].type).toBe('obsidian');
+    expect(next[1][1].emoji).toBe(OBSIDIAN_EMOJI);
+    expect(next[1][2].type).toBe('lava');
+  });
+
+  it('does not cool diagonally adjacent water', () => {
+    const map = grid([
+      '#####',
+      '#~..#',
+      '#.L.#',
+      '#####',
+    ]);
+    const { cooled, map: next } = coolLavaWaterContacts(map);
+    expect(cooled).toHaveLength(0);
+    expect(next[1][1].type).toBe('water');
+  });
+
+  it('obsidian is walkable like floor', () => {
+    expect(PLAYER_PASSABLE_TILES.has('obsidian')).toBe(true);
+    expect(ENEMY_PASSABLE_TILES.has('obsidian')).toBe(true);
+  });
+
+  it('tick cools lava×water even when the volcano does not spew', () => {
+    const map = grid([
+      '#####',
+      '#~L.#',
+      '#.V.#',
+      '#####',
+    ]);
+    const next = tickVolcanoAndLava(baseState(map, {
+      player: playerAt(1, 2),
+      turn: 4,
+      volcanoNextSpewTurn: 10,
+    }));
+    expect(next.map[1][1].type).toBe('obsidian');
+    expect(next.map[1][1].emoji).toBe(OBSIDIAN_EMOJI);
+    expect(next.volcanoNextSpewTurn).toBe(10);
   });
 });

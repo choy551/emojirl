@@ -1,7 +1,7 @@
 export const BED_EMOJI = '🛏️';
 
-export const PLAYER_PASSABLE_TILES = new Set(['floor', 'stairs', 'door-open', 'door-closed', 'grass', 'shrine', 'shrine-used', 'safe-floor', 'shop-item', 'restaurant', 'boss-floor', 'campfire', 'bed']);
-export const ENEMY_PASSABLE_TILES = new Set(['floor', 'stairs', 'door-open', 'grass', 'boss-floor']);
+export const PLAYER_PASSABLE_TILES = new Set(['floor', 'stairs', 'door-open', 'door-closed', 'grass', 'shrine', 'shrine-used', 'safe-floor', 'shop-item', 'restaurant', 'boss-floor', 'campfire', 'bed', 'obsidian']);
+export const ENEMY_PASSABLE_TILES = new Set(['floor', 'stairs', 'door-open', 'grass', 'boss-floor', 'obsidian']);
 export const MERMAN_PASSABLE_TILES = new Set(['water']);
 export const PASSABLE_TILES = PLAYER_PASSABLE_TILES;
 

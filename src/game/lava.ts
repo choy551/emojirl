@@ -3,12 +3,26 @@ import { GameState, MapGrid, Position, EmojiItem, FloatingText, Enemy } from './
 export const LAVA_EMOJI = '🟧';
 export const VOLCANO_EMOJI = '🌋';
 export const BUSH_EMOJI = '🌿';
+export const WATER_EMOJI = '🟦';
+export const OBSIDIAN_EMOJI = '⚫';
+/** Chebyshev distance from the volcano beyond which lava will not spread. */
+export const VOLCANO_MAX_RADIUS = 5;
 
 const LAVA_IMMUNE = new Set([
   'wall', 'volcano', 'stairs', 'shrine', 'shrine-used',
   'shop-item', 'restaurant', 'safe-floor', 'door-closed', 'door-open', 'bed',
-  'campfire', 'boss-floor',
+  'campfire', 'boss-floor', 'obsidian', 'water',
 ]);
+
+export function volcanoMaxLava(floor: number): number {
+  return 16 + Math.max(1, floor);
+}
+
+export function countLavaTiles(map: MapGrid): number {
+  let n = 0;
+  for (const row of map) for (const t of row) if (t.type === 'lava') n++;
+  return n;
+}
 
 export function lavaFlatDamage(floor: number): number {
   return 10 + 5 * Math.max(0, floor - 1);
@@ -49,9 +63,13 @@ export function spreadVolcanoLava(
   map: MapGrid,
   volcano: Position,
   spewCount: number,
+  floor = 1,
 ): { map: MapGrid; converted: Position[] } {
   const H = map.length;
   const W = map[0]?.length ?? 0;
+  const roomLeft = volcanoMaxLava(floor) - countLavaTiles(map);
+  if (roomLeft <= 0 || spewCount <= 0) return { map, converted: [] };
+
   const candidates: { x: number; y: number; weight: number }[] = [];
   const seen = new Set<string>();
 
@@ -65,8 +83,9 @@ export function spreadVolcanoLava(
         const key = `${nx},${ny}`;
         if (seen.has(key)) continue;
         if (!canConvertToLava(map[ny][nx].type)) continue;
-        seen.add(key);
         const dist = Math.max(Math.abs(nx - volcano.x), Math.abs(ny - volcano.y));
+        if (dist > VOLCANO_MAX_RADIUS) continue;
+        seen.add(key);
         candidates.push({ x: nx, y: ny, weight: 1 / (1 + dist) });
       }
     }
@@ -76,7 +95,7 @@ export function spreadVolcanoLava(
 
   const converted: Position[] = [];
   const pool = [...candidates];
-  const n = Math.min(spewCount, pool.length);
+  const n = Math.min(spewCount, pool.length, Math.max(0, roomLeft));
   for (let i = 0; i < n; i++) {
     const total = pool.reduce((s, c) => s + c.weight, 0);
     let roll = Math.random() * total;
@@ -100,6 +119,32 @@ export function spreadVolcanoLava(
     )
   );
   return { map: next, converted };
+}
+
+const ORTHO: [number, number][] = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+
+/** Water orthogonally adjacent to lava cools into walkable obsidian. */
+export function coolLavaWaterContacts(map: MapGrid): { map: MapGrid; cooled: Position[] } {
+  const H = map.length;
+  const W = map[0]?.length ?? 0;
+  const cooled: Position[] = [];
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (map[y][x].type !== 'water') continue;
+      const nextToLava = ORTHO.some(([dx, dy]) => map[y + dy]?.[x + dx]?.type === 'lava');
+      if (nextToLava) cooled.push({ x, y });
+    }
+  }
+  if (cooled.length === 0) return { map, cooled };
+  const keys = new Set(cooled.map(p => `${p.x},${p.y}`));
+  const next = map.map((row, y) =>
+    row.map((tile, x) =>
+      keys.has(`${x},${y}`)
+        ? { ...tile, type: 'obsidian' as const, emoji: OBSIDIAN_EMOJI }
+        : tile
+    )
+  );
+  return { map: next, cooled };
 }
 
 export function volcanoSpewCount(floor: number): number {
@@ -138,7 +183,9 @@ export function tickVolcanoAndLava(state: GameState): GameState {
       volcanoNextSpewTurn = turn + volcanoSpewInterval();
     }
     if (turn >= volcanoNextSpewTurn) {
-      const { map: nextMap, converted } = spreadVolcanoLava(map, volcano, volcanoSpewCount(state.currentFloor));
+      const { map: nextMap, converted } = spreadVolcanoLava(
+        map, volcano, volcanoSpewCount(state.currentFloor), state.currentFloor,
+      );
       map = nextMap;
       volcanoNextSpewTurn = turn + volcanoSpewInterval();
       if (converted.length > 0) {
@@ -150,6 +197,9 @@ export function tickVolcanoAndLava(state: GameState): GameState {
       }
     }
   }
+
+  const cooled = coolLavaWaterContacts(map);
+  map = cooled.map;
 
   const burnedItems: EmojiItem[] = [];
   const items = state.items.filter(it => {
