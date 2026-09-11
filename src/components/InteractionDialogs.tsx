@@ -833,10 +833,18 @@ export function BearInteractionDialog({ gameState, setGameState, bearId, stage, 
 interface BedRestDialogProps {
   onConfirm: () => void;
   onClose: () => void;
+  usesLeft: number;
+  canSleep: boolean;
+  blockReason?: string;
 }
 
-export function BedRestDialog({ onConfirm, onClose }: BedRestDialogProps) {
-  useDialogHotkeys(() => { onConfirm(); onClose(); }, onClose);
+export function BedRestDialog({ onConfirm, onClose, usesLeft, canSleep, blockReason }: BedRestDialogProps) {
+  useDialogHotkeys(canSleep ? () => { onConfirm(); onClose(); } : undefined, onClose, canSleep);
+  const usesLabel = usesLeft <= 0
+    ? 'This bed is worn out.'
+    : usesLeft === 1
+      ? '1 rest left on this bed.'
+      : `${usesLeft} rests left on this bed.`;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-card border border-sky-400/40 rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
@@ -850,13 +858,22 @@ export function BedRestDialog({ onConfirm, onClose }: BedRestDialogProps) {
           </div>
           <div className="mt-2 text-xs text-amber-300/90 leading-relaxed">
             If a hostile reaches you, they get one 200% sneak attack and you wake.
-            Close the door first if you can.
+            Close the door first if you can. You cannot sleep while a hostile is in sight.
           </div>
+          <div className={`mt-2 text-xs ${usesLeft <= 0 ? 'text-red-300' : 'text-sky-200/80'}`}>{usesLabel}</div>
+          {blockReason && (
+            <div className="mt-2 text-xs text-red-300 leading-relaxed">{blockReason}</div>
+          )}
         </div>
         <div className="space-y-2">
           <button
-            className="w-full py-2.5 rounded-lg bg-sky-500/20 border border-sky-400/40 text-sky-100 text-sm font-semibold hover:bg-sky-500/35 transition-colors"
-            onClick={() => { onConfirm(); onClose(); }}
+            disabled={!canSleep}
+            className={`w-full py-2.5 rounded-lg border text-sm font-semibold transition-colors ${
+              canSleep
+                ? 'bg-sky-500/20 border-sky-400/40 text-sky-100 hover:bg-sky-500/35'
+                : 'bg-slate-500/10 border-slate-500/20 text-slate-500 cursor-not-allowed'
+            }`}
+            onClick={() => { if (!canSleep) return; onConfirm(); onClose(); }}
           >
             Sleep ⏎
           </button>

@@ -30,6 +30,8 @@ export interface Tile {
   emoji: string;
   seen: boolean;
   visible: boolean;
+  /** Remaining bed sleeps; only meaningful for type === 'bed'. */
+  usesLeft?: number;
 }
 
 export type MapGrid = Tile[][];

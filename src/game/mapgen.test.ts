@@ -6,7 +6,7 @@ import {
 } from './mapgen';
 import { hasLOSBetween } from './pathfinding';
 import { OPAQUE_TILES } from './vision';
-import { BED_EMOJI, PLAYER_PASSABLE_TILES, ENEMY_PASSABLE_TILES } from './tiles';
+import { BED_EMOJI, BED_MAX_USES, PLAYER_PASSABLE_TILES, ENEMY_PASSABLE_TILES } from './tiles';
 import { rollAmbushCount } from './enemies';
 import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI } from './lava';
 
@@ -232,6 +232,7 @@ describe('room vault', () => {
         if (t.type === 'bed') {
           beds++;
           expect(t.emoji).toBe(BED_EMOJI);
+          expect(t.usesLeft).toBe(BED_MAX_USES);
         }
         if (t.type === 'door-closed') doors++;
         if (t.type === 'wall' || t.type === 'bed' || t.type === 'door-closed') {

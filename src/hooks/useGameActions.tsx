@@ -14,6 +14,7 @@ import {
   spawnVaultItems, handleGodBlessedImmunity,
   getDungeonPressure, _flashSignals, restoreStolenEmojis, stolenEmojiSummary,
   applyBedRest, simulateSleep, SLEEP_TURNS, BED_OVERHEAL_MULT,
+  evaluateBedSleep, consumeBedUse,
 } from '../game/gameHelpers';
 import { canEquipItem } from '../components/itemUtils';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
@@ -1224,8 +1225,19 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     setTrailblazeTurn(-999);
     setGameState(prev => {
       if (!prev || prev.gameOver || prev.floorAnnouncement) return prev;
+      const check = evaluateBedSleep(prev);
+      if (!check.ok) {
+        const text = check.reason === 'worn'
+          ? '🛏️ This bed is worn out. Find another.'
+          : `🛏️ You can't sleep — ${check.threat?.emoji} ${check.threat?.name} is in sight!`;
+        return {
+          ...prev,
+          logs: [{ id: `sleep-block-${prev.turn}`, text, turn: prev.turn }, ...prev.logs].slice(0, 24),
+        };
+      }
       const rested: typeof prev = {
         ...prev,
+        map: consumeBedUse(prev.map, prev.player.pos),
         player: applyBedRest(prev.player),
         logs: [
           { id: `sleep-start-${prev.turn}`, text: `🛏️ You lie down. ${SLEEP_TURNS} turns will pass...`, turn: prev.turn },
@@ -1236,10 +1248,12 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       if (wokeBy) return withVisibility(state);
       const overhealHp = Math.floor(state.player.stats.maxHp * BED_OVERHEAL_MULT);
       const mpMsg = state.player.characterClass === '🧙' ? ' MP full.' : '';
+      const left = check.usesLeft - 1;
+      const usesMsg = left <= 0 ? ' The bed is worn out.' : ` (${left} rest${left === 1 ? '' : 's'} left)`;
       return withVisibility({
         ...state,
         logs: [
-          { id: `sleep-end-${state.turn}`, text: `🛏️ You wake after ${turnsSlept} turns — overheal ${overhealHp} HP, cooldowns reset.${mpMsg}`, turn: state.turn },
+          { id: `sleep-end-${state.turn}`, text: `🛏️ You wake after ${turnsSlept} turns — overheal ${overhealHp} HP, cooldowns reset.${mpMsg}${usesMsg}`, turn: state.turn },
           ...state.logs,
         ].slice(0, 24),
         floatingTexts: [

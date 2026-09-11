@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { Enemy, GameState, MapGrid, Player, Tile } from './types';
-import { applyBedRest, BED_OVERHEAL_MULT, isSleepThreat, simulateSleep, sneakAttackDamage } from './sleep';
+import {
+  applyBedRest, BED_OVERHEAL_MULT, BED_MAX_USES, isSleepThreat, simulateSleep,
+  sneakAttackDamage, bedUsesLeft, consumeBedUse, evaluateBedSleep, makeBedTile,
+} from './sleep';
 
 function tile(type: Tile['type'], emoji: string): Tile {
   return { type, emoji, seen: true, visible: true };
@@ -95,6 +98,60 @@ describe('isSleepThreat', () => {
     expect(isSleepThreat(goblin(0, 0))).toBe(true);
     expect(isSleepThreat({ ...goblin(0, 0), isRecruited: true, tag: 'Friendly' })).toBe(false);
     expect(isSleepThreat({ ...goblin(0, 0), monkey: true, engaged: false })).toBe(false);
+  });
+});
+
+describe('bed uses', () => {
+  it('defaults missing usesLeft to BED_MAX_USES', () => {
+    expect(BED_MAX_USES).toBe(2);
+    expect(bedUsesLeft(tile('bed', '🛏️'))).toBe(2);
+    expect(bedUsesLeft({ ...tile('bed', '🛏️'), usesLeft: 1 })).toBe(1);
+    expect(bedUsesLeft(tile('floor', '⬜'))).toBe(0);
+  });
+
+  it('consumeBedUse decrements that tile only', () => {
+    const map = floorGrid();
+    map[2][2] = makeBedTile(true, true);
+    const next = consumeBedUse(map, { x: 2, y: 2 });
+    expect(next[2][2].usesLeft).toBe(1);
+    expect(map[2][2].usesLeft).toBe(2);
+  });
+
+  it('evaluateBedSleep refuses a worn-out bed', () => {
+    const map = floorGrid();
+    map[2][2] = { ...makeBedTile(true, true), usesLeft: 0 };
+    const check = evaluateBedSleep(state({ map }));
+    expect(check.ok).toBe(false);
+    if (!check.ok) expect(check.reason).toBe('worn');
+  });
+
+  it('evaluateBedSleep refuses when a hostile is in sight', () => {
+    const map = floorGrid();
+    map[2][2] = makeBedTile(true, true);
+    const check = evaluateBedSleep(state({ map, enemies: [goblin(2, 4)] }));
+    expect(check.ok).toBe(false);
+    if (!check.ok) {
+      expect(check.reason).toBe('threat');
+      expect(check.threat?.name).toBe('Goblin');
+    }
+  });
+
+  it('evaluateBedSleep ignores recruited companions in sight', () => {
+    const map = floorGrid();
+    map[2][2] = makeBedTile(true, true);
+    const check = evaluateBedSleep(state({
+      map,
+      enemies: [{ ...goblin(2, 4), isRecruited: true, tag: 'Friendly' }],
+    }));
+    expect(check.ok).toBe(true);
+  });
+
+  it('evaluateBedSleep allows sleep when a hostile is behind a closed door', () => {
+    const map = floorGrid();
+    map[2][2] = makeBedTile(true, true);
+    map[3][2] = tile('door-closed', '🚪');
+    const check = evaluateBedSleep(state({ map, enemies: [goblin(2, 4)] }));
+    expect(check.ok).toBe(true);
   });
 });
 

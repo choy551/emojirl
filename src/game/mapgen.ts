@@ -1,6 +1,6 @@
 import { MapGrid, Position, RoomTheme } from './types';
 import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, coolLavaWaterContacts } from './lava';
-import { BED_EMOJI } from './tiles';
+import { BED_EMOJI, BED_MAX_USES } from './tiles';
 
 const MAP_WIDTH = 50;
 const MAP_HEIGHT = 28;
@@ -170,7 +170,7 @@ export function placeRoomVault(map: MapGrid, room: Room, innerSize?: number): bo
     const door = swap ? face[1] : face[0];
     const bed = swap ? face[0] : face[1];
     map[door.y][door.x] = { type: 'door-closed', emoji: '🚪', seen: false, visible: false };
-    map[bed.y][bed.x] = { type: 'bed', emoji: BED_EMOJI, seen: false, visible: false };
+    map[bed.y][bed.x] = { type: 'bed', emoji: BED_EMOJI, seen: false, visible: false, usesLeft: BED_MAX_USES };
     return true;
   }
 
@@ -195,7 +195,7 @@ export function placeRoomVault(map: MapGrid, room: Room, innerSize?: number): bo
     }
   }
   if (!bed) return false;
-  map[bed.y][bed.x] = { type: 'bed', emoji: BED_EMOJI, seen: false, visible: false };
+  map[bed.y][bed.x] = { type: 'bed', emoji: BED_EMOJI, seen: false, visible: false, usesLeft: BED_MAX_USES };
   return true;
 }
 

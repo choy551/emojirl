@@ -51,7 +51,7 @@ import {
   bfsStepToward, bfsNextStep, bfsNextStepWallHug, PLAYER_PASSABLE_TILES,
   getDungeonPressure,
   isAutoexploreThreat, autoexploreOccupiedKeys, autoexploreFriendlyBlockKeys,
-  classifyStairsFinish, scanGotoDestinations,
+  classifyStairsFinish, scanGotoDestinations, evaluateBedSleep,
 } from '../game/gameHelpers';
 import { useGameActions } from '../hooks/useGameActions';
 
@@ -3015,12 +3015,23 @@ export default function Game() {
         />
       )}
 
-      {bedRestOpen && (
-        <BedRestDialog
-          onConfirm={handleBedRest}
-          onClose={() => setBedRestOpen(false)}
-        />
-      )}
+      {bedRestOpen && gameState && (() => {
+        const check = evaluateBedSleep(gameState);
+        const blockReason = !check.ok
+          ? (check.reason === 'worn'
+            ? 'This bed is worn out. Find another.'
+            : `You can't sleep — ${check.threat?.emoji} ${check.threat?.name} is in sight.`)
+          : undefined;
+        return (
+          <BedRestDialog
+            onConfirm={handleBedRest}
+            onClose={() => setBedRestOpen(false)}
+            usesLeft={check.usesLeft}
+            canSleep={check.ok}
+            blockReason={blockReason}
+          />
+        );
+      })()}
 
       {/* Shop Modal */}
       {shopOpen && gameState && (

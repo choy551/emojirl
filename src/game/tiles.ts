@@ -1,4 +1,6 @@
 export const BED_EMOJI = '🛏️';
+/** Sleeps remaining on a fresh bed. Change this to retune the limit. */
+export const BED_MAX_USES = 2;
 
 export const PLAYER_PASSABLE_TILES = new Set(['floor', 'stairs', 'door-open', 'door-closed', 'grass', 'shrine', 'shrine-used', 'safe-floor', 'shop-item', 'restaurant', 'boss-floor', 'campfire', 'bed', 'obsidian']);
 export const ENEMY_PASSABLE_TILES = new Set(['floor', 'stairs', 'door-open', 'grass', 'boss-floor', 'obsidian']);
