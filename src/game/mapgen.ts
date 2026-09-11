@@ -113,54 +113,80 @@ export function placeDoors(
   }
 }
 
-const INNER_VAULT_W = 5;
-const INNER_VAULT_H = 4;
-/** Outer room must keep a 1-tile walkable ring around the inner vault. */
-const ROOM_VAULT_MIN_W = INNER_VAULT_W + 2;
-const ROOM_VAULT_MIN_H = INNER_VAULT_H + 2;
+/** Nested bedroom footprint (walls included): 2×2 closet, 3×3 cell, or 4×4. */
+const INNER_VAULT_MIN = 2;
+const INNER_VAULT_MAX = 4;
+const INNER_VAULT_PAD = 1;
+/** Smallest outer room that can wrap a 2×2 closet with a walkable ring. */
+const ROOM_VAULT_MIN_W = INNER_VAULT_MIN + 2 * INNER_VAULT_PAD;
+const ROOM_VAULT_MIN_H = INNER_VAULT_MIN + 2 * INNER_VAULT_PAD;
 
 function canHoldInnerVault(room: Pick<Room, 'w' | 'h'>): boolean {
   return room.w >= ROOM_VAULT_MIN_W && room.h >= ROOM_VAULT_MIN_H;
 }
 
-/**
- * Nested bedroom: a small walled room (one closed door, a bed) sitting inside a
- * larger dungeon room with a walkable ring around it.
- */
-export function placeRoomVault(map: MapGrid, room: Room): boolean {
-  const pad = 1;
-  if (room.w < INNER_VAULT_W + 2 * pad || room.h < INNER_VAULT_H + 2 * pad) return false;
-  const minIx = room.x + pad;
-  const maxIx = room.x + room.w - INNER_VAULT_W - pad;
-  const minIy = room.y + pad;
-  const maxIy = room.y + room.h - INNER_VAULT_H - pad;
-  if (maxIx < minIx || maxIy < minIy) return false;
+function maxInnerVaultSize(room: Pick<Room, 'w' | 'h'>): number {
+  return Math.min(INNER_VAULT_MAX, room.w - 2 * INNER_VAULT_PAD, room.h - 2 * INNER_VAULT_PAD);
+}
 
+/**
+ * Nested bedroom: a 2×2, 3×3, or 4×4 walled closet (one closed door, a bed)
+ * sitting inside a larger dungeon room with a walkable ring around it.
+ * Pass `innerSize` to pin the footprint (tests); otherwise a random size that fits.
+ */
+export function placeRoomVault(map: MapGrid, room: Room, innerSize?: number): boolean {
+  const pad = INNER_VAULT_PAD;
+  const maxFit = maxInnerVaultSize(room);
+  if (maxFit < INNER_VAULT_MIN) return false;
+  const size = innerSize ?? (INNER_VAULT_MIN + Math.floor(Math.random() * (maxFit - INNER_VAULT_MIN + 1)));
+  if (size < INNER_VAULT_MIN || size > maxFit) return false;
+
+  const minIx = room.x + pad;
+  const maxIx = room.x + room.w - size - pad;
+  const minIy = room.y + pad;
+  const maxIy = room.y + room.h - size - pad;
   const ix = minIx + Math.floor(Math.random() * (maxIx - minIx + 1));
   const iy = minIy + Math.floor(Math.random() * (maxIy - minIy + 1));
 
-  for (let y = iy; y < iy + INNER_VAULT_H; y++) {
-    for (let x = ix; x < ix + INNER_VAULT_W; x++) {
-      const edge = x === ix || x === ix + INNER_VAULT_W - 1 || y === iy || y === iy + INNER_VAULT_H - 1;
+  for (let y = iy; y < iy + size; y++) {
+    for (let x = ix; x < ix + size; x++) {
+      const edge = x === ix || x === ix + size - 1 || y === iy || y === iy + size - 1;
       map[y][x] = edge
         ? { type: 'wall', emoji: '⬛', seen: false, visible: false }
         : { type: 'floor', emoji: '⬜', seen: false, visible: false };
     }
   }
 
+  if (size === 2) {
+    // Closet: door + bed on one face, walls on the back. No interior tile.
+    const faces: [{ x: number; y: number }, { x: number; y: number }][] = [
+      [{ x: ix, y: iy }, { x: ix + 1, y: iy }],
+      [{ x: ix, y: iy + 1 }, { x: ix + 1, y: iy + 1 }],
+      [{ x: ix, y: iy }, { x: ix, y: iy + 1 }],
+      [{ x: ix + 1, y: iy }, { x: ix + 1, y: iy + 1 }],
+    ];
+    const face = faces[Math.floor(Math.random() * faces.length)];
+    const swap = Math.random() < 0.5;
+    const door = swap ? face[1] : face[0];
+    const bed = swap ? face[0] : face[1];
+    map[door.y][door.x] = { type: 'door-closed', emoji: '🚪', seen: false, visible: false };
+    map[bed.y][bed.x] = { type: 'bed', emoji: BED_EMOJI, seen: false, visible: false };
+    return true;
+  }
+
   const doorChoices = [
-    { x: ix + Math.floor(INNER_VAULT_W / 2), y: iy },
-    { x: ix + Math.floor(INNER_VAULT_W / 2), y: iy + INNER_VAULT_H - 1 },
-    { x: ix, y: iy + Math.floor(INNER_VAULT_H / 2) },
-    { x: ix + INNER_VAULT_W - 1, y: iy + Math.floor(INNER_VAULT_H / 2) },
+    { x: ix + Math.floor(size / 2), y: iy },
+    { x: ix + Math.floor(size / 2), y: iy + size - 1 },
+    { x: ix, y: iy + Math.floor(size / 2) },
+    { x: ix + size - 1, y: iy + Math.floor(size / 2) },
   ];
   const door = doorChoices[Math.floor(Math.random() * doorChoices.length)];
   map[door.y][door.x] = { type: 'door-closed', emoji: '🚪', seen: false, visible: false };
 
   let bed: { x: number; y: number } | null = null;
   let best = -1;
-  for (let y = iy + 1; y < iy + INNER_VAULT_H - 1; y++) {
-    for (let x = ix + 1; x < ix + INNER_VAULT_W - 1; x++) {
+  for (let y = iy + 1; y < iy + size - 1; y++) {
+    for (let x = ix + 1; x < ix + size - 1; x++) {
       const d = Math.max(Math.abs(x - door.x), Math.abs(y - door.y));
       if (d > best) {
         best = d;
@@ -179,7 +205,7 @@ function roomVaultFits(nx: number, ny: number, nw: number, nh: number, rooms: Ro
   return rooms.every((r, i) => i === skip || !roomsOverlap(r, cand));
 }
 
-/** Grow a room one tile at a time until it can wrap a 5×4 inner vault. */
+/** Grow a room one tile at a time until it can wrap a 2×2 closet. */
 function tryExpandForInnerVault(map: MapGrid, rooms: Room[], index: number): boolean {
   let { x, y, w, h } = rooms[index];
   if (canHoldInnerVault({ w, h })) return true;
@@ -216,7 +242,7 @@ function tryExpandForInnerVault(map: MapGrid, rooms: Room[], index: number): boo
   return true;
 }
 
-/** Pick a 7×6+ middle normal, or expand the largest leftover one. */
+/** Pick a 4×4+ middle normal, or expand the largest leftover one. */
 function pickOrExpandRoomVault(map: MapGrid, rooms: Room[]): number {
   const middleNormals = rooms
     .map((room, i) => ({ room, i }))
@@ -731,9 +757,8 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
   let bushAmbushAssigned  = false;
   let volcanoAssigned     = false;
 
-  // Nested bedroom: reserve a 7×6+ middle room (expand one if needed) first.
-  // Sitting this after forest left ~5% of floors with a bed — leftover 7×6
-  // normals are rare, and trees/shrines ate most of them.
+  // Nested bedroom: reserve a 4×4+ middle room (expand one if needed) first
+  // so shrine/forest don't eat every candidate.
   if (Math.random() < roomVaultChance) {
     const vaultIdx = pickOrExpandRoomVault(map, rooms);
     if (vaultIdx >= 0) {

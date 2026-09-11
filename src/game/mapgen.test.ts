@@ -219,40 +219,65 @@ describe('corridor doors', () => {
 });
 
 describe('room vault', () => {
-  it('nests a walled room with one door and a bed inside a larger chamber', () => {
+  function vaultBox(map: Tile[][], room: { x: number; y: number; w: number; h: number }) {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let beds = 0, doors = 0;
+    for (let y = room.y; y < room.y + room.h; y++) {
+      for (let x = room.x; x < room.x + room.w; x++) {
+        const t = map[y][x];
+        if (t.type === 'bed') {
+          beds++;
+          expect(t.emoji).toBe(BED_EMOJI);
+        }
+        if (t.type === 'door-closed') doors++;
+        if (t.type === 'wall' || t.type === 'bed' || t.type === 'door-closed') {
+          minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+          minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+        }
+      }
+    }
+    return { beds, doors, w: maxX - minX + 1, h: maxY - minY + 1 };
+  }
+
+  it('nests a 2×2 to 4×4 walled room with one door and a bed', () => {
     const map = blank(12, 14);
     const room = { x: 1, y: 1, w: 10, h: 8, theme: 'room-vault' as const };
     carveRoom(map, room.x, room.y, room.w, room.h);
     expect(placeRoomVault(map, room)).toBe(true);
-    let beds = 0, doors = 0, innerWalls = 0;
-    for (let y = room.y; y < room.y + room.h; y++) {
-      for (let x = room.x; x < room.x + room.w; x++) {
-        if (map[y][x].type === 'bed') {
-          beds++;
-          expect(map[y][x].emoji).toBe(BED_EMOJI);
-        }
-        if (map[y][x].type === 'door-closed') doors++;
-        if (map[y][x].type === 'wall') innerWalls++;
-      }
-    }
-    expect(beds).toBe(1);
-    expect(doors).toBe(1);
-    expect(innerWalls).toBeGreaterThan(8);
+    const box = vaultBox(map, room);
+    expect(box.beds).toBe(1);
+    expect(box.doors).toBe(1);
+    expect(box.w).toBeGreaterThanOrEqual(2);
+    expect(box.w).toBeLessThanOrEqual(4);
+    expect(box.h).toBe(box.w);
   });
 
-  it('refuses rooms too small to wrap an inner vault', () => {
+  it.each([2, 3, 4] as const)('places a %i×%i bedroom', (size) => {
+    const map = blank(12, 14);
+    const room = { x: 1, y: 1, w: 10, h: 8, theme: 'room-vault' as const };
+    carveRoom(map, room.x, room.y, room.w, room.h);
+    expect(placeRoomVault(map, room, size)).toBe(true);
+    const box = vaultBox(map, room);
+    expect(box.beds).toBe(1);
+    expect(box.doors).toBe(1);
+    expect(box.w).toBe(size);
+    expect(box.h).toBe(size);
+  });
+
+  it('refuses rooms too small to wrap a 2×2 closet', () => {
     const map = blank(8, 8);
-    const room = { x: 1, y: 1, w: 5, h: 4, theme: 'normal' as const };
+    const room = { x: 1, y: 1, w: 4, h: 3, theme: 'normal' as const };
     carveRoom(map, room.x, room.y, room.w, room.h);
     expect(placeRoomVault(map, room)).toBe(false);
   });
 
-  it('fits a vault in a minimum 7×6 outer room', () => {
-    const map = blank(10, 12);
-    const room = { x: 1, y: 1, w: 7, h: 6, theme: 'room-vault' as const };
+  it('fits a 2×2 closet in a minimum 4×4 outer room', () => {
+    const map = blank(8, 8);
+    const room = { x: 1, y: 1, w: 4, h: 4, theme: 'room-vault' as const };
     carveRoom(map, room.x, room.y, room.w, room.h);
-    expect(placeRoomVault(map, room)).toBe(true);
+    expect(placeRoomVault(map, room, 2)).toBe(true);
     expect(map.flat().some(t => t.type === 'bed')).toBe(true);
+    expect(placeRoomVault(map, room, 3)).toBe(false);
   });
 
   it('generateMap places a bedroom on a substantial fraction of floors', () => {
