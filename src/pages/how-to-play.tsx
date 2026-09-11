@@ -399,7 +399,7 @@ export default function HowToPlay({
             { icon: "🌊", label: "Water", desc: "Rivers, ponds, and lakes. You cannot walk on water without a ⛵ Boat. Mermen lurk here." },
             { icon: "🌿", label: "Bush", desc: "Blocks movement like a wall, but you can see and shoot through it. Ranged enemies (archers, dark mages) like to hide behind these." },
             { icon: "🌋", label: "Volcano", desc: "A rare vault. Spews lava every 5–10 turns. Grab the high-tier loot around it before the lava eats it — and don't stand in the fire." },
-            { icon: "🔥", label: "Lava", desc: "Extreme heat: each turn standing in lava deals 50% of your max HP plus a flat amount (starts at +10, +5 per floor descended). Destroys items on the tile. Volcanoes and lava rivers both use this." },
+            { icon: "🟧", label: "Lava", desc: "Extreme heat: each turn standing in lava deals 50% of your max HP plus a flat amount (starts at +10, +5 per floor descended). Destroys items on the tile. Volcanoes and lava rivers both use this." },
           ].map((t) => (
             <div
               key={t.label}

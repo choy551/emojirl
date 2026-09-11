@@ -1,6 +1,6 @@
 import { GameState, MapGrid, Position, EmojiItem, FloatingText, Enemy } from './types';
 
-export const LAVA_EMOJI = '🔥';
+export const LAVA_EMOJI = '🟧';
 export const VOLCANO_EMOJI = '🌋';
 export const BUSH_EMOJI = '🌿';
 
