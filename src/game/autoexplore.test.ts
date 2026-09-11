@@ -27,9 +27,13 @@ describe('isAutoexploreThreat', () => {
     expect(isAutoexploreThreat(fairy)).toBe(false);
   });
 
-  it('still treats hostiles and unrecruited neutrals as threats', () => {
+  it('does not treat unrecruited neutrals (adventurers, etc.) as threats', () => {
+    expect(isAutoexploreThreat(adventurer)).toBe(false);
+  });
+
+  it('still treats hostiles and aggroed neutrals as threats', () => {
     expect(isAutoexploreThreat(goblin)).toBe(true);
-    expect(isAutoexploreThreat(adventurer)).toBe(true);
+    expect(isAutoexploreThreat({ ...adventurer, engaged: true })).toBe(true);
   });
 });
 

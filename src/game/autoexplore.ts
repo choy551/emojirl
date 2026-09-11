@@ -1,9 +1,11 @@
 import { chebyshev } from './geo';
 import type { Position } from './types';
+import { isHostileCombatTarget } from './combat';
 
 type ExploreEntity = {
   isRecruited?: boolean;
   tag?: string;
+  engaged?: boolean;
   pos: Position;
 };
 
@@ -13,12 +15,15 @@ export function isRecruitedCompanion(e: { isRecruited?: boolean }): boolean {
 
 /**
  * Enemies that should halt autoexplore (adjacent / in-sight).
- * Recruited companions never count, even if `tag` is stale.
- * Fairies and other friendlies also never count.
+ * Same set wizard barrage will shoot: not companions, not friendlies,
+ * not Neutral NPCs (adventurers, monkeys, bears, mermen) until they aggro.
  */
-export function isAutoexploreThreat(e: { isRecruited?: boolean; tag?: string }): boolean {
-  if (e.isRecruited) return false;
-  return e.tag !== 'Friendly';
+export function isAutoexploreThreat(e: {
+  isRecruited?: boolean;
+  tag?: string;
+  engaged?: boolean;
+}): boolean {
+  return isHostileCombatTarget(e);
 }
 
 /** Occupied tiles for item pickup / stairs routing — walk through (swap with) recruited companions. */
