@@ -1,3 +1,35 @@
+import type { Enemy } from './types';
+import { ENEMY_PASSABLE_TILES, HUMANOID_ENEMY_PASSABLE_TILES, MERMAN_PASSABLE_TILES } from './tiles';
+
+const ANIMAL_EMOJIS = new Set([
+  '🐍', '🕷️', '🐦‍⬛', '🐺', '🦊', '🐗', '🐻', '🐒', '👁️', '🐉', '🦑',
+]);
+
+const ANIMAL_NAME_RE = /spider queen|dragon|kraken|snake|spider|crow|wolf|fox|boar|bear|monkey|\beye\b/i;
+
+/** Animals cannot open closed doors. Humanoids (including ghosts, fairies, mermen, adventurers) can. */
+export function isAnimalEnemy(e: {
+  emoji: string;
+  name?: string;
+  monkey?: boolean;
+  bear?: boolean;
+  crow?: boolean;
+}): boolean {
+  if (e.monkey || e.bear || e.crow) return true;
+  if (e.emoji && ANIMAL_EMOJIS.has(e.emoji)) return true;
+  if (e.name && ANIMAL_NAME_RE.test(e.name)) return true;
+  return false;
+}
+
+export function enemyCanOpenDoors(e: Parameters<typeof isAnimalEnemy>[0]): boolean {
+  return !isAnimalEnemy(e);
+}
+
+export function passableTilesForEnemy(e: Pick<Enemy, 'waterAggro'> & Parameters<typeof isAnimalEnemy>[0]): Set<string> {
+  if (e.waterAggro) return MERMAN_PASSABLE_TILES;
+  return enemyCanOpenDoors(e) ? HUMANOID_ENEMY_PASSABLE_TILES : ENEMY_PASSABLE_TILES;
+}
+
 export const ENEMY_TYPES = [
   { emoji: '👿', name: 'Demon',          hp: 6,  attack: 3, defense: 1, speed: 4,  weight: 1, berserker: true },
   { emoji: '🧟', name: 'Zombie',         hp: 4,  attack: 2, defense: 0, speed: 2,  weight: 3, silent: true },

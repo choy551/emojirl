@@ -5,7 +5,8 @@ import { stealOneSoulEmoji, applySoulThefts, stolenEmojiSummary } from './monkey
 import { resolveProjectileFlight } from './projectiles';
 import { withVisibility, visionRadiusFor } from './vision';
 import { bfsStepToward, fleeStep, hasLOSBetween, detectionRadius } from './pathfinding';
-import { PLAYER_PASSABLE_TILES, MERMAN_PASSABLE_TILES } from './tiles';
+import { PLAYER_PASSABLE_TILES } from './tiles';
+import { passableTilesForEnemy } from './enemies';
 import { tickVolcanoAndLava } from './lava';
 import { _flashSignals } from './flashSignals';
 import { nearRestaurant, crowGoldSteal } from './economy';
@@ -28,10 +29,12 @@ export interface EnemyTurnResult {
   playerInventoryRemovals: string[];
   playerInventoryAdditions: EmojiItem[];
   enemyBeam?: { positions: Position[]; color: string };
+  map?: GameState['map'];
 }
 
 export function runEnemyTurns(state: GameState, skipId?: string, sleeping = false): EnemyTurnResult {
-  const { player, map } = state;
+  const { player } = state;
+  let map = state.map;
   const effectivePlayer = applyEquipmentAndPassives(player);
   // Player's true sight range (class/level + bag LOS passives). Ranged enemies may
   // only attack while the player can actually see them — i.e. within this radius
@@ -52,6 +55,19 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
 
   const log = (text: string) =>
     newLogs.push({ id: Math.random().toString(), text, turn: state.turn });
+
+  const openDoorIfNeeded = (pos: Position, acting: { emoji: string; name: string }) => {
+    const t = map[pos.y]?.[pos.x];
+    if (t?.type !== 'door-closed') return;
+    map = map.map((row, y) =>
+      row.map((tile, x) =>
+        x === pos.x && y === pos.y
+          ? { ...tile, type: 'door-open' as const, emoji: '🔓' }
+          : tile
+      )
+    );
+    log(`🚪 ${acting.emoji} ${acting.name} opens the door.`);
+  };
 
   const reclaimMonkeyLoot = (e: Enemy) => {
     if (e.monkey && e.stolenEmojis?.length) {
@@ -220,6 +236,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     }
 
     occupied.delete(`${enemy.pos.x},${enemy.pos.y}`);
+    const passable = passableTilesForEnemy(enemy);
 
     const dist = chebyshev(enemy.pos, player.pos);
     const playerKey = `${player.pos.x},${player.pos.y}`;
@@ -253,8 +270,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
         // Flee logic: when HP < 50% and a hostile is nearby, run toward player
         const hpRatio = enemy.hp / enemy.maxHp;
         if (behavior === 'flee' && hpRatio < 0.5 && companionTarget && chebyshev(enemy.pos, companionTarget.pos) <= 3) {
-          const nextPos = bfsStepToward(map, enemy.pos, player.pos, occupied);
+          const nextPos = bfsStepToward(map, enemy.pos, player.pos, occupied, passable);
           if (nextPos && !(nextPos.x === player.pos.x && nextPos.y === player.pos.y)) {
+            openDoorIfNeeded(nextPos, enemy);
             newEnemies[i] = { ...newEnemies[i], pos: nextPos };
             occupied.add(`${nextPos.x},${nextPos.y}`);
           } else {
@@ -284,8 +302,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             }
             occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
           } else if (shouldChase) {
-            const nextPos = bfsStepToward(map, enemy.pos, companionTarget.pos, occupied);
+            const nextPos = bfsStepToward(map, enemy.pos, companionTarget.pos, occupied, passable);
             if (nextPos) {
+              openDoorIfNeeded(nextPos, enemy);
               newEnemies[i] = { ...newEnemies[i], pos: nextPos };
               occupied.add(`${nextPos.x},${nextPos.y}`);
             } else {
@@ -299,8 +318,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
           // No target — follow player if too far
           const followThreshold = behavior === 'far' ? 7 : 3;
           if (dist > followThreshold) {
-            const nextPos = bfsStepToward(map, enemy.pos, player.pos, occupied);
+            const nextPos = bfsStepToward(map, enemy.pos, player.pos, occupied, passable);
             if (nextPos && !(nextPos.x === player.pos.x && nextPos.y === player.pos.y)) {
+              openDoorIfNeeded(nextPos, enemy);
               newEnemies[i] = { ...newEnemies[i], pos: nextPos };
               occupied.add(`${nextPos.x},${nextPos.y}`);
             } else {
@@ -334,8 +354,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             }
             occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
           } else {
-            const nextPos = bfsStepToward(map, enemy.pos, guardTarget.pos, occupied);
+            const nextPos = bfsStepToward(map, enemy.pos, guardTarget.pos, occupied, passable);
             if (nextPos) {
+              openDoorIfNeeded(nextPos, enemy);
               newEnemies[i] = { ...newEnemies[i], pos: nextPos };
               occupied.add(`${nextPos.x},${nextPos.y}`);
             } else {
@@ -462,8 +483,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
       let updated: Enemy = { ...newEnemies[i], engaged: true, huntTurns, alertedBlind };
 
       if (enemy.cowardly && enemy.hp / enemy.maxHp < 0.3) {
-        const fleePos = fleeStep(map, updated.pos, player.pos, occupied);
+        const fleePos = fleeStep(map, updated.pos, player.pos, occupied, passable);
         if (fleePos) {
+          openDoorIfNeeded(fleePos, enemy);
           updated = { ...updated, pos: fleePos, patrolTarget: undefined };
           occupied.add(`${fleePos.x},${fleePos.y}`);
           log(`💨 ${enemy.emoji} ${enemy.name} is terrified and flees!`);
@@ -488,8 +510,12 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             msUpdated = { ...msUpdated, healCooldown: 3 };
           }
         }
-        const fleeP = fleeStep(map, msUpdated.pos, player.pos, occupied);
-        if (fleeP) { msUpdated = { ...msUpdated, pos: fleeP, patrolTarget: undefined }; occupied.add(`${fleeP.x},${fleeP.y}`); }
+        const fleeP = fleeStep(map, msUpdated.pos, player.pos, occupied, passable);
+        if (fleeP) {
+          openDoorIfNeeded(fleeP, enemy);
+          msUpdated = { ...msUpdated, pos: fleeP, patrolTarget: undefined };
+          occupied.add(`${fleeP.x},${fleeP.y}`);
+        }
         else { occupied.add(`${msUpdated.pos.x},${msUpdated.pos.y}`); }
         newEnemies[i] = msUpdated;
         continue;
@@ -621,10 +647,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
         }
         occupied.add(`${updated.pos.x},${updated.pos.y}`);
       } else {
-        const nextPos = enemy.waterAggro
-          ? bfsStepToward(map, enemy.pos, player.pos, occupied, MERMAN_PASSABLE_TILES)
-          : bfsStepToward(map, enemy.pos, player.pos, occupied);
+        const nextPos = bfsStepToward(map, enemy.pos, player.pos, occupied, passable);
         if (nextPos && !(nextPos.x === player.pos.x && nextPos.y === player.pos.y)) {
+          openDoorIfNeeded(nextPos, enemy);
           updated = { ...updated, pos: nextPos, patrolTarget: undefined };
           occupied.add(`${nextPos.x},${nextPos.y}`);
 
@@ -693,8 +718,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
           }
         }
         if (target) {
-          const nextPos = bfsStepToward(map, enemy.pos, target, occupied, MERMAN_PASSABLE_TILES);
+          const nextPos = bfsStepToward(map, enemy.pos, target, occupied, passable);
           if (nextPos && `${nextPos.x},${nextPos.y}` !== playerKey) {
+            openDoorIfNeeded(nextPos, enemy);
             updated = { ...updated, pos: nextPos };
             occupied.add(`${nextPos.x},${nextPos.y}`);
           } else {
@@ -717,8 +743,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             updated = { ...updated, patrolTarget: target };
           }
 
-          const nextPos = bfsStepToward(map, enemy.pos, target, occupied);
+          const nextPos = bfsStepToward(map, enemy.pos, target, occupied, passable);
           if (nextPos && `${nextPos.x},${nextPos.y}` !== playerKey) {
+            openDoorIfNeeded(nextPos, enemy);
             updated = { ...updated, pos: nextPos };
             occupied.add(`${nextPos.x},${nextPos.y}`);
           } else {
@@ -754,7 +781,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     }
   }
 
-  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam };
+  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map };
 }
 
 export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): GameState {
@@ -784,10 +811,13 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
   const pendingExplosion = result.explosionPositions.length > 0 ? result.explosionPositions : undefined;
   const pendingBeam = result.enemyBeam ?? state.pendingBeam;
 
+  const nextMap = result.map ?? state.map;
+
   let next: GameState;
   if (result.newLogs.length === 0 && result.playerHp === state.player.stats.hp && mergedFloating.length === 0 && state.floatingTexts.length === 0 && !hasExtraChanges) {
     next = {
       ...state,
+      map: nextMap,
       enemies: result.enemies,
       floatingTexts: mergedFloating,
       placedBombs: result.placedBombs,
@@ -799,6 +829,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
   } else {
     next = {
       ...state,
+      map: nextMap,
       enemies: result.enemies,
       player: {
         ...state.player,

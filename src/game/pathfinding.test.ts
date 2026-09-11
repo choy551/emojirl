@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Tile } from './types';
-import { hasLOS, hasLOSBetween } from './pathfinding';
-import { RANGED_BLOCKING_TILES } from './tiles';
+import { hasLOS, hasLOSBetween, bfsStepToward } from './pathfinding';
+import { ENEMY_PASSABLE_TILES, HUMANOID_ENEMY_PASSABLE_TILES, RANGED_BLOCKING_TILES } from './tiles';
 
 function tile(type: Tile['type'], emoji: string): Tile {
   return { type, emoji, seen: false, visible: false };
@@ -46,3 +46,28 @@ describe('ranged line of sight', () => {
     expect(hasLOSBetween(map, { x: 1, y: 2 }, { x: 6, y: 2 })).toBe(true);
   });
 });
+
+describe('enemy door pathing', () => {
+  function corridor(): Tile[][] {
+    const map: Tile[][] = Array.from({ length: 3 }, (_, y) =>
+      Array.from({ length: 5 }, (_, x) =>
+        y === 1 && x >= 1 && x <= 3 ? tile('floor', '⬜') : tile('wall', '⬛'),
+      ),
+    );
+    map[1][2] = tile('door-closed', '🚪');
+    return map;
+  }
+
+  it('animals cannot BFS onto a closed door', () => {
+    const map = corridor();
+    const step = bfsStepToward(map, { x: 1, y: 1 }, { x: 3, y: 1 }, new Set(), ENEMY_PASSABLE_TILES);
+    expect(step).toBeNull();
+  });
+
+  it('humanoids can BFS onto a closed door', () => {
+    const map = corridor();
+    const step = bfsStepToward(map, { x: 1, y: 1 }, { x: 3, y: 1 }, new Set(), HUMANOID_ENEMY_PASSABLE_TILES);
+    expect(step).toEqual({ x: 2, y: 1 });
+  });
+});
+

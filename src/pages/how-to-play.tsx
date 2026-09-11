@@ -376,7 +376,7 @@ export default function HowToPlay({
           {[
             { icon: "⬛", label: "Wall", desc: "Solid — cannot pass through" },
             { icon: "⬜", label: "Floor", desc: "Walkable open ground" },
-            { icon: "🚪", label: "Door", desc: "Some 1-tile corridors have a closed door; others are open hallways. Bump to open, press C to close. Closed doors block vision and enemies. Open or closed, door tiles block ranged attacks — you cannot snipe through a doorway." },
+            { icon: "🚪", label: "Door", desc: "Some 1-tile corridors have a closed door; others are open hallways. Bump to open, press C to close. Closed doors block vision, ranged attacks, and animals. Humanoid enemies (zombies, skeletons, elves, adventurers, …) can open a closed door and walk through. Open or closed, door tiles block ranged attacks — you cannot snipe through a doorway." },
             {
               icon: "🕳️",
               label: "Stairs Down",
