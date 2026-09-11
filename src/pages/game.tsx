@@ -11,6 +11,7 @@ import { saveScore } from '../game/leaderboard';
 import { saveGame, loadGame, clearSave, getRawSave } from '../game/save';
 import { isStackableBagPassive } from '../game/passives';
 import { useIsMobile } from '../hooks/use-mobile';
+import { useDismissGuard } from '../hooks/useDismissGuard';
 import { useControlSettings } from '../hooks/useControlSettings';
 import { closeTopOverlay, useAndroidBackButton } from '../hooks/useAndroidBackButton';
 import { useTouchGestures } from '../hooks/useTouchGestures';
@@ -53,6 +54,32 @@ import {
 } from '../game/gameHelpers';
 import { useGameActions } from '../hooks/useGameActions';
 
+
+function FloorAnnouncementOverlay({
+  announcement,
+  onDismiss,
+}: {
+  announcement: NonNullable<GameState['floorAnnouncement']>;
+  onDismiss: () => void;
+}) {
+  const dismiss = useDismissGuard(onDismiss);
+  return (
+    <div
+      className="absolute inset-0 bg-black flex flex-col items-center justify-center z-[80] cursor-pointer px-6"
+      onClick={dismiss}
+      data-testid="floor-announcement"
+    >
+      <div className="text-7xl mb-6">{announcement.kind === 'volcano' ? '🌋' : '⚠️'}</div>
+      <h1 className="text-3xl sm:text-4xl font-black text-orange-400 mb-4 tracking-wide text-center max-w-lg">
+        {announcement.title}
+      </h1>
+      <p className="text-lg text-orange-100/90 text-center max-w-md mb-8 leading-relaxed">
+        {announcement.body}
+      </p>
+      <p className="text-sm text-white/50 tracking-widest uppercase">Press any key or tap to continue</p>
+    </div>
+  );
+}
 
 export default function Game() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -108,6 +135,27 @@ export default function Game() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
+  const dismissFloorAnnouncement = useCallback(() => {
+    setGameState(prev => prev ? { ...prev, floorAnnouncement: null } : prev);
+  }, []);
+  useEffect(() => {
+    const flush = () => {
+      const gs = gameStateRef.current;
+      if (!gs || gs.gameOver) return;
+      saveGame(gs);
+    };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
   useEffect(() => { inspectedEnemyIdRef.current = inspectedEnemyId; }, [inspectedEnemyId]);
   useEffect(() => { blinkTargetModeRef.current = blinkTargetMode; }, [blinkTargetMode]);
   useEffect(() => { wizardTacticsRef.current = wizardTactics; }, [wizardTactics]);
@@ -2480,20 +2528,10 @@ export default function Game() {
         style={isMobile && !gameState.gameOver ? { paddingBottom: chromeBottom } : undefined}
       >
         {gameState.floorAnnouncement ? (
-          <div
-            className="absolute inset-0 bg-black flex flex-col items-center justify-center z-[80] cursor-pointer px-6"
-            onClick={() => setGameState(prev => prev ? { ...prev, floorAnnouncement: null } : prev)}
-            data-testid="floor-announcement"
-          >
-            <div className="text-7xl mb-6">{gameState.floorAnnouncement.kind === 'volcano' ? '🌋' : '⚠️'}</div>
-            <h1 className="text-3xl sm:text-4xl font-black text-orange-400 mb-4 tracking-wide text-center max-w-lg">
-              {gameState.floorAnnouncement.title}
-            </h1>
-            <p className="text-lg text-orange-100/90 text-center max-w-md mb-8 leading-relaxed">
-              {gameState.floorAnnouncement.body}
-            </p>
-            <p className="text-sm text-white/50 tracking-widest uppercase">Press any key or tap to continue</p>
-          </div>
+          <FloorAnnouncementOverlay
+            announcement={gameState.floorAnnouncement}
+            onDismiss={dismissFloorAnnouncement}
+          />
         ) : null}
         {gameState.gameOver ? (
           <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-50">

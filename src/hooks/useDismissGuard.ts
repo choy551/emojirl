@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 /** True when a dismiss event is leftover from the tap that just opened the overlay. */
 export function shouldIgnoreDismiss(openedAt: number, now = Date.now(), ms = 400): boolean {
@@ -32,6 +32,9 @@ export function swallowGhostClick(ms = 400): void {
  */
 export function useDismissGuard(onClose: () => void, ms = 400): () => void {
   const openedAt = useRef(Date.now());
+  useEffect(() => {
+    swallowGhostClick(ms);
+  }, [ms]);
   return useCallback(() => {
     if (shouldIgnoreDismiss(openedAt.current, Date.now(), ms)) return;
     onClose();
