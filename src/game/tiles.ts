@@ -4,3 +4,6 @@ export const PLAYER_PASSABLE_TILES = new Set(['floor', 'stairs', 'door-open', 'd
 export const ENEMY_PASSABLE_TILES = new Set(['floor', 'stairs', 'door-open', 'grass', 'boss-floor']);
 export const MERMAN_PASSABLE_TILES = new Set(['water']);
 export const PASSABLE_TILES = PLAYER_PASSABLE_TILES;
+
+/** Tiles that stop wizard bolts, bows, guns, and enemy ranged shots. Open doors too — shoot from the doorway, not through it. Bushes do not block. */
+export const RANGED_BLOCKING_TILES = new Set(['wall', 'tree', 'door-closed', 'door-open', 'volcano']);

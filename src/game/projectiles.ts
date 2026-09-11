@@ -1,8 +1,7 @@
 import { ActiveProjectile, Enemy, EmojiItem, FloatingText, Player, Position } from './types';
 import { applyEquipmentAndPassives } from './inventory';
 import { stolenEmojiSummary } from './monkeyLoot';
-
-const BLOCKING = new Set(['wall', 'tree', 'door-closed', 'volcano']);
+import { RANGED_BLOCKING_TILES } from './tiles';
 
 export interface ProjectileResolution {
   projectile: ActiveProjectile | null;
@@ -23,7 +22,7 @@ function inBounds(map: { length: number; 0?: { length: number } }, x: number, y:
 
 function isBlocked(map: { type: string }[][], x: number, y: number): boolean {
   if (!inBounds(map, x, y)) return true;
-  return BLOCKING.has(map[y][x].type);
+  return RANGED_BLOCKING_TILES.has(map[y][x].type);
 }
 
 function beamColor(kind: ActiveProjectile['kind']): string {

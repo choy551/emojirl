@@ -1,6 +1,6 @@
 import { GameState, Position } from './types';
 import { chebyshev } from './geo';
-import { PASSABLE_TILES, ENEMY_PASSABLE_TILES } from './tiles';
+import { PASSABLE_TILES, ENEMY_PASSABLE_TILES, RANGED_BLOCKING_TILES } from './tiles';
 
 export function bfsNextStep(
   map: GameState['map'],
@@ -105,12 +105,16 @@ export function bfsNextStepWallHug(
   return null;
 }
 
+function blocksRanged(map: GameState['map'], x: number, y: number): boolean {
+  if (y < 0 || y >= map.length || x < 0 || x >= map[0].length) return true;
+  return RANGED_BLOCKING_TILES.has(map[y][x].type);
+}
+
 export function hasLOS(map: GameState['map'], from: Position, dx: number, dy: number, range: number): boolean {
   for (let n = 1; n < range; n++) {
     const tx = from.x + dx * n;
     const ty = from.y + dy * n;
-    if (ty < 0 || ty >= map.length || tx < 0 || tx >= map[0].length) return false;
-    if (map[ty][tx].type === 'wall' || map[ty][tx].type === 'volcano') return false;
+    if (blocksRanged(map, tx, ty)) return false;
   }
   return true;
 }
@@ -122,8 +126,7 @@ export function hasLOSBetween(map: GameState['map'], from: Position, to: Positio
   for (let n = 1; n < steps; n++) {
     const tx = Math.round(from.x + (dx * n) / steps);
     const ty = Math.round(from.y + (dy * n) / steps);
-    if (ty < 0 || ty >= map.length || tx < 0 || tx >= map[0].length) return false;
-    if (map[ty][tx].type === 'wall' || map[ty][tx].type === 'volcano') return false;
+    if (blocksRanged(map, tx, ty)) return false;
   }
   return true;
 }

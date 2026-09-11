@@ -63,6 +63,16 @@ describe('resolveProjectileFlight', () => {
     expect(res.logs.some(l => l.text.includes('Bullet hits'))).toBe(false);
   });
 
+  it.each(['door-closed', 'door-open'] as const)('is stopped by a %s and does not hit behind it', (kind) => {
+    const map = mapWithWalls(10, 5);
+    map[2][3] = { type: kind, emoji: '🚪', seen: true, visible: true };
+    const enemies = [goblin('g', 5, 2)];
+    const res = resolveProjectileFlight(gunAtPlayer(), map, enemies, player, 1);
+    expect(res.enemies).toHaveLength(1);
+    expect(res.enemies[0].hp).toBe(8);
+    expect(res.logs.some(l => l.text.includes('Bullet hits'))).toBe(false);
+  });
+
   it('passes through a friendly companion and hits the hostile beyond', () => {
     const map = mapWithWalls(10, 5);
     const ally: Enemy = {
