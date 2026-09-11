@@ -33,6 +33,13 @@ describe('scanGotoDestinations', () => {
     expect(dests.map(d => d.kind)).toEqual(['stairs']);
   });
 
+  it('lists a seen bed', () => {
+    const map = grid([
+      [seen({ type: 'bed', emoji: '🛏️' }), seen({ type: 'stairs', emoji: '🕳️' })],
+    ]);
+    expect(scanGotoDestinations(map, { x: 1, y: 0 }).map(d => d.kind)).toEqual(['stairs', 'bed']);
+  });
+
   it('does not list unseen downstairs', () => {
     const map = grid([
       [{ type: 'stairs', emoji: '🕳️', seen: false, visible: false }],

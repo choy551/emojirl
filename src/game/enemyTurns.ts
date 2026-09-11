@@ -30,7 +30,7 @@ export interface EnemyTurnResult {
   enemyBeam?: { positions: Position[]; color: string };
 }
 
-export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResult {
+export function runEnemyTurns(state: GameState, skipId?: string, sleeping = false): EnemyTurnResult {
   const { player, map } = state;
   const effectivePlayer = applyEquipmentAndPassives(player);
   // Player's true sight range (class/level + bag LOS passives). Ranged enemies may
@@ -356,7 +356,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
       log(`🧜‍♂️ ${enemy.emoji} ${enemy.name} senses your presence — turns hostile!`);
     }
 
-    if (enemy.monkey && dist <= 1 && !playerDied) {
+    if (enemy.monkey && dist <= 1 && !playerDied && !sleeping) {
       const theft = stealOneSoulEmoji(player.inventory, stealTakenFrom);
       if (theft) {
         playerInventoryRemovals.push(theft.sourceId);
@@ -511,7 +511,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
       if (monkeyBonus > 0) log(`🐒 ${enemy.emoji} ${enemy.name} fights with your stolen emojis! (+${monkeyBonus} ATK)`);
       const effectiveAttack = Math.round((enemy.attack + packBonus + monkeyBonus) * divineMult);
 
-      if (enemy.ranged && hasLOSBetween(map, enemy.pos, player.pos) && chebyshev(enemy.pos, player.pos) <= playerVisionRadius && !playerDied) {
+      if (!sleeping && enemy.ranged && hasLOSBetween(map, enemy.pos, player.pos) && chebyshev(enemy.pos, player.pos) <= playerVisionRadius && !playerDied) {
         // Simple visual line/flash for the arrow shot (reuses the pendingBeam system used by player ranger/wizard attacks)
         const dx = player.pos.x - enemy.pos.x;
         const dy = player.pos.y - enemy.pos.y;
@@ -575,6 +575,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
       }
 
       if (dist <= 1) {
+        if (!sleeping) {
         if (enemy.ghostly) {
           moodDrain += 1;
           log(`👻 ${enemy.name}'s ethereal touch chills your soul! (mood −1)`);
@@ -617,6 +618,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
             _flashSignals.berserkFlashPending = enemy.id;
           }
         }
+        }
         occupied.add(`${updated.pos.x},${updated.pos.y}`);
       } else {
         const nextPos = enemy.waterAggro
@@ -626,7 +628,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
           updated = { ...updated, pos: nextPos, patrolTarget: undefined };
           occupied.add(`${nextPos.x},${nextPos.y}`);
 
-          if (chebyshev(nextPos, player.pos) <= 1) {
+          if (chebyshev(nextPos, player.pos) <= 1 && !sleeping) {
             if (enemy.ghostly) {
               moodDrain += 1;
               log(`👻 ${enemy.name}'s ethereal touch chills your soul! (mood −1)`);
@@ -734,7 +736,7 @@ export function runEnemyTurns(state: GameState, skipId?: string): EnemyTurnResul
 
   let kitePos: Position | undefined;
   let trailblazerCooldown = Math.max(0, (player.trailblazerCooldown ?? 0) - 1);
-  if (!playerDied && player.characterClass === '🧝') {
+  if (!sleeping && !playerDied && player.characterClass === '🧝') {
     const wasAdjacent = new Set(state.enemies.filter(e => chebyshev(e.pos, player.pos) <= 1).map(e => e.id));
     const trigger = newEnemies.find(e => chebyshev(e.pos, player.pos) <= 1 && !wasAdjacent.has(e.id));
     if (trigger) {

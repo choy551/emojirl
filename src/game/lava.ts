@@ -6,7 +6,7 @@ export const BUSH_EMOJI = '🌿';
 
 const LAVA_IMMUNE = new Set([
   'wall', 'volcano', 'stairs', 'shrine', 'shrine-used',
-  'shop-item', 'restaurant', 'safe-floor', 'door-closed', 'door-open',
+  'shop-item', 'restaurant', 'safe-floor', 'door-closed', 'door-open', 'bed',
   'campfire', 'boss-floor',
 ]);
 

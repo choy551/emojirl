@@ -38,7 +38,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
   const hp = player.stats.hp;
   const maxHp = player.stats.maxHp;
   const overheal = hp > maxHp;
-  const hpPct = overheal ? Math.min(100, (hp / (maxHp * 1.5)) * 100) : (hp / Math.max(1, maxHp)) * 100;
+  const hpPct = overheal ? Math.min(100, (hp / (maxHp * 2)) * 100) : (hp / Math.max(1, maxHp)) * 100;
   const hpColor = overheal ? '#f59e0b' : hpPct > 60 ? '#22c55e' : hpPct > 30 ? '#f59e0b' : '#ef4444';
   const mana = player.stats.mana ?? 0;
   const maxMana = player.stats.maxMana ?? 4;

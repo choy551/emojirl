@@ -816,3 +816,44 @@ export function BearInteractionDialog({ gameState, setGameState, bearId, stage, 
     </div>
   );
 }
+
+interface BedRestDialogProps {
+  onConfirm: () => void;
+  onClose: () => void;
+}
+
+export function BedRestDialog({ onConfirm, onClose }: BedRestDialogProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-card border border-sky-400/40 rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
+        <div className="text-center mb-5">
+          <div className="text-5xl mb-2">🛏️</div>
+          <div className="text-sm font-bold text-sky-200 mb-2">Rest here?</div>
+          <div className="text-xs text-muted-foreground leading-relaxed">
+            Sleeping restores you to <span className="text-amber-300 font-semibold">200% of max HP</span>,
+            fills mana, and resets cooldowns. <span className="text-foreground font-semibold">100 turns</span> pass:
+            enemies still move, volcanoes still spew.
+          </div>
+          <div className="mt-2 text-xs text-amber-300/90 leading-relaxed">
+            If a hostile reaches you, they get one 200% sneak attack and you wake.
+            Close the door first if you can.
+          </div>
+        </div>
+        <div className="space-y-2">
+          <button
+            className="w-full py-2.5 rounded-lg bg-sky-500/20 border border-sky-400/40 text-sky-100 text-sm font-semibold hover:bg-sky-500/35 transition-colors"
+            onClick={() => { onConfirm(); onClose(); }}
+          >
+            Sleep
+          </button>
+          <button
+            className="w-full py-2.5 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-sm font-semibold hover:bg-slate-500/30 transition-colors"
+            onClick={onClose}
+          >
+            Not now
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

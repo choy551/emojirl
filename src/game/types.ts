@@ -21,7 +21,8 @@ export type TileType =
   | 'shop-item'
   | 'restaurant'
   | 'boss-floor'
-  | 'campfire';
+  | 'campfire'
+  | 'bed';
 
 export interface Tile {
   type: TileType;
@@ -32,7 +33,7 @@ export interface Tile {
 
 export type MapGrid = Tile[][];
 
-export type RoomTheme = 'normal' | 'shrine' | 'shop' | 'restaurant' | 'forest' | 'boss' | 'market' | 'monster-den' | 'treasure-vault' | 'bush-ambush' | 'volcano';
+export type RoomTheme = 'normal' | 'shrine' | 'shop' | 'restaurant' | 'forest' | 'boss' | 'market' | 'monster-den' | 'treasure-vault' | 'bush-ambush' | 'volcano' | 'room-vault';
 
 export type MoodType = 
   | 'happy' | 'very_happy' | 'sad' | 'crying' 

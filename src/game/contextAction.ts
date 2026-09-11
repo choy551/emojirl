@@ -4,7 +4,7 @@ import { chebyshev } from './geo';
 
 export type ContextActionKind =
   | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear' | 'talk'
-  | 'cook' | 'close-door'
+  | 'cook' | 'close-door' | 'rest'
   | 'open-shop' | 'open-cache' | 'open-restaurant'
   | 'descend' | 'shrine' | 'pickup' | 'wait' | 'explore';
 
@@ -34,6 +34,7 @@ export function resolveContextAction(
   if (here?.type === 'shop-item' && here.emoji === '🏪') return { kind: 'open-shop', label: 'Shop', icon: '🏪' };
   if (here?.type === 'shop-item' && here.emoji === '📦') return { kind: 'open-cache', label: 'Ammo', icon: '📦' };
   if (here?.type === 'restaurant') return { kind: 'open-restaurant', label: 'Eat', icon: '🍽️' };
+  if (here?.type === 'bed') return { kind: 'rest', label: 'Rest', icon: '🛏️' };
 
   const neighbours: { dx: number; dy: number }[] = [];
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) neighbours.push({ dx, dy });
@@ -79,6 +80,9 @@ export function resolveContextAction(
 
   const companion = adjEnemy(e => !!e.isRecruited && e.tag === 'Friendly');
   if (companion) return { kind: 'talk', label: `Talk to ${companion.emoji}`, icon: '💬', dir: dirTo(companion) };
+
+  const bedDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'bed');
+  if (bedDir) return { kind: 'rest', label: 'Rest', icon: '🛏️', dir: bedDir };
 
   const shrineDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'shrine');
   if (shrineDir) return { kind: 'shrine', label: 'Pray', icon: '⛩️', dir: shrineDir };

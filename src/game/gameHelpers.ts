@@ -13,3 +13,4 @@ export * from './autoexplore';
 export * from './monkeyLoot';
 export * from './goto';
 export * from './lava';
+export * from './sleep';

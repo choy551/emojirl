@@ -13,6 +13,7 @@ import {
   mpBonusForLevel, computeNinjaEvasion, getRandomCowboyFlavor, spawnEnemies,
   spawnVaultItems, handleGodBlessedImmunity,
   getDungeonPressure, _flashSignals, restoreStolenEmojis, stolenEmojiSummary,
+  applyBedRest, simulateSleep, SLEEP_TURNS, BED_OVERHEAL_MULT,
 } from '../game/gameHelpers';
 import { canEquipItem } from '../components/itemUtils';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
@@ -903,6 +904,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         if (rooms.some(r => r.theme === 'monster-den')) addLog(`🦴 You sense a terrible presence nearby...`);
         if (rooms.some(r => r.theme === 'treasure-vault')) addLog(`💎 You sense hidden treasure surrounded by water...`);
         if (rooms.some(r => r.theme === 'bush-ambush')) addLog(`🌿 You hear bowstrings drawn behind the bushes...`);
+        if (rooms.some(r => r.theme === 'room-vault')) addLog(`🛏️ A small room is tucked inside these halls...`);
         if (rooms.some(r => r.theme === 'volcano')) {
           addLog(`🌋 There is a Volcano on this floor!`);
           newState.floorAnnouncement = {
@@ -1216,6 +1218,37 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     });
   }, [addLog, setGameState]);
 
+  const handleBedRest = useCallback(() => {
+    setBlinkTurn(-999);
+    setTrailblazeTurn(-999);
+    setGameState(prev => {
+      if (!prev || prev.gameOver || prev.floorAnnouncement) return prev;
+      const rested: typeof prev = {
+        ...prev,
+        player: applyBedRest(prev.player),
+        logs: [
+          { id: `sleep-start-${prev.turn}`, text: `🛏️ You lie down. ${SLEEP_TURNS} turns will pass...`, turn: prev.turn },
+          ...prev.logs,
+        ].slice(0, 24),
+      };
+      const { state, wokeBy, turnsSlept } = simulateSleep(rested, SLEEP_TURNS);
+      if (wokeBy) return withVisibility(state);
+      const overhealHp = Math.floor(state.player.stats.maxHp * BED_OVERHEAL_MULT);
+      const mpMsg = state.player.characterClass === '🧙' ? ' MP full.' : '';
+      return withVisibility({
+        ...state,
+        logs: [
+          { id: `sleep-end-${state.turn}`, text: `🛏️ You wake after ${turnsSlept} turns — overheal ${overhealHp} HP, cooldowns reset.${mpMsg}`, turn: state.turn },
+          ...state.logs,
+        ].slice(0, 24),
+        floatingTexts: [
+          { id: `bed-oh-${state.turn}`, pos: { ...state.player.pos }, text: `✨ OVERHEAL! (${overhealHp} HP)`, color: '#fbbf24', life: 4 },
+          ...state.floatingTexts,
+        ],
+      });
+    });
+  }, [setGameState, setBlinkTurn, setTrailblazeTurn]);
+
   const {
     applyWizardMode, handleCycleRangedTarget, applyNinjaMode,
     toggleAutoStealth, applyRangerMode, handleCowboyTactics,
@@ -1238,6 +1271,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     handleMove,
     handleWait,
     handleCloseDoor,
+    handleBedRest,
     handleUseHeal,
     handleCook,
     applyWizardMode,

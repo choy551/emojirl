@@ -44,6 +44,7 @@ export function MiniMap({ map, playerPos, enemies }: MiniMapProps) {
           else if (tile.type === 'boss-floor') color = '#5a1a1a';
           else if (tile.type === 'door-closed') color = '#7a4a18';
           else if (tile.type === 'door-open') color = '#5a6a3a';
+          else if (tile.type === 'bed') color = '#4a7ab0';
           else color = '#6a6a7a';
         } else {
           if (tile.type === 'wall') color = '#252530';
@@ -59,6 +60,7 @@ export function MiniMap({ map, playerPos, enemies }: MiniMapProps) {
           else if (tile.type === 'boss-floor') color = '#3a0a0a';
           else if (tile.type === 'door-closed') color = '#4a2c0a';
           else if (tile.type === 'door-open') color = '#3a4222';
+          else if (tile.type === 'bed') color = '#2a4468';
           else color = '#3a3a4a';
         }
 

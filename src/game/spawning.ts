@@ -130,9 +130,21 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
       const type = pressure.atk > 0
         ? { ...base, attack: base.attack + pressure.atk, defense: base.defense + pressure.def }
         : base;
-      const ex = room.x + 1 + Math.floor(Math.random() * (room.w - 2 || 1));
-      const ey = room.y + 1 + Math.floor(Math.random() * (room.h - 2 || 1));
-      let spawnPos: Position = { x: ex, y: ey };
+      let spawnPos: Position = {
+        x: room.x + 1 + Math.floor(Math.random() * (room.w - 2 || 1)),
+        y: room.y + 1 + Math.floor(Math.random() * (room.h - 2 || 1)),
+      };
+      if (map) {
+        let placed = map[spawnPos.y]?.[spawnPos.x]?.type === 'floor';
+        for (let t = 0; t < 12 && !placed; t++) {
+          spawnPos = {
+            x: room.x + 1 + Math.floor(Math.random() * (room.w - 2 || 1)),
+            y: room.y + 1 + Math.floor(Math.random() * (room.h - 2 || 1)),
+          };
+          placed = map[spawnPos.y]?.[spawnPos.x]?.type === 'floor';
+        }
+        if (!placed) continue;
+      }
       let spawnBounds: { x: number; y: number; w: number; h: number } | undefined =
         { x: room.x, y: room.y, w: room.w, h: room.h };
       if ('waterAggro' in type && type.waterAggro && map) {

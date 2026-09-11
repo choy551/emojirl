@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import type { MapGrid, Tile } from './types';
 import {
   canFloodTile, placeWaterBlob, placeRiver, placeBushAmbush, placeVolcanoVault,
-  generateMap, placeDoors,
+  generateMap, placeDoors, placeRoomVault,
 } from './mapgen';
 import { hasLOSBetween } from './pathfinding';
 import { OPAQUE_TILES } from './vision';
-import { PLAYER_PASSABLE_TILES, ENEMY_PASSABLE_TILES } from './tiles';
+import { BED_EMOJI, PLAYER_PASSABLE_TILES, ENEMY_PASSABLE_TILES } from './tiles';
 import { rollAmbushCount } from './enemies';
 import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI } from './lava';
 
@@ -215,6 +215,36 @@ describe('corridor doors', () => {
     }
     expect(doors).toBeGreaterThan(0);
     expect(openMouths).toBeGreaterThan(0);
+  });
+});
+
+describe('room vault', () => {
+  it('nests a walled room with one door and a bed inside a larger chamber', () => {
+    const map = blank(12, 14);
+    const room = { x: 1, y: 1, w: 10, h: 8, theme: 'room-vault' as const };
+    carveRoom(map, room.x, room.y, room.w, room.h);
+    expect(placeRoomVault(map, room)).toBe(true);
+    let beds = 0, doors = 0, innerWalls = 0;
+    for (let y = room.y; y < room.y + room.h; y++) {
+      for (let x = room.x; x < room.x + room.w; x++) {
+        if (map[y][x].type === 'bed') {
+          beds++;
+          expect(map[y][x].emoji).toBe(BED_EMOJI);
+        }
+        if (map[y][x].type === 'door-closed') doors++;
+        if (map[y][x].type === 'wall') innerWalls++;
+      }
+    }
+    expect(beds).toBe(1);
+    expect(doors).toBe(1);
+    expect(innerWalls).toBeGreaterThan(8);
+  });
+
+  it('refuses rooms too small to wrap an inner vault', () => {
+    const map = blank(8, 8);
+    const room = { x: 1, y: 1, w: 5, h: 4, theme: 'normal' as const };
+    carveRoom(map, room.x, room.y, room.w, room.h);
+    expect(placeRoomVault(map, room)).toBe(false);
   });
 });
 

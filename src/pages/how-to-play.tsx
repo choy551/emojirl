@@ -120,7 +120,7 @@ export default function HowToPlay({
             {
               label: "❤️ HP",
               color: "text-red-400",
-              desc: "Hit Points — reach 0 and it's over. Healed by food, shrines, campfires, and resting. The 🍺 bar can temporarily boost you above your max HP (overheal); the excess decays by 1 per 5 turns.",
+              desc: "Hit Points — reach 0 and it's over. Healed by food, shrines, campfires, and resting. The 🍺 bar overheals to 150% of max HP; a 🛏️ bed overheals to 200%. Excess decays by 1 per 5 turns.",
             },
             {
               label: "⚔️ ATK",
@@ -389,7 +389,7 @@ export default function HowToPlay({
             },
             { icon: "🏪", label: "Shop", desc: "Buy emojis, equipment, and ammo with 💰 gold. Sell anything from your bag or bank for gold too. Autoexplore stops here automatically." },
             { icon: "🏪🔥", label: "Restaurant", desc: "A food-only shop. Buy and cook food, rest for +2 extra HP nearby, and sell cooked food for 250% value. You can sell up to 5 cooked dishes — the kitchen closes after that (no more selling or cooking there), but the +2 HP/turn rest bonus remains. Warning: the food smell draws nearby enemies (+2 aggro range). Autoexplore stops here." },
-            { icon: "🍺", label: "Bar", desc: "Spend 15 XP for an instant HP restore from the innkeeper. Won't work if you're already at full health or have fewer than 15 XP." },
+            { icon: "🍺", label: "Bar", desc: "Spend 15 XP for an instant HP restore from the innkeeper (overheal to 150% of max HP). Won't work if you're already overhealed or have fewer than 15 XP. Beds overheal to 200% instead, with no XP cost." },
             {
               icon: "🔥",
               label: "Campfire",
@@ -399,6 +399,7 @@ export default function HowToPlay({
             { icon: "🌊", label: "Water", desc: "Rivers, ponds, and lakes. You cannot walk on water without a ⛵ Boat. Mermen lurk here." },
             { icon: "🌿", label: "Bush", desc: "Blocks movement like a wall, but you can see and shoot through it. Ranged enemies (archers, dark mages) like to hide behind these." },
             { icon: "🌋", label: "Volcano", desc: "A rare vault. Spews lava every 5–10 turns. Grab the high-tier loot around it before the lava eats it — and don't stand in the fire." },
+            { icon: "🛏️", label: "Bed", desc: "Inside a nested room vault: a small walled chamber with one door, tucked into a larger regular room. Interact to sleep. Resting overheals to 200% of max HP (the 🍺 bar is 150%), fully restores Wizard mana, and resets all cooldowns. 100 turns then pass — enemies still move and volcanoes still spew lava. If a hostile reaches you while you sleep, they land one sneak attack at 200% damage and you wake. Close the door before sleeping if you can. Autoexplore stops here." },
             { icon: "🟧", label: "Lava", desc: "Extreme heat: each turn standing in lava deals 50% of your max HP plus a flat amount (starts at +10, +5 per floor descended). Destroys items on the tile. Volcanoes and lava rivers both use this." },
           ].map((t) => (
             <div
@@ -415,7 +416,7 @@ export default function HowToPlay({
         </div>
 
         <div className="mt-3 text-xs text-muted-foreground">
-          <strong>Dungeon Pressure:</strong> Increases on deeper floors — nearby enemies get permanent stat bonuses (watch for on-screen warnings). <strong>Vaults &amp; special rooms:</strong> Use rope (from hotbar or tactics) to safely enter. Treasure vaults offer big rewards (risk of traps); monster dens are extra dangerous. Bush ambushes hide 1–5 ranged attackers behind 🌿 hedges. Volcano vaults pause the screen with a warning, then spew spreading lava every 5–10 turns that burns loot (Skull, Dagger, Boat, and deep-tier gear). Autoexplore stops at shops, restaurants, and bars.
+          <strong>Dungeon Pressure:</strong> Increases on deeper floors — nearby enemies get permanent stat bonuses (watch for on-screen warnings). <strong>Vaults &amp; special rooms:</strong> Use rope (from hotbar or tactics) to safely enter. Treasure vaults offer big rewards (risk of traps); monster dens are extra dangerous. Bush ambushes hide 1–5 ranged attackers behind 🌿 hedges. Volcano vaults pause the screen with a warning, then spew spreading lava every 5–10 turns that burns loot (Skull, Dagger, Boat, and deep-tier gear). Room vaults are smaller walled rooms nested inside a larger chamber, entered through a single 🚪, with a 🛏️ bed inside (sleep for 200% overheal / full mana / reset cooldowns; 100 turns pass; a hostile that finds you sneak-attacks at 200% and wakes you). Autoexplore stops at shops, restaurants, bars, and beds.
         </div>
       </Section>
 

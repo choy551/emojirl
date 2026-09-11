@@ -33,7 +33,7 @@ import { ShopModal } from '../components/ShopModal';
 import { AmmoCacheModal } from '../components/AmmoCacheModal';
 import { RestaurantModal } from '../components/RestaurantModal';
 import { ItemStatCard } from '../components/ItemStatCard';
-import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog, CompanionTalkDialog } from '../components/InteractionDialogs';
+import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog, CompanionTalkDialog, BedRestDialog } from '../components/InteractionDialogs';
 import { TacticsMenu } from '../components/TacticsMenu';
 import { GoToMenu } from '../components/GoToMenu';
 import { EquipmentTab } from '../components/EquipmentTab';
@@ -196,6 +196,7 @@ export default function Game() {
       { id: 'stat-card', isOpen: () => !!statCardItem, close: () => setStatCardItem(null) },
       { id: 'boat-warn', isOpen: () => lastBoatWarnSlot !== null, close: () => setLastBoatWarnSlot(null) },
       { id: 'drown-warn', isOpen: () => drownWarnSlot !== null, close: () => setDrownWarnSlot(null) },
+      { id: 'bed', isOpen: () => bedRestOpen, close: () => setBedRestOpen(false) },
       { id: 'talk', isOpen: () => !!pendingCompanionTalkId, close: () => setPendingCompanionTalkId(null) },
       { id: 'bear', isOpen: () => !!pendingBearInteraction, close: () => setPendingBearInteraction(null) },
       { id: 'adventurer', isOpen: () => !!pendingAdventurerInteraction, close: () => setPendingAdventurerInteraction(null) },
@@ -245,6 +246,7 @@ export default function Game() {
       }
       setRestaurantOpen(true);
     }
+    if (tile?.type === 'bed') setBedRestOpen(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.player.pos.x, gameState?.player.pos.y]);
 
@@ -291,6 +293,7 @@ export default function Game() {
   const [pendingAdventurerInteraction, setPendingAdventurerInteraction] = useState<string | null>(null);
   const [pendingBearInteraction, setPendingBearInteraction] = useState<{ id: string; stage: 'neutral' | 'friendly'; offerId: string | null } | null>(null);
   const [pendingCompanionTalkId, setPendingCompanionTalkId] = useState<string | null>(null);
+  const [bedRestOpen, setBedRestOpen] = useState(false);
 
   // Emoji-less flash: full-screen red vignette when player has no soul emojis
   useEffect(() => {
@@ -478,6 +481,7 @@ export default function Game() {
     handleFireProjectile,
     handleUseSlot,
     handleCook,
+    handleBedRest,
     handleBankMove,
     handleConsumeBankItem,
     handleEquip,
@@ -607,6 +611,9 @@ export default function Game() {
           if (bt.type === 'shop-item' && bt.emoji === '🍺') {
             barBlockedSet.add(`${bx},${by}`);
           }
+          if (bt.type === 'bed') {
+            barBlockedSet.add(`${bx},${by}`);
+          }
           if (bt.type === 'stairs') {
             stairsBlockedSet.add(`${bx},${by}`);
           }
@@ -624,6 +631,11 @@ export default function Game() {
         addLog('Autoexplore stopped: 🏪 shop found!');
         return;
       }
+      if (exploreTile?.type === 'bed') {
+        setAutoExplore(false);
+        addLog('Autoexplore stopped: 🛏️ a bed.');
+        return;
+      }
       // Stop when adjacent to a visible bar tile. BFS already routes around bars so
       // the player never steps on one, but without this stop the player could end up
       // right next to a bar with no feedback. This lets them decide whether to visit.
@@ -636,6 +648,17 @@ export default function Game() {
       if (adjacentVisibleBar) {
         setAutoExplore(false);
         addLog('Autoexplore stopped: 🍺 Innkeeper nearby!');
+        return;
+      }
+      const adjacentVisibleBed = state.map.some((row, by) =>
+        row.some((t, bx) =>
+          t.type === 'bed' && t.visible &&
+          chebyshev(player.pos, { x: bx, y: by }) <= 1
+        )
+      );
+      if (adjacentVisibleBed) {
+        setAutoExplore(false);
+        addLog('Autoexplore stopped: 🛏️ a bed nearby.');
         return;
       }
       const explorePassives = computeBagPassives(player.inventory);
@@ -862,6 +885,11 @@ export default function Game() {
       case 'open-cache': setAmmoCacheOpen(true); break;
       case 'open-restaurant': setRestaurantOpen(true); break;
       case 'close-door': setTravelTarget(null); handleCloseDoor(); break;
+      case 'rest':
+        setTravelTarget(null);
+        if (action.dir) handleManualMove(action.dir.dx, action.dir.dy);
+        else setBedRestOpen(true);
+        break;
       case 'cook': setTravelTarget(null); handleCook(); break;
       case 'talk': {
         const gs = gameStateRef.current;
@@ -1611,6 +1639,7 @@ export default function Game() {
           else if (tileData.type === 'shrine') tileBg = 'rgba(220,170,20,0.22)';
           else if (tileData.type === 'boss-floor') tileBg = 'rgba(200,30,30,0.22)';
           else if (tileData.type === 'campfire') tileBg = 'rgba(255,140,0,0.25)';
+          else if (tileData.type === 'bed') tileBg = 'rgba(80,140,200,0.28)';
           else if (tileData.type === 'restaurant') tileBg = 'rgba(220,60,60,0.22)';
           else if (tileData.type === 'lava') tileBg = 'rgba(255,60,0,0.45)';
           else if (tileData.type === 'volcano') tileBg = 'rgba(220,30,0,0.55)';
@@ -2211,7 +2240,7 @@ export default function Game() {
               {(() => {
                 const isOverheal = player.stats.hp > player.stats.maxHp;
                 if (isOverheal) {
-                  const overhealPct = Math.min(100, (player.stats.hp / (player.stats.maxHp * 1.5)) * 100);
+                  const overhealPct = Math.min(100, (player.stats.hp / (player.stats.maxHp * 2)) * 100);
                   return <div className="h-full transition-all duration-300 rounded-full animate-pulse" style={{ width: `${overhealPct}%`, backgroundColor: '#f59e0b', boxShadow: '0 0 6px #fbbf24' }} />;
                 }
                 const pct = (player.stats.hp / player.stats.maxHp) * 100;
@@ -2949,6 +2978,13 @@ export default function Game() {
           setGameState={setGameState}
           companionId={pendingCompanionTalkId}
           onClose={() => setPendingCompanionTalkId(null)}
+        />
+      )}
+
+      {bedRestOpen && (
+        <BedRestDialog
+          onConfirm={handleBedRest}
+          onClose={() => setBedRestOpen(false)}
         />
       )}
 

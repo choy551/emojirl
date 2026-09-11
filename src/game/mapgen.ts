@@ -1,5 +1,6 @@
 import { MapGrid, Position, RoomTheme } from './types';
 import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI } from './lava';
+import { BED_EMOJI } from './tiles';
 
 const MAP_WIDTH = 50;
 const MAP_HEIGHT = 28;
@@ -110,6 +111,59 @@ export function placeDoors(
       }
     }
   }
+}
+
+const INNER_VAULT_W = 5;
+const INNER_VAULT_H = 4;
+
+/**
+ * Nested bedroom: a small walled room (one closed door, a bed) sitting inside a
+ * larger dungeon room with a walkable ring around it.
+ */
+export function placeRoomVault(map: MapGrid, room: Room): boolean {
+  const pad = 1;
+  if (room.w < INNER_VAULT_W + 2 * pad || room.h < INNER_VAULT_H + 2 * pad) return false;
+  const minIx = room.x + pad;
+  const maxIx = room.x + room.w - INNER_VAULT_W - pad;
+  const minIy = room.y + pad;
+  const maxIy = room.y + room.h - INNER_VAULT_H - pad;
+  if (maxIx < minIx || maxIy < minIy) return false;
+
+  const ix = minIx + Math.floor(Math.random() * (maxIx - minIx + 1));
+  const iy = minIy + Math.floor(Math.random() * (maxIy - minIy + 1));
+
+  for (let y = iy; y < iy + INNER_VAULT_H; y++) {
+    for (let x = ix; x < ix + INNER_VAULT_W; x++) {
+      const edge = x === ix || x === ix + INNER_VAULT_W - 1 || y === iy || y === iy + INNER_VAULT_H - 1;
+      map[y][x] = edge
+        ? { type: 'wall', emoji: '⬛', seen: false, visible: false }
+        : { type: 'floor', emoji: '⬜', seen: false, visible: false };
+    }
+  }
+
+  const doorChoices = [
+    { x: ix + Math.floor(INNER_VAULT_W / 2), y: iy },
+    { x: ix + Math.floor(INNER_VAULT_W / 2), y: iy + INNER_VAULT_H - 1 },
+    { x: ix, y: iy + Math.floor(INNER_VAULT_H / 2) },
+    { x: ix + INNER_VAULT_W - 1, y: iy + Math.floor(INNER_VAULT_H / 2) },
+  ];
+  const door = doorChoices[Math.floor(Math.random() * doorChoices.length)];
+  map[door.y][door.x] = { type: 'door-closed', emoji: '🚪', seen: false, visible: false };
+
+  let bed: { x: number; y: number } | null = null;
+  let best = -1;
+  for (let y = iy + 1; y < iy + INNER_VAULT_H - 1; y++) {
+    for (let x = ix + 1; x < ix + INNER_VAULT_W - 1; x++) {
+      const d = Math.max(Math.abs(x - door.x), Math.abs(y - door.y));
+      if (d > best) {
+        best = d;
+        bed = { x, y };
+      }
+    }
+  }
+  if (!bed) return false;
+  map[bed.y][bed.x] = { type: 'bed', emoji: BED_EMOJI, seen: false, visible: false };
+  return true;
 }
 
 /** Market vault: safe floor with a shrine + shop stalls arranged around it. */
@@ -240,7 +294,7 @@ function placeAmmoCache(map: MapGrid, room: Room) {
 
 const FLOODABLE_TYPES = new Set(['wall', 'floor', 'grass']);
 const FEATURE_PROTECTED_THEMES = new Set([
-  'shop', 'market', 'restaurant', 'treasure-vault', 'volcano', 'boss',
+  'shop', 'market', 'restaurant', 'treasure-vault', 'volcano', 'boss', 'room-vault',
 ]);
 
 function inRoom(r: Room, x: number, y: number): boolean {
@@ -484,7 +538,7 @@ function ensureStairsReachable(map: MapGrid, start: Position, stairs: Position):
   const DRY = new Set([
     'floor', 'stairs', 'boss-floor', 'grass',
     'door-open', 'door-closed',
-    'safe-floor', 'shop-item', 'shrine', 'shrine-used',
+    'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'bed',
     'campfire',
   ]);
   if (reach(map, start, stairs, DRY)) return;
@@ -595,6 +649,7 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
   const treasureChance    = Math.min(0.65, 0.20 + (floor - 1) * 0.06);
   const bushAmbushChance  = Math.min(0.50, 0.16 + (floor - 1) * 0.05);
   const volcanoChance     = isBossFloor ? 0 : Math.min(0.32, 0.08 + (floor - 1) * 0.04);
+  const roomVaultChance   = Math.min(0.50, 0.22 + (floor - 1) * 0.05);
 
   let shrineAssigned      = false;
   let shopAssigned        = false;
@@ -662,6 +717,21 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
     }
   }
 
+  // Nested bedroom vault: a small walled room inside a leftover regular room.
+  const largeNormal = rooms
+    .map((room, i) => ({ room, i }))
+    .filter(({ room, i }) =>
+      i > 0 && i < rooms.length - 1 &&
+      room.theme === 'normal' &&
+      room.w >= INNER_VAULT_W + 2 &&
+      room.h >= INNER_VAULT_H + 2
+    )
+    .sort(() => Math.random() - 0.5);
+  if (largeNormal.length > 0 && Math.random() < roomVaultChance) {
+    const pick = largeNormal[0];
+    rooms[pick.i] = { ...pick.room, theme: 'room-vault' };
+  }
+
   // Place doors at room entrances (corridor–room junctions)
   placeDoors(map, rooms);
 
@@ -676,6 +746,7 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
     else if (room.theme === 'treasure-vault') placeWaterMoat(map, room);
     else if (room.theme === 'bush-ambush')    placeBushAmbush(map, room);
     else if (room.theme === 'volcano')        placeVolcanoVault(map, room);
+    else if (room.theme === 'room-vault')     placeRoomVault(map, room);
     // monster-den: no tile treatment — enemy packing is handled in spawning.ts
   }
 
