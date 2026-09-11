@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { GameState, Player, FloatingText, PlacedBomb, ActiveProjectile } from '../../game/types';
-import { resolveCombat } from '../../game/combat';
+import { resolveCombat, isHostileCombatTarget } from '../../game/combat';
 import { getMood } from '../../game/moods';
 import { markEnemyKilled } from '../../game/discoveries';
 import {
@@ -94,7 +94,7 @@ export function useCombatActions(
       }
       const target = prev.enemies.find(e => e.id === targetId);
       if (!target) { addLog('🥷 Blink Strike — target lost.'); return prev; }
-      if (target.tag === 'Friendly' || (target.tag === 'Neutral' && !target.engaged)) {
+      if (!isHostileCombatTarget(target)) {
         addLog(`🥷 Blink Strike — ${target.name} is not hostile.`);
         return prev;
       }
@@ -223,7 +223,7 @@ export function useCombatActions(
       const targets = prev.enemies.filter(e => {
         const dist = chebyshev(prev.player.pos, e.pos);
         return dist >= 1 && dist <= 6 && hasLOSBetween(prev.map, prev.player.pos, e.pos) && prev.map[e.pos.y]?.[e.pos.x]?.visible
-          && (e.tag === 'Hostile' || e.engaged);
+          && isHostileCombatTarget(e);
       });
       if (targets.length === 0) {
         addLog('🥷 Blink Strike — no targets in range (6 tiles, requires LOS).');

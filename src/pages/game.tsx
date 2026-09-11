@@ -540,7 +540,8 @@ export default function Game() {
     }
     const targets = gs.enemies.filter(e => {
       const d = chebyshev(gs.player.pos, e.pos);
-      return d >= 1 && d <= 6 && hasLOSBetween(gs.map, gs.player.pos, e.pos) && gs.map[e.pos.y]?.[e.pos.x]?.visible;
+      return d >= 1 && d <= 6 && hasLOSBetween(gs.map, gs.player.pos, e.pos) && gs.map[e.pos.y]?.[e.pos.x]?.visible
+        && isHostileCombatTarget(e);
     }).sort((a, b) => chebyshev(gs.player.pos, a.pos) - chebyshev(gs.player.pos, b.pos));
     if (targets.length === 0) {
       addLog('🥷 Blink Strike — no targets in range (6 tiles, requires LOS).');
@@ -1236,7 +1237,8 @@ export default function Game() {
           if (gs) {
             const blinkTargets = gs.enemies.filter(en => {
               const d = chebyshev(gs.player.pos, en.pos);
-              return d >= 1 && d <= 6 && hasLOSBetween(gs.map, gs.player.pos, en.pos) && gs.map[en.pos.y]?.[en.pos.x]?.visible;
+              return d >= 1 && d <= 6 && hasLOSBetween(gs.map, gs.player.pos, en.pos) && gs.map[en.pos.y]?.[en.pos.x]?.visible
+                && isHostileCombatTarget(en);
             }).sort((a, b) => chebyshev(gs.player.pos, a.pos) - chebyshev(gs.player.pos, b.pos));
             if (blinkTargets.length > 0) {
               const idx = blinkTargets.findIndex(en => en.id === inspectedEnemyIdRef.current);

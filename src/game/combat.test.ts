@@ -10,6 +10,7 @@ describe('isHostileCombatTarget', () => {
   it('skips companions, fairies, and unengaged neutrals', () => {
     expect(isHostileCombatTarget({ isRecruited: true, tag: 'Friendly' })).toBe(false);
     expect(isHostileCombatTarget({ isRecruited: true, tag: 'Hostile' })).toBe(false);
+    expect(isHostileCombatTarget({ isRecruited: true, tag: 'Friendly', engaged: true })).toBe(false);
     expect(isHostileCombatTarget({ tag: 'Friendly' })).toBe(false);
     expect(isHostileCombatTarget({ tag: 'Neutral', engaged: false })).toBe(false);
   });
