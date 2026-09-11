@@ -115,6 +115,13 @@ export function placeDoors(
 
 const INNER_VAULT_W = 5;
 const INNER_VAULT_H = 4;
+/** Outer room must keep a 1-tile walkable ring around the inner vault. */
+const ROOM_VAULT_MIN_W = INNER_VAULT_W + 2;
+const ROOM_VAULT_MIN_H = INNER_VAULT_H + 2;
+
+function canHoldInnerVault(room: Pick<Room, 'w' | 'h'>): boolean {
+  return room.w >= ROOM_VAULT_MIN_W && room.h >= ROOM_VAULT_MIN_H;
+}
 
 /**
  * Nested bedroom: a small walled room (one closed door, a bed) sitting inside a
@@ -164,6 +171,69 @@ export function placeRoomVault(map: MapGrid, room: Room): boolean {
   if (!bed) return false;
   map[bed.y][bed.x] = { type: 'bed', emoji: BED_EMOJI, seen: false, visible: false };
   return true;
+}
+
+function roomVaultFits(nx: number, ny: number, nw: number, nh: number, rooms: Room[], skip: number): boolean {
+  if (nx < 1 || ny < 1 || nx + nw > MAP_WIDTH - 1 || ny + nh > MAP_HEIGHT - 1) return false;
+  const cand = { x: nx, y: ny, w: nw, h: nh };
+  return rooms.every((r, i) => i === skip || !roomsOverlap(r, cand));
+}
+
+/** Grow a room one tile at a time until it can wrap a 5×4 inner vault. */
+function tryExpandForInnerVault(map: MapGrid, rooms: Room[], index: number): boolean {
+  let { x, y, w, h } = rooms[index];
+  if (canHoldInnerVault({ w, h })) return true;
+
+  for (let step = 0; step < 16; step++) {
+    if (canHoldInnerVault({ w, h })) break;
+    const tries: Array<{ x: number; y: number; w: number; h: number }> = [];
+    if (w < ROOM_VAULT_MIN_W) {
+      tries.push({ x, y, w: w + 1, h });
+      tries.push({ x: x - 1, y, w: w + 1, h });
+    }
+    if (h < ROOM_VAULT_MIN_H) {
+      tries.push({ x, y, w, h: h + 1 });
+      tries.push({ x, y: y - 1, w, h: h + 1 });
+    }
+    for (let i = tries.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [tries[i], tries[j]] = [tries[j], tries[i]];
+    }
+    const ok = tries.find(t => roomVaultFits(t.x, t.y, t.w, t.h, rooms, index));
+    if (!ok) return false;
+    x = ok.x; y = ok.y; w = ok.w; h = ok.h;
+  }
+  if (!canHoldInnerVault({ w, h })) return false;
+
+  for (let ry = y; ry < y + h; ry++) {
+    for (let rx = x; rx < x + w; rx++) {
+      if (map[ry][rx].type === 'wall') {
+        map[ry][rx] = { type: 'floor', emoji: '⬜', seen: false, visible: false };
+      }
+    }
+  }
+  rooms[index] = { ...rooms[index], x, y, w, h };
+  return true;
+}
+
+/** Pick a 7×6+ middle normal, or expand the largest leftover one. */
+function pickOrExpandRoomVault(map: MapGrid, rooms: Room[]): number {
+  const middleNormals = rooms
+    .map((room, i) => ({ room, i }))
+    .filter(({ room, i }) =>
+      i > 0 && i < rooms.length - 1 && room.theme === 'normal'
+    );
+  const ready = middleNormals.filter(({ room }) => canHoldInnerVault(room));
+  if (ready.length > 0) {
+    return ready[Math.floor(Math.random() * ready.length)].i;
+  }
+  const byArea = [...middleNormals].sort(
+    (a, b) => b.room.w * b.room.h - a.room.w * a.room.h,
+  );
+  for (const n of byArea) {
+    if (tryExpandForInnerVault(map, rooms, n.i)) return n.i;
+  }
+  return -1;
 }
 
 /** Market vault: safe floor with a shrine + shop stalls arranged around it. */
@@ -649,7 +719,8 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
   const treasureChance    = Math.min(0.65, 0.20 + (floor - 1) * 0.06);
   const bushAmbushChance  = Math.min(0.50, 0.16 + (floor - 1) * 0.05);
   const volcanoChance     = isBossFloor ? 0 : Math.min(0.32, 0.08 + (floor - 1) * 0.04);
-  const roomVaultChance   = Math.min(0.50, 0.22 + (floor - 1) * 0.05);
+  // Claim a large room *before* shrine/forest so bedrooms aren't starved out.
+  const roomVaultChance   = Math.min(0.70, 0.38 + (floor - 1) * 0.06);
 
   let shrineAssigned      = false;
   let shopAssigned        = false;
@@ -660,8 +731,19 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
   let bushAmbushAssigned  = false;
   let volcanoAssigned     = false;
 
+  // Nested bedroom: reserve a 7×6+ middle room (expand one if needed) first.
+  // Sitting this after forest left ~5% of floors with a bed — leftover 7×6
+  // normals are rare, and trees/shrines ate most of them.
+  if (Math.random() < roomVaultChance) {
+    const vaultIdx = pickOrExpandRoomVault(map, rooms);
+    if (vaultIdx >= 0) {
+      rooms[vaultIdx] = { ...rooms[vaultIdx], theme: 'room-vault' };
+    }
+  }
+
   for (const idx of shuffled) {
     const r = rooms[idx];
+    if (r.theme !== 'normal') continue;
     if (!shrineAssigned && Math.random() < shrineChance) {
       rooms[idx] = { ...r, theme: 'shrine' };
       shrineAssigned = true;
@@ -715,21 +797,6 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
     if (room.w >= 5 && room.h >= 4 && Math.random() < forestDensity) {
       rooms[i] = { ...room, theme: 'forest' };
     }
-  }
-
-  // Nested bedroom vault: a small walled room inside a leftover regular room.
-  const largeNormal = rooms
-    .map((room, i) => ({ room, i }))
-    .filter(({ room, i }) =>
-      i > 0 && i < rooms.length - 1 &&
-      room.theme === 'normal' &&
-      room.w >= INNER_VAULT_W + 2 &&
-      room.h >= INNER_VAULT_H + 2
-    )
-    .sort(() => Math.random() - 0.5);
-  if (largeNormal.length > 0 && Math.random() < roomVaultChance) {
-    const pick = largeNormal[0];
-    rooms[pick.i] = { ...pick.room, theme: 'room-vault' };
   }
 
   // Place doors at room entrances (corridor–room junctions)

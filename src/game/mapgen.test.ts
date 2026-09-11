@@ -246,6 +246,27 @@ describe('room vault', () => {
     carveRoom(map, room.x, room.y, room.w, room.h);
     expect(placeRoomVault(map, room)).toBe(false);
   });
+
+  it('fits a vault in a minimum 7×6 outer room', () => {
+    const map = blank(10, 12);
+    const room = { x: 1, y: 1, w: 7, h: 6, theme: 'room-vault' as const };
+    carveRoom(map, room.x, room.y, room.w, room.h);
+    expect(placeRoomVault(map, room)).toBe(true);
+    expect(map.flat().some(t => t.type === 'bed')).toBe(true);
+  });
+
+  it('generateMap places a bedroom on a substantial fraction of floors', () => {
+    const N = 80;
+    let beds = 0;
+    let themed = 0;
+    for (let i = 0; i < N; i++) {
+      const { map, rooms } = generateMap(1 + (i % 4));
+      if (rooms.some(r => r.theme === 'room-vault')) themed++;
+      if (map.some(row => row.some(t => t.type === 'bed'))) beds++;
+    }
+    expect(themed).toBe(beds);
+    expect(beds).toBeGreaterThanOrEqual(15);
+  });
 });
 
 describe('volcano vault', () => {
