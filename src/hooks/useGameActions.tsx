@@ -340,7 +340,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         if (pos2.y >= 0 && pos2.y < prev.map.length && pos2.x >= 0 && pos2.x < prev.map[0].length) {
           const tile2 = prev.map[pos2.y][pos2.x];
           const noEnemyAt2 = !prev.enemies.some(e => e.pos.x === pos2.x && e.pos.y === pos2.y);
-          const tile2Passable = PLAYER_PASSABLE_TILES.has(tile2.type) || (tile2.type === 'water' && computeBagPassives(prev.player.inventory).canSwim);
+          const tile2Passable = (PLAYER_PASSABLE_TILES.has(tile2.type) && tile2.type !== 'door-closed')
+            || (tile2.type === 'water' && computeBagPassives(prev.player.inventory).canSwim);
           if (tile2Passable && noEnemyAt2) newPos = pos2;
         }
       }

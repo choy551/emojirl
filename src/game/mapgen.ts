@@ -59,7 +59,20 @@ function placeBossRoom(map: MapGrid, room: Room) {
   }
 }
 
-function placeDoors(map: MapGrid, rooms: Room[]) {
+/** Fraction of 1-tile corridor mouths that get a door; the rest stay open hallways. */
+export const CORRIDOR_DOOR_CHANCE = 0.45;
+
+/**
+ * Put a closed door on the first corridor tile outside a room when that tile is
+ * a one-tile-wide hallway (walls on both perpendicular sides). The door cannot
+ * sit on the room perimeter: those tiles have floor neighbours, so the old
+ * check never placed anything.
+ */
+export function placeDoors(
+  map: MapGrid,
+  rooms: Room[],
+  chance = CORRIDOR_DOOR_CHANCE,
+): void {
   for (const room of rooms) {
     if (room.theme === 'shop') continue;
     for (let rx = room.x; rx < room.x + room.w; rx++) {
@@ -79,19 +92,20 @@ function placeDoors(map: MapGrid, rooms: Room[]) {
             ny < room.y || ny >= room.y + room.h;
           if (!outsideRoom) continue;
           if (ny < 0 || ny >= map.length || nx < 0 || nx >= map[0].length) continue;
-          if (map[ny][nx].type === 'floor') {
-            // Only place a door when the two perpendicular neighbours are walls —
-            // this ensures the door sits in a one-tile-wide corridor/hallway
-            // entry rather than floating along an open room wall.
-            const tile1 = map[ry + dx]?.[rx + dy];
-            const tile2 = map[ry - dx]?.[rx - dy];
-            const side1Wall = !tile1 || tile1.type === 'wall';
-            const side2Wall = !tile2 || tile2.type === 'wall';
-            if (side1Wall && side2Wall) {
-              map[ry][rx] = { type: 'door-closed', emoji: '🚪', seen: false, visible: false };
-            }
-            break;
+          const outside = map[ny][nx].type;
+          if (outside === 'door-closed' || outside === 'door-open') break;
+          if (outside !== 'floor') continue;
+
+          // Perpendicular neighbours of the *corridor* tile, not the room tile.
+          const tile1 = map[ny + dx]?.[nx + dy];
+          const tile2 = map[ny - dx]?.[nx - dy];
+          const side1Wall = !tile1 || tile1.type === 'wall';
+          const side2Wall = !tile2 || tile2.type === 'wall';
+          if (!side1Wall || !side2Wall) continue;
+          if (Math.random() < chance) {
+            map[ny][nx] = { type: 'door-closed', emoji: '🚪', seen: false, visible: false };
           }
+          break;
         }
       }
     }

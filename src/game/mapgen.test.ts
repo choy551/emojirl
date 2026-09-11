@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { MapGrid, Tile } from './types';
 import {
   canFloodTile, placeWaterBlob, placeRiver, placeBushAmbush, placeVolcanoVault,
-  generateMap,
+  generateMap, placeDoors,
 } from './mapgen';
 import { hasLOSBetween } from './pathfinding';
 import { OPAQUE_TILES } from './vision';
@@ -127,6 +127,94 @@ describe('bush ambush vault', () => {
     expect(counts[2]).toBeGreaterThan(counts[5]);
     expect(counts[5]).toBeGreaterThan(0);
     expect(counts[1] + counts[2] + counts[3] + counts[4] + counts[5]).toBe(2000);
+  });
+});
+
+describe('corridor doors', () => {
+  function twoRoomsWithHallway(): { map: MapGrid; rooms: ReturnType<typeof generateMap>['rooms'] } {
+    // Two 3x3 rooms stacked, joined by a 1-tile-wide vertical corridor.
+    const map = blank(9, 7);
+    carveRoom(map, 2, 1, 3, 3);
+    carveRoom(map, 2, 5, 3, 3);
+    map[4][3] = tile('floor', '⬜');
+    const rooms = [
+      { x: 2, y: 1, w: 3, h: 3, theme: 'normal' as const },
+      { x: 2, y: 5, w: 3, h: 3, theme: 'normal' as const },
+    ];
+    return { map, rooms };
+  }
+
+  it('places a door on the corridor mouth, not the room perimeter', () => {
+    const { map, rooms } = twoRoomsWithHallway();
+    placeDoors(map, rooms, 1);
+    expect(map[4][3].type).toBe('door-closed');
+    expect(map[4][3].emoji).toBe('🚪');
+    expect(map[3][3].type).toBe('floor');
+    expect(map[5][3].type).toBe('floor');
+  });
+
+  it('leaves the hallway open when chance is 0', () => {
+    const { map, rooms } = twoRoomsWithHallway();
+    placeDoors(map, rooms, 0);
+    expect(map[4][3].type).toBe('floor');
+  });
+
+  it('does not door shop-room corridor mouths', () => {
+    const { map, rooms } = twoRoomsWithHallway();
+    rooms[0] = { ...rooms[0], theme: 'shop' };
+    rooms[1] = { ...rooms[1], theme: 'shop' };
+    placeDoors(map, rooms, 1);
+    expect(map[4][3].type).toBe('floor');
+  });
+
+  it('does not door wide openings — only 1-tile corridors', () => {
+    const map = blank(9, 8);
+    carveRoom(map, 1, 1, 5, 3);
+    carveRoom(map, 1, 5, 5, 3);
+    map[4][2] = tile('floor', '⬜');
+    map[4][3] = tile('floor', '⬜');
+    map[4][4] = tile('floor', '⬜');
+    const rooms = [
+      { x: 1, y: 1, w: 5, h: 3, theme: 'normal' as const },
+      { x: 1, y: 5, w: 5, h: 3, theme: 'normal' as const },
+    ];
+    placeDoors(map, rooms, 1);
+    expect(map[4][2].type).toBe('floor');
+    expect(map[4][3].type).toBe('floor');
+    expect(map[4][4].type).toBe('floor');
+  });
+
+  it('generated floors mix doors with open 1-tile hallways', () => {
+    let doors = 0;
+    let openMouths = 0;
+    for (let i = 0; i < 20; i++) {
+      const { map, rooms } = generateMap(2);
+      for (const room of rooms) {
+        if (room.theme === 'shop') continue;
+        for (let rx = room.x; rx < room.x + room.w; rx++) {
+          for (let ry = room.y; ry < room.y + room.h; ry++) {
+            const onEdge =
+              rx === room.x || rx === room.x + room.w - 1 ||
+              ry === room.y || ry === room.y + room.h - 1;
+            if (!onEdge) continue;
+            for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as [number, number][]) {
+              const nx = rx + dx, ny = ry + dy;
+              if (nx >= room.x && nx < room.x + room.w && ny >= room.y && ny < room.y + room.h) continue;
+              const t = map[ny]?.[nx];
+              if (!t) continue;
+              const a = map[ny + dx]?.[nx + dy];
+              const b = map[ny - dx]?.[nx - dy];
+              const oneWide = (!a || a.type === 'wall') && (!b || b.type === 'wall');
+              if (!oneWide) continue;
+              if (t.type === 'door-closed' || t.type === 'door-open') doors++;
+              else if (t.type === 'floor') openMouths++;
+            }
+          }
+        }
+      }
+    }
+    expect(doors).toBeGreaterThan(0);
+    expect(openMouths).toBeGreaterThan(0);
   });
 });
 

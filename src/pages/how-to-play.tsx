@@ -376,6 +376,7 @@ export default function HowToPlay({
           {[
             { icon: "⬛", label: "Wall", desc: "Solid — cannot pass through" },
             { icon: "⬜", label: "Floor", desc: "Walkable open ground" },
+            { icon: "🚪", label: "Door", desc: "Some 1-tile corridors have a closed door; others are open hallways. Bump to open, press C to close. Closed doors block vision and enemies." },
             {
               icon: "🕳️",
               label: "Stairs Down",
