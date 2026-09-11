@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { Player, Enemy, Position, FloatingText } from '../game/types';
-import { resolveCombat, getCowboyUnarmedBonus } from '../game/combat';
+import { resolveCombat, getCowboyUnarmedBonus, isHostileCombatTarget } from '../game/combat';
 import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, getFoodHealItems } from '../game/emojis';
 import { getMood } from '../game/moods';
 import { generateMap } from '../game/mapgen';
@@ -926,7 +926,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const boltCandidates = newState.enemies.filter(e => {
           const dist = chebyshev(newPlayer.pos, e.pos);
           return dist > 1 && dist <= VISION_RADIUS && hasLOSBetween(newState.map, newPlayer.pos, e.pos)
-            && (e.tag === 'Hostile' || e.engaged);
+            && isHostileCombatTarget(e);
         });
         const boltTactics = wizardTacticsRef.current;
         const boltTarget = boltTactics.mode === 'holdfire'
@@ -1085,7 +1085,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       if (cls === '🧙') {
         const boltCandidates = waitEnemies.filter(e => {
           const dist = chebyshev(waitPlayer.pos, e.pos);
-          return dist > 1 && dist <= VISION_RADIUS && hasLOSBetween(prev.map, waitPlayer.pos, e.pos);
+          return dist > 1 && dist <= VISION_RADIUS && hasLOSBetween(prev.map, waitPlayer.pos, e.pos)
+            && isHostileCombatTarget(e);
         });
         const boltTactics = wizardTacticsRef.current;
         const boltTarget = boltTactics.mode === 'holdfire'

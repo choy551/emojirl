@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { generateMap } from '../game/mapgen';
 import { Player, Enemy, EmojiItem, GameState, Position, EquipSlot } from '../game/types';
-import { getCowboyUnarmedBonus } from '../game/combat';
+import { getCowboyUnarmedBonus, isHostileCombatTarget } from '../game/combat';
 import { getRandomEmojiPower } from '../game/emojis';
 import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
@@ -1538,7 +1538,8 @@ export default function Game() {
     if (player.characterClass !== '🧙' || wizardTactics.mode === 'holdfire') return null;
     const candidates = gameState.enemies.filter(e => {
       const d = chebyshev(player.pos, e.pos);
-      return d > 1 && d <= VISION_RADIUS && hasLOSBetween(gameState.map, player.pos, e.pos);
+      return d > 1 && d <= VISION_RADIUS && hasLOSBetween(gameState.map, player.pos, e.pos)
+        && isHostileCombatTarget(e);
     });
     if (!candidates.length) return null;
     if (wizardTactics.mode === 'furthest')

@@ -1,6 +1,22 @@
 import { Player, Enemy, MoodType } from './types';
 import { crowGoldSteal } from './economy';
 
+/**
+ * Auto-fire / barrage should only pick real foes: not companions, not friendlies,
+ * and not Neutral NPCs (monkeys, bears, mermen, adventurers) until they aggro.
+ * Regular enemies have no tag and count as hostile.
+ */
+export function isHostileCombatTarget(e: {
+  isRecruited?: boolean;
+  tag?: string;
+  engaged?: boolean;
+}): boolean {
+  if (e.isRecruited) return false;
+  if (e.tag === 'Friendly') return false;
+  if (e.tag === 'Neutral' && !e.engaged) return false;
+  return true;
+}
+
 export interface MoodModifiers {
   damageMult: number;
   incomingMult: number;

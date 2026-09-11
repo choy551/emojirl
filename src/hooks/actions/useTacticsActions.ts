@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { chebyshev, withVisibility, runEnemyTurns, applyEnemyTurns } from '../../game/gameHelpers';
+import { isHostileCombatTarget } from '../../game/combat';
 import type { GameRefs, GameSetters, AddLog } from './types';
 
 const BLINK_ACTIVE = 3;
@@ -55,6 +56,7 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
     const { player } = state;
     const targets = state.enemies
       .filter(e => state.map[e.pos.y]?.[e.pos.x]?.visible)
+      .filter(e => player.characterClass !== '🧙' || isHostileCombatTarget(e))
       .sort((a, b) => chebyshev(player.pos, a.pos) - chebyshev(player.pos, b.pos));
     if (targets.length === 0) { addLog('No visible enemies to target.'); return; }
     const idx = targets.findIndex(e => e.id === inspectedEnemyIdRef.current);
