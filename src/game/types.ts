@@ -268,6 +268,11 @@ export interface GameState {
   floorAnnouncement?: { kind: 'volcano'; title: string; body: string } | null;
   /** Turn number when a floor volcano next spews lava (every 5–10 turns). */
   volcanoNextSpewTurn?: number;
+  /** Vendor stock for this floor. null/undefined = not generated yet; [] = sold out. */
+  shopStock?: EmojiItem[] | null;
+  restaurantStock?: EmojiItem[] | null;
+  ammoCacheStock?: EmojiItem[] | null;
+  restaurantSoldCount?: number;
 }
 
 export interface ControlSettings {

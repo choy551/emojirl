@@ -574,6 +574,11 @@ export default function HowToPlay({
                       <div className="text-xs text-muted-foreground">
                         {power.description}
                       </div>
+                      {power.bagPassive?.description && (
+                        <div className="text-xs text-sky-300/80 mt-0.5">
+                          Bag: {power.bagPassive.description}
+                        </div>
+                      )}
                     </>
                   ) : (
                     <div className="flex items-center gap-1.5">
@@ -714,6 +719,12 @@ export default function HowToPlay({
             the passive bag effect.
           </li>
         </ul>
+        <p className="text-xs text-muted-foreground mt-3">
+          💀 <strong className="text-foreground">Skull</strong> is non-stackable.
+          Bag Death Crit: +25% crit chance at full HP, interpolating up to +50% when
+          the foe is at 25% HP or below. Adds to luck/mood crit chance — never a
+          guaranteed crit. Consume still grants +2 ATK and +2 SPD.
+        </p>
       </Section>
 
       {/* Enemies */}

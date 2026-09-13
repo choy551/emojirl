@@ -84,7 +84,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       const cowboyDualGuns = cls === '🤠'
         && _outerState.player.equipment.mainHand?.weaponKind === 'gun'
         && _outerState.player.equipment.offHand?.weaponKind === 'gun'
-        && (_outerState.player.ammo ?? 0) > 0;
+        && (_outerState.player.ammo ?? 0) >= 2;
       let cowboyWouldShoot = false;
       if (cowboyDualGuns) {
         for (let range = 2; range <= 4; range++) {
@@ -131,7 +131,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       const cls = player.characterClass;
 
       const cowboyDualGuns = cls === '🤠' && player.equipment.mainHand?.weaponKind === 'gun' && player.equipment.offHand?.weaponKind === 'gun';
-      if (cowboyDualGuns && player.ammo > 0) {
+      if (cowboyDualGuns && player.ammo >= 2) {
         for (let range = 2; range <= 4; range++) {
           const tx = player.pos.x + dx * range;
           const ty = player.pos.y + dy * range;
@@ -155,7 +155,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           for (let n = 1; n <= range; n++) _cBeam.push({ x: player.pos.x + dx * n, y: player.pos.y + dy * n });
           const cBeam = { positions: _cBeam, color: '#fbbf24' };
           let cEnemies = [...prev.enemies];
-          let cPlayer: Player = { ...player, ammo: player.ammo - 1, stats: { ...player.stats, hp: cResult.playerHp } };
+          let cPlayer: Player = { ...player, ammo: player.ammo - 2, stats: { ...player.stats, hp: cResult.playerHp } };
           let cSkip: string | undefined;
           let cKillCounts = { ...prev.killCounts };
           if (cResult.enemyDied) {
@@ -482,7 +482,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const holdFire = isBlinkActive;
         const rangerFlee = isTrailblazeActive;
         const hasDualBlades = cls === '🥷' && player.equipment.mainHand?.weaponKind === 'blade' && player.equipment.offHand?.weaponKind === 'blade';
-        const isPistolWhip = cowboyDualGuns && player.ammo <= 0;
+        const isPistolWhip = cowboyDualGuns && player.ammo < 2;
         if (isPistolWhip) addLog(`🤠 I'll pistol whip tha' shit outta you!`);
         const isCowboyUnarmed = cls === '🤠' && !player.equipment.mainHand?.weaponKind && !player.equipment.offHand?.weaponKind;
         const cowboyIronFistBonus = (isPistolWhip || isCowboyUnarmed) ? getCowboyUnarmedBonus(player.stats.level) : 0;
@@ -897,6 +897,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         newState.activeProjectile = null;
         newState.pendingExplosion = undefined;
         newState.pendingBeam = undefined;
+        newState.shopStock = null;
+        newState.restaurantStock = null;
+        newState.ammoCacheStock = null;
+        newState.restaurantSoldCount = 0;
 
         // Companion descent: favorite companion (or random if none) descends with the player.
         const recruitedCompanions = prev.enemies.filter(e =>

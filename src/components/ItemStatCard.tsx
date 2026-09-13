@@ -1,5 +1,6 @@
 import { EmojiItem } from '../game/types';
 import { isStackableBagPassive, getStackableBonusLabel, getStackableCumulativeLabel } from '../game/passives';
+import { soulHelpText } from '../game/emojis';
 
 interface ItemStatCardProps {
   item: EmojiItem;
@@ -7,6 +8,7 @@ interface ItemStatCardProps {
 }
 
 export function ItemStatCard({ item: si, onClose }: ItemStatCardProps) {
+  const help = soulHelpText(si);
   const effect = (si as any).effect as Record<string, number | boolean> | undefined;
   const consumeLines: string[] = [];
   if (effect) {
@@ -49,7 +51,7 @@ export function ItemStatCard({ item: si, onClose }: ItemStatCardProps) {
         </div>
 
         {/* Description */}
-        <p className="text-xs text-muted-foreground/80 leading-relaxed">{si.description}</p>
+        <p className="text-xs text-muted-foreground/80 leading-relaxed">{help.description}</p>
 
         {/* Equipment bonuses */}
         {si.isEquipment && equipBonusLines.length > 0 && (
@@ -68,7 +70,7 @@ export function ItemStatCard({ item: si, onClose }: ItemStatCardProps) {
         {si.bagPassive && (
           <div className="bg-black/20 rounded-lg p-2.5 space-y-1.5">
             <div className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wide">Bag passive</div>
-            <p className="text-xs text-sky-300/80 leading-relaxed">{si.bagPassive.description}</p>
+            <p className="text-xs text-sky-300/80 leading-relaxed">{help.bagPassiveDescription ?? si.bagPassive.description}</p>
             {isStackableBagPassive(si) ? (() => {
               const perStack = getStackableBonusLabel(si);
               const stackN = si.stackCount ?? 1;

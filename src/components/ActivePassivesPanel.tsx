@@ -1,5 +1,6 @@
 import { EmojiItem } from '../game/types';
 import { hasBagPassive, getStackableCumulativeLabel } from '../game/passives';
+import { soulHelpText } from '../game/emojis';
 
 interface ActivePassivesPanelProps {
   bagSlots: (EmojiItem | null)[];
@@ -35,6 +36,7 @@ export function ActivePassivesPanel({ bagSlots }: ActivePassivesPanelProps) {
         const cumulative = getStackableCumulativeLabel(item);
         const n = item.stackCount ?? 1;
         const p = item.bagPassive!;
+        const help = soulHelpText(item);
         const statParts: string[] = [];
         if (p.attackBonus)              statParts.push(`+${p.attackBonus} ATK`);
         if (p.defenseBonus)             statParts.push(`+${p.defenseBonus} DEF`);
@@ -43,11 +45,12 @@ export function ActivePassivesPanel({ bagSlots }: ActivePassivesPanelProps) {
         if (p.luckBonus)                statParts.push(`+${p.luckBonus} LCK`);
         if (p.losBonus && p.losBonus > 0) statParts.push(`+${p.losBonus} VIS`);
         if (p.losBonus && p.losBonus < 0) statParts.push(`${p.losBonus} VIS`);
+        const passiveDesc = help.bagPassiveDescription ?? p.description;
         const effectLabel = cumulative
           ? (n > 1 ? `×${n} — ${cumulative}` : cumulative)
           : statParts.length > 0
-            ? `${p.description} [${statParts.join(', ')}]`
-            : p.description;
+            ? `${passiveDesc} [${statParts.join(', ')}]`
+            : passiveDesc;
         return (
           <div key={item.id} className="flex items-start gap-1.5 text-[11px]">
             <span className="text-base leading-none shrink-0 mt-px">{item.emoji}</span>

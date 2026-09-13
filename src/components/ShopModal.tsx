@@ -1,5 +1,6 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
 import { getItemBuyPrice, getItemSellValue, addToBag, removeAndRefillBag } from '../game/gameHelpers';
+import { soulHelpText } from '../game/emojis';
 import { COOKABLE_EMOJIS } from '../game/emojis';
 import { canEquipItem } from './itemUtils';
 import { useDismissGuard } from '../hooks/useDismissGuard';
@@ -60,7 +61,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                   <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold leading-tight">{item.name}</div>
-                    <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.description}</div>
+                    <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{soulHelpText(item).description}</div>
                   </div>
                   <button
                     disabled={!canAfford || bagFull}
@@ -148,7 +149,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                     {item.name}{inBank ? ' (bank)' : ''}
                     {item.isEquipment && !canEquipItem(item, cls) && <span className="ml-1 text-[9px] text-red-400/80 font-normal">wrong class</span>}
                   </div>
-                  <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.description}</div>
+                  <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{soulHelpText(item).description}</div>
                 </div>
                 <button
                   onClick={() => {

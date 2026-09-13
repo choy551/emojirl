@@ -1,4 +1,5 @@
 import { EmojiItem } from './types';
+import { soulHelpText } from './emojis';
 
 /** Per-emoji caps for the stackable-passive collapse mechanic. */
 export const STACKABLE_BAG_CAPS: Record<string, number> = {
@@ -77,6 +78,6 @@ export function getPassiveTooltipSuffix(item: EmojiItem): string {
   if (p.luckBonus)                statParts.push(`+${p.luckBonus} LCK`);
   if (p.losBonus && p.losBonus > 0) statParts.push(`+${p.losBonus} vision`);
   if (p.losBonus && p.losBonus < 0) statParts.push(`${p.losBonus} vision`);
-  const base = ` · Passive: ${p.description}`;
+  const base = ` · Passive: ${soulHelpText(item).bagPassiveDescription ?? p.description}`;
   return statParts.length > 0 ? `${base} [${statParts.join(', ')}]` : base;
 }

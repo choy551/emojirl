@@ -62,7 +62,7 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
     startingAmmo: 0,
     passives: [
       { label: 'Iron Fist', detail: '20% melee stun chance — enemy skips their counterattack. Unarmed ATK scales with level: +1/lvl (1–5), +2/lvl (6–10), +3/lvl (11+). Bonus also applies when pistol-whipping.' },
-      { label: 'Real American Hero', detail: 'Can only equip guns (🔫/💥) in hand slots — "Only real Cowboys fight with their fists!" While unarmed: fights in melee with scaling Iron Fist bonus. Dual-gun mode (both hands = guns): ranged attacks cost 1 🪙 bullet per shot (4-tile range). Out of ammo: pistol-whips for +120% damage.' },
+      { label: 'Real American Hero', detail: 'Can only equip guns (🔫/💥) in hand slots — "Only real Cowboys fight with their fists!" While unarmed: fights in melee with scaling Iron Fist bonus. Dual-gun mode (both hands = guns): 1 🪙 bullet per shot, 2 bullets per attack (4-tile range). Need 2 bullets to shoot; with 0–1 bullet, pistol-whip in melee (+120% dmg).' },
       { label: 'Cowboy Happy', detail: 'Mood can never drop below Happy — immune to Neutral, Angry, Sad, Crying, Scared, and Desperate states. On big hits, stuns, or every 4–6 turns, randomly shouts patriotic nonsense into the combat log.' },
       { label: 'Boundless Spirit', detail: 'Mood-boosting emoji items stack with no upper limit. Every 20 points above 100 adds +5% damage, +2 dodge, +3 crit, and +2% double-strike chance.' },
     ],

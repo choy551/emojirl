@@ -191,40 +191,47 @@ export default function Game() {
   const [shopOpen, setShopOpen] = useState(false);
   const shopOpenRef = useRef(false);
   const [shopItems, setShopItems] = useState<EmojiItem[]>([]);
-  const shopStockFloor = useRef(-1);
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
-  // Reset shop stock whenever the floor changes so each floor's shop is generated fresh
-  useEffect(() => {
-    shopStockFloor.current = -1;
-    setShopItems([]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.currentFloor]);
+  const persistShopItems = useCallback((update: React.SetStateAction<EmojiItem[]>) => {
+    setShopItems(prev => {
+      const next = typeof update === 'function' ? update(prev) : update;
+      setGameState(gs => gs ? { ...gs, shopStock: next } : gs);
+      return next;
+    });
+  }, []);
 
   const [ammoCacheOpen, setAmmoCacheOpen] = useState(false);
   const ammoCacheOpenRef = useRef(false);
   const [restaurantOpen, setRestaurantOpen] = useState(false);
   const restaurantOpenRef = useRef(false);
   const [restaurantItems, setRestaurantItems] = useState<EmojiItem[]>([]);
-  const restaurantStockFloor = useRef(-1);
   const [restaurantSoldCount, setRestaurantSoldCount] = useState(0);
   const restaurantClosedRef = useRef(false);
   useEffect(() => { restaurantOpenRef.current = restaurantOpen; }, [restaurantOpen]);
   useEffect(() => { restaurantClosedRef.current = restaurantSoldCount >= 5; }, [restaurantSoldCount]);
-  useEffect(() => {
-    restaurantStockFloor.current = -1;
-    setRestaurantItems([]);
-    setRestaurantSoldCount(0);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.currentFloor]);
+  const persistRestaurantItems = useCallback((update: React.SetStateAction<EmojiItem[]>) => {
+    setRestaurantItems(prev => {
+      const next = typeof update === 'function' ? update(prev) : update;
+      setGameState(gs => gs ? { ...gs, restaurantStock: next } : gs);
+      return next;
+    });
+  }, []);
+  const persistRestaurantSoldCount = useCallback((update: React.SetStateAction<number>) => {
+    setRestaurantSoldCount(prev => {
+      const next = typeof update === 'function' ? update(prev) : update;
+      setGameState(gs => gs ? { ...gs, restaurantSoldCount: next } : gs);
+      return next;
+    });
+  }, []);
   const [ammoCacheItems, setAmmoCacheItems] = useState<EmojiItem[]>([]);
-  const ammoCacheStockFloor = useRef(-1);
   useEffect(() => { ammoCacheOpenRef.current = ammoCacheOpen; }, [ammoCacheOpen]);
-  // Reset ammo cache stock on floor change
-  useEffect(() => {
-    ammoCacheStockFloor.current = -1;
-    setAmmoCacheItems([]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.currentFloor]);
+  const persistAmmoCacheItems = useCallback((update: React.SetStateAction<EmojiItem[]>) => {
+    setAmmoCacheItems(prev => {
+      const next = typeof update === 'function' ? update(prev) : update;
+      setGameState(gs => gs ? { ...gs, ammoCacheStock: next } : gs);
+      return next;
+    });
+  }, []);
   const [logOpen, setLogOpen] = useState(false);
   const logOpenRef = useRef(false);
   useEffect(() => { logOpenRef.current = logOpen; }, [logOpen]);
@@ -252,6 +259,33 @@ export default function Game() {
   useEffect(() => { focusedBagIdxRef.current = focusedBagIdx; }, [focusedBagIdx]);
   useEffect(() => { bagTabRef.current = bagTab; }, [bagTab]);
   useEffect(() => { if (bankOpen) setFocusedBagIdx(0); }, [bankOpen]);
+
+  // Hydrate vendor UI from persisted GameState after load (refs start empty).
+  useEffect(() => {
+    if (!gameState) return;
+    if (gameState.shopStock != null) setShopItems(gameState.shopStock);
+    if (gameState.restaurantStock != null) setRestaurantItems(gameState.restaurantStock);
+    if (gameState.ammoCacheStock != null) setAmmoCacheItems(gameState.ammoCacheStock);
+    if (typeof gameState.restaurantSoldCount === 'number') setRestaurantSoldCount(gameState.restaurantSoldCount);
+  // Only when a save is first applied / floor stock is restored — not every turn.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState?.schemaVersion, gameState?.currentFloor, gameState?.shopStock, gameState?.restaurantStock, gameState?.ammoCacheStock, gameState?.restaurantSoldCount]);
+
+  // Reset vendor stock when descending to a new floor (descend also nulls GameState fields).
+  const vendorFloorRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!gameState) return;
+    if (vendorFloorRef.current === null) {
+      vendorFloorRef.current = gameState.currentFloor;
+      return;
+    }
+    if (vendorFloorRef.current === gameState.currentFloor) return;
+    vendorFloorRef.current = gameState.currentFloor;
+    setShopItems([]);
+    setRestaurantItems([]);
+    setAmmoCacheItems([]);
+    setRestaurantSoldCount(0);
+  }, [gameState?.currentFloor]);
 
   // Android hardware/gesture Back and browser Back: close the top menu first.
   useAndroidBackButton(
@@ -298,16 +332,22 @@ export default function Game() {
     const { pos } = gameState.player;
     const tile = gameState.map[pos.y]?.[pos.x];
     if (tile?.type === 'shop-item' && tile.emoji === '🏪' && !shopOpenRef.current) {
-      if (shopStockFloor.current !== gameState.currentFloor) {
-        setShopItems(generateShopStock(gameState.currentFloor, gameState.player.characterClass));
-        shopStockFloor.current = gameState.currentFloor;
+      if (gameState.shopStock == null) {
+        const items = generateShopStock(gameState.currentFloor, gameState.player.characterClass);
+        setShopItems(items);
+        setGameState(prev => prev ? { ...prev, shopStock: items } : prev);
+      } else {
+        setShopItems(gameState.shopStock);
       }
       setShopOpen(true);
     }
     if (tile?.type === 'restaurant' && !restaurantOpenRef.current) {
-      if (restaurantStockFloor.current !== gameState.currentFloor) {
-        setRestaurantItems(generateRestaurantStock(gameState.currentFloor));
-        restaurantStockFloor.current = gameState.currentFloor;
+      if (gameState.restaurantStock == null) {
+        const items = generateRestaurantStock(gameState.currentFloor);
+        setRestaurantItems(items);
+        setGameState(prev => prev ? { ...prev, restaurantStock: items } : prev);
+      } else {
+        setRestaurantItems(gameState.restaurantStock);
       }
       setRestaurantOpen(true);
     }
@@ -321,9 +361,12 @@ export default function Game() {
     const { pos } = gameState.player;
     const tile = gameState.map[pos.y]?.[pos.x];
     if (tile?.type === 'shop-item' && tile.emoji === '📦' && !ammoCacheOpenRef.current) {
-      if (ammoCacheStockFloor.current !== gameState.currentFloor) {
-        setAmmoCacheItems(generateAmmoCacheStock(gameState.currentFloor, gameState.player.characterClass));
-        ammoCacheStockFloor.current = gameState.currentFloor;
+      if (gameState.ammoCacheStock == null) {
+        const items = generateAmmoCacheStock(gameState.currentFloor, gameState.player.characterClass);
+        setAmmoCacheItems(items);
+        setGameState(prev => prev ? { ...prev, ammoCacheStock: items } : prev);
+      } else {
+        setAmmoCacheItems(gameState.ammoCacheStock);
       }
       setAmmoCacheOpen(true);
     }
@@ -1433,8 +1476,8 @@ export default function Game() {
         const gs = gameStateRef.current;
         if (!gs || gs.gameOver) return;
         const dests = scanGotoDestinations(gs.map, gs.player.pos, {
-          shopSoldOut: shopStockFloor.current === gs.currentFloor && shopItems.length === 0,
-          cacheSoldOut: ammoCacheStockFloor.current === gs.currentFloor && ammoCacheItems.length === 0,
+          shopSoldOut: gs.shopStock != null && gs.shopStock.length === 0,
+          cacheSoldOut: gs.ammoCacheStock != null && gs.ammoCacheStock.length === 0,
         });
         if (dests.length === 0) {
           addLog('No known destinations on this floor.');
@@ -1570,8 +1613,8 @@ export default function Game() {
   ];
 
   const gotoDestinations = scanGotoDestinations(gameState.map, player.pos, {
-    shopSoldOut: shopStockFloor.current === gameState.currentFloor && shopItems.length === 0,
-    cacheSoldOut: ammoCacheStockFloor.current === gameState.currentFloor && ammoCacheItems.length === 0,
+    shopSoldOut: gameState.shopStock != null && gameState.shopStock.length === 0,
+    cacheSoldOut: gameState.ammoCacheStock != null && gameState.ammoCacheStock.length === 0,
   });
   gotoDestsRef.current = gotoDestinations;
 
@@ -3062,7 +3105,7 @@ export default function Game() {
           gameState={gameState}
           setGameState={setGameState}
           shopItems={shopItems}
-          setShopItems={setShopItems}
+          setShopItems={persistShopItems}
           addLog={addLog}
           onClose={() => setShopOpen(false)}
         />
@@ -3074,7 +3117,7 @@ export default function Game() {
           gameState={gameState}
           setGameState={setGameState}
           ammoCacheItems={ammoCacheItems}
-          setAmmoCacheItems={setAmmoCacheItems}
+          setAmmoCacheItems={persistAmmoCacheItems}
           addLog={addLog}
           onClose={() => setAmmoCacheOpen(false)}
         />
@@ -3086,9 +3129,9 @@ export default function Game() {
           gameState={gameState}
           setGameState={setGameState}
           restaurantItems={restaurantItems}
-          setRestaurantItems={setRestaurantItems}
+          setRestaurantItems={persistRestaurantItems}
           restaurantSoldCount={restaurantSoldCount}
-          setRestaurantSoldCount={setRestaurantSoldCount}
+          setRestaurantSoldCount={persistRestaurantSoldCount}
           addLog={addLog}
           onClose={() => setRestaurantOpen(false)}
         />
@@ -3297,8 +3340,8 @@ export default function Game() {
           onOpenTactics={() => setTacticsMenuOpen(true)}
           onOpenGoto={() => {
             const dests = scanGotoDestinations(gameState.map, player.pos, {
-              shopSoldOut: shopStockFloor.current === gameState.currentFloor && shopItems.length === 0,
-              cacheSoldOut: ammoCacheStockFloor.current === gameState.currentFloor && ammoCacheItems.length === 0,
+              shopSoldOut: gameState.shopStock != null && gameState.shopStock.length === 0,
+              cacheSoldOut: gameState.ammoCacheStock != null && gameState.ammoCacheStock.length === 0,
             });
             if (dests.length === 0) {
               addLog('No known destinations on this floor.');

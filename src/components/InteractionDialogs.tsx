@@ -864,7 +864,7 @@ export function LavaStepDialog({ onYes, onNo }: { onYes: () => void; onNo: () =>
 export function BedRestDialog({ onConfirm, onClose, usesLeft, canSleep, blockReason }: BedRestDialogProps) {
   useDialogHotkeys(canSleep ? () => { onConfirm(); onClose(); } : undefined, onClose, canSleep);
   const usesLabel = usesLeft <= 0
-    ? "You've already slept enough!"
+    ? null
     : usesLeft === 1
       ? '1 rest left on this bed.'
       : `${usesLeft} rests left on this bed.`;
@@ -883,7 +883,9 @@ export function BedRestDialog({ onConfirm, onClose, usesLeft, canSleep, blockRea
             If a hostile reaches you, they get one 200% sneak attack and you wake.
             Close the door first if you can. You cannot sleep while a hostile is in sight.
           </div>
-          <div className={`mt-2 text-xs ${usesLeft <= 0 ? 'text-red-300' : 'text-sky-200/80'}`}>{usesLabel}</div>
+          {usesLabel && (
+            <div className="mt-2 text-xs text-sky-200/80">{usesLabel}</div>
+          )}
           {blockReason && (
             <div className="mt-2 text-xs text-red-300 leading-relaxed">{blockReason}</div>
           )}

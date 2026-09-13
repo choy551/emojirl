@@ -151,6 +151,30 @@ export function getEmojiPowerByEmoji(emoji: string): Omit<EmojiItem, 'id' | 'con
   return found ? { ...found } : getRandomEmojiPower();
 }
 
+/** Live catalog copy so saved items pick up wording nerfs without a new drop. */
+export function soulHelpText(item: { emoji: string; description: string; bagPassive?: { description?: string } }): {
+  description: string;
+  bagPassiveDescription?: string;
+} {
+  const cat = EMOJI_POWERS.find(e => e.emoji === item.emoji);
+  return {
+    description: cat?.description ?? item.description,
+    bagPassiveDescription: cat?.bagPassive?.description ?? item.bagPassive?.description,
+  };
+}
+
+export function applySoulCatalogCopy<T extends { emoji: string; description: string; bagPassive?: { description?: string } }>(item: T): T {
+  const cat = EMOJI_POWERS.find(e => e.emoji === item.emoji);
+  if (!cat) return item;
+  return {
+    ...item,
+    description: cat.description,
+    bagPassive: item.bagPassive && cat.bagPassive
+      ? { ...item.bagPassive, description: cat.bagPassive.description }
+      : item.bagPassive,
+  };
+}
+
 export const VOLCANO_VALUABLE_EMOJIS = ['💀', '🗡️', '⛵'] as const;
 
 // ── Tier 1: floors 1–9 ────────────────────────────────────────────────────
@@ -167,8 +191,8 @@ export const EQUIPMENT_DROPS_T1: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   { emoji: '🏹', name: 'Longbow',          description: 'Ranger main hand: +4 ATK to ranged attacks.',                           isEquipment: true, equipSlots: ['mainHand'],             weaponKind: 'bow',   equipBonus: { attack: 4 } },
   { emoji: '🎯', name: 'Precision Bow',    description: 'Ranger main hand: +3 ATK, +3 LCK. Better crits at range.',              isEquipment: true, equipSlots: ['mainHand'],             weaponKind: 'bow',   equipBonus: { attack: 3, luck: 3 } },
   // Guns (Cowboy / Ranger mainHand & offHand)
-  { emoji: '🔫', name: 'Revolver',         description: 'Cowboy/Ranger: +4 ATK. Cowboy dual-wield = ranged auto-attack (costs 1 🪙 bullet/shot).',      isEquipment: true, equipSlots: ['mainHand', 'offHand'],  weaponKind: 'gun',   equipBonus: { attack: 4 } },
-  { emoji: '💥', name: 'Hand Cannon',      description: 'Cowboy/Ranger: +6 ATK, -1 SPD. Heavy stopping power (costs 1 🪙 bullet/shot in dual-gun mode).', isEquipment: true, equipSlots: ['mainHand', 'offHand'],  weaponKind: 'gun',   equipBonus: { attack: 6, speed: -1 } },
+  { emoji: '🔫', name: 'Revolver',         description: 'Cowboy/Ranger: +4 ATK. Cowboy dual-wield = ranged auto-attack (1 🪙 per shot, 2 per dual-gun attack).',      isEquipment: true, equipSlots: ['mainHand', 'offHand'],  weaponKind: 'gun',   equipBonus: { attack: 4 } },
+  { emoji: '💥', name: 'Hand Cannon',      description: 'Cowboy/Ranger: +6 ATK, -1 SPD. Dual-gun mode: 1 🪙 per shot, 2 bullets per attack.', isEquipment: true, equipSlots: ['mainHand', 'offHand'],  weaponKind: 'gun',   equipBonus: { attack: 6, speed: -1 } },
   // Ranger offHand melee
   { emoji: '🔰', name: 'Hunting Blade',    description: 'Ranger off-hand: +3 ATK to melee. Separate from ranged damage.',        isEquipment: true, equipSlots: ['offHand'],              weaponKind: 'blade', equipBonus: { attack: 3 } },
   // Special Ammo (Ranger offHand)

@@ -1,4 +1,5 @@
-import { GameState, Player, PlayerStats } from './types';
+import { GameState, Player, PlayerStats, EmojiItem, Equipment } from './types';
+import { applySoulCatalogCopy } from './emojis';
 
 const SAVE_KEY = 'emojirl_save_v1';
 
@@ -25,6 +26,14 @@ const KNOWN_VERSIONS = new Set([1]);
  * NOTE: `migrateRaw` is only called after `loadGame()` has confirmed that
  * `raw.schemaVersion` is a known version, so no unknown-version guard is needed here.
  */
+function refreshEquipmentCopy(eq: Equipment): Equipment {
+  const next = { ...eq };
+  (['body', 'mainHand', 'offHand', 'accessory'] as const).forEach(slot => {
+    if (next[slot]) next[slot] = applySoulCatalogCopy(next[slot]!);
+  });
+  return next;
+}
+
 function migrateRaw(raw: Record<string, unknown>): void {
   const fromVersion = raw.schemaVersion as number;
 
@@ -84,9 +93,9 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     characterClass:  (rawPlayer.characterClass   as string)               ?? '🧙',
     ammo:            (rawPlayer.ammo             as number)               ?? 0,
     stats,
-    inventory:       (rawPlayer.inventory        as Player['inventory'])  ?? [],
-    bank:            (rawPlayer.bank             as Player['bank'])       ?? [],
-    equipment:       (rawPlayer.equipment        as Player['equipment'])  ?? {},
+    inventory:       ((rawPlayer.inventory as EmojiItem[]) ?? []).map(applySoulCatalogCopy),
+    bank:            ((rawPlayer.bank as EmojiItem[]) ?? []).map(applySoulCatalogCopy),
+    equipment:       refreshEquipmentCopy((rawPlayer.equipment as Equipment) ?? {}),
     // optional fields
     trailblazerCooldown: rawPlayer.trailblazerCooldown as number | undefined,
   };
@@ -98,7 +107,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     currentFloor:             (raw.currentFloor              as number)                  ?? 1,
     map:                      (raw.map                       as GameState['map'])         ?? [],
     enemies:                  (raw.enemies                   as GameState['enemies'])     ?? [],
-    items:                    (raw.items                     as GameState['items'])       ?? [],
+    items:                    ((raw.items as GameState['items']) ?? []).map(applySoulCatalogCopy),
     turn:                     (raw.turn                      as number)                  ?? 0,
     logs:                     (raw.logs                      as GameState['logs'])        ?? [],
     floatingTexts:            (raw.floatingTexts             as GameState['floatingTexts']) ?? [],
@@ -118,6 +127,10 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     highestPressureTierWarned: (raw.highestPressureTierWarned as number)                 ?? 0,
     floorAnnouncement:        (raw.floorAnnouncement as GameState['floorAnnouncement']) ?? null,
     volcanoNextSpewTurn:      raw.volcanoNextSpewTurn as number | undefined,
+    shopStock:                raw.shopStock == null ? null : ((raw.shopStock as EmojiItem[]) ?? []).map(applySoulCatalogCopy),
+    restaurantStock:          raw.restaurantStock == null ? null : ((raw.restaurantStock as EmojiItem[]) ?? []).map(applySoulCatalogCopy),
+    ammoCacheStock:           raw.ammoCacheStock == null ? null : ((raw.ammoCacheStock as EmojiItem[]) ?? []).map(applySoulCatalogCopy),
+    restaurantSoldCount:      (raw.restaurantSoldCount as number) ?? 0,
   };
 }
 
