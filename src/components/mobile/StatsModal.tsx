@@ -132,7 +132,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
           if (p.lightningBolt) tags.push('⚡ Chain Arc');
           if (p.thorns) tags.push(`💎 Thorns×${p.thorns}`);
           if (p.bonusLoot) tags.push(`🍀 Loot×${p.bonusLoot}`);
-          if (p.execBlow) tags.push('💥 Exec Blow');
+          if (p.execBlow) tags.push('💥 Death Crit');
           if (p.trueVision) tags.push('👁️ True Vision');
           if (p.itemMagnet) tags.push('🧲 Magnet');
           if (p.shieldWall) tags.push(`🛡️ Shield×${p.shieldWall}`);

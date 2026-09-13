@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isHostileCombatTarget } from './combat';
+import { isHostileCombatTarget, skullCritBonus } from './combat';
 
 describe('isHostileCombatTarget', () => {
   it('treats untagged regular enemies as foes', () => {
@@ -17,5 +17,15 @@ describe('isHostileCombatTarget', () => {
 
   it('allows neutrals only after they aggro', () => {
     expect(isHostileCombatTarget({ tag: 'Neutral', engaged: true })).toBe(true);
+  });
+});
+
+describe('skullCritBonus', () => {
+  it('is +25 at full HP, +50 at ≤25% HP, and interpolates in between', () => {
+    expect(skullCritBonus(20, 20)).toBe(25);
+    expect(skullCritBonus(5, 20)).toBe(50);
+    expect(skullCritBonus(4, 20)).toBe(50);
+    expect(skullCritBonus(0, 20)).toBe(50);
+    expect(skullCritBonus(12.5, 20)).toBeCloseTo(37.5);
   });
 });

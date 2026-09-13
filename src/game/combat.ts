@@ -17,6 +17,14 @@ export function isHostileCombatTarget(e: {
   return true;
 }
 
+/** Skull bag: extra crit chance from target HP %. 100% HP → +25; ≤25% HP → +50. */
+export function skullCritBonus(hp: number, maxHp: number): number {
+  const max = Math.max(1, maxHp);
+  const hpFrac = Math.max(0, Math.min(1, hp / max));
+  if (hpFrac <= 0.25) return 50;
+  return 25 + ((1 - hpFrac) / 0.75) * 25;
+}
+
 export interface MoodModifiers {
   damageMult: number;
   incomingMult: number;
@@ -102,6 +110,10 @@ export function resolveCombat(
   // ── 2. Hit resolution ──────────────────────────────────────────────────────
   const baseHit = 85 + mods.hitChance;
   const critChance = 5 + (player.stats.luck ?? 1) + mods.critBonus;
+  const rollCrit = (hpNow: number) => {
+    const skullBonus = opts.execBlow ? skullCritBonus(hpNow, enemy.maxHp) : 0;
+    return r() * 100 < critChance + skullBonus;
+  };
   let newEnemyHp = enemy.hp;
 
   if (cls === '🥷' && (opts.dualStrike || opts.quadStrike)) {
@@ -114,7 +126,7 @@ export function resolveCombat(
       addLog(`You swing at ${enemy.emoji} — miss!`);
     } else {
       const raw1 = wasUnaware ? Math.round(player.stats.attack * 1.6) : player.stats.attack;
-      const isCrit1 = (opts.execBlow ?? false) || r() * 100 < critChance;
+      const isCrit1 = rollCrit(newEnemyHp);
       const dmg1 = Math.max(1, Math.round(raw1 * mods.damageMult * (isCrit1 ? 2 : 1)) - (enemy.defense ?? 0));
       newEnemyHp -= dmg1;
       if (wasUnaware) {
@@ -131,7 +143,7 @@ export function resolveCombat(
         addLog(`🥷 Dual Strike — second swing misses!`);
       } else {
         const raw2 = Math.floor((wasUnaware ? Math.round(player.stats.attack * 1.6) : player.stats.attack) * 0.65);
-        const isCrit2 = (opts.execBlow ?? false) || r() * 100 < critChance;
+        const isCrit2 = rollCrit(newEnemyHp);
         const dmg2 = Math.max(1, Math.round(raw2 * mods.damageMult * (isCrit2 ? 2 : 1)) - (enemy.defense ?? 0));
         newEnemyHp -= dmg2;
         addLog(`🥷 Dual Strike! ${wasUnaware ? 'Shadow ' : ''}${dmg2} dmg${isCrit2 ? ' CRITICAL!' : ''}!`);
@@ -145,7 +157,7 @@ export function resolveCombat(
         addLog(`🥷 Off-hand slash — miss!`);
       } else {
         const raw3 = Math.floor((wasUnaware ? Math.round(player.stats.attack * 1.6) : player.stats.attack) * 0.55);
-        const isCrit3 = (opts.execBlow ?? false) || r() * 100 < critChance;
+        const isCrit3 = rollCrit(newEnemyHp);
         const dmg3 = Math.max(1, Math.round(raw3 * mods.damageMult * (isCrit3 ? 2 : 1)) - (enemy.defense ?? 0));
         newEnemyHp -= dmg3;
         addLog(`🥷 Off-hand slash! ${dmg3} dmg${isCrit3 ? ' CRITICAL!' : ''}!`);
@@ -157,7 +169,7 @@ export function resolveCombat(
         addLog(`🥷 Finishing strike — miss!`);
       } else {
         const raw4 = Math.floor((wasUnaware ? Math.round(player.stats.attack * 1.6) : player.stats.attack) * 0.40);
-        const isCrit4 = (opts.execBlow ?? false) || r() * 100 < critChance;
+        const isCrit4 = rollCrit(newEnemyHp);
         const dmg4 = Math.max(1, Math.round(raw4 * mods.damageMult * (isCrit4 ? 2 : 1)) - (enemy.defense ?? 0));
         newEnemyHp -= dmg4;
         addLog(`🥷 Finishing strike! ${dmg4} dmg${isCrit4 ? ' CRITICAL!' : ''}!`);
@@ -182,7 +194,7 @@ export function resolveCombat(
         rawDamage = Math.ceil(rawDamage * 1.5);
       }
 
-      const isCrit = (opts.execBlow ?? false) || r() * 100 < critChance;
+      const isCrit = rollCrit(newEnemyHp);
       const moodDamage = Math.round(rawDamage * mods.damageMult * (isCrit ? 2 : 1));
       const actualDamage = Math.max(1, moodDamage - (enemy.defense ?? 0));
       newEnemyHp = enemy.hp - actualDamage;
