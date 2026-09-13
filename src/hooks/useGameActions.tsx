@@ -14,7 +14,7 @@ import {
   spawnVaultItems, handleGodBlessedImmunity,
   getDungeonPressure, _flashSignals, restoreStolenEmojis, stolenEmojiSummary,
   applyBedRest, simulateSleep, SLEEP_TURNS, BED_OVERHEAL_MULT,
-  evaluateBedSleep, consumeBedUse,
+  evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
 } from '../game/gameHelpers';
 import { canEquipItem } from '../components/itemUtils';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
@@ -31,12 +31,14 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     gameStateRef, wizardTacticsRef, autoStealthRef, rangerModeRef,
     lastCowboyFlavorTurnRef,
     blinkTurnRef, trailblazeTurnRef,
+    lavaStepConfirmedRef,
   } = refs;
   const {
     setGameState, setWizardTactics, setRangerMode,
     setPendingFairyId, setPendingMonkeyInteraction,
     setPendingAdventurerInteraction, setPendingBearInteraction,
     setBlinkTurn, setTrailblazeTurn,
+    setPendingLavaStep,
   } = setters;
 
   const BLINK_ACTIVE = 3;
@@ -76,6 +78,50 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         setRangerMode('ranged');
         addLog('💨 Trailblaze faded — bow at the ready');
       }
+
+      const from = _outerState.player.pos;
+      const cls = _outerState.player.characterClass;
+      const cowboyDualGuns = cls === '🤠'
+        && _outerState.player.equipment.mainHand?.weaponKind === 'gun'
+        && _outerState.player.equipment.offHand?.weaponKind === 'gun'
+        && (_outerState.player.ammo ?? 0) > 0;
+      let cowboyWouldShoot = false;
+      if (cowboyDualGuns) {
+        for (let range = 2; range <= 4; range++) {
+          const tx = from.x + dx * range;
+          const ty = from.y + dy * range;
+          const enemy = _outerState.enemies.find(e => e.pos.x === tx && e.pos.y === ty);
+          if (!enemy) continue;
+          if (!hasLOS(_outerState.map, from, dx, dy, range)) break;
+          if (enemy.tag === 'Friendly') continue;
+          if (enemy.tag === 'Neutral' && !enemy.engaged) continue;
+          cowboyWouldShoot = true;
+          break;
+        }
+      }
+      let walkDest = { x: from.x + dx, y: from.y + dy };
+      const isBlinkActive = cls === '🧙' && wizardTacticsRef.current.mode === 'holdfire' && (_outerState.turn - blinkTurnRef.current) < BLINK_ACTIVE;
+      if (isBlinkActive) {
+        const pos2 = { x: from.x + 2 * dx, y: from.y + 2 * dy };
+        const destTile = _outerState.map[pos2.y]?.[pos2.x];
+        const canSwim = computeBagPassives(_outerState.player.inventory).canSwim;
+        if (destTile && (PLAYER_PASSABLE_TILES.has(destTile.type) || destTile.type === 'door-closed' || (destTile.type === 'water' && canSwim))) {
+          walkDest = pos2;
+        }
+      }
+      const fromType = _outerState.map[from.y]?.[from.x]?.type ?? '';
+      const destType = _outerState.map[walkDest.y]?.[walkDest.x]?.type ?? '';
+      const occupant = _outerState.enemies.some(e => e.pos.x === walkDest.x && e.pos.y === walkDest.y);
+      if (
+        !cowboyWouldShoot &&
+        shouldConfirmLavaStep(fromType, destType) &&
+        !occupant &&
+        !lavaStepConfirmedRef.current
+      ) {
+        setPendingLavaStep({ dx, dy });
+        return;
+      }
+      lavaStepConfirmedRef.current = false;
     }
 
     setGameState(prev => {

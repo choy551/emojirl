@@ -28,9 +28,17 @@ export function lavaFlatDamage(floor: number): number {
   return 10 + 5 * Math.max(0, floor - 1);
 }
 
-/** 50% of max HP + a flat amount that scales +5 per D:Floor descended. */
+/** Fraction of max HP dealt each turn standing in lava (plus a floor-scaled flat amount). */
+export const LAVA_HP_FRACTION = 0.25;
+
+/** 25% of max HP + a flat amount that scales +5 per D:Floor descended. */
 export function lavaDamageForFloor(floor: number, maxHp: number): number {
-  return Math.floor(maxHp * 0.5) + lavaFlatDamage(floor);
+  return Math.floor(maxHp * LAVA_HP_FRACTION) + lavaFlatDamage(floor);
+}
+
+/** Prompt when walking from a non-lava tile onto lava. Already-in-lava steps skip it. */
+export function shouldConfirmLavaStep(fromType: string, toType: string): boolean {
+  return toType === 'lava' && fromType !== 'lava';
 }
 
 export function isLavaTileType(type: string): boolean {

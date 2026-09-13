@@ -35,7 +35,7 @@ import { ShopModal } from '../components/ShopModal';
 import { AmmoCacheModal } from '../components/AmmoCacheModal';
 import { RestaurantModal } from '../components/RestaurantModal';
 import { ItemStatCard } from '../components/ItemStatCard';
-import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog, CompanionTalkDialog, BedRestDialog } from '../components/InteractionDialogs';
+import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog, CompanionTalkDialog, BedRestDialog, LavaStepDialog } from '../components/InteractionDialogs';
 import { TacticsMenu } from '../components/TacticsMenu';
 import { GoToMenu } from '../components/GoToMenu';
 import { EquipmentTab } from '../components/EquipmentTab';
@@ -184,6 +184,10 @@ export default function Game() {
   const [drownWarnSlot, setDrownWarnSlot] = useState<number | null>(null);
   const [lastBoatWarnSlot, setLastBoatWarnSlot] = useState<number | null>(null);
   const boatConfirmedRef = useRef(false);
+  const lavaStepConfirmedRef = useRef(false);
+  const [pendingLavaStep, setPendingLavaStep] = useState<{ dx: number; dy: number } | null>(null);
+  const pendingLavaStepRef = useRef<{ dx: number; dy: number } | null>(null);
+  useEffect(() => { pendingLavaStepRef.current = pendingLavaStep; }, [pendingLavaStep]);
   const [shopOpen, setShopOpen] = useState(false);
   const shopOpenRef = useRef(false);
   const [shopItems, setShopItems] = useState<EmojiItem[]>([]);
@@ -256,6 +260,7 @@ export default function Game() {
       { id: 'stat-card', isOpen: () => !!statCardItem, close: () => setStatCardItem(null) },
       { id: 'boat-warn', isOpen: () => lastBoatWarnSlot !== null, close: () => setLastBoatWarnSlot(null) },
       { id: 'drown-warn', isOpen: () => drownWarnSlot !== null, close: () => setDrownWarnSlot(null) },
+      { id: 'lava-warn', isOpen: () => pendingLavaStep !== null, close: () => setPendingLavaStep(null) },
       { id: 'bed', isOpen: () => bedRestOpen, close: () => setBedRestOpen(false) },
       { id: 'talk', isOpen: () => !!pendingCompanionTalkId, close: () => setPendingCompanionTalkId(null) },
       { id: 'bear', isOpen: () => !!pendingBearInteraction, close: () => setPendingBearInteraction(null) },
@@ -555,6 +560,7 @@ export default function Game() {
       inspectedEnemyIdRef,
       dirPickModeRef,
       boatConfirmedRef,
+      lavaStepConfirmedRef,
       blinkTurnRef,
       trailblazeTurnRef,
       restaurantClosedRef,
@@ -574,6 +580,7 @@ export default function Game() {
       setSelectedItemId,
       setDrownWarnSlot,
       setLastBoatWarnSlot,
+      setPendingLavaStep,
       setPendingFairyId,
       setPendingMonkeyInteraction,
       setPendingAdventurerInteraction,
@@ -1078,6 +1085,10 @@ export default function Game() {
         e.preventDefault();
         if (e.repeat) return;
         setGameState(prev => prev ? { ...prev, floorAnnouncement: null } : prev);
+        return;
+      }
+      if (pendingLavaStepRef.current) {
+        e.preventDefault();
         return;
       }
       if (e.code === 'NumLock') { e.preventDefault(); return; }
@@ -2905,6 +2916,18 @@ export default function Game() {
           applyRangerMode={applyRangerMode}
           handleCowboyTactics={handleCowboyTactics}
           onClose={() => setTacticsMenuOpen(false)}
+        />
+      )}
+
+      {pendingLavaStep && (
+        <LavaStepDialog
+          onNo={() => setPendingLavaStep(null)}
+          onYes={() => {
+            const step = pendingLavaStep;
+            lavaStepConfirmedRef.current = true;
+            setPendingLavaStep(null);
+            handleMove(step.dx, step.dy);
+          }}
         />
       )}
 

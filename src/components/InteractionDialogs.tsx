@@ -838,6 +838,29 @@ interface BedRestDialogProps {
   blockReason?: string;
 }
 
+export function LavaStepDialog({ onYes, onNo }: { onYes: () => void; onNo: () => void }) {
+  useDialogHotkeys(onYes, onNo);
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70">
+      <div className="bg-card border border-orange-500/60 rounded-xl p-5 max-w-xs w-full mx-4 shadow-2xl shadow-orange-900/40 text-center">
+        <div className="text-4xl mb-2">🟧</div>
+        <h2 className="text-sm font-bold text-orange-400 uppercase tracking-widest mb-2">Lava</h2>
+        <p className="text-sm text-white/90 mb-4">Do you really want to step on lava?</p>
+        <div className="flex gap-2">
+          <button
+            className="flex-1 text-sm py-2.5 rounded-lg bg-secondary/40 border border-border/60 text-muted-foreground hover:bg-secondary/60 transition-colors"
+            onClick={onNo}
+          >No</button>
+          <button
+            className="flex-1 text-sm py-2.5 rounded-lg bg-orange-600/80 border border-orange-500/60 text-white font-bold hover:bg-orange-600 transition-colors"
+            onClick={onYes}
+          >Yes ⏎</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function BedRestDialog({ onConfirm, onClose, usesLeft, canSleep, blockReason }: BedRestDialogProps) {
   useDialogHotkeys(canSleep ? () => { onConfirm(); onClose(); } : undefined, onClose, canSleep);
   const usesLabel = usesLeft <= 0

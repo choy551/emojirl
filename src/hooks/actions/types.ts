@@ -11,6 +11,7 @@ export interface GameRefs {
   inspectedEnemyIdRef: MutableRefObject<string | null>;
   dirPickModeRef: MutableRefObject<'gun' | 'freeze' | 'boomerang' | 'bomb' | null>;
   boatConfirmedRef: MutableRefObject<boolean>;
+  lavaStepConfirmedRef: MutableRefObject<boolean>;
   blinkTurnRef: MutableRefObject<number>;
   trailblazeTurnRef: MutableRefObject<number>;
   restaurantClosedRef: MutableRefObject<boolean>;
@@ -31,6 +32,7 @@ export interface GameSetters {
   setSelectedItemId: React.Dispatch<React.SetStateAction<string | null>>;
   setDrownWarnSlot: React.Dispatch<React.SetStateAction<number | null>>;
   setLastBoatWarnSlot: React.Dispatch<React.SetStateAction<number | null>>;
+  setPendingLavaStep: React.Dispatch<React.SetStateAction<{ dx: number; dy: number } | null>>;
   setPendingFairyId: React.Dispatch<React.SetStateAction<string | null>>;
   setPendingMonkeyInteraction: React.Dispatch<React.SetStateAction<{ id: string; wants: string } | null>>;
   setPendingAdventurerInteraction: React.Dispatch<React.SetStateAction<string | null>>;

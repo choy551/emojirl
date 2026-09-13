@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { EmojiItem, GameState, MapGrid, Player, Tile } from './types';
 import { PLAYER_PASSABLE_TILES, ENEMY_PASSABLE_TILES } from './tiles';
 import {
-  lavaFlatDamage, lavaDamageForFloor, spreadVolcanoLava, tickVolcanoAndLava,
+  lavaFlatDamage, lavaDamageForFloor, shouldConfirmLavaStep, spreadVolcanoLava, tickVolcanoAndLava,
   volcanoSpewInterval, volcanoMaxLava, countLavaTiles, coolLavaWaterContacts,
   canConvertToLava, VOLCANO_MAX_RADIUS, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, OBSIDIAN_EMOJI,
 } from './lava';
@@ -63,12 +63,19 @@ function baseState(map: MapGrid, overrides: Partial<GameState> = {}): GameState 
 }
 
 describe('lava damage', () => {
-  it('is 50% max HP plus 10 on D:1, then +5 flat per floor descended', () => {
+  it('is 25% max HP plus 10 on D:1, then +5 flat per floor descended', () => {
     expect(lavaFlatDamage(1)).toBe(10);
     expect(lavaFlatDamage(2)).toBe(15);
     expect(lavaFlatDamage(6)).toBe(35);
-    expect(lavaDamageForFloor(1, 20)).toBe(20);
-    expect(lavaDamageForFloor(3, 20)).toBe(30);
+    expect(lavaDamageForFloor(1, 20)).toBe(15);
+    expect(lavaDamageForFloor(3, 20)).toBe(25);
+  });
+
+  it('asks once when stepping from safe ground onto lava, not while already in it', () => {
+    expect(shouldConfirmLavaStep('floor', 'lava')).toBe(true);
+    expect(shouldConfirmLavaStep('obsidian', 'lava')).toBe(true);
+    expect(shouldConfirmLavaStep('lava', 'lava')).toBe(false);
+    expect(shouldConfirmLavaStep('floor', 'floor')).toBe(false);
   });
 });
 
@@ -122,7 +129,7 @@ describe('tickVolcanoAndLava', () => {
     expect(next.logs.some(l => l.text.includes('burns away'))).toBe(true);
   });
 
-  it('deals extreme damage when the player stands in lava', () => {
+  it('deals 25% max HP plus flat when the player stands in lava', () => {
     const map = grid([
       '#####',
       '#.L.#',
@@ -132,9 +139,8 @@ describe('tickVolcanoAndLava', () => {
       player: playerAt(2, 1, 20, 20),
       currentFloor: 1,
     }));
-    expect(next.player.stats.hp).toBe(0);
-    expect(next.gameOver).toBe(true);
-    expect(next.killer?.name).toBe('Lava');
+    expect(next.player.stats.hp).toBe(5);
+    expect(next.gameOver).toBe(false);
   });
 
   it('does not damage a player standing on floor next to lava', () => {
