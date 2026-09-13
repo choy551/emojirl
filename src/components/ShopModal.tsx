@@ -1,5 +1,5 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToBag } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToBag, removeAndRefillBag } from '../game/gameHelpers';
 import { COOKABLE_EMOJIS } from '../game/emojis';
 import { canEquipItem } from './itemUtils';
 import { useDismissGuard } from '../hooks/useDismissGuard';
@@ -154,8 +154,10 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                   onClick={() => {
                     setGameState(prev => {
                       if (!prev) return prev;
-                      const inventory = prev.player.inventory.filter(i => i.id !== item.id);
-                      const bank = prev.player.bank.filter(i => i.id !== item.id);
+                      const fromHotbar = prev.player.inventory.some(i => i.id === item.id);
+                      const { inventory, bank } = fromHotbar
+                        ? removeAndRefillBag(prev.player.inventory, prev.player.bank, item.id)
+                        : { inventory: prev.player.inventory, bank: prev.player.bank.filter(i => i.id !== item.id) };
                       const equipment: Equipment = { ...prev.player.equipment };
                       (Object.keys(equipment) as EquipSlot[]).forEach(slot => {
                         if (equipment[slot]?.id === item.id) delete equipment[slot];
@@ -181,8 +183,17 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                     setGameState(prev => {
                       if (!prev) return prev;
                       const junkIds = new Set(junk.map(i => i.id));
-                      const inventory = prev.player.inventory.filter(i => !junkIds.has(i.id));
-                      const bank = prev.player.bank.filter(i => !junkIds.has(i.id));
+                      let inventory = prev.player.inventory;
+                      let bank = prev.player.bank;
+                      for (const j of junk) {
+                        if (inventory.some(i => i.id === j.id)) {
+                          const r = removeAndRefillBag(inventory, bank, j.id);
+                          inventory = r.inventory;
+                          bank = r.bank;
+                        } else {
+                          bank = bank.filter(i => i.id !== j.id);
+                        }
+                      }
                       const equipment: Equipment = { ...prev.player.equipment };
                       (Object.keys(equipment) as EquipSlot[]).forEach(slot => {
                         if (equipment[slot] && junkIds.has(equipment[slot]!.id)) delete equipment[slot];
