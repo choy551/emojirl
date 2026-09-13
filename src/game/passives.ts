@@ -40,7 +40,7 @@ export function getStackableBonusLabel(item: EmojiItem): string | null {
   if (p.regeneration) return '+1 HP / 5 turns';
   if (p.vampiricStrike) return '+1 HP per hit per ×';
   if (p.dodgeHeal)      return '+1 HP on dodge per ×';
-  if (p.ninjaCombo)     return '+15% ninja combo chance per × (base 25%)';
+  if (p.ninjaCombo)     return 'Ninja only: +15% combo chance per × (base 25%)';
   if (p.combatRegen)    return '+1 HP per turn in combat per ×';
   return null;
 }
@@ -56,7 +56,7 @@ export function getStackableCumulativeLabel(item: EmojiItem): string | null {
   if (p.regeneration) return `+1 HP every ${Math.max(1, 6 - n)} turns`;
   if (p.vampiricStrike) return `+${n} HP per hit`;
   if (p.dodgeHeal)      return `+${n} HP on dodge`;
-  if (p.ninjaCombo)     return `${25 + (n-1)*15}% chance of bonus ninja strike`;
+  if (p.ninjaCombo)     return `Ninja only: ${25 + (n-1)*15}% chance of bonus melee strike`;
   if (p.combatRegen)    return `+${n} HP per turn in combat`;
   return null;
 }

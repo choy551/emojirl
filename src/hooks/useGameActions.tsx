@@ -145,7 +145,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, true);
           const effectiveCowboy = applyEquipmentAndPassives(player);
           const _cowboyPassives = computeBagPassives(prev.player.inventory);
-          const cResult = resolveCombat(effectiveCowboy, enemy, addLog, { mood, cowboyMoodValue: prev.player.stats.moodValue, advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, shieldWall: _cowboyPassives.shieldWall, isRanged: true });
+          const cResult = resolveCombat(effectiveCowboy, enemy, addLog, { mood, cowboyMoodValue: prev.player.stats.moodValue, advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true });
           if (cResult.fled) { const midState = { ...prev, turn: prev.turn + 1 }; return applyEnemyTurns(midState, runEnemyTurns(midState)); }
           addLog(`🤠 Dual guns — BANG BANG!`);
           const cFloats: FloatingText[] = [];
@@ -173,8 +173,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               return applyEnemyTurns(cMid, runEnemyTurns(cMid));
             }
           } else {
-            const _cBurning = _cowboyPassives.burningOnHit ? { burningTurns: 3 } : {};
-            if (_cowboyPassives.burningOnHit) addLog(`🔥 ${enemy.emoji} is ignited!`);
+            const cLanded = cResult.enemyHp < enemy.hp;
+            const _cBurning = cLanded && _cowboyPassives.burningOnHit ? { burningTurns: 3 } : {};
+            if (cLanded && _cowboyPassives.burningOnHit) addLog(`🔥 ${enemy.emoji} is ignited!`);
             cEnemies[enemyIdx] = { ...enemy, hp: cResult.enemyHp, engaged: true, ..._cBurning };
             cSkip = enemy.id;
           }
@@ -215,7 +216,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               addLog(`🧊 Ice arrow slows ${enemy.emoji} ${enemy.name}!`);
             }
           }
-          if (!combatResult.fled && combatResult.enemyHp > 0 && _rangerPassives.burningOnHit && !specialAmmoEffect.burningTurns) {
+          if (!combatResult.fled && combatResult.enemyHp > 0 && combatResult.enemyHp < enemy.hp && _rangerPassives.burningOnHit && !specialAmmoEffect.burningTurns) {
             specialAmmoEffect = { ...specialAmmoEffect, burningTurns: 3 };
             addLog(`🔥 ${enemy.emoji} is ignited!`);
           }
@@ -607,14 +608,14 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             const drop = isEquipDrop ? getRandomEquipmentDrop(prev.currentFloor) : isActiveDrop ? getRandomActiveDrop() : dropAmmo ? (cls === '🤠' ? getBulletDrop() : getAmmoDrop()) : getRandomHealDrop();
             newState.items = [...prev.items, { ...drop, id: `drop-${Math.random()}`, consumed: false, pos: enemy.pos }];
           }
-        } else if (!godBlessedProc) {
-          const _mBurning = _meleePassives.burningOnHit ? { burningTurns: 3 } : {};
-          if (_meleePassives.burningOnHit) addLog(`🔥 ${enemy.emoji} is ignited!`);
+        }
+        const playerLanded = (combatResult.enemyDied && !godBlessedProc) || combatResult.enemyHp < enemy.hp;
+        if (!godBlessedProc && !combatResult.enemyDied) {
+          const _mBurning = playerLanded && _meleePassives.burningOnHit ? { burningTurns: 3 } : {};
+          if (playerLanded && _meleePassives.burningOnHit) addLog(`🔥 ${enemy.emoji} is ignited!`);
           newEnemies[enemyIndex] = { ...enemy, hp: combatResult.enemyHp, engaged: true, ..._mBurning };
           skipFightId = enemy.id;
         }
-
-        const playerLanded = (combatResult.enemyDied && !godBlessedProc) || combatResult.enemyHp < enemy.hp;
         if (_meleePassives.lightningBolt && playerLanded) {
           const arcCandidates = newEnemies.filter(e2 =>
             e2.id !== enemy.id && chebyshev(e2.pos, enemy.pos) <= 2 && e2.hp > 0
@@ -1032,8 +1033,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               newState.items = [...newState.items, { ...bDrop, id: `bolt-drop-${Math.random()}`, consumed: false, pos: boltTarget.pos }];
             }
           } else {
-            const _bBurning = _boltPassives.burningOnHit ? { burningTurns: 3 } : {};
-            if (_boltPassives.burningOnHit) addLog(`🔥 ${boltTarget.emoji} is ignited!`);
+            const boltLanded = boltResult.enemyHp < boltTarget.hp;
+            const _bBurning = boltLanded && _boltPassives.burningOnHit ? { burningTurns: 3 } : {};
+            if (boltLanded && _boltPassives.burningOnHit) addLog(`🔥 ${boltTarget.emoji} is ignited!`);
             boltEnemies[boltEnemyIdx] = { ...boltTarget, hp: boltResult.enemyHp, engaged: true, ..._bBurning };
           }
           newState.enemies = boltEnemies;
@@ -1185,8 +1187,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               waitItems = [...waitItems, { ...bDrop, id: `bolt-drop-${Math.random()}`, consumed: false, pos: boltTarget.pos }];
             }
           } else {
-            const _bBurning = _boltPassives.burningOnHit ? { burningTurns: 3 } : {};
-            if (_boltPassives.burningOnHit) addLog(`🔥 ${boltTarget.emoji} is ignited!`);
+            const boltLanded = boltResult.enemyHp < boltTarget.hp;
+            const _bBurning = boltLanded && _boltPassives.burningOnHit ? { burningTurns: 3 } : {};
+            if (boltLanded && _boltPassives.burningOnHit) addLog(`🔥 ${boltTarget.emoji} is ignited!`);
             waitEnemies[boltEnemyIdx] = { ...boltTarget, hp: boltResult.enemyHp, engaged: true, ..._bBurning };
           }
           const _bdx = boltTarget.pos.x - waitPlayer.pos.x;

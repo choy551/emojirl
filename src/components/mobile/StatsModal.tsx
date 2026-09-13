@@ -139,7 +139,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
           if (p.healOnKill) tags.push(`🍄 Heal/Kill×${p.healOnKill}`);
           if (p.trueAim) tags.push('🎯 True Aim');
           if (p.regeneration) tags.push(`💊 Regen×${p.regeneration}`);
-          if (p.ninjaCombo > 0) tags.push(`🗡️ Combo×${p.ninjaCombo}`);
+          if (p.ninjaCombo > 0) tags.push(`🗡️ Ninja Combo×${p.ninjaCombo}`);
           if (p.royalAura) tags.push('👑 Royal Aura');
           if (p.combatRegen > 0) tags.push(`🌊 Combat Regen×${p.combatRegen}`);
           if (p.dodgeHeal > 0) tags.push(`🦋 Dodge Heal×${p.dodgeHeal}`);

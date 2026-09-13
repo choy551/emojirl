@@ -334,7 +334,7 @@ export function RightSidebar({
         if (p.healOnKill)     tags.push({ icon: '🍄', label: `Heal on Kill ×${p.healOnKill}`, color: 'text-emerald-400', desc: `+${p.healOnKill} HP per kill (stacks per copy).` });
         if (p.trueAim)        tags.push({ icon: '🎯', label: 'True Aim', color: 'text-green-400', desc: 'Ranged attacks never miss.' });
         if (p.regeneration)   tags.push({ icon: '💊', label: `Regen ×${p.regeneration}`, color: 'text-teal-300', desc: `+1 HP every ${Math.max(1, 6 - p.regeneration)} turns out of combat (stacks per copy).` });
-        if (p.ninjaCombo > 0) tags.push({ icon: '🗡️', label: `Ninja Combo ×${p.ninjaCombo}`, color: 'text-slate-300', desc: `${25 + (p.ninjaCombo-1)*15}% chance of bonus melee strike.` });
+        if (p.ninjaCombo > 0) tags.push({ icon: '🗡️', label: `Ninja Combo ×${p.ninjaCombo}`, color: 'text-slate-300', desc: `Ninja only. ${25 + (p.ninjaCombo-1)*15}% chance of bonus melee strike.` });
         if (p.royalAura)      tags.push({ icon: '👑', label: 'Royal Aura', color: 'text-yellow-400', desc: 'Weak enemies hesitate before attacking you.' });
         if (p.combatRegen > 0) tags.push({ icon: '🌊', label: `Combat Regen ×${p.combatRegen}`, color: 'text-cyan-300', desc: `+${p.combatRegen} HP per turn even while in combat (stacks).` });
         if (p.dodgeHeal > 0) tags.push({ icon: '🦋', label: `Dodge Heal ×${p.dodgeHeal}`, color: 'text-purple-300', desc: `Heal ${p.dodgeHeal} HP each time you dodge an attack (stacks).` });

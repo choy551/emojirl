@@ -193,7 +193,12 @@ export function useCombatActions(
         ninjaFreeMoves += freeMovesGain;
         addLog(`🥷 Assassin's Edge — ${freeMovesGain} free move${freeMovesGain > 1 ? 's' : ''}!`);
       } else if (!target.godBlessed || !combatResult.enemyDied) {
-        if (targetIdx !== -1) newEnemies[targetIdx] = { ...target, hp: combatResult.enemyHp, engaged: true };
+        if (targetIdx !== -1) {
+          const blinkLanded = combatResult.enemyHp < target.hp;
+          const blinkBurn = blinkLanded && _blinkPassives.burningOnHit ? { burningTurns: 3 } : {};
+          if (blinkLanded && _blinkPassives.burningOnHit) addLog(`🔥 ${target.emoji} is ignited!`);
+          newEnemies[targetIdx] = { ...target, hp: combatResult.enemyHp, engaged: true, ...blinkBurn };
+        }
         newPlayer.stats.blinkStrikeInstakillChain = 0;
         addLog(`🥷 Blink Strike — 8 turn cooldown started.`);
       } else {
@@ -322,7 +327,12 @@ export function useCombatActions(
         ninjaFreeMoves += freeMovesGain;
         addLog(`🥷 Assassin's Edge — ${freeMovesGain} free move${freeMovesGain > 1 ? 's' : ''}!`);
       } else if (!target.godBlessed || !combatResult.enemyDied) {
-        if (targetIdx !== -1) newEnemies[targetIdx] = { ...target, hp: combatResult.enemyHp, engaged: true };
+        if (targetIdx !== -1) {
+          const blinkLanded = combatResult.enemyHp < target.hp;
+          const blinkBurn = blinkLanded && _blinkPassives.burningOnHit ? { burningTurns: 3 } : {};
+          if (blinkLanded && _blinkPassives.burningOnHit) addLog(`🔥 ${target.emoji} is ignited!`);
+          newEnemies[targetIdx] = { ...target, hp: combatResult.enemyHp, engaged: true, ...blinkBurn };
+        }
         newPlayer.stats.blinkStrikeInstakillChain = 0;
         addLog(`🥷 Blink Strike — 8 turn cooldown started.`);
       } else {

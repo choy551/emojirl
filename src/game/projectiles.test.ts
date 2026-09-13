@@ -47,6 +47,22 @@ describe('resolveProjectileFlight', () => {
     expect(res.beam?.positions.length).toBe(4);
   });
 
+  it('ignites on a gun hit when the bag has Fire', () => {
+    const map = mapWithWalls(10, 5);
+    const enemies = [goblin('g', 5, 2)];
+    const pyro = {
+      ...player,
+      inventory: [{
+        id: 'fire', emoji: '🔥', name: 'Fire', description: 'ignite', consumed: false,
+        bagPassive: { description: 'ignite', burningOnHit: true, nonStackable: true, attackBonus: 1 },
+      }],
+    } as Player;
+    const res = resolveProjectileFlight(gunAtPlayer(), map, enemies, pyro, 1);
+    expect(res.enemies).toHaveLength(1);
+    expect(res.enemies[0].burningTurns).toBe(3);
+    expect(res.logs.some(l => l.text.includes('ignited'))).toBe(true);
+  });
+
   it('hits an adjacent enemy', () => {
     const map = mapWithWalls(6, 5);
     const enemies = [goblin('g', 2, 2, { hp: 3, maxHp: 8 })];

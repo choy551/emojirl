@@ -1,5 +1,5 @@
 import { ActiveProjectile, Enemy, EmojiItem, FloatingText, Player, Position } from './types';
-import { applyEquipmentAndPassives } from './inventory';
+import { applyEquipmentAndPassives, computeBagPassives } from './inventory';
 import { stolenEmojiSummary } from './monkeyLoot';
 import { RANGED_BLOCKING_TILES } from './tiles';
 
@@ -75,6 +75,7 @@ export function resolveProjectileFlight(
   };
 
   const atk = applyEquipmentAndPassives(player).stats.attack;
+  const ignite = computeBagPassives(player.inventory).burningOnHit;
   let enemies = [...enemiesIn];
   let playerDamage = 0;
   let playerDied = false;
@@ -92,7 +93,10 @@ export function resolveProjectileFlight(
       floats.push({ id: `gun-hit-${target.id}-${turn}`, pos: { ...target.pos }, text: `-${dmg}`, color: '#ef4444', life: 2 });
       const newHp = target.hp - dmg;
       if (newHp <= 0) { reclaim(target); enemies.splice(idx, 1); }
-      else enemies[idx] = { ...target, hp: newHp, engaged: true };
+      else {
+        if (ignite) log(`🔥 ${target.emoji} is ignited!`);
+        enemies[idx] = { ...target, hp: newHp, engaged: true, ...(ignite ? { burningTurns: 3 } : {}) };
+      }
       return true;
     }
     if (kind === 'freeze') {
@@ -101,7 +105,10 @@ export function resolveProjectileFlight(
       floats.push({ id: `freeze-hit-${target.id}-${turn}`, pos: { ...target.pos }, text: `❄️-${dmg}`, color: '#93c5fd', life: 2 });
       const newHp = target.hp - dmg;
       if (newHp <= 0) { reclaim(target); enemies.splice(idx, 1); }
-      else enemies[idx] = { ...target, hp: newHp, engaged: true, frozenTurns: 3, slowedTurns: 0 };
+      else {
+        if (ignite) log(`🔥 ${target.emoji} is ignited!`);
+        enemies[idx] = { ...target, hp: newHp, engaged: true, frozenTurns: 3, slowedTurns: 0, ...(ignite ? { burningTurns: 3 } : {}) };
+      }
       return true;
     }
     if (kind === 'boomerang') {
@@ -111,7 +118,10 @@ export function resolveProjectileFlight(
       floats.push({ id: `boom-hit-${target.id}-${turn}`, pos: { ...target.pos }, text: `-${dmg}`, color: '#fde68a', life: 2 });
       const newHp = target.hp - dmg;
       if (newHp <= 0) { reclaim(target); enemies.splice(idx, 1); }
-      else enemies[idx] = { ...target, hp: newHp, engaged: true };
+      else {
+        if (ignite) log(`🔥 ${target.emoji} is ignited!`);
+        enemies[idx] = { ...target, hp: newHp, engaged: true, ...(ignite ? { burningTurns: 3 } : {}) };
+      }
       return true;
     }
     if (kind === 'bomb') {
@@ -135,7 +145,10 @@ export function resolveProjectileFlight(
         floats.push({ id: `bomb-proj-hit-${e.id}`, pos: { ...e.pos }, text: `-${dmg}`, color: '#f97316', life: 2 });
         const newHp = e.hp - dmg;
         if (newHp <= 0) { reclaim(e); enemies.splice(ei, 1); }
-        else enemies[ei] = { ...e, hp: newHp, engaged: true };
+        else {
+          if (ignite) log(`🔥 ${e.emoji} is ignited!`);
+          enemies[ei] = { ...e, hp: newHp, engaged: true, ...(ignite ? { burningTurns: 3 } : {}) };
+        }
       }
       if (Math.max(Math.abs(player.pos.x - blastPos.x), Math.abs(player.pos.y - blastPos.y)) <= blastRadius) {
         const selfDmg = Math.max(1, bombAtk);

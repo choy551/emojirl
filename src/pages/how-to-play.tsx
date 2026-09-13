@@ -623,7 +623,7 @@ export default function HowToPlay({
               name: "Dagger",
               effect: "Ninja Combo",
               detail:
-                "25% base chance of a bonus ¼-power strike; +15% per copy (cap 4 → 80% max). Two daggers ≈ 40% chance.",
+                "Ninja only. 25% base chance of a bonus ¼-power melee strike; +15% per copy (cap 4 → 80% max). Two daggers ≈ 40% chance. Consume still grants +ATK/+SPD to any class.",
               color: "text-slate-300",
             },
             {
