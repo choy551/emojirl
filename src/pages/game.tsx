@@ -1058,6 +1058,7 @@ export default function Game() {
       const safeRadius = visionRadiusFor(state.player.characterClass, state.player.stats.level) + passives.losBonus;
       const { x: px, y: py } = state.player.pos;
       const hasVisibleEnemy = state.enemies.some(e => {
+        if (!isHostileCombatTarget(e)) return false;
         if (!state.map[e.pos.y]?.[e.pos.x]?.visible) return false;
         if (passives.trueVision) {
           const dist = Math.max(Math.abs(e.pos.x - px), Math.abs(e.pos.y - py));

@@ -1120,6 +1120,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
       if (cls === '🧙') {
         const seenByEnemy = prev.enemies.some(e =>
+          isHostileCombatTarget(e) &&
           chebyshev(prev.player.pos, e.pos) <= VISION_RADIUS &&
           hasLOSBetween(prev.map, prev.player.pos, e.pos)
         );
