@@ -51,7 +51,7 @@ import {
   bfsStepToward, bfsNextStep, bfsNextStepWallHug, PLAYER_PASSABLE_TILES,
   getDungeonPressure,
   isAutoexploreThreat, autoexploreOccupiedKeys, autoexploreInteractBlockKeys, isAutoexploreInteractNpc,
-  classifyStairsFinish, scanGotoDestinations, evaluateBedSleep,
+  classifyStairsFinish, scanGotoDestinations, evaluateBedSleep, autoRestNeedsBountyWait,
 } from '../game/gameHelpers';
 import { useGameActions } from '../hooks/useGameActions';
 
@@ -609,6 +609,8 @@ export default function Game() {
       killCounts: {},
       difficultyTier: 0,
       highestPressureTierWarned: 0,
+      companionKillTally: 0,
+      companionBountyOocTurns: 0,
       floorAnnouncement: rooms.some(r => r.theme === 'volcano')
         ? {
             kind: 'volcano',
@@ -1113,7 +1115,8 @@ export default function Game() {
       const isWizard = state.player.characterClass === '🧙';
       const hpFull = state.player.stats.hp >= state.player.stats.maxHp;
       const mpFull = !isWizard || (state.player.stats.mana ?? 0) >= (state.player.stats.maxMana ?? 4);
-      if (hpFull && mpFull) {
+      const bountyWait = autoRestNeedsBountyWait(state.companionKillTally ?? 0);
+      if (hpFull && mpFull && !bountyWait) {
         setAutoRest(false);
         addLog('Fully rested.');
         return;

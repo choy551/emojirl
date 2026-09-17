@@ -107,3 +107,58 @@ describe('humanoid enemies open doors', () => {
     expect(blocked.enemies[0].pos).toEqual({ x: 1, y: 1 });
   });
 });
+
+describe('companion kill XP and bounty', () => {
+  function openFloor(): MapGrid {
+    return Array.from({ length: 6 }, () =>
+      Array.from({ length: 6 }, () => tile('floor', '⬜')),
+    );
+  }
+
+  it('grants full XP to the companion and 50% to the player', () => {
+    const companion = foe({
+      id: 'c1', emoji: '🥷', name: 'Lost Ninja', tag: 'Friendly',
+      isAdventurer: true, isRecruited: true, pos: { x: 2, y: 2 },
+      attack: 8, hp: 12, maxHp: 12, xp: 0, level: 1,
+    });
+    const goblin = foe({
+      id: 'g1', emoji: '👺', name: 'Goblin', tag: 'Hostile',
+      pos: { x: 2, y: 3 }, hp: 1, maxHp: 1, engaged: true, attack: 1,
+    });
+    const state = {
+      ...base([companion, goblin]),
+      map: openFloor(),
+      player: { ...playerAt(1, 1), stats: { ...playerAt(1, 1).stats, xp: 0, level: 1 } },
+      companionKillTally: 0,
+    };
+    const next = applyEnemyTurns(state, runEnemyTurns(state));
+    expect(next.enemies.some(e => e.id === 'g1')).toBe(false);
+    const c = next.enemies.find(e => e.id === 'c1')!;
+    expect(c.xp).toBe(5);
+    expect(next.player.stats.xp).toBe(3);
+    expect(next.companionKillTally).toBe(1);
+    expect(next.logs.some(l => l.text.includes('Companion bounty'))).toBe(false);
+  });
+
+  it('logs bounty only when the share tier drops', () => {
+    const companion = foe({
+      id: 'c1', emoji: '🥷', name: 'Lost Ninja', tag: 'Friendly',
+      isAdventurer: true, isRecruited: true, pos: { x: 2, y: 2 },
+      attack: 8, hp: 12, maxHp: 12, xp: 0, level: 1,
+    });
+    const goblin = foe({
+      id: 'g1', emoji: '👺', name: 'Goblin', tag: 'Hostile',
+      pos: { x: 2, y: 3 }, hp: 1, maxHp: 1, engaged: true, attack: 1,
+    });
+    const state = {
+      ...base([companion, goblin]),
+      map: openFloor(),
+      player: playerAt(1, 1),
+      companionKillTally: 4,
+    };
+    const next = applyEnemyTurns(state, runEnemyTurns(state));
+    expect(next.companionKillTally).toBe(5);
+    expect(next.player.stats.xp).toBe(3);
+    expect(next.logs.some(l => l.text === 'Companion bounty: 40% XP')).toBe(true);
+  });
+});

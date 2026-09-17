@@ -131,6 +131,8 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     restaurantStock:          raw.restaurantStock == null ? null : ((raw.restaurantStock as EmojiItem[]) ?? []).map(applySoulCatalogCopy),
     ammoCacheStock:           raw.ammoCacheStock == null ? null : ((raw.ammoCacheStock as EmojiItem[]) ?? []).map(applySoulCatalogCopy),
     restaurantSoldCount:      (raw.restaurantSoldCount as number) ?? 0,
+    companionKillTally:       (raw.companionKillTally as number) ?? 0,
+    companionBountyOocTurns:  (raw.companionBountyOocTurns as number) ?? 0,
   };
 }
 

@@ -366,6 +366,11 @@ export default function HowToPlay({
 
           <div className="text-xs text-muted-foreground mt-1">
             <strong>Companions (recruited adventurers):</strong> Bump into them to swap places (prevents hallway soft-locks). They follow you and fight nearby hostiles automatically. Press uppercase <Kbd>T</Kbd> (Shift+t, or Spacebar context action) while adjacent to Talk — set a <em>Favorite Companion</em> to descend with you (others stay behind), heal them with food, gift soul emojis for stat boosts or an ongoing passive, and set their combat behavior (Stay Close / Hang Back / Flee at Low HP / Fight to Death). Lowercase <Kbd>t</Kbd> is tactics, not Talk.
+            <br /><br />
+            Companions earn full XP from their kills and can level up.
+            You earn 50% XP from a companion’s kill. Every 5 companion kills
+            reduces your share by 10% (minimum 10%). Stay out of combat for
+            20 turns to refresh the bounty back to 50%.
           </div>
         </div>
       </Section>

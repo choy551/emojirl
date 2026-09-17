@@ -218,7 +218,7 @@ export function AdventurerInteractionDialog({ gameState, setGameState, adventure
         player: { ...prev.player, inventory: newInventory },
         enemies: prev.enemies.map(e =>
           e.id === adventurerId
-            ? { ...e, tag: 'Friendly' as const, engaged: false, isRecruited: true }
+            ? { ...e, tag: 'Friendly' as const, engaged: false, isRecruited: true, xp: e.xp ?? 0, level: e.level ?? 1 }
             : e
         ),
         logs: [{ id: Math.random().toString(), text: `🤝 ${adv.emoji} ${adv.name} beams with joy! "${fav}?! For me?!" — joins as your companion!`, turn: prev.turn }, ...prev.logs].slice(0, 24),
@@ -234,7 +234,7 @@ export function AdventurerInteractionDialog({ gameState, setGameState, adventure
         ...prev,
         enemies: prev.enemies.map(e =>
           e.id === adventurerId
-            ? { ...e, tag: 'Friendly' as const, engaged: false, isRecruited: true }
+            ? { ...e, tag: 'Friendly' as const, engaged: false, isRecruited: true, xp: e.xp ?? 0, level: e.level ?? 1 }
             : e
         ),
         logs: [{ id: Math.random().toString(), text: `🤝 ${adv.emoji} ${adv.name} grins warmly — joins as your companion!`, turn: prev.turn }, ...prev.logs].slice(0, 24),
@@ -741,7 +741,7 @@ export function BearInteractionDialog({ gameState, setGameState, bearId, stage, 
           player: { ...prev.player, inventory: newInventory },
           enemies: prev.enemies.map(e =>
             e.id === bearId
-              ? { ...e, tag: 'Friendly' as const, engaged: false, isRecruited: recruited }
+              ? { ...e, tag: 'Friendly' as const, engaged: false, isRecruited: recruited, ...(recruited ? { xp: e.xp ?? 0, level: e.level ?? 1 } : {}) }
               : e
           ),
           logs: [

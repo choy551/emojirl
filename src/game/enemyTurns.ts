@@ -10,7 +10,10 @@ import { passableTilesForEnemy } from './enemies';
 import { tickVolcanoAndLava } from './lava';
 import { _flashSignals } from './flashSignals';
 import { nearRestaurant, crowGoldSteal } from './economy';
-import { computeNinjaEvasion } from './progression';
+import { computeNinjaEvasion, companionBountyShare, companionBountyPercent, companionKillXp, applyCompanionLevelUp, tickCompanionBountyOoc, levelFromXP } from './progression';
+import { isHostileCombatTarget } from './combat';
+import { applyLevelUp } from './playerTurn';
+import { markEnemyKilled } from './discoveries';
 
 export interface EnemyTurnResult {
   enemies: Enemy[];
@@ -30,6 +33,9 @@ export interface EnemyTurnResult {
   playerInventoryAdditions: EmojiItem[];
   enemyBeam?: { positions: Position[]; color: string };
   map?: GameState['map'];
+  playerXpGain?: number;
+  companionKillTally?: number;
+  companionKillsThisTurn?: number;
 }
 
 export function runEnemyTurns(state: GameState, skipId?: string, sleeping = false): EnemyTurnResult {
@@ -49,6 +55,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   const explosionPositions: Position[] = [];
   let moodDrain = 0;
   let goldDrain = 0;
+  let playerXpGain = 0;
+  let companionKillTally = state.companionKillTally ?? 0;
+  let companionKillsThisTurn = 0;
   let playerGold = player.stats.gold;
   const playerInventoryRemovals: string[] = [];
   const playerInventoryAdditions: EmojiItem[] = [];
@@ -293,6 +302,29 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
               reclaimMonkeyLoot(companionTarget);
               newEnemies[ti] = { ...companionTarget, hp: 0 };
               log(`${logPrefix} ${enemy.emoji} ${enemy.name} takes down ${companionTarget.emoji} ${companionTarget.name}!`);
+              markEnemyKilled(companionTarget.emoji);
+              const baseXp = companionKillXp(!!companionTarget.isBoss);
+              const share = companionBountyShare(companionKillTally);
+              playerXpGain += Math.round(baseXp * share);
+              const oldShare = share;
+              companionKillTally += 1;
+              companionKillsThisTurn += 1;
+              const newShare = companionBountyShare(companionKillTally);
+              if (newShare < oldShare) {
+                log(newShare <= 0.10
+                  ? 'Companion bounty: 10% XP (min)'
+                  : `Companion bounty: ${companionBountyPercent(companionKillTally)}% XP`);
+              }
+              const killer = newEnemies[i];
+              const oldLv = killer.level ?? 1;
+              const newXp = (killer.xp ?? 0) + baseXp;
+              const newLv = levelFromXP(newXp);
+              let leveled: Enemy = { ...killer, xp: newXp, level: oldLv };
+              if (newLv > oldLv) {
+                leveled = applyCompanionLevelUp(leveled, oldLv, newLv);
+                log(`${leveled.emoji} ${leveled.name} reached level ${newLv}!`);
+              }
+              newEnemies[i] = leveled;
             } else {
               newEnemies[ti] = { ...companionTarget, hp: newTargetHp };
             }
@@ -781,7 +813,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     }
   }
 
-  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map };
+  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn };
 }
 
 export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): GameState {
@@ -849,5 +881,45 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
       pendingBeam,
     };
   }
+  const xpGain = result.playerXpGain ?? 0;
+  if (xpGain > 0) {
+    const oldLevel = next.player.stats.level;
+    const newXP = next.player.stats.xp + xpGain;
+    const newLevel = levelFromXP(newXP);
+    let p = { ...next.player, stats: { ...next.player.stats, xp: newXP } };
+    const extraLogs: Array<{ id: string; text: string; turn: number }> = [];
+    if (newLevel > oldLevel) {
+      p = applyLevelUp(p, oldLevel, newLevel, text => {
+        extraLogs.push({ id: Math.random().toString(), text, turn: next.turn });
+      });
+    }
+    next = {
+      ...next,
+      player: p,
+      logs: extraLogs.length ? [...extraLogs, ...next.logs].slice(0, 24) : next.logs,
+    };
+  }
+
+  const inCombat = (result.companionKillsThisTurn ?? 0) > 0
+    || result.playerHp < state.player.stats.hp
+    || next.enemies.some(e => e.engaged && isHostileCombatTarget(e));
+  const bounty = tickCompanionBountyOoc(
+    result.companionKillTally ?? state.companionKillTally ?? 0,
+    state.companionBountyOocTurns ?? 0,
+    inCombat,
+    (result.companionKillsThisTurn ?? 0) > 0,
+  );
+  next = {
+    ...next,
+    companionKillTally: bounty.tally,
+    companionBountyOocTurns: bounty.ooc,
+  };
+  if (bounty.refreshed) {
+    next = {
+      ...next,
+      logs: [{ id: `bounty-refresh-${next.turn}`, text: 'Companion bounty refreshed (50% XP)', turn: next.turn }, ...next.logs].slice(0, 24),
+    };
+  }
+
   return withVisibility(tickVolcanoAndLava(next));
 }

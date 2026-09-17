@@ -217,6 +217,8 @@ export interface Enemy {
   isEcho?: boolean;
   isAdventurer?: boolean;
   isRecruited?: boolean;
+  xp?: number;
+  level?: number;
   favoriteEmoji?: string;
   ranged?: boolean;
   /** Player-designated favorite companion — descends with the player; others stay behind. */
@@ -274,6 +276,10 @@ export interface GameState {
   restaurantStock?: EmojiItem[] | null;
   ammoCacheStock?: EmojiItem[] | null;
   restaurantSoldCount?: number;
+  /** Companion kills since last bounty refresh. */
+  companionKillTally?: number;
+  /** Consecutive non-combat turns toward bounty snap-reset. */
+  companionBountyOocTurns?: number;
 }
 
 export interface ControlSettings {
