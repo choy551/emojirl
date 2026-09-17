@@ -7,6 +7,9 @@ type ExploreEntity = {
   tag?: string;
   engaged?: boolean;
   pos: Position;
+  bear?: boolean;
+  monkey?: boolean;
+  isAdventurer?: boolean;
 };
 
 export function isRecruitedCompanion(e: { isRecruited?: boolean }): boolean {
@@ -34,16 +37,28 @@ export function autoexploreOccupiedKeys(enemies: ExploreEntity[]): Set<string> {
 }
 
 /**
- * Routing obstacles for unseen-tile BFS. Fairies and other unrecruited friendlies
- * stay blocked so we don't bump-interact them; recruited companions do not —
- * bumping swaps, which is how hallways stay passable.
+ * Unrecruited bump-to-talk NPCs (bears, monkeys, adventurers, fairies).
+ * Recruited companions and hostiles/engaged foes are not included.
  */
-export function autoexploreFriendlyBlockKeys(enemies: ExploreEntity[]): Set<string> {
+export function isAutoexploreInteractNpc(e: ExploreEntity): boolean {
+  if (e.isRecruited || e.engaged || e.tag === 'Hostile') return false;
+  if (e.tag === 'Friendly') return true;
+  return !!(e.bear || e.monkey || e.isAdventurer);
+}
+
+/**
+ * Routing obstacles for unseen-tile BFS so we don't bump-open Talk menus.
+ * Recruited companions stay walk-through (swap).
+ */
+export function autoexploreInteractBlockKeys(enemies: ExploreEntity[]): Set<string> {
   return new Set(
-    enemies
-      .filter(e => e.tag === 'Friendly' && !e.isRecruited)
-      .map(e => `${e.pos.x},${e.pos.y}`),
+    enemies.filter(isAutoexploreInteractNpc).map(e => `${e.pos.x},${e.pos.y}`),
   );
+}
+
+/** @deprecated use autoexploreInteractBlockKeys */
+export function autoexploreFriendlyBlockKeys(enemies: ExploreEntity[]): Set<string> {
+  return autoexploreInteractBlockKeys(enemies);
 }
 
 export type StairsFinish = 'no-stairs' | 'adjacent' | 'blocked' | 'step';

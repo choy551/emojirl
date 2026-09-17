@@ -3,7 +3,8 @@ import {
   isAutoexploreThreat,
   isRecruitedCompanion,
   autoexploreOccupiedKeys,
-  autoexploreFriendlyBlockKeys,
+  autoexploreInteractBlockKeys,
+  isAutoexploreInteractNpc,
   classifyStairsFinish,
 } from './autoexplore';
 import { bfsStepToward } from './pathfinding';
@@ -13,7 +14,9 @@ import type { GameState } from './types';
 const companion = { pos: { x: 5, y: 5 }, isRecruited: true, tag: 'Friendly' as const };
 const staleCompanion = { pos: { x: 6, y: 5 }, isRecruited: true, tag: 'Hostile' as const };
 const fairy = { pos: { x: 4, y: 5 }, isRecruited: false, tag: 'Friendly' as const };
-const adventurer = { pos: { x: 3, y: 5 }, isRecruited: false, tag: 'Neutral' as const };
+const adventurer = { pos: { x: 3, y: 5 }, isRecruited: false, tag: 'Neutral' as const, isAdventurer: true };
+const bear = { pos: { x: 2, y: 5 }, isRecruited: false, tag: 'Neutral' as const, bear: true };
+const monkey = { pos: { x: 1, y: 5 }, isRecruited: false, tag: 'Neutral' as const, monkey: true };
 const goblin = { pos: { x: 7, y: 5 }, tag: 'Hostile' as const };
 
 describe('isAutoexploreThreat', () => {
@@ -38,7 +41,7 @@ describe('isAutoexploreThreat', () => {
 });
 
 describe('autoexplore occupancy', () => {
-  const enemies = [companion, staleCompanion, fairy, adventurer, goblin];
+  const enemies = [companion, staleCompanion, fairy, adventurer, bear, monkey, goblin];
 
   it('lets routing walk through recruited companions (swap) but not other bodies', () => {
     const occupied = autoexploreOccupiedKeys(enemies);
@@ -49,11 +52,21 @@ describe('autoexplore occupancy', () => {
     expect(occupied.has('7,5')).toBe(true);
   });
 
-  it('keeps unrecruited friendlies as explore blockers so we do not bump-interact them', () => {
-    const blocks = autoexploreFriendlyBlockKeys(enemies);
+  it('blocks unrecruited talk NPCs so explore does not bump-open menus', () => {
+    expect(isAutoexploreInteractNpc(fairy)).toBe(true);
+    expect(isAutoexploreInteractNpc(adventurer)).toBe(true);
+    expect(isAutoexploreInteractNpc(bear)).toBe(true);
+    expect(isAutoexploreInteractNpc(monkey)).toBe(true);
+    expect(isAutoexploreInteractNpc(companion)).toBe(false);
+    expect(isAutoexploreInteractNpc(goblin)).toBe(false);
+    expect(isAutoexploreInteractNpc({ ...bear, engaged: true })).toBe(false);
+    expect(isAutoexploreInteractNpc({ ...bear, isRecruited: true, tag: 'Friendly' as const })).toBe(false);
+    const blocks = autoexploreInteractBlockKeys(enemies);
     expect(blocks.has('4,5')).toBe(true);
+    expect(blocks.has('3,5')).toBe(true);
+    expect(blocks.has('2,5')).toBe(true);
+    expect(blocks.has('1,5')).toBe(true);
     expect(blocks.has('5,5')).toBe(false);
-    expect(blocks.has('6,5')).toBe(false);
     expect(blocks.has('7,5')).toBe(false);
   });
 });

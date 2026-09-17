@@ -50,7 +50,7 @@ import {
   _flashSignals,
   bfsStepToward, bfsNextStep, bfsNextStepWallHug, PLAYER_PASSABLE_TILES,
   getDungeonPressure,
-  isAutoexploreThreat, autoexploreOccupiedKeys, autoexploreFriendlyBlockKeys,
+  isAutoexploreThreat, autoexploreOccupiedKeys, autoexploreInteractBlockKeys, isAutoexploreInteractNpc,
   classifyStairsFinish, scanGotoDestinations, evaluateBedSleep,
 } from '../game/gameHelpers';
 import { useGameActions } from '../hooks/useGameActions';
@@ -401,6 +401,44 @@ export default function Game() {
   const [pendingCompanionTalkId, setPendingCompanionTalkId] = useState<string | null>(null);
   const [bedRestOpen, setBedRestOpen] = useState(false);
 
+  const stopMapAutomation = useCallback(() => {
+    setAutoExplore(false);
+    setAutoRest(false);
+    setTravelTarget(null);
+  }, []);
+  const blockingOverlayOpen = !!(
+    gameState?.floorAnnouncement ||
+    statCardItem ||
+    lastBoatWarnSlot !== null ||
+    drownWarnSlot !== null ||
+    pendingLavaStep ||
+    bedRestOpen ||
+    pendingCompanionTalkId ||
+    pendingBearInteraction ||
+    pendingAdventurerInteraction ||
+    pendingMonkeyInteraction ||
+    pendingFairyId ||
+    dirPickMode ||
+    blinkTargetMode ||
+    gotoMenuOpen ||
+    tacticsMenuOpen ||
+    actionsMenuOpen ||
+    shopOpen ||
+    restaurantOpen ||
+    ammoCacheOpen ||
+    bankOpen ||
+    logOpen ||
+    statsExpanded ||
+    optionsOpen ||
+    showRTFM ||
+    pauseMenuOpen
+  );
+  const blockingOverlayOpenRef = useRef(false);
+  useEffect(() => { blockingOverlayOpenRef.current = blockingOverlayOpen; }, [blockingOverlayOpen]);
+  useEffect(() => {
+    if (blockingOverlayOpen) stopMapAutomation();
+  }, [blockingOverlayOpen, stopMapAutomation]);
+
   // Emoji-less flash: full-screen red vignette when player has no soul emojis
   useEffect(() => {
     if (!_flashSignals.emojilessFlashPending) return;
@@ -667,6 +705,7 @@ export default function Game() {
   useEffect(() => {
     if (!autoExplore) return;
     const interval = setInterval(() => {
+      if (blockingOverlayOpenRef.current) { stopMapAutomation(); return; }
       const state = gameStateRef.current;
       if (!state || state.gameOver) { setAutoExplore(false); return; }
 
@@ -707,9 +746,17 @@ export default function Game() {
         addLog('Autoexplore stopped: enemy nearby!');
         return;
       }
-      // Keep unrecruited friendlies (fairies) as routing obstacles so we don't bump-interact
-      // them. Recruited companions are excluded — bumping swaps, which prevents hallway loops.
-      const friendlyBlockedSet = autoexploreFriendlyBlockKeys(enemies);
+      // Keep unrecruited talk NPCs (bears, monkeys, adventurers, fairies) as routing
+      // obstacles so we don't bump-open Talk. Recruited companions stay walk-through.
+      const interactBlockedSet = autoexploreInteractBlockKeys(enemies);
+      const nearbyTalk = enemies.find(e =>
+        isAutoexploreInteractNpc(e) && chebyshev(player.pos, e.pos) <= 1
+      );
+      if (nearbyTalk) {
+        stopMapAutomation();
+        addLog(`Autoexplore stopped: ${nearbyTalk.emoji} ${nearbyTalk.name} nearby`);
+        return;
+      }
       // Collect bar (🍺) tile positions so autoexplore routes around them
       const barBlockedSet = new Set<string>();
       // Collect stairs position so autoexplore never accidentally steps on it
@@ -728,7 +775,7 @@ export default function Game() {
           }
         }
       }
-      const autoBlockedSet = new Set([...friendlyBlockedSet, ...barBlockedSet, ...stairsBlockedSet]);
+      const autoBlockedSet = new Set([...interactBlockedSet, ...barBlockedSet, ...stairsBlockedSet]);
       const exploreTile = state.map[player.pos.y]?.[player.pos.x];
       if (exploreTile?.type === 'restaurant') {
         setAutoExplore(false);
@@ -844,7 +891,7 @@ export default function Game() {
       handleMove(step[0], step[1]);
     }, 150);
     return () => clearInterval(interval);
-  }, [autoExplore, handleMove, addLog]);
+  }, [autoExplore, handleMove, addLog, stopMapAutomation]);
 
   // ── tap-to-move auto-path interval ───────────────────────────────────────
   // Walks the player one step per tick toward travelTarget, stopping on arrival,
@@ -853,6 +900,7 @@ export default function Game() {
   useEffect(() => {
     if (!travelTarget) return;
     const interval = setInterval(() => {
+      if (blockingOverlayOpenRef.current) { stopMapAutomation(); return; }
       const state = gameStateRef.current;
       if (!state || state.gameOver) { setTravelTarget(null); return; }
       const { player, enemies } = state;
@@ -902,7 +950,7 @@ export default function Game() {
       }
     }, 150);
     return () => clearInterval(interval);
-  }, [travelTarget, handleMove, addLog]);
+  }, [travelTarget, handleMove, addLog, stopMapAutomation]);
 
   // Ref so autoexplore can call handleWait without stale closure
   const handleWaitRef = useRef<(() => void) | null>(null);
@@ -1039,6 +1087,10 @@ export default function Game() {
     let timeout: ReturnType<typeof setTimeout> | null = null;
 
     const tick = () => {
+      if (blockingOverlayOpenRef.current) {
+        stopMapAutomation();
+        return;
+      }
       const state = gameStateRef.current;
       if (!state || state.gameOver || !autoRest) {
         setAutoRest(false);
@@ -1089,7 +1141,7 @@ export default function Game() {
     return () => {
       if (timeout) clearTimeout(timeout);
     };
-  }, [autoRest, handleWait, addLog]);
+  }, [autoRest, handleWait, addLog, stopMapAutomation]);
 
   // ── keyboard ─────────────────────────────────────────────────────────────
   const heldKeys = useRef<Set<string>>(new Set());
