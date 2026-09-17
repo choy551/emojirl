@@ -459,6 +459,12 @@ export default function Game() {
     _flashSignals.lightningFlashPending = false;
     setLightningFlashKey(k => k + 1);
   }, [gameState?.turn]);
+  const [spellEchoFlashKey, setSpellEchoFlashKey] = useState(0);
+  useEffect(() => {
+    if (!_flashSignals.spellEchoFlashPending) return;
+    _flashSignals.spellEchoFlashPending = false;
+    setSpellEchoFlashKey(k => k + 1);
+  }, [gameState?.turn]);
 
   // Explosion flash: when a bomb detonates, drive the tile overlay for ~400ms
   // NOTE: no cleanup return — timer is managed via ref to prevent premature
@@ -2271,6 +2277,12 @@ export default function Game() {
           45%  { opacity: 0.7; }
           100% { opacity: 0; }
         }
+        @keyframes spell-echo-flash {
+          0%   { opacity: 0; }
+          20%  { opacity: 0.9; }
+          55%  { opacity: 0.5; }
+          100% { opacity: 0; }
+        }
         @keyframes wizard-target-pulse {
           0%   { box-shadow: 0 0 6px #a78bfa, 0 0 12px rgba(167,139,250,0.25); opacity: 0.7; }
           100% { box-shadow: 0 0 12px #a78bfa, 0 0 24px rgba(167,139,250,0.55); opacity: 1; }
@@ -3472,6 +3484,17 @@ export default function Game() {
             position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 110,
             background: 'radial-gradient(ellipse at center, rgba(255,255,255,0.95) 0%, rgba(125,211,252,0.85) 45%, rgba(125,211,252,0.15) 100%)',
             animation: 'lightning-flash 400ms ease-out forwards',
+          }}
+        />
+      )}
+
+      {spellEchoFlashKey > 0 && (
+        <div
+          key={`spell-echo-${spellEchoFlashKey}`}
+          style={{
+            position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 110,
+            background: 'radial-gradient(ellipse at center, rgba(147,197,253,0.9) 0%, rgba(59,130,246,0.55) 50%, rgba(37,99,235,0.08) 100%)',
+            animation: 'spell-echo-flash 400ms ease-out forwards',
           }}
         />
       )}

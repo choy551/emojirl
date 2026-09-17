@@ -9,6 +9,7 @@ import {
   tickActiveBuffs, withVisibility, runEnemyTurns, applyEnemyTurns, getItemBuyPrice,
 } from '../../game/gameHelpers';
 import { applyInstantItemUse, canBuyAndUse } from '../../game/shopUse';
+import { _flashSignals } from '../../game/flashSignals';
 import type { GameRefs, GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 
 export function useItemActions(
@@ -310,6 +311,7 @@ export function useItemActions(
       let newInventory = applied.player.inventory;
       let newSoulBank = applied.player.bank;
       if (echo) {
+        _flashSignals.spellEchoFlashPending = true;
         addLog(`🧙 Spell Echo! ${slotItem.emoji} resonates — not consumed.`);
       } else if (isStackableBagPassive(slotItem) && (slotItem.stackCount ?? 1) > 1) {
         newInventory = applied.player.inventory.map(it =>

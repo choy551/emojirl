@@ -8,6 +8,7 @@ export const _flashSignals = {
   pendingFairyId: null as string | null,
   pressureFlashPending: false,
   lightningFlashPending: false,
+  spellEchoFlashPending: false,
 };
 
 export const DIVINE_INSPIRE_RADIUS = 4;

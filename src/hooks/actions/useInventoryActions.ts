@@ -8,6 +8,7 @@ import {
   isNonStackableBagPassiveDuplicate, isActiveKindDuplicate, runEnemyTurns, applyEnemyTurns,
 } from '../../game/gameHelpers';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
+import { _flashSignals } from '../../game/flashSignals';
 
 export function useInventoryActions(
   setters: GameSetters,
@@ -132,6 +133,7 @@ export function useInventoryActions(
       const echo = isWizard && Math.random() < 0.25;
       let newBank = prev.player.bank;
       if (echo) {
+        _flashSignals.spellEchoFlashPending = true;
         addLog(`🧙 Spell Echo! ${item.emoji} resonates — not consumed.`);
       } else if (isStackableBagPassive(item) && (item.stackCount ?? 1) > 1) {
         newBank = prev.player.bank.map(it => it.id === itemId ? { ...it, stackCount: (it.stackCount ?? 1) - 1 } : it);
