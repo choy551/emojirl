@@ -1,6 +1,7 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
 import { getItemBuyPrice, getItemSellValue, addToBag, removeAndRefillBag } from '../game/gameHelpers';
 import { soulHelpText } from '../game/emojis';
+import { isStackableBagPassive } from '../game/passives';
 import { COOKABLE_EMOJIS } from '../game/emojis';
 import { canEquipItem } from './itemUtils';
 import { useDismissGuard } from '../hooks/useDismissGuard';
@@ -55,7 +56,15 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
               const price = getItemBuyPrice(item, gameState.currentFloor);
               const canAfford = gameState.player.stats.gold >= price;
               const nonHealBagCount = gameState.player.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined).length;
-              const bagFull = !item.isEquipment && item.healAmount === undefined && item.ammoAmount === undefined && nonHealBagCount >= 9;
+              const ownsStackableInHotbar =
+                isStackableBagPassive(item) &&
+                gameState.player.inventory.some(i => i.emoji === item.emoji && isStackableBagPassive(i));
+              const bagFull =
+                !item.isEquipment &&
+                item.healAmount === undefined &&
+                item.ammoAmount === undefined &&
+                nonHealBagCount >= 9 &&
+                !ownsStackableInHotbar;
               return (
                 <div key={item.id} className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">
                   <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
@@ -67,6 +76,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                     disabled={!canAfford || bagFull}
                     onClick={() => {
                       let sentToBank = false;
+                      let overflowToBank = false;
                       let shopAmmoTotal: number | null = null;
                       let autoEquippedSlot: EquipSlot | null = null;
                       setGameState(prev => {
@@ -92,7 +102,9 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                             return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, equipment: { ...prev.player.equipment, [emptySlot]: boughtItem } } };
                           }
                         }
+                        const bankBefore = prev.player.bank.length;
                         const { inventory, bank } = addToBag(prev.player.inventory, prev.player.bank, boughtItem);
+                        overflowToBank = bank.length > bankBefore;
                         return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, inventory, bank } };
                       });
                       if (shopAmmoTotal !== null) {
@@ -103,7 +115,9 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                           ? `🏪 Bought ${item.emoji} ${item.name} for ${price}g — your class can't equip it, sent to bank.`
                           : autoEquippedSlot
                             ? `🏪 Bought ${item.emoji} ${item.name} for ${price}g — auto-equipped to ${autoEquippedSlot} slot!`
-                            : `🏪 Bought ${item.emoji} ${item.name} for ${price}g!`);
+                            : overflowToBank
+                              ? `🏪 Bought ${item.emoji} ${item.name} for ${price}g — extra copy sent to bank.`
+                              : `🏪 Bought ${item.emoji} ${item.name} for ${price}g!`);
                       }
                       setShopItems(prev => prev.filter(i => i.id !== item.id));
                     }}
