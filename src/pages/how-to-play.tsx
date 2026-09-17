@@ -418,7 +418,7 @@ export default function HowToPlay({
 
         <div className="mt-3 text-xs text-muted-foreground space-y-3">
           <p>
-            <strong className="text-foreground">Dungeon Pressure:</strong> Increases on deeper floors — nearby enemies get permanent stat bonuses (watch for on-screen warnings).
+            <strong className="text-foreground">Dungeon Pressure:</strong> From D:16 onward, spawned enemies gain +3 ATK / +2 DEF per floor below 15 (D:16 = +3/+2, D:18 = +9/+6). Watch for on-screen warnings.
           </p>
           <p>
             <strong className="text-foreground">🪢 Rope:</strong> Use rope 🪢 (from hotbar or tactics) to safely enter. This magical rope will transport you to a dimensional treasure vault that randomly intersects the current dungeon floor. Treasure vaults offer big rewards (risk of traps). Rope 🪢 can also be used as a quick &apos;teleport&apos;/&apos;get out of danger&apos; button, but beware of taking damage from traps if you&apos;re at low health!

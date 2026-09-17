@@ -30,6 +30,6 @@ export function computeNinjaEvasion(player: Player): number {
 
 export function getDungeonPressure(floor: number): { atk: number; def: number } {
   if (floor <= 15) return { atk: 0, def: 0 };
-  const levels = Math.floor((floor - 16) / 5) + 1;
-  return { atk: levels, def: levels };
+  const depth = floor - 15;
+  return { atk: depth * 3, def: depth * 2 };
 }

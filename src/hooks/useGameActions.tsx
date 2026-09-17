@@ -950,11 +950,11 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         } else {
           addLog(`Descended to floor ${nextFloor}.`);
         }
-        const newPressureTier = getDungeonPressure(nextFloor).atk;
+        const newPressure = getDungeonPressure(nextFloor);
         const highestWarned = prev.highestPressureTierWarned ?? 0;
-        if (newPressureTier > 0 && newPressureTier > highestWarned) {
-          addLog(`⚠️ Dungeon Pressure rises to +${newPressureTier}! Enemies grow stronger.`);
-          newState.highestPressureTierWarned = newPressureTier;
+        if (newPressure.atk > 0 && newPressure.atk > highestWarned) {
+          addLog(`⚠️ Dungeon Pressure rises to +${newPressure.atk} ATK / +${newPressure.def} DEF!`);
+          newState.highestPressureTierWarned = newPressure.atk;
           _flashSignals.pressureFlashPending = true;
         }
         if (rooms.some(r => r.theme === 'monster-den')) addLog(`🦴 You sense a terrible presence nearby...`);

@@ -111,7 +111,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
           <StatPill label="LCK" value={eff.stats.luck} color="text-pink-400" />
           <StatPill label="CRIT" value={`${crit}%`} color="text-rose-300" />
           <StatPill label="DODGE" value={`${dodge}%`} color="text-sky-300" />
-          {pressure.atk > 0 && <StatPill label="PRESSURE" value={`T${pressure.atk}`} color="text-red-400" />}
+          {pressure.atk > 0 && <StatPill label="PRESSURE" value={`+${pressure.atk}/+${pressure.def}`} color="text-red-400" />}
         </div>
 
         {/* Active food buffs */}

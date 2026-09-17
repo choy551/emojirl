@@ -2617,23 +2617,22 @@ export default function Game() {
         {(() => {
           const pressure = getDungeonPressure(currentFloor);
           if (pressure.atk === 0) return null;
-          const tier = pressure.atk;
           const tierStyle =
-            tier === 1
+            pressure.atk <= 6
               ? { bg: 'bg-yellow-950/60', border: 'border-yellow-500/60', text: 'text-yellow-400' }
-              : tier === 2
+              : pressure.atk <= 15
               ? { bg: 'bg-orange-950/60', border: 'border-orange-500/60', text: 'text-orange-400' }
               : { bg: 'bg-red-950/60', border: 'border-red-500/60', text: 'text-red-400' };
-          const pulseClass = tier >= 3 ? 'animate-pulse' : tier === 2 ? 'animate-pulse opacity-90' : '';
+          const pulseClass = pressure.atk > 15 ? 'animate-pulse' : pressure.atk > 6 ? 'animate-pulse opacity-90' : '';
           return (
             <>
               <div className="h-7 w-px bg-border/40 shrink-0" />
               <div
-                title={`Dungeon Pressure Tier ${tier}: all enemies gain +${pressure.atk} ATK and +${pressure.def} DEF`}
+                title={`Dungeon Pressure: enemies gain +${pressure.atk} ATK and +${pressure.def} DEF`}
                 className={`flex items-center gap-1 ${tierStyle.bg} border ${tierStyle.border} rounded px-1.5 py-0.5 text-[9px] ${tierStyle.text} shrink-0 ${pulseClass}`}
               >
                 <span>⚡</span>
-                <span className="font-bold">Pressure +{tier}</span>
+                <span className="font-bold">Pressure +{pressure.atk}/+{pressure.def}</span>
               </div>
             </>
           );
@@ -2694,7 +2693,7 @@ export default function Game() {
               if (pressure.atk <= 0) return null;
               return (
                 <p className="text-sm font-semibold mb-4" style={{ color: '#f97316' }}>
-                  🔥 Dungeon Pressure: +{pressure.atk}
+                  🔥 Dungeon Pressure: +{pressure.atk} ATK / +{pressure.def} DEF
                 </p>
               );
             })()}
