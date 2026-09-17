@@ -21,6 +21,7 @@ interface ShopModalProps {
 export function ShopModal({ gameState, setGameState, shopItems, setShopItems, addLog, onBuyAndUse, onClose }: ShopModalProps) {
   const dismiss = useDismissGuard(onClose);
   const hand = useMobileHand();
+  const listing = (gameState.shopStock ?? shopItems).filter(i => !i.consumed);
   return (
     <div
       className={`fixed inset-0 z-[70] flex bg-black/60 backdrop-blur-sm ${overlayFlexClass(hand)}`}
@@ -51,9 +52,9 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
         {/* For Sale */}
         <div className="mb-4">
           <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">For Sale</div>
-          {shopItems.length === 0 && <div className="text-xs text-muted-foreground text-center py-3">Sold out!</div>}
+          {listing.length === 0 && <div className="text-xs text-muted-foreground text-center py-3">Sold out!</div>}
           <div className="flex flex-col gap-1.5">
-            {shopItems.map(item => {
+            {listing.map(item => {
               const price = getItemBuyPrice(item, gameState.currentFloor);
               const canAfford = gameState.player.stats.gold >= price;
               const nonHealBagCount = gameState.player.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined).length;
@@ -139,7 +140,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                     disabled={!useCheck.ok}
                     title={useCheck.ok ? 'Buy and consume immediately' : useCheck.reason}
                     onClick={() => {
-                      if (onBuyAndUse(item)) setShopItems(prev => prev.filter(i => i.id !== item.id));
+                      onBuyAndUse(item);
                     }}
                     className={`leading-tight text-center text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors ${
                       useCheck.ok

@@ -334,9 +334,11 @@ export function useItemActions(
     const price = getItemBuyPrice(item, gs.currentFloor);
     const check = canBuyAndUse(item, gs, price);
     if (!check.ok) return false;
+    if (gs.shopStock != null && !gs.shopStock.some(i => i.id === item.id)) return false;
     let succeeded = false;
     setGameState(prev => {
       if (!prev || prev.gameOver) return prev;
+      if (prev.shopStock != null && !prev.shopStock.some(i => i.id === item.id)) return prev;
       const p = getItemBuyPrice(item, prev.currentFloor);
       const again = canBuyAndUse(item, prev, p);
       if (!again.ok) return prev;
@@ -346,13 +348,14 @@ export function useItemActions(
         player: { ...prev.player, stats: { ...prev.player.stats, gold: prev.player.stats.gold - p } },
         logs: [{ id: `shop-use-${prev.turn}`, text: boughtLine, turn: prev.turn }, ...prev.logs].slice(0, 24),
       };
-      const used = applyInstantItemUse(paid, item, { source: 'shop', addLog, applyMonkeyDropOnKill });
+      const used = applyInstantItemUse(paid, item, { source: 'shop', addLog: () => {}, applyMonkeyDropOnKill });
       if (!used) return prev;
       succeeded = true;
-      return used;
+      const nextStock = prev.shopStock == null ? prev.shopStock : prev.shopStock.filter(i => i.id !== item.id);
+      return { ...used, shopStock: nextStock };
     });
     return succeeded;
-  }, [addLog, gameStateRef, setGameState, applyMonkeyDropOnKill]);
+  }, [gameStateRef, setGameState, applyMonkeyDropOnKill]);
 
   return { handleUseHeal, handleCook, handleUseRope, handleUseSlot, handleShopBuyAndUse };
 }
