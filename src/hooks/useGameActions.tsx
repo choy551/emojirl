@@ -16,6 +16,7 @@ import {
   applyBedRest, simulateSleep, SLEEP_TURNS, BED_OVERHEAL_MULT,
   evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
 } from '../game/gameHelpers';
+import { lightningArcDamage } from '../game/passives';
 import { canEquipItem } from '../components/itemUtils';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
 import type { GameRefs, GameSetters } from './actions/types';
@@ -623,11 +624,15 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (arcCandidates.length > 0) {
             const arcCount = Math.min(arcCandidates.length, 1 + Math.floor(Math.random() * 3));
             const shuffled = [...arcCandidates].sort(() => Math.random() - 0.5).slice(0, arcCount);
-            const arcedIds: string[] = [];
-            for (const tgt of shuffled) {
+            const bits: string[] = [];
+            const arcAtk = combatPlayer.stats.attack;
+            const arcStacks = _meleePassives.lightningBolt;
+            shuffled.forEach((tgt, arcI) => {
               const idx = newEnemies.findIndex(e2 => e2.id === tgt.id);
-              if (idx === -1) continue;
-              const newHp = tgt.hp - 1;
+              if (idx === -1) return;
+              const arcDmg = lightningArcDamage(arcAtk, arcStacks, arcI);
+              const newHp = tgt.hp - arcDmg;
+              bits.push(`${tgt.emoji}-${arcDmg}`);
               if (newHp <= 0) {
                 markEnemyKilled(tgt.emoji);
                 updatedKillCounts[tgt.emoji] = (updatedKillCounts[tgt.emoji] ?? 0) + 1;
@@ -637,9 +642,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               } else {
                 newEnemies[idx] = { ...tgt, hp: newHp, engaged: true };
               }
-              arcedIds.push(tgt.emoji);
-            }
-            if (arcedIds.length > 0) addLog(`⚡ Arc! ${arcedIds.join('')} zapped!`);
+            });
+            if (bits.length > 0) addLog(`⚡ Arc! ${bits.join(' ')}`);
           }
         }
 

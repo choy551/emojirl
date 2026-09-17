@@ -679,6 +679,14 @@ export default function HowToPlay({
                 "Reflects 1 damage back per copy when an enemy hits you. Two diamonds = 2 thorns damage per melee hit.",
               color: "text-cyan-400",
             },
+            {
+              emoji: "⚡",
+              name: "Lightning",
+              effect: "Chain Arc",
+              detail:
+                "Melee hits arc to 1–3 nearby foes. 1⚡ = 75%/50%/25% ATK; each extra copy +25% to every tier (cap 4 → 150%/125%/100%). Consume / Buy & Use still instakills a visible foe.",
+              color: "text-yellow-300",
+            },
           ].map((s) => (
             <div
               key={s.emoji}

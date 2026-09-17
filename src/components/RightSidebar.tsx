@@ -324,7 +324,15 @@ export function RightSidebar({
       {(() => {
         const tags: { icon: string; label: string; color: string; desc: string }[] = [];
         if (p.vampiricStrike > 0) tags.push({ icon: '🩸', label: p.vampiricStrike > 1 ? `Vampiric ×${p.vampiricStrike}` : 'Vampiric', color: 'text-rose-400', desc: `Melee hits restore ${p.vampiricStrike} HP.` });
-        if (p.lightningBolt)  tags.push({ icon: '⚡', label: 'Chain Arc', color: 'text-yellow-300', desc: 'Melee attacks arc lightning to 1–3 nearby enemies.' });
+        if (p.lightningBolt > 0) {
+          const extra = p.lightningBolt - 1;
+          tags.push({
+            icon: '⚡',
+            label: p.lightningBolt > 1 ? `Chain Arc ×${p.lightningBolt}` : 'Chain Arc',
+            color: 'text-yellow-300',
+            desc: `Melee arcs 1–3 nearby foes for ${75 + extra * 25}% / ${50 + extra * 25}% / ${25 + extra * 25}% ATK.`,
+          });
+        }
         if (p.thorns)         tags.push({ icon: '💎', label: `Thorns ×${p.thorns}`, color: 'text-cyan-400', desc: `Reflect ${p.thorns} damage back to attackers in melee (stacks per copy).` });
         if (p.bonusLoot)      tags.push({ icon: '🍀', label: `+Loot ×${p.bonusLoot}`, color: 'text-amber-300', desc: `${Math.round(Math.min(95, 55 + 15 * p.bonusLoot))}% enemy drop chance (stacks per copy; base 55%).` });
         if (p.execBlow)       tags.push({ icon: '💥', label: 'Death Crit', color: 'text-orange-400', desc: '+25% crit at full HP, up to +50% when the foe is at ≤25% HP.' });

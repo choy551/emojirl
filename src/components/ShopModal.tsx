@@ -1,9 +1,8 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToBag, removeAndRefillBag } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToBag, removeAndRefillBag, COOKED_OVERFLOW_THRESHOLD, cookedHealCount, isHealJunk } from '../game/gameHelpers';
 import { soulHelpText } from '../game/emojis';
 import { isStackableBagPassive } from '../game/passives';
 import { canBuyAndUse } from '../game/shopUse';
-import { COOKABLE_EMOJIS } from '../game/emojis';
 import { canEquipItem } from './itemUtils';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -167,11 +166,16 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
           ];
           const souls = allSellable.filter(i => !i.healAmount && !i.ammoAmount);
           const food  = allSellable.filter(i => i.healAmount !== undefined);
+          const overflowHeals = cookedHealCount([
+            ...gameState.player.inventory,
+            ...gameState.player.bank,
+          ]) >= COOKED_OVERFLOW_THRESHOLD;
           const isJunk = (i: EmojiItem) =>
             i.isMoneyBag || i.emoji === '💰' ||
             (i.isEquipment && !canEquipItem(i, cls)) ||
-            (i.healAmount !== undefined && !i.isCooked && !i.cookedBuff && i.healAmount <= 4 && !COOKABLE_EMOJIS.has(i.emoji));
+            isHealJunk(i, overflowHeals);
           const junk = allSellable.filter(isJunk);
+          const soldOverflowHeals = overflowHeals && junk.some(i => isHealJunk(i, true) && (i.healAmount ?? 0) > 4);
           const junkGold = junk.reduce((s, i) => s + getItemSellValue(i, 1, gameState.currentFloor), 0);
 
           const SellRow = ({ item }: { item: EmojiItem }) => {
@@ -239,7 +243,9 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                       });
                       return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: prev.player.stats.gold + junkGold }, inventory, bank, equipment } };
                     });
-                    addLog(`🗑️ Sold ${junk.length} junk item${junk.length !== 1 ? 's' : ''} for ${junkGold}g.`);
+                    addLog(soldOverflowHeals
+                      ? `🗑️ Sold ${junk.length} junk (incl. overflow heals) for ${junkGold}g.`
+                      : `🗑️ Sold ${junk.length} junk item${junk.length !== 1 ? 's' : ''} for ${junkGold}g.`);
                   }}
                   className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors text-xs font-bold"
                 >

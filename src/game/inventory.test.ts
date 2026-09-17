@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { EmojiItem } from './types';
-import { removeAndRefillBag, refillBagFromBank, sortBagSlots } from './inventory';
+import { removeAndRefillBag, refillBagFromBank, sortBagSlots, addToBag, computeBagPassives } from './inventory';
+import { lightningArcTiers, lightningArcDamage, STACKABLE_BAG_CAPS } from './passives';
 
 function ice(id: string): EmojiItem {
   return {
@@ -219,5 +220,38 @@ describe('stackable refill stays in place', () => {
     expect(slots.find(i => i.emoji === '❤️')?.stackCount).toBe(2);
     expect(slots.map(i => i.id)).toEqual(['f1', 's1', 'm1', 'g1', 'b1', 'h1']);
     expect(nextBank).toHaveLength(0);
+  });
+});
+
+describe('lightning bag stacks', () => {
+  function bolt(id: string, stackCount = 1): EmojiItem {
+    return {
+      id,
+      emoji: '⚡',
+      name: 'Lightning',
+      description: 'arc',
+      consumed: false,
+      stackCount,
+      bagPassive: { description: 'arc', lightningBolt: true },
+    };
+  }
+
+  it('caps at 4 in the bag and banks the 5th', () => {
+    expect(STACKABLE_BAG_CAPS['⚡']).toBe(4);
+    const { inventory, bank } = addToBag([], [], bolt('a', 4), bolt('b', 1));
+    expect(inventory[0].stackCount).toBe(4);
+    expect(bank).toHaveLength(1);
+    expect(computeBagPassives(inventory).lightningBolt).toBe(4);
+  });
+
+  it('tiers are 75/50/25% ATK at 1 stack and 150/125/100% at 4', () => {
+    expect(lightningArcTiers(1)).toEqual([0.75, 0.50, 0.25]);
+    expect(lightningArcTiers(4)).toEqual([1.50, 1.25, 1.00]);
+    expect(lightningArcDamage(100, 1, 0)).toBe(75);
+    expect(lightningArcDamage(100, 1, 1)).toBe(50);
+    expect(lightningArcDamage(100, 1, 2)).toBe(25);
+    expect(lightningArcDamage(100, 4, 0)).toBe(150);
+    expect(lightningArcDamage(100, 4, 1)).toBe(125);
+    expect(lightningArcDamage(100, 4, 2)).toBe(100);
   });
 });

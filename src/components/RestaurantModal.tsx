@@ -1,5 +1,5 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToBag } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToBag, pickBestDishesToSell, restaurantCookedPrice } from '../game/gameHelpers';
 import { canEquipItem } from './itemUtils';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -131,8 +131,53 @@ export function RestaurantModal({
             ];
             if (sellable.length === 0) return <div className="text-xs text-muted-foreground text-center py-3">Nothing to sell.</div>;
             const isLastCooked = restaurantSoldCount === 4;
+            const bestBatch = pickBestDishesToSell(sellable, restaurantSoldCount);
+            const bestGold = bestBatch.reduce((s, i) => s + restaurantCookedPrice(i), 0);
+            const sellBestDishes = () => {
+              if (bestBatch.length === 0) {
+                addLog('🍽️ No cooked dishes to sell.');
+                return;
+              }
+              const soldIds = new Set(bestBatch.map(i => i.id));
+              const gold = bestGold;
+              const newCount = restaurantSoldCount + bestBatch.length;
+              setGameState(prev => {
+                if (!prev) return prev;
+                const inventory = prev.player.inventory.filter(i => !soldIds.has(i.id));
+                const bank = prev.player.bank.filter(i => !soldIds.has(i.id));
+                return {
+                  ...prev,
+                  player: {
+                    ...prev.player,
+                    stats: { ...prev.player.stats, gold: prev.player.stats.gold + gold },
+                    inventory,
+                    bank,
+                  },
+                };
+              });
+              setRestaurantSoldCount(newCount);
+              if (newCount >= 5) {
+                addLog(`🍽️ Sold ${bestBatch.length} best dish${bestBatch.length !== 1 ? 'es' : ''} for ${gold}g ✨ — kitchen is now closed, thank you!`);
+              } else {
+                addLog(`🍽️ Sold ${bestBatch.length} best dish${bestBatch.length !== 1 ? 'es' : ''} for ${gold}g (${newCount}/5 cooked).`);
+              }
+            };
             return (
               <div className="flex flex-col gap-1.5">
+                {bestBatch.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={sellBestDishes}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/20 transition-colors text-xs font-bold"
+                  >
+                    <span>
+                      {restaurantSoldCount >= 4
+                        ? '🍽️ Sell Best Dish (close kitchen)'
+                        : '🍽️ Sell Best Dishes (to 4/5)'}
+                    </span>
+                    <span className="text-emerald-300">+{bestGold}g ✨</span>
+                  </button>
+                )}
                 {isLastCooked && (
                   <div className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1.5 leading-snug">
                     ⚠️ Selling one more cooked dish will close the kitchen!

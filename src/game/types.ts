@@ -303,7 +303,7 @@ export type BagPassiveSummary = {
   attack: number; defense: number; speed: number; evasion: number; luck: number;
   losBonus: number; stealthBonus: number; stealthPenalty: number;
   canSwim: boolean; burningOnHit: boolean; freezeAura: boolean; advantageDice: boolean;
-  vampiricStrike: number; lightningBolt: boolean; thorns: number; bonusLoot: number;
+  vampiricStrike: number; lightningBolt: number; thorns: number; bonusLoot: number;
   execBlow: boolean; trueVision: boolean; itemMagnet: boolean; shieldWall: number;
   healOnKill: number; trueAim: boolean; regeneration: number; ninjaCombo: number;
   royalAura: boolean; combatRegen: number; dodgeHeal: number;

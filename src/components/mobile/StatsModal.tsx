@@ -129,7 +129,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
         {(() => {
           const tags: string[] = [];
           if (p.vampiricStrike > 0) tags.push(`🩸 Vampiric×${p.vampiricStrike}`);
-          if (p.lightningBolt) tags.push('⚡ Chain Arc');
+          if (p.lightningBolt > 0) tags.push(p.lightningBolt > 1 ? `⚡ Chain Arc×${p.lightningBolt}` : '⚡ Chain Arc');
           if (p.thorns) tags.push(`💎 Thorns×${p.thorns}`);
           if (p.bonusLoot) tags.push(`🍀 Loot×${p.bonusLoot}`);
           if (p.execBlow) tags.push('💥 Death Crit');

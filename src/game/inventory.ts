@@ -164,7 +164,7 @@ export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {
     attack: 0, defense: 0, speed: 0, evasion: 0, luck: 0,
     losBonus: 0, stealthBonus: 0, stealthPenalty: 0,
     canSwim: false, burningOnHit: false, freezeAura: false, advantageDice: false,
-    vampiricStrike: 0, lightningBolt: false, thorns: 0, bonusLoot: 0,
+    vampiricStrike: 0, lightningBolt: 0, thorns: 0, bonusLoot: 0,
     execBlow: false, trueVision: false, itemMagnet: false, shieldWall: 0,
     healOnKill: 0, trueAim: false, regeneration: 0, ninjaCombo: 0,
     royalAura: false, combatRegen: 0, dodgeHeal: 0,
@@ -186,7 +186,7 @@ export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {
     if (p.freezeAura)     acc.freezeAura     = true;
     if (p.advantageDice)  acc.advantageDice  = true;
     if (p.vampiricStrike) acc.vampiricStrike += sc;
-    if (p.lightningBolt)  acc.lightningBolt  = true;
+    if (p.lightningBolt)  acc.lightningBolt += sc;
     if (p.thorns)         acc.thorns        += sc;
     if (p.bonusLoot)      acc.bonusLoot     += sc;
     if (p.execBlow)       acc.execBlow       = true;

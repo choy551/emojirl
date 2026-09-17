@@ -12,12 +12,25 @@ export const STACKABLE_BAG_CAPS: Record<string, number> = {
   '🦋': 5,   // dodgeHeal: +1 HP per dodge per copy
   '🗡️': 4,   // ninjaCombo: 25% base + ~15% per copy (capped reasonably)
   '🌊': 5,   // combatRegen: +1 HP per turn per copy (in combat)
+  '⚡': 4,   // lightningBolt: 75/50/25% ATK arcs +25% per extra copy
 };
 
 export function isStackableBagPassive(item: EmojiItem): boolean {
   const p = item.bagPassive;
   return !!p && !!(p.shieldWall || p.healOnKill || p.bonusLoot || p.thorns || p.regeneration ||
-    p.vampiricStrike || p.dodgeHeal || p.ninjaCombo || p.combatRegen);
+    p.vampiricStrike || p.dodgeHeal || p.ninjaCombo || p.combatRegen || p.lightningBolt);
+}
+
+/** 1st/2nd/3rd melee arc as ATK fractions. stacks 1 → 0.75/0.50/0.25; each extra +0.25. */
+export function lightningArcTiers(stacks: number): [number, number, number] {
+  const extra = Math.max(0, Math.min(3, stacks - 1));
+  return [0.75 + extra * 0.25, 0.50 + extra * 0.25, 0.25 + extra * 0.25];
+}
+
+export function lightningArcDamage(atk: number, stacks: number, arcIndex: number): number {
+  const tiers = lightningArcTiers(stacks);
+  const pct = tiers[Math.max(0, Math.min(2, arcIndex))] ?? tiers[2];
+  return Math.max(1, Math.floor(atk * pct));
 }
 
 /** Returns true if an item is actively contributing a bag passive right now. */
@@ -43,6 +56,7 @@ export function getStackableBonusLabel(item: EmojiItem): string | null {
   if (p.dodgeHeal)      return '+1 HP on dodge per ×';
   if (p.ninjaCombo)     return 'Ninja only: +15% combo chance per × (base 25%)';
   if (p.combatRegen)    return '+1 HP per turn in combat per ×';
+  if (p.lightningBolt)  return '+25% each arc tier per ×';
   return null;
 }
 
@@ -59,6 +73,10 @@ export function getStackableCumulativeLabel(item: EmojiItem): string | null {
   if (p.dodgeHeal)      return `+${n} HP on dodge`;
   if (p.ninjaCombo)     return `Ninja only: ${25 + (n-1)*15}% chance of bonus melee strike`;
   if (p.combatRegen)    return `+${n} HP per turn in combat`;
+  if (p.lightningBolt) {
+    const [a, b, c] = lightningArcTiers(n);
+    return `${Math.round(a * 100)}% / ${Math.round(b * 100)}% / ${Math.round(c * 100)}% ATK arcs`;
+  }
   return null;
 }
 

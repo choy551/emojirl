@@ -1,5 +1,5 @@
 import { EmojiItem, MapGrid, Position } from './types';
-import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, cookFood, HEAL_DROPS } from './emojis';
+import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, cookFood, HEAL_DROPS, COOKABLE_EMOJIS } from './emojis';
 
 /** Gold stolen by a 🐦‍⬛ Crow on a successful hit. Scales with dungeon floor. */
 export function crowGoldSteal(floor: number, playerGold: number): number {
@@ -28,6 +28,47 @@ export function getItemSellValue(item: EmojiItem, multiplier = 1, floor = 1): nu
   if (item.emoji === '⛵') return Math.round(50 * multiplier);
   if (item.bagPassive) return Math.round(12 * multiplier);
   return Math.round(5 * multiplier);
+}
+
+export const COOKED_OVERFLOW_THRESHOLD = 12;
+
+export function isCookedHeal(i: EmojiItem): boolean {
+  return i.healAmount !== undefined && !i.consumed && (!!i.isCooked || !!i.cookedBuff);
+}
+
+export function cookedHealCount(items: EmojiItem[]): number {
+  return items.filter(isCookedHeal).length;
+}
+
+/** Weak dedicated heals (onion) plus, when overflow, potions/hearts. Never cooked or raw cookables. */
+export function isHealJunk(i: EmojiItem, overflowHeals: boolean): boolean {
+  if (i.healAmount === undefined || i.consumed) return false;
+  if (i.isCooked || i.cookedBuff) return false;
+  if (COOKABLE_EMOJIS.has(i.emoji)) return false;
+  if (i.healAmount <= 4) return true;
+  return overflowHeals;
+}
+
+export const RESTAURANT_COOKED_SELL_LIMIT = 5;
+
+export function isCookedDish(i: EmojiItem): boolean {
+  return i.healAmount !== undefined && !i.consumed && (!!i.isCooked || !!i.cookedBuff);
+}
+
+export function restaurantCookedPrice(i: EmojiItem): number {
+  return getItemSellValue(i, 2.5);
+}
+
+/** Highest-priced cooked dishes to sell: fill to 4/5, or the last 1 if already at 4. */
+export function pickBestDishesToSell(items: EmojiItem[], soldCount: number): EmojiItem[] {
+  const remaining = RESTAURANT_COOKED_SELL_LIMIT - soldCount;
+  if (remaining <= 0) return [];
+  const cookedOwned = [...items]
+    .filter(isCookedDish)
+    .sort((a, b) => restaurantCookedPrice(b) - restaurantCookedPrice(a));
+  const targetCap = soldCount >= 4 ? 5 : 4;
+  const sellCount = Math.min(cookedOwned.length, Math.max(0, targetCap - soldCount));
+  return cookedOwned.slice(0, sellCount);
 }
 
 export function getItemBuyPrice(item: EmojiItem, floor: number): number {
