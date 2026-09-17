@@ -1,7 +1,7 @@
 import { Enemy, EmojiItem, MapGrid, Position } from './types';
 import type { Room } from './geo';
 import { getRandomEnemy, getForestEnemy, getBossForFloor, getEchoEnemy, getRandomAdventurer, adventurerSpawnChance, ADVENTURER_FAVORITE_EMOJIS, rollAmbushCount, getAmbushRangedType } from './enemies';
-import { getRandomEmojiPower, getBulletDrop, getRandomEquipmentDrop, getEmojiPowerByEmoji, VOLCANO_VALUABLE_EMOJIS } from './emojis';
+import { getRandomEmojiPower, getBulletDrop, getRandomEquipmentDrop, getEmojiPowerByEmoji, VOLCANO_VALUABLE_EMOJIS, MONEY_BAG } from './emojis';
 import { getDungeonPressure } from './progression';
 
 function floorScale<T extends { hp: number; attack: number; defense: number }>(type: T, floor: number): T {
@@ -222,6 +222,8 @@ export function spawnVaultItems(rooms: Room[], playerClass?: string, floor = 1, 
         let drop: Omit<EmojiItem, 'id' | 'consumed'>;
         if (playerClass === '🤠' && Math.random() < 0.13) {
           drop = getBulletDrop();
+        } else if (Math.random() < 0.08) {
+          drop = { ...MONEY_BAG };
         } else {
           drop = Math.random() < 0.45 ? getRandomEquipmentDrop(floor) : getRandomEmojiPower();
         }

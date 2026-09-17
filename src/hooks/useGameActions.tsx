@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { Player, Enemy, Position, FloatingText } from '../game/types';
 import { resolveCombat, getCowboyUnarmedBonus, isHostileCombatTarget } from '../game/combat';
-import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, getFoodHealItems } from '../game/emojis';
+import { getRandomEmojiPower, getRandomFloorDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, getFoodHealItems } from '../game/emojis';
 import { getMood } from '../game/moods';
 import { generateMap } from '../game/mapgen';
 import { markEnemySeen, markEmojiSeen, markEnemyKilled } from '../game/discoveries';
@@ -167,7 +167,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             cPlayer.stats.moodValue = Math.min(moodMax(cls), cPlayer.stats.moodValue + 10);
             if (enemy.isBoss || Math.random() < 0.50) {
               const r2 = Math.random();
-              const cDrop = r2 < 0.12 ? getRandomEquipmentDrop(prev.currentFloor) : r2 < 0.28 ? getRandomActiveDrop() : Math.random() < 0.40 ? getBulletDrop() : getRandomHealDrop();
+              const cDrop = r2 < 0.12 ? getRandomEquipmentDrop(prev.currentFloor) : r2 < 0.28 ? getRandomActiveDrop() : Math.random() < 0.40 ? getBulletDrop() : getRandomFloorDrop();
               const cItem = { ...cDrop, id: `drop-${Math.random()}`, consumed: false, pos: enemy.pos };
               const cMid = { ...prev, killCounts: cKillCounts, player: cPlayer, enemies: cEnemies, items: [...prev.items, cItem], turn: prev.turn + 1, floatingTexts: cFloats, pendingBeam: cBeam };
               return applyEnemyTurns(cMid, runEnemyTurns(cMid));
@@ -275,7 +275,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                 drop = Math.random() < 0.4 ? getRandomEquipmentDrop(prev.currentFloor) : getRandomEmojiPower();
               } else {
                 const r2 = Math.random();
-                drop = r2 < 0.10 ? getRandomEquipmentDrop(prev.currentFloor) : r2 < 0.22 ? getRandomActiveDrop() : r2 < 0.57 ? getAmmoDrop() : getRandomHealDrop();
+                drop = r2 < 0.10 ? getRandomEquipmentDrop(prev.currentFloor) : r2 < 0.22 ? getRandomActiveDrop() : r2 < 0.57 ? getAmmoDrop() : getRandomFloorDrop();
               }
               const newItem = { ...drop, id: `drop-${Math.random()}`, consumed: false, pos: enemy.pos };
               const midState = { ...prev, killCounts: rangerKillCounts, player: newPlayer, enemies: newEnemies, items: [...prev.items, newItem], turn: prev.turn + 1, floatingTexts: rangedBaseFloats, pendingBeam: rangerBeam, difficultyTier: enemy.isBoss ? (prev.difficultyTier ?? 0) + 1 : (prev.difficultyTier ?? 0) };
@@ -605,7 +605,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               cls === '🤠' ? Math.random() < 0.13 :
               Math.random() < 0.15
             );
-            const drop = isEquipDrop ? getRandomEquipmentDrop(prev.currentFloor) : isActiveDrop ? getRandomActiveDrop() : dropAmmo ? (cls === '🤠' ? getBulletDrop() : getAmmoDrop()) : getRandomHealDrop();
+            const drop = isEquipDrop ? getRandomEquipmentDrop(prev.currentFloor) : isActiveDrop ? getRandomActiveDrop() : dropAmmo ? (cls === '🤠' ? getBulletDrop() : getAmmoDrop()) : getRandomFloorDrop();
             newState.items = [...prev.items, { ...drop, id: `drop-${Math.random()}`, consumed: false, pos: enemy.pos }];
           }
         }
@@ -1033,7 +1033,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               const r2 = Math.random();
               const bDrop = boltTarget.isBoss
                 ? (r2 < 0.4 ? getRandomEquipmentDrop(prev.currentFloor) : getRandomEmojiPower())
-                : (r2 < 0.10 ? getRandomEquipmentDrop(prev.currentFloor) : getRandomHealDrop());
+                : (r2 < 0.10 ? getRandomEquipmentDrop(prev.currentFloor) : getRandomFloorDrop());
               newState.items = [...newState.items, { ...bDrop, id: `bolt-drop-${Math.random()}`, consumed: false, pos: boltTarget.pos }];
             }
           } else {
@@ -1188,7 +1188,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               const r2 = Math.random();
               const bDrop = boltTarget.isBoss
                 ? (r2 < 0.4 ? getRandomEquipmentDrop(prev.currentFloor) : getRandomEmojiPower())
-                : (r2 < 0.10 ? getRandomEquipmentDrop(prev.currentFloor) : getRandomHealDrop());
+                : (r2 < 0.10 ? getRandomEquipmentDrop(prev.currentFloor) : getRandomFloorDrop());
               waitItems = [...waitItems, { ...bDrop, id: `bolt-drop-${Math.random()}`, consumed: false, pos: boltTarget.pos }];
             }
           } else {

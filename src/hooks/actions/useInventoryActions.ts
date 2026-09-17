@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { EquipSlot } from '../../game/types';
-import { getRandomHealDrop, getRandomActiveDrop, getRandomEquipmentDrop } from '../../game/emojis';
+import { getRandomFloorDrop, getRandomActiveDrop, getRandomEquipmentDrop } from '../../game/emojis';
 import { markEnemySeen, markEnemyKilled } from '../../game/discoveries';
 import { isStackableBagPassive } from '../../game/passives';
 import {
@@ -156,7 +156,7 @@ export function useInventoryActions(
         newPlayer = applyMonkeyDropOnKill(target, newPlayer);
         if (target.isBoss || Math.random() < 0.50) {
           const r2 = Math.random();
-          const drop = r2 < 0.12 ? getRandomEquipmentDrop(prev.currentFloor) : r2 < 0.28 ? getRandomActiveDrop() : getRandomHealDrop();
+          const drop = r2 < 0.12 ? getRandomEquipmentDrop(prev.currentFloor) : r2 < 0.28 ? getRandomActiveDrop() : getRandomFloorDrop();
           newItems = [...newItems, { ...drop, id: `zap-drop-${Math.random()}`, consumed: false, pos: target.pos }];
         }
       }

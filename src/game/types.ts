@@ -157,6 +157,7 @@ export interface EmojiItem {
   stackCount?: number; // for stackable bag passives — how many copies are collapsed into this slot
   isCooked?: boolean;
   cookedBuff?: { stat: 'attack' | 'defense'; amount: number; turns: number };
+  isMoneyBag?: boolean;
 }
 
 export interface PlacedBomb {

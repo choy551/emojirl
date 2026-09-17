@@ -168,13 +168,14 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
           const souls = allSellable.filter(i => !i.healAmount && !i.ammoAmount);
           const food  = allSellable.filter(i => i.healAmount !== undefined);
           const isJunk = (i: EmojiItem) =>
+            i.isMoneyBag || i.emoji === '💰' ||
             (i.isEquipment && !canEquipItem(i, cls)) ||
             (i.healAmount !== undefined && !i.isCooked && !i.cookedBuff && i.healAmount <= 4 && !COOKABLE_EMOJIS.has(i.emoji));
           const junk = allSellable.filter(isJunk);
-          const junkGold = junk.reduce((s, i) => s + getItemSellValue(i), 0);
+          const junkGold = junk.reduce((s, i) => s + getItemSellValue(i, 1, gameState.currentFloor), 0);
 
           const SellRow = ({ item }: { item: EmojiItem }) => {
-            const price = getItemSellValue(item);
+            const price = getItemSellValue(item, 1, gameState.currentFloor);
             const inBank = gameState.player.bank.some(i => i.id === item.id);
             return (
               <div className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">
@@ -200,7 +201,9 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                       });
                       return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: prev.player.stats.gold + price }, inventory, bank, equipment } };
                     });
-                    addLog(`💰 Sold ${item.emoji} ${item.name} for ${price}g.`);
+                    addLog((item.isMoneyBag || item.emoji === '💰')
+                      ? `💰 Sold Money Bag for ${price}g!`
+                      : `💰 Sold ${item.emoji} ${item.name} for ${price}g.`);
                   }}
                   className="shrink-0 text-xs font-bold px-2.5 py-1.5 rounded-lg border bg-emerald-500/20 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/30 transition-colors"
                 >

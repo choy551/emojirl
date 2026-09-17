@@ -15,6 +15,19 @@ export function getRandomHealDrop(): Omit<EmojiItem, 'id' | 'consumed'> {
   return HEAL_DROPS[Math.floor(Math.random() * HEAL_DROPS.length)];
 }
 
+export const MONEY_BAG: Omit<EmojiItem, 'id' | 'consumed'> = {
+  emoji: '💰',
+  name: 'Money Bag',
+  description: 'Fat with coins — sell at the shop. Worth more deeper down.',
+  isMoneyBag: true,
+};
+
+/** Ground/kill loot: mostly food, sometimes a money bag. */
+export function getRandomFloorDrop(): Omit<EmojiItem, 'id' | 'consumed'> {
+  if (Math.random() < 0.08) return { ...MONEY_BAG };
+  return getRandomHealDrop();
+}
+
 /** Raw-food emoji → cooked version. Only emojis in this map can be cooked at a campfire. */
 export const RAW_TO_COOKED: Record<string, Omit<EmojiItem, 'id' | 'consumed'>> = {
   '🍎': { emoji: '🍏', name: 'Baked Apple',   description: '+4 HP & mood boost',              healAmount: 4,  isCooked: true },

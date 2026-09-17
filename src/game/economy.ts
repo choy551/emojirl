@@ -10,7 +10,14 @@ export function crowGoldSteal(floor: number, playerGold: number): number {
   return Math.min(playerGold, Math.max(1, stolen));
 }
 
-export function getItemSellValue(item: EmojiItem, multiplier = 1): number {
+/** D:1 → 100–200g, then +50g to the band per floor. */
+export function moneyBagSellValue(floor: number): number {
+  const f = Math.max(1, floor);
+  return 100 + (f - 1) * 50 + Math.floor(Math.random() * 101);
+}
+
+export function getItemSellValue(item: EmojiItem, multiplier = 1, floor = 1): number {
+  if (item.isMoneyBag || item.emoji === '💰') return moneyBagSellValue(floor);
   if (item.isEquipment) return 15 * multiplier;
   if (item.activeKind) return 10 * multiplier;
   if (item.healAmount !== undefined) {

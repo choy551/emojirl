@@ -1,6 +1,6 @@
 import { Enemy, EmojiItem, FloatingText, GameState, Player } from './types';
 import type { SoulEffect } from './emojis';
-import { EMOJI_POWERS, getRandomEmojiPower, getRandomHealDrop, getRandomActiveDrop, getRandomEquipmentDrop } from './emojis';
+import { EMOJI_POWERS, getRandomEmojiPower, getRandomFloorDrop, getRandomActiveDrop, getRandomEquipmentDrop } from './emojis';
 import { markEnemySeen, markEnemyKilled, markEmojiSeen } from './discoveries';
 import { moodMax, levelFromXP, hpBonusForLevel } from './progression';
 import { addToBag, activeKindLabel } from './inventory';
@@ -13,13 +13,15 @@ export type ShopUseBlockReason =
   | 'Needs a target direction — buy it and use from the hotbar'
   | 'No enemies on screen'
   | 'Equip from Buy / bag'
-  | 'Already at full HP';
+  | 'Already at full HP'
+  | 'Sell it at the shop';
 
 const AIMED_KINDS = new Set(['gun', 'boomerang', 'freeze', 'bomb', 'rope']);
 
 export function isShopDirectUseBlocked(item: EmojiItem): boolean {
   if (item.isEquipment) return true;
   if (item.ammoAmount !== undefined) return true;
+  if (item.isMoneyBag || item.emoji === '💰') return true;
   if (item.activeKind && AIMED_KINDS.has(item.activeKind)) return true;
   return false;
 }
@@ -49,6 +51,7 @@ export function canBuyAndUse(
 ): { ok: true } | { ok: false; reason: ShopUseBlockReason } {
   if (state.player.stats.gold < price) return { ok: false, reason: 'Not enough gold' };
   if (item.isEquipment || item.ammoAmount !== undefined) return { ok: false, reason: 'Equip from Buy / bag' };
+  if (item.isMoneyBag || item.emoji === '💰') return { ok: false, reason: 'Sell it at the shop' };
   if (item.activeKind && AIMED_KINDS.has(item.activeKind)) {
     return { ok: false, reason: 'Needs a target direction — buy it and use from the hotbar' };
   }
@@ -76,6 +79,11 @@ export function applyInstantItemUse(
   const cls = state.player.characterClass;
   let s = state;
   const log = (text: string) => { s = withLog(s, text, opts.addLog); };
+
+  if (item.isMoneyBag || item.emoji === '💰') {
+    log("💰 It's full of coins — sell it at a shop.");
+    return s;
+  }
 
   if (item.healAmount !== undefined) {
     if (s.player.stats.hp >= s.player.stats.maxHp) {
@@ -178,7 +186,7 @@ export function applyInstantItemUse(
     newPlayer = opts.applyMonkeyDropOnKill(target, newPlayer);
     if (target.isBoss || Math.random() < 0.50) {
       const r2 = Math.random();
-      const drop = r2 < 0.12 ? getRandomEquipmentDrop(s.currentFloor) : r2 < 0.28 ? getRandomActiveDrop() : getRandomHealDrop();
+      const drop = r2 < 0.12 ? getRandomEquipmentDrop(s.currentFloor) : r2 < 0.28 ? getRandomActiveDrop() : getRandomFloorDrop();
       newItems = [...newItems, { ...drop, id: `zap-drop-${Math.random()}`, consumed: false, pos: target.pos }];
     }
     floats.push({ id: `zap-${target.id}-${s.turn}`, pos: { ...target.pos }, text: '⚡ ZAP!', color: '#fbbf24', life: 3 });

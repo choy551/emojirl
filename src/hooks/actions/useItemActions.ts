@@ -274,6 +274,11 @@ export function useItemActions(
 
     if (item.activeKind === 'rope') { handleUseRope(); return; }
 
+    if (item.isMoneyBag || item.emoji === '💰') {
+      addLog("💰 It's full of coins — sell it at a shop.");
+      return;
+    }
+
     if (item.emoji === '⛵') {
       const tile = gs.map[gs.player.pos.y]?.[gs.player.pos.x];
       if (tile?.type === 'water') {

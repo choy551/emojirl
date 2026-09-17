@@ -93,6 +93,12 @@ describe('canBuyAndUse', () => {
     expect(canBuyAndUse(apple, s, 10)).toEqual({ ok: false, reason: 'Not enough gold' });
   });
 
+  it('blocks money bags — they are for selling', () => {
+    const bag: EmojiItem = { id: 'mb', emoji: '💰', name: 'Money Bag', description: 'coins', consumed: false, isMoneyBag: true };
+    expect(isShopDirectUseBlocked(bag)).toBe(true);
+    expect(canBuyAndUse(bag, state(), 10)).toEqual({ ok: false, reason: 'Sell it at the shop' });
+  });
+
   it('blocks aimed actives and equipment', () => {
     expect(isShopDirectUseBlocked(gun)).toBe(true);
     expect(isShopDirectUseBlocked(sword)).toBe(true);
@@ -122,6 +128,17 @@ describe('applyInstantItemUse', () => {
     expect(next!.player.stats.speed).toBe(6);
     expect(next!.logs[0].text).toBe('🍄 Strange mushroom energy flows through you!');
     expect(logs).toContain('🍄 Strange mushroom energy flows through you!');
+  });
+
+  it('bag-use of a money bag logs a tip and is not consumed', () => {
+    const logs: string[] = [];
+    const bag: EmojiItem = { id: 'mb', emoji: '💰', name: 'Money Bag', description: 'coins', consumed: false, isMoneyBag: true };
+    const s = state();
+    const next = applyInstantItemUse(s, bag, { source: 'bag', addLog: t => logs.push(t), applyMonkeyDropOnKill: (_k, p) => p });
+    expect(next).not.toBeNull();
+    expect(next!.player.stats.gold).toBe(s.player.stats.gold);
+    expect(next!.player.inventory).toHaveLength(s.player.inventory.length);
+    expect(logs.some(l => l.includes('sell it at a shop'))).toBe(true);
   });
 
   it('heals without adding to inventory (full hotbar stays 9)', () => {
