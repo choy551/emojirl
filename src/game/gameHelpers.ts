@@ -14,3 +14,4 @@ export * from './monkeyLoot';
 export * from './goto';
 export * from './lava';
 export * from './sleep';
+export * from './shopUse';

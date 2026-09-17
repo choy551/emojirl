@@ -154,7 +154,7 @@ describe('tickVolcanoAndLava', () => {
     expect(next.gameOver).toBe(false);
   });
 
-  it('does not spew lava every turn — waits 5–10 turns between eruptions', () => {
+  it('does not spew lava every turn — waits 10–20 turns between eruptions', () => {
     const map = grid([
       '#####',
       '#.V.#',
@@ -168,8 +168,8 @@ describe('tickVolcanoAndLava', () => {
       turn: 3,
     }));
     expect(floorCount(scheduled.map)).toBe(floorCount(map));
-    expect(scheduled.volcanoNextSpewTurn).toBeGreaterThanOrEqual(8);
-    expect(scheduled.volcanoNextSpewTurn).toBeLessThanOrEqual(13);
+    expect(scheduled.volcanoNextSpewTurn).toBeGreaterThanOrEqual(13);
+    expect(scheduled.volcanoNextSpewTurn).toBeLessThanOrEqual(23);
     expect(scheduled.logs.some(l => l.text.includes('spews'))).toBe(false);
 
     const quiet = tickVolcanoAndLava(baseState(map, {
@@ -186,18 +186,18 @@ describe('tickVolcanoAndLava', () => {
       volcanoNextSpewTurn: 10,
     }));
     expect(floorCount(erupted.map)).toBeLessThan(floorCount(map));
-    expect(erupted.volcanoNextSpewTurn).toBeGreaterThanOrEqual(15);
-    expect(erupted.volcanoNextSpewTurn).toBeLessThanOrEqual(20);
+    expect(erupted.volcanoNextSpewTurn).toBeGreaterThanOrEqual(20);
+    expect(erupted.volcanoNextSpewTurn).toBeLessThanOrEqual(30);
     expect(erupted.logs.some(l => l.text.includes('spews'))).toBe(true);
   });
 });
 
 describe('volcanoSpewInterval', () => {
-  it('is always 5–10 inclusive', () => {
+  it('is always 10–20 inclusive', () => {
     for (let i = 0; i < 40; i++) {
       const n = volcanoSpewInterval();
-      expect(n).toBeGreaterThanOrEqual(5);
-      expect(n).toBeLessThanOrEqual(10);
+      expect(n).toBeGreaterThanOrEqual(10);
+      expect(n).toBeLessThanOrEqual(20);
     }
   });
 });

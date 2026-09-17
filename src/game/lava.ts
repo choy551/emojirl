@@ -162,9 +162,9 @@ export function volcanoSpewCount(floor: number): number {
   return n;
 }
 
-/** Inclusive 5–10 turns until the next eruption. */
+/** Inclusive 10–20 turns until the next eruption. */
 export function volcanoSpewInterval(): number {
-  return 5 + Math.floor(Math.random() * 6);
+  return 10 + Math.floor(Math.random() * 11);
 }
 
 function lavaOn(map: MapGrid, pos: Position): boolean {

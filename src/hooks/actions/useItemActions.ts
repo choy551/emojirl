@@ -1,15 +1,14 @@
 import { useCallback } from 'react';
-import { Player, EmojiItem, FloatingText, ActiveBuff } from '../../game/types';
+import { EmojiItem, ActiveBuff } from '../../game/types';
 import {
-  getRandomEmojiPower, getRandomHealDrop, getBulletDrop, getRandomActiveDrop,
-  getRandomEquipmentDrop, COOKABLE_EMOJIS, cookFood,
+  getRandomEmojiPower, getRandomActiveDrop, getBulletDrop, COOKABLE_EMOJIS, cookFood,
 } from '../../game/emojis';
-import { markEnemySeen, markEmojiSeen, markEnemyKilled } from '../../game/discoveries';
 import { isStackableBagPassive } from '../../game/passives';
 import {
-  moodMax, addToBag, activeKindLabel, sortBagSlots, refillBagFromBank, removeAndRefillBag, levelFromXP,
-  hpBonusForLevel, tickActiveBuffs, withVisibility, runEnemyTurns, applyEnemyTurns,
+  moodMax, sortBagSlots, refillBagFromBank, removeAndRefillBag,
+  tickActiveBuffs, withVisibility, runEnemyTurns, applyEnemyTurns, getItemBuyPrice,
 } from '../../game/gameHelpers';
+import { applyInstantItemUse, canBuyAndUse } from '../../game/shopUse';
 import type { GameRefs, GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 
 export function useItemActions(
@@ -298,119 +297,55 @@ export function useItemActions(
       const slotItem = prevBagItems[bagSlotIndex];
       if (!slotItem) return prev;
 
-      if (slotItem.healAmount !== undefined) {
-        if (prev.player.stats.hp >= prev.player.stats.maxHp) { addLog('Already at full HP.'); return prev; }
-        const amount = slotItem.healAmount ?? 2;
-        const stats = { ...prev.player.stats };
-        const wasLow = stats.hp / stats.maxHp <= 0.3;
-        stats.hp = Math.min(stats.maxHp, stats.hp + amount);
-        stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + (wasLow ? 40 : 10));
-        const { inventory: healInv, bank: healBank } = removeAndRefillBag(prev.player.inventory, prev.player.bank, slotItem.id);
-        addLog(wasLow
-          ? `${slotItem.emoji} ${slotItem.name}: +${amount} HP — relief floods through you! Mood surges!`
-          : `${slotItem.emoji} ${slotItem.name}: +${amount} HP restored.`
-        );
-        const mid = { ...prev, player: { ...prev.player, stats, inventory: healInv, bank: healBank }, turn: prev.turn + 1 };
-        return applyEnemyTurns(mid, runEnemyTurns(mid));
-      }
+      const applied = applyInstantItemUse(prev, slotItem, { source: 'bag', addLog, applyMonkeyDropOnKill });
+      if (!applied) return prev;
 
-      const stats = { ...prev.player.stats };
-      const effect = (slotItem as any).effect;
-
-      if (effect?.instakillNearest) {
-        const anyVisible = prev.enemies.some(e => prev.map[e.pos.y]?.[e.pos.x]?.visible);
-        if (!anyVisible) {
-          addLog(`${slotItem.emoji} No visible enemies to strike!`);
-          return prev;
-        }
-      }
-
-      if (effect) {
-        if (effect.hpBonus)      stats.hp        = Math.min(stats.maxHp + (effect.maxHpBonus ?? 0), stats.hp + effect.hpBonus);
-        if (effect.maxHpBonus)   stats.maxHp     = stats.maxHp + effect.maxHpBonus;
-        if (effect.attackBonus)  stats.attack    = stats.attack  + effect.attackBonus;
-        if (effect.defenseBonus) stats.defense   = stats.defense + effect.defenseBonus;
-        if (effect.speedBonus)   stats.speed     = (stats.speed   ?? 0) + effect.speedBonus;
-        if (effect.evasionBonus) stats.evasion   = (stats.evasion ?? 0) + effect.evasionBonus;
-        if (effect.luckBonus)    stats.luck      = (stats.luck    ?? 0) + effect.luckBonus;
-        if (effect.moodBonus)    stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + effect.moodBonus);
-        if (effect.xpBonus) {
-          const newXP = stats.xp + effect.xpBonus;
-          const newLevel = levelFromXP(newXP);
-          if (newLevel > stats.level) addLog(`✨ Level up! You are now level ${newLevel}!`);
-          stats.xp = newXP;
-          stats.level = newLevel;
-        }
-        if (slotItem.emoji === '⛵') { stats.gold = (stats.gold ?? 0) + 50; addLog(`${slotItem.emoji} ${effect.label} +50g from the voyage!`); }
-        else addLog(`${slotItem.emoji} ${effect.label}`);
-      } else {
-        addLog(`${slotItem.emoji} ${slotItem.name} activated!`);
-      }
       const isWizard = prev.player.characterClass === '🧙';
       const echo = isWizard && Math.random() < 0.25;
-      let newInventory: typeof prev.player.inventory;
-      let newSoulBank = prev.player.bank;
+      let newInventory = applied.player.inventory;
+      let newSoulBank = applied.player.bank;
       if (echo) {
         addLog(`🧙 Spell Echo! ${slotItem.emoji} resonates — not consumed.`);
-        newInventory = [...prev.player.inventory];
       } else if (isStackableBagPassive(slotItem) && (slotItem.stackCount ?? 1) > 1) {
-        newInventory = prev.player.inventory.map(it =>
+        newInventory = applied.player.inventory.map(it =>
           it.id === slotItem.id ? { ...it, stackCount: (it.stackCount ?? 1) - 1 } : it
         );
-        const r = refillBagFromBank(newInventory, prev.player.bank);
+        const r = refillBagFromBank(newInventory, applied.player.bank);
         newInventory = r.inventory; newSoulBank = r.bank;
       } else {
-        const r = removeAndRefillBag(prev.player.inventory, prev.player.bank, slotItem.id);
+        const r = removeAndRefillBag(applied.player.inventory, applied.player.bank, slotItem.id);
         newInventory = r.inventory; newSoulBank = r.bank;
       }
 
-      let newPlayer: Player = { ...prev.player, stats, inventory: newInventory, bank: newSoulBank };
-      let newEnemies = prev.enemies;
-      let newItems = prev.items;
-      const floats: FloatingText[] = [];
-
-      let zapKillCounts = prev.killCounts;
-      if (effect?.instakillNearest) {
-        const visible = prev.enemies.filter(e => prev.map[e.pos.y]?.[e.pos.x]?.visible);
-        const target = visible.reduce((closest, e) => {
-          const d1 = Math.abs(e.pos.x - prev.player.pos.x) + Math.abs(e.pos.y - prev.player.pos.y);
-          const d2 = Math.abs(closest.pos.x - prev.player.pos.x) + Math.abs(closest.pos.y - prev.player.pos.y);
-          return d1 < d2 ? e : closest;
-        });
-        markEnemySeen(target.emoji);
-        markEnemyKilled(target.emoji);
-        zapKillCounts = { ...prev.killCounts, [target.emoji]: (prev.killCounts[target.emoji] ?? 0) + 1 };
-        addLog(`⚡ ZAP! ${target.emoji} ${target.name} is obliterated!`);
-        const xpGain = target.isBoss ? 25 : 5;
-        const newXP = newPlayer.stats.xp + xpGain;
-        const oldLevel = newPlayer.stats.level;
-        const newLevel = levelFromXP(newXP);
-        newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, xp: newXP } };
-        if (newLevel > oldLevel) {
-          const hpInc = hpBonusForLevel(newLevel) - hpBonusForLevel(oldLevel);
-          const newMaxHp = newPlayer.stats.maxHp + hpInc;
-          const lvlEmoji = { ...getRandomEmojiPower(), id: `zap-lvl-${Math.random()}`, consumed: false };
-          const { inventory: _inv, bank: _bnk, nonStackableBanked: _nsbZ, duplicateActiveBanked: _dabZ } = addToBag(newPlayer.inventory, newPlayer.bank, lvlEmoji);
-          markEmojiSeen(lvlEmoji.emoji);
-          _nsbZ.forEach(i => addLog(`Extra ${i.emoji} → Bank (already carried)`));
-          _dabZ.forEach(i => addLog(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
-          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, level: newLevel, maxHp: newMaxHp, hp: newMaxHp, moodValue: Math.min(moodMax(prev.player.characterClass), newPlayer.stats.moodValue + 30) }, inventory: _inv, bank: _bnk };
-          addLog(`✨ Level ${newLevel}! Full heal! +${hpInc} max HP! Got ${lvlEmoji.emoji}!`);
-        }
-        newEnemies = prev.enemies.filter(e => e.id !== target.id);
-        newPlayer = applyMonkeyDropOnKill(target, newPlayer);
-        if (target.isBoss || Math.random() < 0.50) {
-          const r2 = Math.random();
-          const drop = r2 < 0.12 ? getRandomEquipmentDrop(prev.currentFloor) : r2 < 0.28 ? getRandomActiveDrop() : getRandomHealDrop();
-          newItems = [...newItems, { ...drop, id: `zap-drop-${Math.random()}`, consumed: false, pos: target.pos }];
-        }
-        floats.push({ id: `zap-${target.id}-${prev.turn}`, pos: { ...target.pos }, text: '⚡ ZAP!', color: '#fbbf24', life: 3 });
-      }
-
-      const midState = { ...prev, killCounts: zapKillCounts, player: newPlayer, enemies: newEnemies, items: newItems, floatingTexts: floats, turn: prev.turn + 1 };
-      return withVisibility(applyEnemyTurns(midState, runEnemyTurns(midState)));
+      return { ...applied, player: { ...applied.player, inventory: newInventory, bank: newSoulBank } };
     });
-  }, [handleUseRope, addLog, gameStateRef, setGameState, setBagTab, setBankOpen, setSelectedItemId, dirPickModeRef, setDirPickMode, setDrownWarnSlot, setLastBoatWarnSlot, boatConfirmedRef]);
+  }, [handleUseRope, addLog, gameStateRef, setGameState, setBagTab, setBankOpen, setSelectedItemId, dirPickModeRef, setDirPickMode, setDrownWarnSlot, setLastBoatWarnSlot, boatConfirmedRef, applyMonkeyDropOnKill]);
 
-  return { handleUseHeal, handleCook, handleUseRope, handleUseSlot };
+  const handleShopBuyAndUse = useCallback((item: EmojiItem): boolean => {
+    const gs = gameStateRef.current;
+    if (!gs || gs.gameOver) return false;
+    const price = getItemBuyPrice(item, gs.currentFloor);
+    const check = canBuyAndUse(item, gs, price);
+    if (!check.ok) return false;
+    let succeeded = false;
+    setGameState(prev => {
+      if (!prev || prev.gameOver) return prev;
+      const p = getItemBuyPrice(item, prev.currentFloor);
+      const again = canBuyAndUse(item, prev, p);
+      if (!again.ok) return prev;
+      const boughtLine = `🏪 Bought & used ${item.emoji} ${item.name} for ${p}g!`;
+      const paid: typeof prev = {
+        ...prev,
+        player: { ...prev.player, stats: { ...prev.player.stats, gold: prev.player.stats.gold - p } },
+        logs: [{ id: `shop-use-${prev.turn}`, text: boughtLine, turn: prev.turn }, ...prev.logs].slice(0, 24),
+      };
+      const used = applyInstantItemUse(paid, item, { source: 'shop', addLog, applyMonkeyDropOnKill });
+      if (!used) return prev;
+      succeeded = true;
+      return used;
+    });
+    return succeeded;
+  }, [addLog, gameStateRef, setGameState, applyMonkeyDropOnKill]);
+
+  return { handleUseHeal, handleCook, handleUseRope, handleUseSlot, handleShopBuyAndUse };
 }

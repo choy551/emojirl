@@ -1324,7 +1324,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
   } = useTacticsActions(refs, setters, addLog);
 
   const {
-    handleUseHeal, handleCook, handleUseRope, handleUseSlot,
+    handleUseHeal, handleCook, handleUseRope, handleUseSlot, handleShopBuyAndUse,
   } = useItemActions(refs, setters, addLog, applyMonkeyDropOnKill);
 
   const {
@@ -1353,6 +1353,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     handleFireProjectile,
     handleUseRope,
     handleUseSlot,
+    handleShopBuyAndUse,
     handleBankMove,
     handleConsumeBankItem,
     handleEquip,

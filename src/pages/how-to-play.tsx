@@ -398,7 +398,7 @@ export default function HowToPlay({
             { icon: "📦", label: "Ammo Cache", desc: "Special shop tile (📦). Re-interact (z/Enter/Space on the tile) for class-specific ammo resupply before bosses." },
             { icon: "🟦", label: "Water", desc: "Rivers, ponds, lakes, and vault moats. You cannot walk on water without a ⛵ Boat. Mermen lurk here. Lava that touches water cools the water into walkable ⚫ obsidian." },
             { icon: "🌿", label: "Bush", desc: "Blocks movement like a wall, but you can see and shoot through it. Ranged enemies (archers, dark mages) like to hide behind these." },
-            { icon: "🌋", label: "Volcano", desc: "A rare vault. Spews lava every 5–10 turns, but only near the crater — it will not flood the whole floor. Grab the high-tier loot around it before the lava eats it — and don't stand in the fire." },
+            { icon: "🌋", label: "Volcano", desc: "A rare vault. Spews lava every 10–20 turns, but only near the crater — it will not flood the whole floor. Grab the high-tier loot around it before the lava eats it — and don't stand in the fire." },
             { icon: "🛏️", label: "Bed", desc: "Inside a nested room vault: a tiny 2×2 to 4×4 walled chamber with one door, tucked into a larger regular room. Interact to sleep. Resting overheals to 200% of max HP (the 🍺 bar is 150%), fully restores Wizard mana, and resets all cooldowns. 100 turns then pass — enemies still move and volcanoes still spew lava. Each bed can be used twice, then it's worn out. You cannot start sleep while a hostile is in sight. If a hostile reaches you, they land one sneak attack at 200% damage and you wake. Close the door before sleeping if you can. Autoexplore stops here." },
             { icon: "🟧", label: "Lava", desc: "Extreme heat: each turn standing in lava deals 25% of your max HP plus a flat amount (starts at +10, +5 per floor descended). You'll get a Yes/No warning before stepping onto it from safe ground. Destroys items on the tile. Volcanoes and lava rivers both use this. Orthogonally adjacent 🟦 water cools into ⚫ obsidian." },
             { icon: "⚫", label: "Obsidian", desc: "Cooled lava×water. Walkable like regular floor for you and enemies. Does not remelt." },
@@ -457,7 +457,7 @@ export default function HowToPlay({
               icon: "🌋",
               label: "Volcano",
               log: "🌋 There is a Volcano on this floor!",
-              desc: "Pauses the screen with a warning, then spews spreading 🟧 lava every 5–10 turns near the crater (it will not flood the floor). Burns loot on the tile (Skull, Dagger, Boat, and deep-tier gear). Water it touches cools to ⚫ obsidian. Don't stand in the fire.",
+              desc: "Pauses the screen with a warning, then spews spreading 🟧 lava every 10–20 turns near the crater (it will not flood the floor). Burns loot on the tile (Skull, Dagger, Boat, and deep-tier gear). Water it touches cools to ⚫ obsidian. Don't stand in the fire.",
             },
             {
               icon: "🛏️",

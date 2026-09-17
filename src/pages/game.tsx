@@ -453,6 +453,12 @@ export default function Game() {
     _flashSignals.pressureFlashPending = false;
     setPressureFlashKey(k => k + 1);
   }, [gameState?.turn]);
+  const [lightningFlashKey, setLightningFlashKey] = useState(0);
+  useEffect(() => {
+    if (!_flashSignals.lightningFlashPending) return;
+    _flashSignals.lightningFlashPending = false;
+    setLightningFlashKey(k => k + 1);
+  }, [gameState?.turn]);
 
   // Explosion flash: when a bomb detonates, drive the tile overlay for ~400ms
   // NOTE: no cleanup return — timer is managed via ref to prevent premature
@@ -624,6 +630,7 @@ export default function Game() {
     handleCowboyTactics,
     handleFireProjectile,
     handleUseSlot,
+    handleShopBuyAndUse,
     handleCook,
     handleBedRest,
     handleBankMove,
@@ -2258,6 +2265,12 @@ export default function Game() {
           50%  { opacity: 0.45; }
           100% { opacity: 0; }
         }
+        @keyframes lightning-flash {
+          0%   { opacity: 0; }
+          18%  { opacity: 0.95; }
+          45%  { opacity: 0.7; }
+          100% { opacity: 0; }
+        }
         @keyframes wizard-target-pulse {
           0%   { box-shadow: 0 0 6px #a78bfa, 0 0 12px rgba(167,139,250,0.25); opacity: 0.7; }
           100% { box-shadow: 0 0 12px #a78bfa, 0 0 24px rgba(167,139,250,0.55); opacity: 1; }
@@ -3160,6 +3173,7 @@ export default function Game() {
           shopItems={shopItems}
           setShopItems={persistShopItems}
           addLog={addLog}
+          onBuyAndUse={handleShopBuyAndUse}
           onClose={() => setShopOpen(false)}
         />
       )}
@@ -3447,6 +3461,17 @@ export default function Game() {
             position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 100,
             background: 'radial-gradient(ellipse at center, rgba(180,0,0,0) 20%, rgba(200,0,0,0.65) 80%, rgba(220,0,0,0.85) 100%)',
             animation: 'pressure-flash 900ms ease-in-out forwards',
+          }}
+        />
+      )}
+
+      {lightningFlashKey > 0 && (
+        <div
+          key={`lightning-${lightningFlashKey}`}
+          style={{
+            position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 110,
+            background: 'radial-gradient(ellipse at center, rgba(255,255,255,0.95) 0%, rgba(125,211,252,0.85) 45%, rgba(125,211,252,0.15) 100%)',
+            animation: 'lightning-flash 400ms ease-out forwards',
           }}
         />
       )}

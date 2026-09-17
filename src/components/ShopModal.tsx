@@ -2,6 +2,7 @@ import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
 import { getItemBuyPrice, getItemSellValue, addToBag, removeAndRefillBag } from '../game/gameHelpers';
 import { soulHelpText } from '../game/emojis';
 import { isStackableBagPassive } from '../game/passives';
+import { canBuyAndUse } from '../game/shopUse';
 import { COOKABLE_EMOJIS } from '../game/emojis';
 import { canEquipItem } from './itemUtils';
 import { useDismissGuard } from '../hooks/useDismissGuard';
@@ -14,10 +15,11 @@ interface ShopModalProps {
   shopItems: EmojiItem[];
   setShopItems: React.Dispatch<React.SetStateAction<EmojiItem[]>>;
   addLog: (text: string) => void;
+  onBuyAndUse: (item: EmojiItem) => boolean;
   onClose: () => void;
 }
 
-export function ShopModal({ gameState, setGameState, shopItems, setShopItems, addLog, onClose }: ShopModalProps) {
+export function ShopModal({ gameState, setGameState, shopItems, setShopItems, addLog, onBuyAndUse, onClose }: ShopModalProps) {
   const dismiss = useDismissGuard(onClose);
   const hand = useMobileHand();
   return (
@@ -65,6 +67,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                 item.ammoAmount === undefined &&
                 nonHealBagCount >= 9 &&
                 !ownsStackableInHotbar;
+              const useCheck = canBuyAndUse(item, gameState, price);
               return (
                 <div key={item.id} className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">
                   <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
@@ -72,6 +75,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                     <div className="text-xs font-bold leading-tight">{item.name}</div>
                     <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{soulHelpText(item).description}</div>
                   </div>
+                  <div className="flex flex-row items-center gap-1 shrink-0">
                   <button
                     disabled={!canAfford || bagFull}
                     onClick={() => {
@@ -131,6 +135,23 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                   >
                     {bagFull ? 'Full' : `${price}g`}
                   </button>
+                  <button
+                    type="button"
+                    disabled={!useCheck.ok}
+                    title={useCheck.ok ? 'Buy and consume immediately' : useCheck.reason}
+                    onClick={() => {
+                      if (onBuyAndUse(item)) setShopItems(prev => prev.filter(i => i.id !== item.id));
+                    }}
+                    className={`leading-tight text-center text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors ${
+                      useCheck.ok
+                        ? 'bg-sky-500/20 border-sky-400/50 text-sky-200 hover:bg-sky-500/30'
+                        : 'bg-secondary/10 border-border/30 text-muted-foreground/50 cursor-not-allowed'
+                    }`}
+                  >
+                    <span className="block">Buy</span>
+                    <span className="block">&amp; Use</span>
+                  </button>
+                  </div>
                 </div>
               );
             })}
