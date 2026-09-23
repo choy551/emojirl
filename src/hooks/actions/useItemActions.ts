@@ -1,16 +1,135 @@
 import { useCallback } from 'react';
-import { EmojiItem, ActiveBuff } from '../../game/types';
+import { EmojiItem, ActiveBuff, GameState } from '../../game/types';
 import {
   getRandomEmojiPower, getRandomActiveDrop, getBulletDrop, COOKABLE_EMOJIS, cookFood,
 } from '../../game/emojis';
 import { isStackableBagPassive } from '../../game/passives';
 import {
-  moodMax, sortBagSlots, refillBagFromBank, removeAndRefillBag,
-  tickActiveBuffs, withVisibility, runEnemyTurns, applyEnemyTurns, getItemBuyPrice,
+  moodMax, sortBagSlots, refillBagFromBank, removeAndRefillBag, takeOneMatchingFromBank,
+  tickActiveBuffs, withVisibility, runEnemyTurns, applyEnemyTurns, getItemBuyPrice, cookedEatHeal,
 } from '../../game/gameHelpers';
 import { applyInstantItemUse, canBuyAndUse } from '../../game/shopUse';
 import { _flashSignals } from '../../game/flashSignals';
 import type { GameRefs, GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
+
+/** Open a rope vault. If `consumeInventoryId` is set, spend that bag rope; shop Buy & Use passes null. */
+export function applyRopeVault(
+  prev: GameState,
+  consumeInventoryId: string | null,
+  addLog: AddLog,
+): GameState {
+  const map = prev.map.map(row => row.map(t => ({ ...t })));
+  const mapH = map.length;
+  const mapW = map[0].length;
+
+  let vaultX = -1, vaultY = -1;
+  const vw = 6, vh = 5;
+  let tries = 0;
+  outer:
+  while (tries++ < 300) {
+    const tx = 1 + Math.floor(Math.random() * (mapW - vw - 2));
+    const ty = 1 + Math.floor(Math.random() * (mapH - vh - 2));
+    for (let ry = ty; ry < ty + vh; ry++) {
+      for (let rx = tx; rx < tx + vw; rx++) {
+        if (map[ry][rx].type !== 'wall') continue outer;
+      }
+    }
+    vaultX = tx; vaultY = ty; break;
+  }
+
+  let newPlayer = { ...prev.player };
+
+  const spendRope = (p: typeof newPlayer) => {
+    if (!consumeInventoryId) return p;
+    const { inventory, bank } = removeAndRefillBag(p.inventory, p.bank, consumeInventoryId);
+    return { ...p, inventory, bank };
+  };
+
+  if (vaultX === -1) {
+    addLog('🪢 The rope leads nowhere — but fate rewards you anyway!');
+    const rewards = Array.from({ length: 2 }, (_, i) => ({
+      ...getRandomActiveDrop(), id: `vault-fb-${i}-${Math.random()}`, consumed: false, pos: prev.player.pos,
+    }));
+    newPlayer = spendRope(newPlayer);
+    return { ...prev, player: newPlayer, items: [...prev.items, ...rewards] };
+  }
+
+  for (let ry = vaultY; ry < vaultY + vh; ry++) {
+    for (let rx = vaultX; rx < vaultX + vw; rx++) {
+      map[ry][rx] = { type: 'floor', emoji: '⬜', seen: true, visible: true };
+    }
+  }
+
+  const midX = vaultX + Math.floor(vw / 2);
+  const midY = vaultY + Math.floor(vh / 2);
+  const PASSABLE_TO_CONNECT = new Set(['floor', 'grass', 'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'boss-floor', 'stairs', 'door-open', 'door-closed', 'bed']);
+  const scanDirs = [
+    { sx: midX,        sy: vaultY - 1,  dx:  0, dy: -1 },
+    { sx: midX,        sy: vaultY + vh, dx:  0, dy:  1 },
+    { sx: vaultX - 1,  sy: midY,        dx: -1, dy:  0 },
+    { sx: vaultX + vw, sy: midY,        dx:  1, dy:  0 },
+  ];
+  const corridorCandidates: { sx: number; sy: number; dx: number; dy: number; dist: number }[] = [];
+  for (const { sx, sy, dx, dy } of scanDirs) {
+    if (sy < 0 || sy >= mapH || sx < 0 || sx >= mapW) continue;
+    let cx = sx, cy = sy, dist = 0;
+    while (cx >= 0 && cx < mapW && cy >= 0 && cy < mapH && dist < 20) {
+      if (PASSABLE_TO_CONNECT.has(map[cy][cx].type)) {
+        corridorCandidates.push({ sx, sy, dx, dy, dist });
+        break;
+      }
+      const ttype = map[cy][cx].type;
+      if (ttype === 'water') break;
+      cx += dx; cy += dy; dist++;
+    }
+  }
+  if (corridorCandidates.length > 0) {
+    corridorCandidates.sort((a, b) => a.dist - b.dist);
+    const { sx, sy, dx, dy, dist } = corridorCandidates[0];
+    for (let i = 0; i <= dist; i++) {
+      const cx = sx + dx * i, cy = sy + dy * i;
+      if (map[cy][cx].type === 'wall') {
+        map[cy][cx] = { type: 'floor', emoji: '⬜', seen: true, visible: true };
+      }
+    }
+  } else {
+    for (let rx = vaultX + vw; rx < Math.min(mapW - 1, vaultX + vw + 15); rx++) {
+      if (map[midY][rx].type !== 'wall') break;
+      map[midY][rx] = { type: 'floor', emoji: '⬜', seen: true, visible: true };
+    }
+  }
+
+  newPlayer.pos = { x: midX, y: midY };
+  newPlayer = spendRope(newPlayer);
+
+  const isTrap = Math.random() < 0.35;
+  let newItems = [...prev.items];
+  let newLogs: Array<{ id: string; text: string; turn: number }> = [];
+  if (isTrap) {
+    const trapDmg = Math.max(1, Math.floor(newPlayer.stats.maxHp * 0.25));
+    newPlayer.stats = { ...newPlayer.stats, hp: Math.max(1, newPlayer.stats.hp - trapDmg) };
+    newLogs = [{ id: Math.random().toString(), text: `🪢 You enter the vault — TRAP! Spikes deal ${trapDmg} damage!`, turn: prev.turn }];
+    addLog(`🪢 You enter the vault — TRAP! Spikes deal ${trapDmg} damage!`);
+  } else {
+    const rewardCount = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < rewardCount; i++) {
+      const rx = vaultX + 1 + Math.floor(Math.random() * (vw - 2));
+      const ry = vaultY + 1 + Math.floor(Math.random() * (vh - 2));
+      let drop: Omit<EmojiItem, 'id' | 'consumed'>;
+      if (newPlayer.characterClass === '🤠' && Math.random() < 0.13) {
+        drop = getBulletDrop();
+      } else {
+        drop = Math.random() < 0.5 ? getRandomEmojiPower() : getRandomActiveDrop();
+      }
+      newItems.push({ ...drop, id: `vault-${i}-${Math.random()}`, consumed: false, pos: { x: rx, y: ry } });
+    }
+    addLog(`🪢 You descend into a hidden vault! Treasure awaits…`);
+  }
+
+  const midState = { ...prev, player: newPlayer, map, items: newItems, logs: [...newLogs, ...prev.logs].slice(0, 24), turn: prev.turn + 1 };
+  const withVis = withVisibility(midState);
+  return applyEnemyTurns(withVis, runEnemyTurns(withVis));
+}
 
 export function useItemActions(
   refs: GameRefs,
@@ -49,8 +168,8 @@ export function useItemActions(
       const healIndex = best.idx;
 
       const item = best.it;
-      const amount = item.healAmount ?? 2;
       const stats = { ...prev.player.stats };
+      const amount = cookedEatHeal(item, prev.chefLessonCount ?? 0, stats.maxHp);
       const wasLow = stats.hp / stats.maxHp <= 0.3;
 
       stats.hp = Math.min(stats.maxHp, stats.hp + amount);
@@ -138,115 +257,7 @@ export function useItemActions(
       if (!prev || prev.gameOver) return prev;
       const ropeItem = prev.player.inventory.find(it => it.activeKind === 'rope' && !it.consumed && (it.charges ?? 0) > 0);
       if (!ropeItem) { addLog('No 🪢 Rope in inventory!'); return prev; }
-
-      const map = prev.map.map(row => row.map(t => ({ ...t })));
-      const mapH = map.length;
-      const mapW = map[0].length;
-
-      let vaultX = -1, vaultY = -1;
-      const vw = 6, vh = 5;
-      let tries = 0;
-      outer:
-      while (tries++ < 300) {
-        const tx = 1 + Math.floor(Math.random() * (mapW - vw - 2));
-        const ty = 1 + Math.floor(Math.random() * (mapH - vh - 2));
-        for (let ry = ty; ry < ty + vh; ry++) {
-          for (let rx = tx; rx < tx + vw; rx++) {
-            if (map[ry][rx].type !== 'wall') continue outer;
-          }
-        }
-        vaultX = tx; vaultY = ty; break;
-      }
-
-      let newPlayer = { ...prev.player };
-
-      if (vaultX === -1) {
-        addLog('🪢 The rope leads nowhere — but fate rewards you anyway!');
-        const rewards = Array.from({ length: 2 }, (_, i) => ({
-          ...getRandomActiveDrop(), id: `vault-fb-${i}-${Math.random()}`, consumed: false, pos: prev.player.pos,
-        }));
-        const { inventory: ropeInv, bank: ropeBank } = removeAndRefillBag(prev.player.inventory, newPlayer.bank, ropeItem.id);
-        newPlayer = { ...newPlayer, inventory: ropeInv, bank: ropeBank };
-        return { ...prev, player: newPlayer, items: [...prev.items, ...rewards] };
-      }
-
-      for (let ry = vaultY; ry < vaultY + vh; ry++) {
-        for (let rx = vaultX; rx < vaultX + vw; rx++) {
-          map[ry][rx] = { type: 'floor', emoji: '⬜', seen: true, visible: true };
-        }
-      }
-
-      const midX = vaultX + Math.floor(vw / 2);
-      const midY = vaultY + Math.floor(vh / 2);
-      const PASSABLE_TO_CONNECT = new Set(['floor', 'grass', 'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'boss-floor', 'stairs', 'door-open', 'door-closed', 'bed']);
-      const scanDirs = [
-        { sx: midX,        sy: vaultY - 1,  dx:  0, dy: -1 },
-        { sx: midX,        sy: vaultY + vh, dx:  0, dy:  1 },
-        { sx: vaultX - 1,  sy: midY,        dx: -1, dy:  0 },
-        { sx: vaultX + vw, sy: midY,        dx:  1, dy:  0 },
-      ];
-      const corridorCandidates: { sx: number; sy: number; dx: number; dy: number; dist: number }[] = [];
-      for (const { sx, sy, dx, dy } of scanDirs) {
-        if (sy < 0 || sy >= mapH || sx < 0 || sx >= mapW) continue;
-        let cx = sx, cy = sy, dist = 0;
-        while (cx >= 0 && cx < mapW && cy >= 0 && cy < mapH && dist < 20) {
-          if (PASSABLE_TO_CONNECT.has(map[cy][cx].type)) {
-            corridorCandidates.push({ sx, sy, dx, dy, dist });
-            break;
-          }
-          const ttype = map[cy][cx].type;
-          if (ttype === 'water') break;
-          cx += dx; cy += dy; dist++;
-        }
-      }
-      if (corridorCandidates.length > 0) {
-        corridorCandidates.sort((a, b) => a.dist - b.dist);
-        const { sx, sy, dx, dy, dist } = corridorCandidates[0];
-        for (let i = 0; i <= dist; i++) {
-          const cx = sx + dx * i, cy = sy + dy * i;
-          if (map[cy][cx].type === 'wall') {
-            map[cy][cx] = { type: 'floor', emoji: '⬜', seen: true, visible: true };
-          }
-        }
-      } else {
-        for (let rx = vaultX + vw; rx < Math.min(mapW - 1, vaultX + vw + 15); rx++) {
-          if (map[midY][rx].type !== 'wall') break;
-          map[midY][rx] = { type: 'floor', emoji: '⬜', seen: true, visible: true };
-        }
-      }
-
-      const entrancePos = { x: midX, y: midY };
-      newPlayer.pos = entrancePos;
-      const { inventory: vaultInv, bank: vaultBank } = removeAndRefillBag(prev.player.inventory, newPlayer.bank, ropeItem.id);
-      newPlayer = { ...newPlayer, inventory: vaultInv, bank: vaultBank };
-
-      const isTrap = Math.random() < 0.35;
-      let newItems = [...prev.items];
-      let newLogs: Array<{ id: string; text: string; turn: number }> = [];
-      if (isTrap) {
-        const trapDmg = Math.max(1, Math.floor(newPlayer.stats.maxHp * 0.25));
-        newPlayer.stats = { ...newPlayer.stats, hp: Math.max(1, newPlayer.stats.hp - trapDmg) };
-        newLogs = [{ id: Math.random().toString(), text: `🪢 You enter the vault — TRAP! Spikes deal ${trapDmg} damage!`, turn: prev.turn }];
-        addLog(`🪢 You enter the vault — TRAP! Spikes deal ${trapDmg} damage!`);
-      } else {
-        const rewardCount = 2 + Math.floor(Math.random() * 2);
-        for (let i = 0; i < rewardCount; i++) {
-          const rx = vaultX + 1 + Math.floor(Math.random() * (vw - 2));
-          const ry = vaultY + 1 + Math.floor(Math.random() * (vh - 2));
-          let drop: Omit<EmojiItem, 'id' | 'consumed'>;
-          if (newPlayer.characterClass === '🤠' && Math.random() < 0.13) {
-            drop = getBulletDrop();
-          } else {
-            drop = Math.random() < 0.5 ? getRandomEmojiPower() : getRandomActiveDrop();
-          }
-          newItems.push({ ...drop, id: `vault-${i}-${Math.random()}`, consumed: false, pos: { x: rx, y: ry } });
-        }
-        addLog(`🪢 You descend into a hidden vault! Treasure awaits…`);
-      }
-
-      const midState = { ...prev, player: newPlayer, map, items: newItems, logs: [...newLogs, ...prev.logs].slice(0, 24), turn: prev.turn + 1 };
-      const withVis = withVisibility(midState);
-      return applyEnemyTurns(withVis, runEnemyTurns(withVis));
+      return applyRopeVault(prev, ropeItem.id, addLog);
     });
   }, [addLog, setGameState]);
 
@@ -303,7 +314,11 @@ export function useItemActions(
       const slotItem = prevBagItems[bagSlotIndex];
       if (!slotItem) return prev;
 
-      const applied = applyInstantItemUse(prev, slotItem, { source: 'bag', addLog, applyMonkeyDropOnKill });
+      const applied = applyInstantItemUse(prev, slotItem, {
+        source: 'bag',
+        addLog: () => {}, // withLog already writes state.logs; real addLog would duplicate
+        applyMonkeyDropOnKill,
+      });
       if (!applied) return prev;
 
       const isWizard = prev.player.characterClass === '🧙';
@@ -313,12 +328,21 @@ export function useItemActions(
       if (echo) {
         _flashSignals.spellEchoFlashPending = true;
         addLog(`🧙 Spell Echo! ${slotItem.emoji} resonates — not consumed.`);
-      } else if (isStackableBagPassive(slotItem) && (slotItem.stackCount ?? 1) > 1) {
-        newInventory = applied.player.inventory.map(it =>
-          it.id === slotItem.id ? { ...it, stackCount: (it.stackCount ?? 1) - 1 } : it
-        );
-        const r = refillBagFromBank(newInventory, applied.player.bank);
-        newInventory = r.inventory; newSoulBank = r.bank;
+      } else if (isStackableBagPassive(slotItem)) {
+        const fromBank = takeOneMatchingFromBank(applied.player.bank, slotItem.emoji);
+        if (fromBank.took) {
+          newInventory = applied.player.inventory;
+          newSoulBank = fromBank.bank;
+        } else if ((slotItem.stackCount ?? 1) > 1) {
+          newInventory = applied.player.inventory.map(it =>
+            it.id === slotItem.id ? { ...it, stackCount: (it.stackCount ?? 1) - 1 } : it
+          );
+          const r = refillBagFromBank(newInventory, applied.player.bank);
+          newInventory = r.inventory; newSoulBank = r.bank;
+        } else {
+          const r = removeAndRefillBag(applied.player.inventory, applied.player.bank, slotItem.id);
+          newInventory = r.inventory; newSoulBank = r.bank;
+        }
       } else {
         const r = removeAndRefillBag(applied.player.inventory, applied.player.bank, slotItem.id);
         newInventory = r.inventory; newSoulBank = r.bank;
@@ -348,10 +372,14 @@ export function useItemActions(
         player: { ...prev.player, stats: { ...prev.player.stats, gold: prev.player.stats.gold - p } },
         logs: [{ id: `shop-use-${prev.turn}`, text: boughtLine, turn: prev.turn }, ...prev.logs].slice(0, 24),
       };
+      const nextStock = prev.shopStock == null ? prev.shopStock : prev.shopStock.filter(i => i.id !== item.id);
+      if (item.activeKind === 'rope' || item.emoji === '🪢') {
+        succeeded = true;
+        return { ...applyRopeVault(paid, null, addLog), shopStock: nextStock };
+      }
       const used = applyInstantItemUse(paid, item, { source: 'shop', addLog: () => {}, applyMonkeyDropOnKill });
       if (!used) return prev;
       succeeded = true;
-      const nextStock = prev.shopStock == null ? prev.shopStock : prev.shopStock.filter(i => i.id !== item.id);
       return { ...used, shopStock: nextStock };
     });
     return succeeded;

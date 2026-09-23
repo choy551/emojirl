@@ -55,8 +55,38 @@ export function isCookedDish(i: EmojiItem): boolean {
   return i.healAmount !== undefined && !i.consumed && (!!i.isCooked || !!i.cookedBuff);
 }
 
-export function restaurantCookedPrice(i: EmojiItem): number {
-  return getItemSellValue(i, 2.5);
+export function restaurantCookedPrice(i: EmojiItem, lessons = 0): number {
+  return restaurantCookedSellPrice(i, lessons);
+}
+
+export const MAX_CHEF_LESSONS = 5;
+
+export function chefLessonCost(floor: number): number {
+  const f = Math.max(1, floor);
+  return Math.max(1000 + (f - 1) * 250, f * 350);
+}
+
+export function cookedHealBonus(n: number, maxHp: number): number {
+  if (n <= 0) return 0;
+  return Math.floor(maxHp * 0.05 * n) + 3 * n;
+}
+
+export function cookedSellBonus(n: number, baseCookedSellPrice: number): number {
+  if (n <= 0) return 0;
+  return 10 * n + Math.floor(baseCookedSellPrice * 0.10 * n);
+}
+
+export function restaurantCookedSellPrice(item: EmojiItem, lessons: number): number {
+  const base = getItemSellValue(item, 2.5);
+  return base + cookedSellBonus(lessons, base);
+}
+
+export function cookedEatHeal(item: EmojiItem, lessons: number, maxHp: number): number {
+  let amount = item.healAmount ?? 2;
+  if (item.isCooked || item.cookedBuff) {
+    amount += cookedHealBonus(lessons, maxHp);
+  }
+  return amount;
 }
 
 /** Highest-priced cooked dishes to sell: fill to 4/5, or the last 1 if already at 4. */

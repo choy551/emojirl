@@ -102,18 +102,41 @@ function wouldMergeIntoExistingStack(item: EmojiItem, inventory: EmojiItem[]): b
   return inventory.some(i => i.emoji === item.emoji && isStackableBagPassive(i) && (i.stackCount ?? 1) < cap);
 }
 
+/** Remove one copy of `emoji` from bank (decrement stackCount or drop the entry). */
+export function takeOneMatchingFromBank(
+  bank: EmojiItem[],
+  emoji: string,
+): { bank: EmojiItem[]; took: boolean } {
+  const idx = bank.findIndex(i =>
+    !i.consumed && !i.isEquipment && i.emoji === emoji && isStackableBagPassive(i)
+  );
+  if (idx === -1) return { bank, took: false };
+  const it = bank[idx];
+  const n = it.stackCount ?? 1;
+  if (n > 1) {
+    const next = [...bank];
+    next[idx] = { ...it, stackCount: n - 1 };
+    return { bank: next, took: true };
+  }
+  return { bank: [...bank.slice(0, idx), ...bank.slice(idx + 1)], took: true };
+}
+
 export function refillBagFromBank(inventory: EmojiItem[], bank: EmojiItem[]): { inventory: EmojiItem[]; bank: EmojiItem[] } {
   if (bank.length === 0) return { inventory, bank };
 
-  // First pass: try to merge any stackable at the front of the bank
-  const [frontItem, ...rest] = bank;
-  if (isStackableBagPassive(frontItem)) {
+  // Merge one copy of a banked stackable into an existing under-cap hotbar stack.
+  for (let bi = 0; bi < bank.length; bi++) {
+    const frontItem = bank[bi];
+    if (!isStackableBagPassive(frontItem) || frontItem.consumed || frontItem.isEquipment) continue;
     const cap = STACKABLE_BAG_CAPS[frontItem.emoji] ?? 9;
     const existingIdx = inventory.findIndex(i => i.emoji === frontItem.emoji && isStackableBagPassive(i) && (i.stackCount ?? 1) < cap);
-    if (existingIdx !== -1) {
-      const newInv = inventory.map((it, i) => i === existingIdx ? { ...it, stackCount: (it.stackCount ?? 1) + 1 } : it);
-      return { inventory: newInv, bank: rest };
-    }
+    if (existingIdx === -1) continue;
+    const newInv = inventory.map((it, i) => i === existingIdx ? { ...it, stackCount: (it.stackCount ?? 1) + 1 } : it);
+    const n = frontItem.stackCount ?? 1;
+    const newBank = n > 1
+      ? bank.map((it, i) => i === bi ? { ...it, stackCount: n - 1 } : it)
+      : [...bank.slice(0, bi), ...bank.slice(bi + 1)];
+    return { inventory: newInv, bank: newBank };
   }
 
   // Find first *safe* non-equipment item in bank to pull into bag.

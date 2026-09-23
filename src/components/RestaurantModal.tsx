@@ -1,5 +1,5 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToBag, pickBestDishesToSell, restaurantCookedPrice } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, MAX_CHEF_LESSONS, cookedHealBonus } from '../game/gameHelpers';
 import { canEquipItem } from './itemUtils';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -110,6 +110,56 @@ export function RestaurantModal({
           </div>
         </div>
 
+        {(() => {
+          const n = gameState.chefLessonCount ?? 0;
+          const cost = chefLessonCost(gameState.currentFloor);
+          const master = n >= MAX_CHEF_LESSONS;
+          const canAfford = gameState.player.stats.gold >= cost;
+          const maxHp = gameState.player.stats.maxHp;
+          return (
+            <div className="mb-4">
+              <button
+                type="button"
+                disabled={master || !canAfford}
+                title={master ? "You're already a Master Chef!" : !canAfford ? `Need ${cost}g` : "Cooked dishes heal and sell better run-wide"}
+                onClick={() => {
+                  if (master || !canAfford) return;
+                  setGameState(prev => {
+                    if (!prev || (prev.chefLessonCount ?? 0) >= MAX_CHEF_LESSONS) return prev;
+                    const lessonCost = chefLessonCost(prev.currentFloor);
+                    if (prev.player.stats.gold < lessonCost) return prev;
+                    return {
+                      ...prev,
+                      chefLessonCount: (prev.chefLessonCount ?? 0) + 1,
+                      player: {
+                        ...prev.player,
+                        stats: { ...prev.player.stats, gold: prev.player.stats.gold - lessonCost },
+                      },
+                    };
+                  });
+                  addLog(`🧑‍🍳 Chef's Lesson ${n + 1}/5! Cooked dishes heal & sell better run-wide.`);
+                }}
+                className={`w-full text-left text-xs font-bold px-3 py-2 rounded-lg border transition-colors ${
+                  master
+                    ? 'bg-secondary/10 border-border/30 text-muted-foreground/70 cursor-not-allowed'
+                    : canAfford
+                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-200 hover:bg-amber-500/25'
+                      : 'bg-secondary/10 border-border/30 text-red-400/70 cursor-not-allowed'
+                }`}
+              >
+                {master
+                  ? "🧑‍🍳 You're already a Master Chef!"
+                  : `🧑‍🍳 Chef's Lesson (${n}/5) — ${cost}g`}
+              </button>
+              {n > 0 && (
+                <div className="text-[10px] text-muted-foreground mt-1 px-1">
+                  Cooked eat +{cookedHealBonus(n, maxHp)} HP · cooked sell +{10 * n}g and +{10 * n}%
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Sell — 250% for cooked food, 5-item limit */}
         <div>
           <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
@@ -131,8 +181,9 @@ export function RestaurantModal({
             ];
             if (sellable.length === 0) return <div className="text-xs text-muted-foreground text-center py-3">Nothing to sell.</div>;
             const isLastCooked = restaurantSoldCount === 4;
+            const lessons = gameState.chefLessonCount ?? 0;
             const bestBatch = pickBestDishesToSell(sellable, restaurantSoldCount);
-            const bestGold = bestBatch.reduce((s, i) => s + restaurantCookedPrice(i), 0);
+            const bestGold = bestBatch.reduce((s, i) => s + restaurantCookedPrice(i, lessons), 0);
             const sellBestDishes = () => {
               if (bestBatch.length === 0) {
                 addLog('🍽️ No cooked dishes to sell.');
@@ -186,7 +237,9 @@ export function RestaurantModal({
                 {sellable.map(item => {
                   const isCooked = item.isCooked || !!item.cookedBuff;
                   const sellMul = isCooked ? 2.5 : 1;
-                  const price = getItemSellValue(item, sellMul);
+                  const price = isCooked
+                    ? restaurantCookedPrice(item, gameState.chefLessonCount ?? 0)
+                    : getItemSellValue(item, sellMul);
                   const inBank = gameState.player.bank.some(i => i.id === item.id);
                   return (
                     <div key={item.id} className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">

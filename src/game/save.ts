@@ -133,6 +133,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     restaurantSoldCount:      (raw.restaurantSoldCount as number) ?? 0,
     companionKillTally:       (raw.companionKillTally as number) ?? 0,
     companionBountyOocTurns:  (raw.companionBountyOocTurns as number) ?? 0,
+    chefLessonCount:          Math.min(5, Math.max(0, (raw.chefLessonCount as number) ?? 0)),
   };
 }
 

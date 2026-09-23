@@ -106,6 +106,14 @@ describe('canBuyAndUse', () => {
     expect(canBuyAndUse(sword, state(), 10).ok).toBe(false);
   });
 
+  it('allows Buy & Use for Rope', () => {
+    const rope: EmojiItem = {
+      id: 'r1', emoji: '🪢', name: 'Rope', description: 'vault', consumed: false, activeKind: 'rope', charges: 1,
+    };
+    expect(isShopDirectUseBlocked(rope)).toBe(false);
+    expect(canBuyAndUse(rope, state(), 10)).toEqual({ ok: true });
+  });
+
   it('blocks lightning with no visible foe, allows with one', () => {
     expect(canBuyAndUse(lightning, state(), 10)).toEqual({ ok: false, reason: 'No enemies on screen' });
     const s = state({ enemies: [goblin()] });
@@ -139,6 +147,26 @@ describe('applyInstantItemUse', () => {
     expect(next!.player.stats.gold).toBe(s.player.stats.gold);
     expect(next!.player.inventory).toHaveLength(s.player.inventory.length);
     expect(logs.some(l => l.includes('sell it at a shop'))).toBe(true);
+  });
+
+  it('cooked eats gain chef-lesson bonus; raw does not', () => {
+    const logs: string[] = [];
+    const steak: EmojiItem = {
+      id: 'st', emoji: '🥩', name: 'Steak', description: 'cooked', consumed: false,
+      healAmount: 4, isCooked: true,
+    };
+    const raw: EmojiItem = {
+      id: 'ap', emoji: '🍎', name: 'Apple', description: 'raw', consumed: false, healAmount: 4,
+    };
+    const s0 = state({ chefLessonCount: 0, player: playerAt({ hp: 6, maxHp: 100, gold: 50 }) });
+    const n0 = applyInstantItemUse(s0, steak, { source: 'bag', addLog: t => logs.push(t), applyMonkeyDropOnKill: (_k, p) => p });
+    const s2 = state({ chefLessonCount: 2, player: playerAt({ hp: 6, maxHp: 100, gold: 50 }) });
+    const n2 = applyInstantItemUse(s2, steak, { source: 'bag', addLog: t => logs.push(t), applyMonkeyDropOnKill: (_k, p) => p });
+    expect(n0!.player.stats.hp).toBe(10);
+    expect(n2!.player.stats.hp).toBe(6 + 4 + 10 + 6);
+    const r0 = applyInstantItemUse(s0, raw, { source: 'bag', addLog: () => {}, applyMonkeyDropOnKill: (_k, p) => p });
+    const r2 = applyInstantItemUse(s2, raw, { source: 'bag', addLog: () => {}, applyMonkeyDropOnKill: (_k, p) => p });
+    expect(r0!.player.stats.hp).toBe(r2!.player.stats.hp);
   });
 
   it('heals without adding to inventory (full hotbar stays 9)', () => {

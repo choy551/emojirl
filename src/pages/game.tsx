@@ -611,6 +611,7 @@ export default function Game() {
       highestPressureTierWarned: 0,
       companionKillTally: 0,
       companionBountyOocTurns: 0,
+      chefLessonCount: 0,
       floorAnnouncement: rooms.some(r => r.theme === 'volcano')
         ? {
             kind: 'volcano',

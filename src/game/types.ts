@@ -280,6 +280,8 @@ export interface GameState {
   companionKillTally?: number;
   /** Consecutive non-combat turns toward bounty snap-reset. */
   companionBountyOocTurns?: number;
+  /** Run-wide restaurant lessons (0–5). Cooked food heals and sells better. */
+  chefLessonCount?: number;
 }
 
 export interface ControlSettings {

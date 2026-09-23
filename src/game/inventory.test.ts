@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { EmojiItem } from './types';
-import { removeAndRefillBag, refillBagFromBank, sortBagSlots, addToBag, computeBagPassives } from './inventory';
+import { removeAndRefillBag, refillBagFromBank, sortBagSlots, addToBag, computeBagPassives, takeOneMatchingFromBank } from './inventory';
 import { lightningArcTiers, lightningArcDamage, STACKABLE_BAG_CAPS } from './passives';
 
 function ice(id: string): EmojiItem {
@@ -220,6 +220,25 @@ describe('stackable refill stays in place', () => {
     expect(slots.find(i => i.emoji === '❤️')?.stackCount).toBe(2);
     expect(slots.map(i => i.id)).toEqual(['f1', 's1', 'm1', 'g1', 'b1', 'h1']);
     expect(nextBank).toHaveLength(0);
+  });
+});
+
+describe('takeOneMatchingFromBank', () => {
+  it('consumes a banked extra without touching the hotbar stack', () => {
+    const inv = [heart('h-hot', 3)];
+    const bank = [heart('h-bank', 2)];
+    const taken = takeOneMatchingFromBank(bank, '❤️');
+    expect(taken.took).toBe(true);
+    expect(taken.bank[0].stackCount).toBe(1);
+    expect(inv[0].stackCount).toBe(3);
+  });
+
+  it('refill merges a clover that is not first in the bank', () => {
+    const inv = [heart('h-hot', 2)];
+    const bank = [ice('ice-bank'), heart('h-bank', 1)];
+    const { inventory, bank: nextBank } = refillBagFromBank(inv, bank);
+    expect(inventory[0].stackCount).toBe(3);
+    expect(nextBank.map(i => i.id)).toEqual(['ice-bank']);
   });
 });
 

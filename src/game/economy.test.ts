@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { moneyBagSellValue, getItemSellValue, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, pickBestDishesToSell, restaurantCookedPrice } from './economy';
+import { moneyBagSellValue, getItemSellValue, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, cookedHealBonus, cookedSellBonus, MAX_CHEF_LESSONS, restaurantCookedSellPrice } from './economy';
 import { MONEY_BAG } from './emojis';
 import type { EmojiItem } from './types';
 
@@ -98,5 +98,34 @@ describe('pickBestDishesToSell', () => {
     const gold = picked.reduce((s, i) => s + restaurantCookedPrice(i), 0);
     expect(gold).toBe(picked.reduce((s, i) => s + getItemSellValue(i, 2.5), 0));
     expect(picked.map(i => i.id)).toEqual(['best', 'cheap']);
+  });
+});
+
+describe("Chef's Lesson", () => {
+  it('uses locked floor costs', () => {
+    expect(chefLessonCost(1)).toBe(1000);
+    expect(chefLessonCost(10)).toBe(3500);
+    expect(chefLessonCost(13)).toBe(4550);
+    expect(chefLessonCost(27)).toBe(9450);
+    expect(chefLessonCost(32)).toBe(11200);
+    expect(MAX_CHEF_LESSONS).toBe(5);
+  });
+
+  it('heal and sell bonuses at 5 lessons', () => {
+    expect(cookedHealBonus(5, 100)).toBe(40);
+    expect(cookedSellBonus(5, 100)).toBe(100);
+    expect(cookedHealBonus(0, 100)).toBe(0);
+    expect(cookedSellBonus(2, 80)).toBe(20 + 16);
+  });
+
+  it('restaurant cooked sell includes lesson bonus', () => {
+    const steak: EmojiItem = {
+      id: 's', emoji: '🥩', name: 'Steak', description: 'cooked', consumed: false,
+      healAmount: 12, isCooked: true,
+    };
+    const base = getItemSellValue(steak, 2.5);
+    expect(restaurantCookedSellPrice(steak, 0)).toBe(base);
+    expect(restaurantCookedSellPrice(steak, 5)).toBe(base + cookedSellBonus(5, base));
+    expect(restaurantCookedPrice(steak, 5)).toBe(restaurantCookedSellPrice(steak, 5));
   });
 });

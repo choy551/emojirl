@@ -7,6 +7,7 @@ import { addToBag, activeKindLabel } from './inventory';
 import { withVisibility } from './vision';
 import { runEnemyTurns, applyEnemyTurns } from './enemyTurns';
 import { _flashSignals } from './flashSignals';
+import { cookedEatHeal } from './economy';
 
 export type ShopUseBlockReason =
   | 'Not enough gold'
@@ -16,7 +17,7 @@ export type ShopUseBlockReason =
   | 'Already at full HP'
   | 'Sell it at the shop';
 
-const AIMED_KINDS = new Set(['gun', 'boomerang', 'freeze', 'bomb', 'rope']);
+const AIMED_KINDS = new Set(['gun', 'boomerang', 'freeze', 'bomb']);
 
 export function isShopDirectUseBlocked(item: EmojiItem): boolean {
   if (item.isEquipment) return true;
@@ -36,6 +37,8 @@ export function soulConsumeEffect(item: EmojiItem): SoulEffect | undefined {
   return EMOJI_POWERS.find(e => e.emoji === item.emoji)?.effect;
 }
 
+// Writes state.logs. If addLog is provided it is ALSO invoked — do NOT pass a
+// setState-based addLog from inside a setGameState updater or lines duplicate.
 function withLog(state: GameState, text: string, addLog?: (t: string) => void): GameState {
   addLog?.(text);
   return {
@@ -90,7 +93,7 @@ export function applyInstantItemUse(
       log('Already at full HP.');
       return null;
     }
-    const amount = item.healAmount ?? 2;
+    const amount = cookedEatHeal(item, s.chefLessonCount ?? 0, s.player.stats.maxHp);
     const stats = { ...s.player.stats };
     const wasLow = stats.hp / stats.maxHp <= 0.3;
     stats.hp = Math.min(stats.maxHp, stats.hp + amount);
