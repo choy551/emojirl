@@ -4,12 +4,13 @@ import { getPassiveTooltipSuffix } from '../game/passives';
 import { getCowboyUnarmedBonus } from '../game/combat';
 import { MiniMap } from './MiniMap';
 import { activeKindEmoji } from './itemUtils';
+import { foodHealLabel, foodHealDescription } from '../game/economy';
 
 const HEAL_DISPLAY_LIMIT = 9;
 
 interface RightSidebarProps {
   player: Player;
-  gameState: Pick<GameState, 'map' | 'enemies' | 'activeProjectile'>;
+  gameState: Pick<GameState, 'map' | 'enemies' | 'activeProjectile' | 'chefLessonCount'>;
   bagSlots: EmojiItem[];
   healSlots: EmojiItem[];
   bagPassiveSummary: BagPassiveSummary;
@@ -175,7 +176,7 @@ export function RightSidebar({
                 data-testid={`heal-slot-${item.id}`}
                 onClick={handleUseHeal}
                 {...itemInspectProps(item)}
-                title={`${item.name}: ${item.description} · Right-click for details`}
+                title={`${item.name}: ${foodHealDescription(item, gameState.chefLessonCount ?? 0, player.stats.maxHp)} · Right-click for details`}
                 className="relative w-9 h-9 bg-card border border-emerald-500/40 rounded flex items-center justify-center text-lg hover:border-emerald-400 hover:scale-105 transition-all cursor-pointer shadow-sm"
               >
                 {item.emoji}
@@ -186,7 +187,7 @@ export function RightSidebar({
                 <button
                   ref={overflowBtnRef}
                   onClick={handleOverflowToggle}
-                  title={healSlots.slice(HEAL_DISPLAY_LIMIT).map(i => `${i.emoji} ${i.name} (+${i.healAmount} HP)`).join('\n')}
+                  title={healSlots.slice(HEAL_DISPLAY_LIMIT).map(i => `${i.emoji} ${i.name} (${foodHealLabel(i, gameState.chefLessonCount ?? 0, player.stats.maxHp)})`).join('\n')}
                   className="w-9 h-9 bg-card border border-emerald-500/40 rounded flex items-center justify-center text-[11px] font-bold text-emerald-400 hover:border-emerald-400 hover:scale-105 transition-all cursor-pointer shadow-sm leading-none"
                 >
                   +{healSlots.length - HEAL_DISPLAY_LIMIT}
@@ -203,7 +204,7 @@ export function RightSidebar({
                         <button
                           key={item.id}
                           onClick={() => { handleUseHeal(); setOverflowOpen(false); }}
-                          title={`${item.name}: ${item.description}`}
+                          title={`${item.name}: ${foodHealDescription(item, gameState.chefLessonCount ?? 0, player.stats.maxHp)}`}
                           className="w-8 h-8 bg-card border border-emerald-500/40 rounded flex items-center justify-center text-base hover:border-emerald-400 hover:scale-110 transition-all cursor-pointer shadow-sm"
                         >
                           {item.emoji}

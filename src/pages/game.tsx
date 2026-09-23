@@ -3221,7 +3221,12 @@ export default function Game() {
 
       {/* ── Item Stat Card (right-click / long-press) ──────────────────────── */}
       {statCardItem && (
-        <ItemStatCard item={statCardItem} onClose={() => setStatCardItem(null)} />
+        <ItemStatCard
+          item={statCardItem}
+          onClose={() => setStatCardItem(null)}
+          chefLessonCount={gameState?.chefLessonCount ?? 0}
+          maxHp={gameState?.player.stats.maxHp ?? 0}
+        />
       )}
 
       {/* Bank / Bag Modal */}
@@ -3293,6 +3298,7 @@ export default function Game() {
                 onConsume={handleConsumeBankItem}
                 onClose={() => setBankOpen(false)}
                 onShowStatCard={setStatCardItem}
+                chefLessonCount={gameState?.chefLessonCount ?? 0}
               />
             )}
 

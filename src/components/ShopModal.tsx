@@ -1,5 +1,5 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToBag, removeAndRefillBag, COOKED_OVERFLOW_THRESHOLD, cookedHealCount, isHealJunk } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToBag, removeAndRefillBag, COOKED_OVERFLOW_THRESHOLD, cookedHealCount, isHealJunk, foodHealDescription } from '../game/gameHelpers';
 import { soulHelpText } from '../game/emojis';
 import { isStackableBagPassive } from '../game/passives';
 import { canBuyAndUse } from '../game/shopUse';
@@ -73,7 +73,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                   <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold leading-tight">{item.name}</div>
-                    <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{soulHelpText(item).description}</div>
+                    <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.healAmount !== undefined ? foodHealDescription(item, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp) : soulHelpText(item).description}</div>
                   </div>
                   <div className="flex flex-row items-center gap-1 shrink-0">
                   <button
@@ -190,7 +190,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                     {item.name}{inBank ? ' (bank)' : ''}
                     {item.isEquipment && !canEquipItem(item, cls) && <span className="ml-1 text-[9px] text-red-400/80 font-normal">wrong class</span>}
                   </div>
-                  <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{soulHelpText(item).description}</div>
+                  <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.healAmount !== undefined ? foodHealDescription(item, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp) : soulHelpText(item).description}</div>
                 </div>
                 <button
                   onClick={() => {

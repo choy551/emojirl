@@ -1,13 +1,16 @@
 import { EmojiItem } from '../game/types';
 import { isStackableBagPassive, getStackableBonusLabel, getStackableCumulativeLabel } from '../game/passives';
 import { soulHelpText } from '../game/emojis';
+import { foodHealLabel, foodHealDescription, cookedEatHeal } from '../game/economy';
 
 interface ItemStatCardProps {
   item: EmojiItem;
   onClose: () => void;
+  chefLessonCount?: number;
+  maxHp?: number;
 }
 
-export function ItemStatCard({ item: si, onClose }: ItemStatCardProps) {
+export function ItemStatCard({ item: si, onClose, chefLessonCount = 0, maxHp = 0 }: ItemStatCardProps) {
   const help = soulHelpText(si);
   const effect = (si as any).effect as Record<string, number | boolean> | undefined;
   const consumeLines: string[] = [];
@@ -51,7 +54,11 @@ export function ItemStatCard({ item: si, onClose }: ItemStatCardProps) {
         </div>
 
         {/* Description */}
-        <p className="text-xs text-muted-foreground/80 leading-relaxed">{help.description}</p>
+        <p className="text-xs text-muted-foreground/80 leading-relaxed">
+          {si.healAmount !== undefined
+            ? foodHealDescription(si, chefLessonCount, maxHp, false)
+            : help.description}
+        </p>
 
         {/* Equipment bonuses */}
         {si.isEquipment && equipBonusLines.length > 0 && (
@@ -113,7 +120,12 @@ export function ItemStatCard({ item: si, onClose }: ItemStatCardProps) {
 
         {/* Heal / ammo / charges */}
         {si.healAmount !== undefined && (
-          <div className="text-xs text-emerald-400/80">Restores <span className="font-bold">+{si.healAmount} HP</span> when consumed</div>
+          <div className="text-xs text-emerald-400/80">
+            Restores <span className="font-bold">{foodHealLabel(si, chefLessonCount, maxHp)}</span> when consumed
+            {cookedEatHeal(si, chefLessonCount, maxHp) > si.healAmount && (
+              <span className="text-amber-300/80"> · Chef's Lesson</span>
+            )}
+          </div>
         )}
         {si.ammoAmount !== undefined && (
           <div className="text-xs text-sky-400/80">Ammo: <span className="font-bold">+{si.ammoAmount}</span></div>

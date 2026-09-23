@@ -3,6 +3,7 @@ import { EmojiItem, Player } from '../game/types';
 import { hasBagPassive, getPassiveTooltipSuffix, isStackableBagPassive, getStackableBonusLabel } from '../game/passives';
 import { soulHelpText } from '../game/emojis';
 import { isNonStackableBagPassiveDuplicate, isActiveKindDuplicate } from '../game/gameHelpers';
+import { foodHealDescription } from '../game/economy';
 import { activeKindEmoji } from './itemUtils';
 import { ActivePassivesPanel } from './ActivePassivesPanel';
 
@@ -16,6 +17,7 @@ interface BankPanelProps {
   onConsume: (itemId: string) => void;
   onClose: () => void;
   onShowStatCard: (item: EmojiItem) => void;
+  chefLessonCount?: number;
 }
 
 export function BankPanel({
@@ -27,6 +29,7 @@ export function BankPanel({
   onMove,
   onConsume,
   onShowStatCard,
+  chefLessonCount = 0,
 }: BankPanelProps) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -93,7 +96,11 @@ export function BankPanel({
         return (
           <div className="bg-black/30 rounded-lg p-2.5 text-xs space-y-1 border border-primary/30 mb-3">
             <div className="font-bold text-foreground">{si.emoji} {si.name}</div>
-            <div className="text-muted-foreground/70 leading-snug">{soulHelpText(si).description}</div>
+            <div className="text-muted-foreground/70 leading-snug">
+              {si.healAmount !== undefined
+                ? foodHealDescription(si, chefLessonCount, player.stats.maxHp)
+                : soulHelpText(si).description}
+            </div>
             {hasBagPassive(si) && (() => {
               const alreadyActive = (si.bagPassive?.nonStackable ?? false)
                 ? isNonStackableBagPassiveDuplicate(si, player.inventory)
@@ -170,7 +177,7 @@ export function BankPanel({
                     else { onSelect(item.id); }
                   }}
                   {...itemInspectProps(item)}
-                  title={`${item.name}${items.length > 1 ? ` ×${items.length}` : ''}: ${item.description}${passiveComputedSuffix}${isStackableBagPassive(item) ? ' · Stackable — compounding power per copy' : ''}`}
+                  title={`${item.name}${items.length > 1 ? ` ×${items.length}` : ''}: ${item.healAmount !== undefined ? foodHealDescription(item, chefLessonCount, player.stats.maxHp) : item.description}${passiveComputedSuffix}${isStackableBagPassive(item) ? ' · Stackable — compounding power per copy' : ''}`}
                   className={`relative aspect-square rounded border flex items-center justify-center text-xl transition-all cursor-pointer
                     ${focusedBagIdx === bankIdx ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-black/50' : ''}
                     ${isSelected

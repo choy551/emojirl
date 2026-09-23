@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { GameState, Enemy, EmojiItem } from '../game/types';
-import { restoreStolenEmojis, stolenEmojiSummary } from '../game/gameHelpers';
+import { restoreStolenEmojis, stolenEmojiSummary, cookedEatHeal } from '../game/gameHelpers';
 import { useDialogHotkeys } from '../hooks/useDialogHotkeys';
 
 type SetGameState = React.Dispatch<React.SetStateAction<GameState | null>>;
@@ -371,7 +371,7 @@ export function CompanionTalkDialog({ gameState, setGameState, companionId, onCl
       if (!prev) return prev;
       const comp = prev.enemies.find(e => e.id === companionId);
       if (!comp) return prev;
-      const amount = item.healAmount ?? 0;
+      const amount = cookedEatHeal(item, prev.chefLessonCount ?? 0, prev.player.stats.maxHp);
       const newHp = Math.min(comp.maxHp, comp.hp + amount);
       return {
         ...prev,
@@ -476,7 +476,10 @@ export function CompanionTalkDialog({ gameState, setGameState, companionId, onCl
           ) : (
             <div className="space-y-1.5 max-h-52 overflow-y-auto mb-3">
               {healItems.map(it => {
-                const wouldHeal = Math.min(it.healAmount!, companion.maxHp - companion.hp);
+                const wouldHeal = Math.min(
+                  cookedEatHeal(it, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp),
+                  companion.maxHp - companion.hp,
+                );
                 const full = companion.hp >= companion.maxHp;
                 return (
                   <button

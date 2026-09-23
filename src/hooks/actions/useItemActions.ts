@@ -155,15 +155,17 @@ export function useItemActions(
 
       const hpPct = prev.player.stats.hp / prev.player.stats.maxHp;
       const missingHp = prev.player.stats.maxHp - prev.player.stats.hp;
+      const lessons = prev.chefLessonCount ?? 0;
+      const healOf = (it: EmojiItem) => cookedEatHeal(it, lessons, prev.player.stats.maxHp);
       let best: { it: EmojiItem; idx: number };
       if (hpPct <= 0.4) {
         // Low health — use the biggest heal available
-        best = healCandidates.reduce((a, b) => (b.it.healAmount ?? 0) > (a.it.healAmount ?? 0) ? b : a);
+        best = healCandidates.reduce((a, b) => healOf(b.it) > healOf(a.it) ? b : a);
       } else {
         // Near full — prefer the smallest heal that covers the gap, avoid wasting big ones
-        const fitsGap = healCandidates.filter(({ it }) => (it.healAmount ?? 0) <= missingHp);
+        const fitsGap = healCandidates.filter(({ it }) => healOf(it) <= missingHp);
         const pool = fitsGap.length > 0 ? fitsGap : healCandidates;
-        best = pool.reduce((a, b) => (b.it.healAmount ?? 0) < (a.it.healAmount ?? 0) ? b : a);
+        best = pool.reduce((a, b) => healOf(b.it) < healOf(a.it) ? b : a);
       }
       const healIndex = best.idx;
 

@@ -89,6 +89,40 @@ export function cookedEatHeal(item: EmojiItem, lessons: number, maxHp: number): 
   return amount;
 }
 
+/** Tooltip / stat-card HP line, including Chef's Lesson bonus on cooked dishes. */
+export function foodHealLabel(item: EmojiItem, lessons: number, maxHp: number): string {
+  if (item.healAmount === undefined) return '';
+  const total = cookedEatHeal(item, lessons, maxHp);
+  const bonus = total - item.healAmount;
+  if (bonus > 0) return `+${total} HP (${item.healAmount} + ${bonus} Chef)`;
+  return `+${item.healAmount} HP`;
+}
+
+/**
+ * Catalog food copy with Chef's Lesson HP substituted in.
+ * `includeChefNote` appends `(base + bonus Chef)` when the bonus applies.
+ */
+export function foodHealDescription(
+  item: EmojiItem,
+  lessons: number,
+  maxHp: number,
+  includeChefNote = true,
+): string {
+  if (item.healAmount === undefined) return item.description;
+  const total = cookedEatHeal(item, lessons, maxHp);
+  const bonus = total - item.healAmount;
+  if (bonus <= 0) return item.description;
+  const replaced = item.description
+    .replace(/\+(\d+)\s*HP/i, `+${total} HP`)
+    .replace(/Restores\s+(\d+)\s+HP/i, `Restores ${total} HP`);
+  if (replaced === item.description) {
+    return includeChefNote
+      ? `${item.description} · ${foodHealLabel(item, lessons, maxHp)}`
+      : `${item.description} · +${total} HP`;
+  }
+  return includeChefNote ? `${replaced} (${item.healAmount} + ${bonus} Chef)` : replaced;
+}
+
 /** Highest-priced cooked dishes to sell: fill to 4/5, or the last 1 if already at 4. */
 export function pickBestDishesToSell(items: EmojiItem[], soldCount: number): EmojiItem[] {
   const remaining = RESTAURANT_COOKED_SELL_LIMIT - soldCount;

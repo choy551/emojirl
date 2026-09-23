@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { moneyBagSellValue, getItemSellValue, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, cookedHealBonus, cookedSellBonus, MAX_CHEF_LESSONS, restaurantCookedSellPrice } from './economy';
+import { moneyBagSellValue, getItemSellValue, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, cookedHealBonus, cookedSellBonus, MAX_CHEF_LESSONS, restaurantCookedSellPrice, cookedEatHeal, foodHealLabel, foodHealDescription } from './economy';
 import { MONEY_BAG } from './emojis';
 import type { EmojiItem } from './types';
 
@@ -127,5 +127,27 @@ describe("Chef's Lesson", () => {
     expect(restaurantCookedSellPrice(steak, 0)).toBe(base);
     expect(restaurantCookedSellPrice(steak, 5)).toBe(base + cookedSellBonus(5, base));
     expect(restaurantCookedPrice(steak, 5)).toBe(restaurantCookedSellPrice(steak, 5));
+  });
+
+  it('cooked eat heal and labels include lesson bonus', () => {
+    const steak: EmojiItem = {
+      id: 's', emoji: '🥩', name: 'Grilled Steak',
+      description: '+12 HP & +2 ATK for 10 turns', consumed: false,
+      healAmount: 12, isCooked: true,
+    };
+    const apple: EmojiItem = {
+      id: 'a', emoji: '🍎', name: 'Apple',
+      description: 'Restores 2 HP · cook on 🔥 for more', consumed: false,
+      healAmount: 2,
+    };
+    expect(cookedEatHeal(steak, 0, 100)).toBe(12);
+    expect(cookedEatHeal(steak, 5, 100)).toBe(52);
+    expect(cookedEatHeal(apple, 5, 100)).toBe(2);
+    expect(foodHealLabel(steak, 0, 100)).toBe('+12 HP');
+    expect(foodHealLabel(steak, 5, 100)).toBe('+52 HP (12 + 40 Chef)');
+    expect(foodHealLabel(apple, 5, 100)).toBe('+2 HP');
+    expect(foodHealDescription(steak, 5, 100)).toBe('+52 HP & +2 ATK for 10 turns (12 + 40 Chef)');
+    expect(foodHealDescription(steak, 5, 100, false)).toBe('+52 HP & +2 ATK for 10 turns');
+    expect(foodHealDescription(apple, 5, 100)).toBe('Restores 2 HP · cook on 🔥 for more');
   });
 });

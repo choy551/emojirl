@@ -1,5 +1,5 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, MAX_CHEF_LESSONS, cookedHealBonus } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, MAX_CHEF_LESSONS, cookedHealBonus, foodHealDescription } from '../game/gameHelpers';
 import { canEquipItem } from './itemUtils';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -62,7 +62,7 @@ export function RestaurantModal({
                   <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold leading-tight">{item.name}{item.isCooked ? ' ✨' : ''}</div>
-                    <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.description}</div>
+                    <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{foodHealDescription(item, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp)}</div>
                   </div>
                   <button
                     disabled={!canAfford}
@@ -246,7 +246,7 @@ export function RestaurantModal({
                       <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-bold leading-tight">{item.name}{inBank ? ' (bank)' : ''}{item.isCooked ? ' ✨' : ''}</div>
-                        <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.description}</div>
+                        <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{foodHealDescription(item, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp)}</div>
                       </div>
                       <button
                         onClick={() => {
