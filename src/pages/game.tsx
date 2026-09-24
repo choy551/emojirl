@@ -19,6 +19,8 @@ import { useTouchGestures } from '../hooks/useTouchGestures';
 import { resolveContextAction } from '../game/contextAction';
 import { ContextActionButton } from '../components/mobile/ContextActionButton';
 import { AbilityButtons } from '../components/mobile/AbilityButtons';
+import { MobileConsumableUseButtons } from '../components/mobile/MobileConsumableUseButtons';
+import { listMobileQuickUseSlots } from '../game/mobileQuickUse';
 import { ActionsMenu, ActionItem } from '../components/mobile/ActionsMenu';
 import { getClassAbilities } from '../components/mobile/classAbilities';
 import { MobileTopBar } from '../components/mobile/MobileTopBar';
@@ -3486,6 +3488,16 @@ export default function Game() {
           />
         ) : null;
 
+        const quickUses = listMobileQuickUseSlots(player.inventory);
+        const quickUseStack = quickUses.length > 0 ? (
+          <MobileConsumableUseButtons
+            entries={quickUses}
+            dirPickMode={dirPickMode}
+            activeProjectileKind={gameState.activeProjectile?.kind}
+            onUse={handleUseSlot}
+          />
+        ) : null;
+
         const closeDoor = isAdjacentToOpenDoor && !controlSettings.showContextButtons ? (
           <button
             data-testid="mobile-close-door"
@@ -3512,6 +3524,7 @@ export default function Game() {
             >
               {abilityStack}
               {contextRow}
+              {quickUseStack}
               {closeDoor}
               {dpad}
             </div>
@@ -3522,6 +3535,14 @@ export default function Game() {
           <>
             {dpad}
             {closeDoor}
+            {quickUseStack && (
+              <div
+                className="fixed z-40 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1"
+                style={{ bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))' }}
+              >
+                {quickUseStack}
+              </div>
+            )}
             {(controlSettings.showContextButtons || controlSettings.showAbilityButtons) && (
               <div
                 className={`fixed z-40 flex flex-col gap-1.5 ${ctxSide === 'right' ? 'right-2 items-end' : 'left-2 items-start'}`}
