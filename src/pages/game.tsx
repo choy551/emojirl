@@ -244,6 +244,10 @@ export default function Game() {
   useEffect(() => { pauseMenuOpenRef.current = pauseMenuOpen; }, [pauseMenuOpen]);
   const actionsMenuOpenRef = useRef(false);
   useEffect(() => { actionsMenuOpenRef.current = actionsMenuOpen; }, [actionsMenuOpen]);
+  const optionsOpenRef = useRef(false);
+  useEffect(() => { optionsOpenRef.current = optionsOpen; }, [optionsOpen]);
+  const statsExpandedRef = useRef(false);
+  useEffect(() => { statsExpandedRef.current = statsExpanded; }, [statsExpanded]);
   const [showRTFM, setShowRTFM] = useState(false);
   const showRTFMRef = useRef(false);
   useEffect(() => { showRTFMRef.current = showRTFM; }, [showRTFM]);
@@ -1417,6 +1421,20 @@ export default function Game() {
         return;
       }
 
+      // ── Options overlay intercept ──────────────────────────────────────────
+      if (optionsOpenRef.current) {
+        e.preventDefault();
+        if (e.key === 'Escape') setOptionsOpen(false);
+        return;
+      }
+
+      // ── Stats overlay intercept (mobile StatsModal) ────────────────────────
+      if (statsExpandedRef.current) {
+        e.preventDefault();
+        if (e.key === 'Escape') setStatsExpanded(false);
+        return;
+      }
+
       // ── Pause menu intercept ──────────────────────────────────────────────
       if (pauseMenuOpenRef.current) {
         e.preventDefault();
@@ -1491,6 +1509,14 @@ export default function Game() {
         }
         if (actionsMenuOpenRef.current) {
           setActionsMenuOpen(false);
+          return;
+        }
+        if (statsExpandedRef.current) {
+          setStatsExpanded(false);
+          return;
+        }
+        if (optionsOpenRef.current) {
+          setOptionsOpen(false);
           return;
         }
         setPauseMenuOpen(true);
