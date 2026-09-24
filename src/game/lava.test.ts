@@ -3,9 +3,10 @@ import type { EmojiItem, GameState, MapGrid, Player, Tile } from './types';
 import { PLAYER_PASSABLE_TILES, ENEMY_PASSABLE_TILES } from './tiles';
 import {
   lavaFlatDamage, lavaDamageForFloor, shouldConfirmLavaStep, spreadVolcanoLava, tickVolcanoAndLava,
-  volcanoSpewInterval, volcanoMaxLava, countLavaTiles, coolLavaWaterContacts,
+  volcanoSpewInterval, volcanoSpewNotice, volcanoMaxLava, countLavaTiles, coolLavaWaterContacts,
   canConvertToLava, VOLCANO_MAX_RADIUS, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, OBSIDIAN_EMOJI,
 } from './lava';
+import { cardinalFromTo } from './geo';
 
 function tile(type: Tile['type'], emoji: string): Tile {
   return { type, emoji, seen: false, visible: false };
@@ -188,7 +189,36 @@ describe('tickVolcanoAndLava', () => {
     expect(floorCount(erupted.map)).toBeLessThan(floorCount(map));
     expect(erupted.volcanoNextSpewTurn).toBeGreaterThanOrEqual(20);
     expect(erupted.volcanoNextSpewTurn).toBeLessThanOrEqual(30);
-    expect(erupted.logs.some(l => l.text.includes('spews'))).toBe(true);
+    const spew = erupted.logs.find(l => l.text.includes('spews'));
+    expect(spew?.text).toBe('🌋 The volcano spews fresh lava! You can smell the scent of sulfur nearby to the east!');
+  });
+
+  it('does not add a spew line when the floor has no volcano', () => {
+    const map = grid(['#####', '#.L.#', '#####']);
+    const next = tickVolcanoAndLava(baseState(map, { player: playerAt(1, 1) }));
+    expect(next.logs.some(l => l.text.includes('spews') || l.text.includes('sulfur') || l.text.includes('rumbl'))).toBe(false);
+  });
+});
+
+describe('volcano spew compass', () => {
+  it('points along the dominant axis, with y growing south', () => {
+    expect(cardinalFromTo({ x: 0, y: 0 }, { x: 4, y: 1 })).toBe('east');
+    expect(cardinalFromTo({ x: 5, y: 5 }, { x: 1, y: 4 })).toBe('west');
+    expect(cardinalFromTo({ x: 3, y: 3 }, { x: 4, y: 8 })).toBe('south');
+    expect(cardinalFromTo({ x: 3, y: 8 }, { x: 2, y: 1 })).toBe('north');
+  });
+
+  it('uses far, medium, and close copy, and drops direction on the same tile', () => {
+    expect(volcanoSpewNotice({ x: 0, y: 0 }, { x: 12, y: 0 }))
+      .toBe('You hear the very distant rumbling of the volcano to the east');
+    expect(volcanoSpewNotice({ x: 0, y: 0 }, { x: 0, y: 11 }))
+      .toBe('You hear the rumbling of the volcano to the south');
+    expect(volcanoSpewNotice({ x: 0, y: 0 }, { x: 6, y: 0 }))
+      .toBe('You hear the rumbling of the volcano to the east');
+    expect(volcanoSpewNotice({ x: 5, y: 5 }, { x: 5, y: 1 }))
+      .toBe('You can smell the scent of sulfur nearby to the north!');
+    expect(volcanoSpewNotice({ x: 2, y: 2 }, { x: 2, y: 2 }))
+      .toBe('You can smell the scent of sulfur nearby!');
   });
 });
 

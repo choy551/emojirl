@@ -10,3 +10,11 @@ export function roomCenter(r: Room): Position {
 export function chebyshev(a: Position, b: Position): number {
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 }
+
+/** y increases downward (south). Ties break to east/west. */
+export function cardinalFromTo(from: Position, to: Position): 'north' | 'south' | 'east' | 'west' {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'east' : 'west';
+  return dy >= 0 ? 'south' : 'north';
+}

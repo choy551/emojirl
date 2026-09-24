@@ -1,4 +1,5 @@
 import { GameState, MapGrid, Position, EmojiItem, FloatingText, Enemy } from './types';
+import { chebyshev, cardinalFromTo } from './geo';
 
 export const LAVA_EMOJI = '🟧';
 export const VOLCANO_EMOJI = '🌋';
@@ -167,6 +168,16 @@ export function volcanoSpewInterval(): number {
   return 10 + Math.floor(Math.random() * 11);
 }
 
+/** One-line distance/compass flavor for a spew. d === 0 omits a direction. */
+export function volcanoSpewNotice(player: Position, volcano: Position): string {
+  const d = chebyshev(player, volcano);
+  if (d === 0) return 'You can smell the scent of sulfur nearby!';
+  const dir = cardinalFromTo(player, volcano);
+  if (d >= 12) return `You hear the very distant rumbling of the volcano to the ${dir}`;
+  if (d >= 6) return `You hear the rumbling of the volcano to the ${dir}`;
+  return `You can smell the scent of sulfur nearby to the ${dir}!`;
+}
+
 function lavaOn(map: MapGrid, pos: Position): boolean {
   return map[pos.y]?.[pos.x]?.type === 'lava';
 }
@@ -199,7 +210,7 @@ export function tickVolcanoAndLava(state: GameState): GameState {
       if (converted.length > 0) {
         logs.push({
           id: `volcano-spew-${turn}-${Math.random()}`,
-          text: `🌋 The volcano spews fresh lava!`,
+          text: `🌋 The volcano spews fresh lava! ${volcanoSpewNotice(state.player.pos, volcano)}`,
           turn,
         });
       }
