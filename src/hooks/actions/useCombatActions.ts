@@ -9,7 +9,7 @@ import {
   handleGodBlessedImmunity, levelFromXP,
 } from '../../game/gameHelpers';
 import { applyLevelUp } from '../../game/playerTurn';
-import { getZodiacPassives } from '../../game/zodiac';
+import { getZodiacPassives, queuePlayerKill } from '../../game/zodiac';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 
 export function useCombatActions(
@@ -157,6 +157,7 @@ export function useCombatActions(
 
       if (actuallyKilled) {
         markEnemyKilled(target.emoji);
+        queuePlayerKill({ maxHp: newPlayer.stats.maxHp, enemy: target, unaware: !target.engaged, damageDealt: Math.max(0, target.hp - combatResult.enemyHp), onWater: prev.map[target.pos.y]?.[target.pos.x]?.type === 'water' });
         newKillCounts[target.emoji] = (newKillCounts[target.emoji] ?? 0) + 1;
         if (targetIdx !== -1) newEnemies.splice(targetIdx, 1);
         newPlayer = applyMonkeyDropOnKill(target, newPlayer);
@@ -291,6 +292,7 @@ export function useCombatActions(
 
       if (actuallyKilledX) {
         markEnemyKilled(target.emoji);
+        queuePlayerKill({ maxHp: newPlayer.stats.maxHp, enemy: target, unaware: !target.engaged, damageDealt: Math.max(0, target.hp - combatResult.enemyHp), onWater: prev.map[target.pos.y]?.[target.pos.x]?.type === 'water' });
         newKillCounts[target.emoji] = (newKillCounts[target.emoji] ?? 0) + 1;
         if (targetIdx !== -1) newEnemies.splice(targetIdx, 1);
         newPlayer = applyMonkeyDropOnKill(target, newPlayer);

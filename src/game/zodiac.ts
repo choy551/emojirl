@@ -166,6 +166,20 @@ export function noteNewEmojiType(z: ZodiacState, emoji: string): { zodiac: Zodia
   return applyPietyDelta(next, 5, 'aquarius_new_emoji_type');
 }
 
+type QueuedKill = {
+  maxHp: number;
+  enemy: { maxHp: number; isBoss?: boolean; isEcho?: boolean };
+  unaware: boolean;
+  damageDealt: number;
+  onWater: boolean;
+};
+
+const queuedKills: QueuedKill[] = [];
+
+export function queuePlayerKill(kill: QueuedKill): void {
+  queuedKills.push(kill);
+}
+
 export function pietyOnPlayerKill(
   z: ZodiacState,
   playerMaxHp: number,
@@ -215,6 +229,12 @@ export function settleZodiacTurn(
     z = r.zodiac;
     if (r.log) logs.push(r.log);
   };
+
+  for (const kill of queuedKills.splice(0, queuedKills.length)) {
+    const scored = pietyOnPlayerKill(z, kill.maxHp, kill.enemy, kill);
+    z = scored.zodiac;
+    logs.push(...scored.logs);
+  }
 
   const afterIds = new Set(after.enemies.map(e => e.id));
   for (const e of before.enemies) {

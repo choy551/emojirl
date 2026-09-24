@@ -17,7 +17,7 @@ import {
   evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
 } from '../game/gameHelpers';
 import { lightningArcDamage } from '../game/passives';
-import { getZodiacPassives, resetZodiacFloorCaps, pietyOnPlayerKill, noteNewEmojiType, createDefaultZodiacState } from '../game/zodiac';
+import { getZodiacPassives, resetZodiacFloorCaps, queuePlayerKill, noteNewEmojiType, createDefaultZodiacState } from '../game/zodiac';
 import { canEquipItem } from '../components/itemUtils';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
 import type { GameRefs, GameSetters } from './actions/types';
@@ -175,6 +175,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           let cKillCounts = { ...prev.killCounts };
           if (cResult.enemyDied) {
             markEnemyKilled(enemy.emoji);
+            queuePlayerKill({ maxHp: cPlayer.stats.maxHp, enemy, unaware: !enemy.engaged, damageDealt: Math.max(0, cDmg), onWater: prev.map[enemy.pos.y]?.[enemy.pos.x]?.type === 'water' });
             cKillCounts = { ...cKillCounts, [enemy.emoji]: (cKillCounts[enemy.emoji] ?? 0) + 1 };
             cPlayer = applyMonkeyDropOnKill(enemy, cPlayer);
             cEnemies.splice(enemyIdx, 1);
@@ -268,6 +269,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           let rangerKillCounts = { ...prev.killCounts };
           if (combatResult.enemyDied) {
             markEnemyKilled(enemy.emoji);
+            queuePlayerKill({ maxHp: newPlayer.stats.maxHp, enemy, unaware: !enemy.engaged, damageDealt: Math.max(0, enemy.hp - combatResult.enemyHp), onWater: prev.map[enemy.pos.y]?.[enemy.pos.x]?.type === 'water' });
             rangerKillCounts = { ...rangerKillCounts, [enemy.emoji]: (rangerKillCounts[enemy.emoji] ?? 0) + 1 };
             newPlayer = applyMonkeyDropOnKill(enemy, newPlayer);
             newEnemies.splice(enemyIdx, 1);
@@ -565,13 +567,13 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
         if (combatResult.enemyDied && !godBlessedProc) {
           markEnemyKilled(enemy.emoji);
-          const killPiety = pietyOnPlayerKill(newState.zodiac ?? prev.zodiac ?? createDefaultZodiacState(), newPlayer.stats.maxHp, enemy, {
+          queuePlayerKill({
+            maxHp: newPlayer.stats.maxHp,
+            enemy,
             unaware: !enemy.engaged,
             damageDealt: Math.max(0, enemy.hp - combatResult.enemyHp),
             onWater: prev.map[enemy.pos.y]?.[enemy.pos.x]?.type === 'water',
           });
-          newState.zodiac = killPiety.zodiac;
-          killPiety.logs.forEach(addLog);
           updatedKillCounts[enemy.emoji] = (updatedKillCounts[enemy.emoji] ?? 0) + 1;
           newPlayer = applyMonkeyDropOnKill(enemy, newPlayer);
           newEnemies.splice(enemyIndex, 1);
@@ -660,6 +662,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               bits.push(`${tgt.emoji}-${arcDmg}`);
               if (newHp <= 0) {
                 markEnemyKilled(tgt.emoji);
+                queuePlayerKill({ maxHp: newPlayer.stats.maxHp, enemy: tgt, unaware: !tgt.engaged, damageDealt: arcDmg, onWater: prev.map[tgt.pos.y]?.[tgt.pos.x]?.type === 'water' });
                 updatedKillCounts[tgt.emoji] = (updatedKillCounts[tgt.emoji] ?? 0) + 1;
                 newPlayer = applyMonkeyDropOnKill(tgt, newPlayer);
                 newEnemies.splice(idx, 1);
@@ -687,6 +690,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             const ncNewHp = ncEnemy.hp - ncDmg;
             if (ncNewHp <= 0) {
               markEnemyKilled(ncEnemy.emoji);
+              queuePlayerKill({ maxHp: newPlayer.stats.maxHp, enemy: ncEnemy, unaware: !ncEnemy.engaged, damageDealt: ncDmg, onWater: prev.map[ncEnemy.pos.y]?.[ncEnemy.pos.x]?.type === 'water' });
               updatedKillCounts[ncEnemy.emoji] = (updatedKillCounts[ncEnemy.emoji] ?? 0) + 1;
               newPlayer = applyMonkeyDropOnKill(ncEnemy, newPlayer);
               newEnemies.splice(nci, 1);
@@ -1063,6 +1067,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           let boltEnemies = [...newState.enemies];
           if (boltResult.enemyDied) {
             markEnemyKilled(boltTarget.emoji);
+            queuePlayerKill({ maxHp: newPlayer.stats.maxHp, enemy: boltTarget, unaware: !boltTarget.engaged, damageDealt: Math.max(0, boltDmg), onWater: newState.map[boltTarget.pos.y]?.[boltTarget.pos.x]?.type === 'water' });
             newState.killCounts = { ...newState.killCounts, [boltTarget.emoji]: (newState.killCounts[boltTarget.emoji] ?? 0) + 1 };
             newPlayer = applyMonkeyDropOnKill(boltTarget, newPlayer);
             boltEnemies.splice(boltEnemyIdx, 1);
@@ -1220,6 +1225,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const boltEnemyIdx = waitEnemies.findIndex(e => e.id === boltTarget.id);
           if (boltResult.enemyDied) {
             markEnemyKilled(boltTarget.emoji);
+            queuePlayerKill({ maxHp: waitPlayer.stats.maxHp, enemy: boltTarget, unaware: !boltTarget.engaged, damageDealt: Math.max(0, boltDmg), onWater: prev.map[boltTarget.pos.y]?.[boltTarget.pos.x]?.type === 'water' });
             waitKillCounts = { ...waitKillCounts, [boltTarget.emoji]: (waitKillCounts[boltTarget.emoji] ?? 0) + 1 };
             waitPlayer = applyMonkeyDropOnKill(boltTarget, waitPlayer);
             waitEnemies.splice(boltEnemyIdx, 1);
