@@ -1,6 +1,7 @@
 import { Player, GameState, BagPassiveSummary } from '../../game/types';
 import { applyEquipmentAndPassives, computeNinjaEvasion, getDungeonPressure } from '../../game/gameHelpers';
 import { getCowboyUnarmedBonus } from '../../game/combat';
+import { getZodiacPassives, ZODIAC_GLYPH } from '../../game/zodiac';
 import { MiniMap } from '../MiniMap';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './oneHandedLayout';
 import { useDismissGuard } from '../../hooks/useDismissGuard';
@@ -26,12 +27,12 @@ function StatPill({ label, value, color }: { label: string; value: string | numb
 }
 
 export function StatsModal({ player, className, currentFloor, moodEmoji, moodName, bagPassiveSummary, gameState, onClose }: StatsModalProps) {
-  const eff = applyEquipmentAndPassives(player);
+  const eff = applyEquipmentAndPassives(player, gameState.zodiac);
   const dualGuns = player.characterClass === '🤠' && player.equipment.mainHand?.weaponKind === 'gun' && player.equipment.offHand?.weaponKind === 'gun';
   const unarmed = player.characterClass === '🤠' && !player.equipment.mainHand?.weaponKind && !player.equipment.offHand?.weaponKind;
   const ironFist = (dualGuns && player.ammo <= 0) || unarmed ? getCowboyUnarmedBonus(player.stats.level) : 0;
   const atk = eff.stats.attack + ironFist;
-  const crit = Math.min(99, 5 + eff.stats.luck);
+  const crit = Math.min(99, 5 + eff.stats.luck + getZodiacPassives(gameState.zodiac).crit);
   const dodge = player.characterClass === '🥷' ? computeNinjaEvasion(eff) : Math.min(50, eff.stats.evasion ?? 0);
   const pressure = getDungeonPressure(currentFloor);
   const p = bagPassiveSummary;
@@ -146,6 +147,9 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
           if (tags.length === 0) return null;
           return (
             <div>
+              {gameState.zodiac?.ruler && (
+                <div className="text-xs font-bold text-violet-200 mb-1">{ZODIAC_GLYPH[gameState.zodiac.ruler]} {gameState.zodiac.piety}%</div>
+              )}
               <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1">✨ Soul Powers</div>
               <div className="flex flex-wrap gap-1">
                 {tags.map(t => (

@@ -5,12 +5,13 @@ import { getCowboyUnarmedBonus } from '../game/combat';
 import { MiniMap } from './MiniMap';
 import { activeKindEmoji } from './itemUtils';
 import { foodHealLabel, foodHealDescription } from '../game/economy';
+import { ZODIAC_GLYPH } from '../game/zodiac';
 
 const HEAL_DISPLAY_LIMIT = 9;
 
 interface RightSidebarProps {
   player: Player;
-  gameState: Pick<GameState, 'map' | 'enemies' | 'activeProjectile' | 'chefLessonCount'>;
+  gameState: Pick<GameState, 'map' | 'enemies' | 'activeProjectile' | 'chefLessonCount' | 'zodiac'>;
   bagSlots: EmojiItem[];
   healSlots: EmojiItem[];
   bagPassiveSummary: BagPassiveSummary;
@@ -320,6 +321,12 @@ export function RightSidebar({
           </div>
         );
       })()}
+
+      {gameState.zodiac?.ruler && (
+        <div className="text-xs font-bold text-violet-200 px-1">
+          {ZODIAC_GLYPH[gameState.zodiac.ruler]} {gameState.zodiac.piety}%
+        </div>
+      )}
 
       {/* Active bag passives — Soul Powers */}
       {(() => {

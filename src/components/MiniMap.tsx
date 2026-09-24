@@ -41,6 +41,7 @@ export function MiniMap({ map, playerPos, enemies }: MiniMapProps) {
           else if (tile.type === 'stairs') color = '#8060d0';
           else if (tile.type === 'shrine') color = '#3a2e00';
           else if (tile.type === 'slot-shrine') color = '#5a2068';
+          else if (tile.type === 'zodiac-altar') color = '#6a3a90';
           else if (tile.type === 'shrine-used') color = '#2e2e2e';
           else if (tile.type === 'safe-floor' || tile.type === 'shop-item') color = '#2e1e08';
           else if (tile.type === 'boss-floor') color = '#5a1a1a';
@@ -59,6 +60,7 @@ export function MiniMap({ map, playerPos, enemies }: MiniMapProps) {
           else if (tile.type === 'stairs') color = '#403060';
           else if (tile.type === 'shrine') color = '#1e1800';
           else if (tile.type === 'slot-shrine') color = '#3a1848';
+          else if (tile.type === 'zodiac-altar') color = '#3a2060';
           else if (tile.type === 'shrine-used') color = '#1e1e1e';
           else if (tile.type === 'safe-floor' || tile.type === 'shop-item') color = '#1a1008';
           else if (tile.type === 'boss-floor') color = '#3a0a0a';

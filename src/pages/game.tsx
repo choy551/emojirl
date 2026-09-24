@@ -36,7 +36,9 @@ import { AmmoCacheModal } from '../components/AmmoCacheModal';
 import { RestaurantModal } from '../components/RestaurantModal';
 import { SlotShrineModal } from '../components/SlotShrineModal';
 import { ItemStatCard } from '../components/ItemStatCard';
-import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog, CompanionTalkDialog, BedRestDialog, LavaStepDialog } from '../components/InteractionDialogs';
+import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog, CompanionTalkDialog, BedRestDialog, LavaStepDialog, ZodiacDescendDialog } from '../components/InteractionDialogs';
+import { ZodiacAltarDialog } from '../components/ZodiacAltarDialog';
+import { createDefaultZodiacState, ZodiacRuler } from '../game/zodiac';
 import { TacticsMenu } from '../components/TacticsMenu';
 import { GoToMenu } from '../components/GoToMenu';
 import { EquipmentTab } from '../components/EquipmentTab';
@@ -186,6 +188,11 @@ export default function Game() {
   const [lastBoatWarnSlot, setLastBoatWarnSlot] = useState<number | null>(null);
   const boatConfirmedRef = useRef(false);
   const lavaStepConfirmedRef = useRef(false);
+  const zodiacDescendConfirmedRef = useRef(false);
+  const [pendingZodiacDescend, setPendingZodiacDescend] = useState<{ dx: number; dy: number } | null>(null);
+  const [zodiacAltar, setZodiacAltar] = useState<ZodiacRuler | null>(null);
+  const zodiacAltarRef = useRef<ZodiacRuler | null>(null);
+  useEffect(() => { zodiacAltarRef.current = zodiacAltar; }, [zodiacAltar]);
   const [pendingLavaStep, setPendingLavaStep] = useState<{ dx: number; dy: number } | null>(null);
   const pendingLavaStepRef = useRef<{ dx: number; dy: number } | null>(null);
   useEffect(() => { pendingLavaStepRef.current = pendingLavaStep; }, [pendingLavaStep]);
@@ -301,6 +308,8 @@ export default function Game() {
       { id: 'boat-warn', isOpen: () => lastBoatWarnSlot !== null, close: () => setLastBoatWarnSlot(null) },
       { id: 'drown-warn', isOpen: () => drownWarnSlot !== null, close: () => setDrownWarnSlot(null) },
       { id: 'lava-warn', isOpen: () => pendingLavaStep !== null, close: () => setPendingLavaStep(null) },
+      { id: 'zodiac-descend', isOpen: () => pendingZodiacDescend !== null, close: () => setPendingZodiacDescend(null) },
+      { id: 'zodiac-altar', isOpen: () => zodiacAltar !== null, close: () => setZodiacAltar(null) },
       { id: 'bed', isOpen: () => bedRestOpen, close: () => setBedRestOpen(false) },
       { id: 'talk', isOpen: () => !!pendingCompanionTalkId, close: () => setPendingCompanionTalkId(null) },
       { id: 'bear', isOpen: () => !!pendingBearInteraction, close: () => setPendingBearInteraction(null) },
@@ -347,6 +356,10 @@ export default function Game() {
         setShopItems(gameState.shopStock);
       }
       setShopOpen(true);
+    }
+    if (tile?.type === 'zodiac-altar' && tile.altarRuler && zodiacAltarRef.current !== tile.altarRuler) {
+      setZodiacAltar(tile.altarRuler);
+      setAutoExplore(false);
     }
     if (tile?.type === 'slot-shrine' && !slotShrineOpenRef.current) {
       setSlotShrineOpen(true);
@@ -423,6 +436,8 @@ export default function Game() {
     lastBoatWarnSlot !== null ||
     drownWarnSlot !== null ||
     pendingLavaStep ||
+    pendingZodiacDescend ||
+    zodiacAltar !== null ||
     bedRestOpen ||
     pendingCompanionTalkId ||
     pendingBearInteraction ||
@@ -634,6 +649,7 @@ export default function Game() {
       companionBountyOocTurns: 0,
       chefLessonCount: 0,
       dualGunsFanfareDone: false,
+      zodiac: createDefaultZodiacState(),
       floorAnnouncement: rooms.some(r => r.theme === 'volcano')
         ? {
             kind: 'volcano',
@@ -680,6 +696,7 @@ export default function Game() {
       dirPickModeRef,
       boatConfirmedRef,
       lavaStepConfirmedRef,
+      zodiacDescendConfirmedRef,
       blinkTurnRef,
       trailblazeTurnRef,
       restaurantClosedRef,
@@ -700,6 +717,7 @@ export default function Game() {
       setDrownWarnSlot,
       setLastBoatWarnSlot,
       setPendingLavaStep,
+      setPendingZodiacDescend,
       setPendingFairyId,
       setPendingMonkeyInteraction,
       setPendingAdventurerInteraction,
@@ -920,6 +938,10 @@ export default function Game() {
         }
         if (finish === 'adjacent') {
           setAutoExplore(false);
+          if (state.currentFloor === 7 && !state.zodiac?.ruler && stairsTarget) {
+            setPendingZodiacDescend({ dx: stairsTarget.x - player.pos.x, dy: stairsTarget.y - player.pos.y });
+            return;
+          }
           addLog('Autoexplore: floor cleared — 🕳️ stairs are right here!');
           return;
         }
@@ -1088,6 +1110,11 @@ export default function Game() {
         setSlotShrineOpen(true);
         addLog('🎰 Slot Shrine — pay gold to spin. Fortune favors the bold…');
         break;
+      case 'open-zodiac': {
+        const here = gameStateRef.current?.map[gameStateRef.current.player.pos.y]?.[gameStateRef.current.player.pos.x];
+        if (here?.type === 'zodiac-altar' && here.altarRuler) setZodiacAltar(here.altarRuler);
+        break;
+      }
       case 'close-door': setTravelTarget(null); handleCloseDoor(); break;
       case 'rest':
         setTravelTarget(null);
@@ -1846,6 +1873,7 @@ export default function Game() {
           if (tileData.type === 'safe-floor' || tileData.type === 'shop-item') tileBg = 'rgba(180,120,40,0.18)';
           else if (tileData.type === 'shrine') tileBg = 'rgba(220,170,20,0.22)';
           else if (tileData.type === 'slot-shrine') tileBg = 'rgba(180,80,200,0.22)';
+          else if (tileData.type === 'zodiac-altar') tileBg = 'rgba(160,90,220,0.28)';
           else if (tileData.type === 'boss-floor') tileBg = 'rgba(200,30,30,0.22)';
           else if (tileData.type === 'campfire') tileBg = 'rgba(255,140,0,0.25)';
           else if (tileData.type === 'bed') tileBg = 'rgba(80,140,200,0.28)';
@@ -2631,7 +2659,7 @@ export default function Game() {
           const _ifDualGuns = player.characterClass === '🤠' && player.equipment.mainHand?.weaponKind === 'gun' && player.equipment.offHand?.weaponKind === 'gun';
           const _ifUnarmed = player.characterClass === '🤠' && !player.equipment.mainHand?.weaponKind && !player.equipment.offHand?.weaponKind;
           const hudIronFistBonus = (_ifDualGuns && player.ammo <= 0) || _ifUnarmed ? getCowboyUnarmedBonus(player.stats.level) : 0;
-          const _effPlayer = applyEquipmentAndPassives(player);
+          const _effPlayer = applyEquipmentAndPassives(player, gameState.zodiac);
           const displayedAtk = _effPlayer.stats.attack + hudIronFistBonus;
           const atkTitle = hudIronFistBonus > 0 ? `ATK ${_effPlayer.stats.attack} + ${hudIronFistBonus} Iron Fist` : '';
           const crit = Math.min(99, 5 + _effPlayer.stats.luck);
@@ -3128,6 +3156,27 @@ export default function Game() {
         />
       )}
 
+      {zodiacAltar && gameState && (
+        <ZodiacAltarDialog
+          altar={zodiacAltar}
+          zodiac={gameState.zodiac ?? createDefaultZodiacState()}
+          onChange={(next, log) => {
+            setGameState(prev => prev ? { ...prev, zodiac: next, logs: [{ id: Math.random().toString(), text: log, turn: prev.turn }, ...prev.logs].slice(0, 24) } : prev);
+          }}
+          onClose={() => setZodiacAltar(null)}
+        />
+      )}
+      {pendingZodiacDescend && (
+        <ZodiacDescendDialog
+          onStay={() => setPendingZodiacDescend(null)}
+          onDescend={() => {
+            const step = pendingZodiacDescend;
+            zodiacDescendConfirmedRef.current = true;
+            setPendingZodiacDescend(null);
+            if (step) handleMove(step.dx, step.dy);
+          }}
+        />
+      )}
       {pendingLavaStep && (
         <LavaStepDialog
           onNo={() => setPendingLavaStep(null)}
@@ -3544,7 +3593,7 @@ export default function Game() {
         bagSlots={bagSlots}
         healSlots={healSlots}
         bagPassiveSummary={bagPassiveSummary}
-        equippedPlayer={applyEquipmentAndPassives(player)}
+        equippedPlayer={applyEquipmentAndPassives(player, gameState.zodiac)}
         handleUseSlot={handleUseSlot}
         handleUseHeal={handleUseHeal}
         setBankOpen={setBankOpen}

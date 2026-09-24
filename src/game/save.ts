@@ -1,5 +1,6 @@
 import { GameState, Player, PlayerStats, EmojiItem, Equipment } from './types';
 import { applySoulCatalogCopy } from './emojis';
+import { normalizeZodiac } from './zodiac';
 
 const SAVE_KEY = 'emojirl_save_v1';
 
@@ -135,6 +136,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     companionBountyOocTurns:  (raw.companionBountyOocTurns as number) ?? 0,
     chefLessonCount:          Math.min(5, Math.max(0, (raw.chefLessonCount as number) ?? 0)),
     dualGunsFanfareDone:      raw.dualGunsFanfareDone === true,
+    zodiac:                   normalizeZodiac(raw.zodiac),
   };
 }
 

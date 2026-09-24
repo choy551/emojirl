@@ -17,6 +17,7 @@ import {
   evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
 } from '../game/gameHelpers';
 import { lightningArcDamage } from '../game/passives';
+import { getZodiacPassives, resetZodiacFloorCaps, pietyOnPlayerKill, noteNewEmojiType, createDefaultZodiacState } from '../game/zodiac';
 import { canEquipItem } from '../components/itemUtils';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
 import type { GameRefs, GameSetters } from './actions/types';
@@ -44,6 +45,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     lastCowboyFlavorTurnRef,
     blinkTurnRef, trailblazeTurnRef,
     lavaStepConfirmedRef,
+    zodiacDescendConfirmedRef,
   } = refs;
   const {
     setGameState, setWizardTactics, setRangerMode,
@@ -51,6 +53,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     setPendingAdventurerInteraction, setPendingBearInteraction,
     setBlinkTurn, setTrailblazeTurn,
     setPendingLavaStep,
+    setPendingZodiacDescend,
   } = setters;
 
   const BLINK_ACTIVE = 3;
@@ -155,9 +158,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (enemy.tag === 'Neutral' && !enemy.engaged) continue;
           markEnemySeen(enemy.emoji);
           const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, true);
-          const effectiveCowboy = applyEquipmentAndPassives(player);
+          const effectiveCowboy = applyEquipmentAndPassives(player, prev.zodiac);
           const _cowboyPassives = computeBagPassives(prev.player.inventory);
-          const cResult = resolveCombat(effectiveCowboy, enemy, addLog, { mood, cowboyMoodValue: prev.player.stats.moodValue, advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true });
+          const cResult = resolveCombat(effectiveCowboy, enemy, addLog, { mood, cowboyMoodValue: prev.player.stats.moodValue, advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true, critBonus: getZodiacPassives(prev.zodiac).crit });
           if (cResult.fled) { const midState = { ...prev, turn: prev.turn + 1 }; return applyEnemyTurns(midState, runEnemyTurns(midState)); }
           addLog(`🤠 Dual guns — BANG BANG!`);
           const cFloats: FloatingText[] = [];
@@ -213,9 +216,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (enemy.tag === 'Friendly') continue;
           if (enemy.tag === 'Neutral' && !enemy.engaged) continue;
           const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, player.characterClass === '🤠');
-          const effectiveRanger = applyEquipmentAndPassives(player);
+          const effectiveRanger = applyEquipmentAndPassives(player, prev.zodiac);
           const _rangerPassives = computeBagPassives(prev.player.inventory);
-          const combatResult = resolveCombat(effectiveRanger, enemy, addLog, { mood, cowboyMoodValue: player.characterClass === '🤠' ? prev.player.stats.moodValue : undefined, advantage: _rangerPassives.advantageDice, execBlow: _rangerPassives.execBlow, trueAim: _rangerPassives.trueAim, shieldWall: _rangerPassives.shieldWall, firstShot: !enemy.engaged });
+          const combatResult = resolveCombat(effectiveRanger, enemy, addLog, { mood, cowboyMoodValue: player.characterClass === '🤠' ? prev.player.stats.moodValue : undefined, advantage: _rangerPassives.advantageDice, execBlow: _rangerPassives.execBlow, trueAim: _rangerPassives.trueAim, shieldWall: _rangerPassives.shieldWall, firstShot: !enemy.engaged, critBonus: getZodiacPassives(prev.zodiac).crit });
 
           const offHandAmmo = player.equipment.offHand?.specialAmmoKind;
           let specialAmmoEffect: Partial<Enemy> = {};
@@ -505,13 +508,13 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const meleeBasePlayer = cowboyIronFistBonus > 0
           ? { ...player, stats: { ...player.stats, attack: player.stats.attack + cowboyIronFistBonus } }
           : player;
-        const effectiveMeleePlayer = applyEquipmentAndPassives(meleeBasePlayer);
+        const effectiveMeleePlayer = applyEquipmentAndPassives(meleeBasePlayer, prev.zodiac);
         const combatPlayer = (holdFire || rangerFlee) ? { ...effectiveMeleePlayer, stats: { ...effectiveMeleePlayer.stats, defense: 0 } } : effectiveMeleePlayer;
         const _meleePassives = computeBagPassives(prev.player.inventory);
         const ninjaEvaCombatPlayer = cls === '🥷'
           ? { ...combatPlayer, stats: { ...combatPlayer.stats, evasion: computeNinjaEvasion(combatPlayer) } }
           : combatPlayer;
-        const combatResult = resolveCombat(ninjaEvaCombatPlayer, enemy, addLog, { weakMelee, wizardMelee, pistolWhip: isPistolWhip, mood, cowboyMoodValue: cls === '🤠' ? prev.player.stats.moodValue : undefined, dualStrike: false, quadStrike: hasDualBlades, advantage: _meleePassives.advantageDice, execBlow: _meleePassives.execBlow, shieldWall: _meleePassives.shieldWall, floor: prev.currentFloor });
+        const combatResult = resolveCombat(ninjaEvaCombatPlayer, enemy, addLog, { weakMelee, wizardMelee, pistolWhip: isPistolWhip, mood, cowboyMoodValue: cls === '🤠' ? prev.player.stats.moodValue : undefined, dualStrike: false, quadStrike: hasDualBlades, advantage: _meleePassives.advantageDice, execBlow: _meleePassives.execBlow, shieldWall: _meleePassives.shieldWall, floor: prev.currentFloor, critBonus: getZodiacPassives(prev.zodiac).crit });
 
         if (cls === '🤠' && !combatResult.fled) {
           const dmgDealt = enemy.hp - Math.max(0, combatResult.enemyHp);
@@ -562,6 +565,13 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
         if (combatResult.enemyDied && !godBlessedProc) {
           markEnemyKilled(enemy.emoji);
+          const killPiety = pietyOnPlayerKill(newState.zodiac ?? prev.zodiac ?? createDefaultZodiacState(), newPlayer.stats.maxHp, enemy, {
+            unaware: !enemy.engaged,
+            damageDealt: Math.max(0, enemy.hp - combatResult.enemyHp),
+            onWater: prev.map[enemy.pos.y]?.[enemy.pos.x]?.type === 'water',
+          });
+          newState.zodiac = killPiety.zodiac;
+          killPiety.logs.forEach(addLog);
           updatedKillCounts[enemy.emoji] = (updatedKillCounts[enemy.emoji] ?? 0) + 1;
           newPlayer = applyMonkeyDropOnKill(enemy, newPlayer);
           newEnemies.splice(enemyIndex, 1);
@@ -780,7 +790,12 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               ? `🎒 Bag full! ${pickedUp.emoji} ${pickedUp.name} sent to bank. (B to open)`
               : `Picked up ${pickedUp.emoji} ${pickedUp.name} (${pickedUp.description})`);
           }
-          if (!pickedUp.healAmount) markEmojiSeen(pickedUp.emoji);
+          if (!pickedUp.healAmount) {
+            markEmojiSeen(pickedUp.emoji);
+            const seen = noteNewEmojiType(newState.zodiac ?? prev.zodiac ?? createDefaultZodiacState(), pickedUp.emoji);
+            newState.zodiac = seen.zodiac;
+            if (seen.log) addLog(seen.log);
+          }
           newPlayer.stats.moodValue = Math.min(moodMax(cls), newPlayer.stats.moodValue + 5);
         }
       }
@@ -818,7 +833,12 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                   ? `🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you — bag full, sent to bank.`
                   : `🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you!`);
               }
-              if (!pickedUp.healAmount) markEmojiSeen(pickedUp.emoji);
+              if (!pickedUp.healAmount) {
+                markEmojiSeen(pickedUp.emoji);
+                const seen = noteNewEmojiType(newState.zodiac ?? prev.zodiac ?? createDefaultZodiacState(), pickedUp.emoji);
+                newState.zodiac = seen.zodiac;
+                if (seen.log) addLog(seen.log);
+              }
               newPlayer.stats.moodValue = Math.min(moodMax(cls), newPlayer.stats.moodValue + 3);
             }
           }
@@ -911,6 +931,11 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       }
 
       if (tile.type === 'stairs') {
+        if (prev.currentFloor === 7 && !prev.zodiac?.ruler && !zodiacDescendConfirmedRef.current) {
+          setPendingZodiacDescend({ dx, dy });
+          return prev;
+        }
+        zodiacDescendConfirmedRef.current = false;
         const nextFloor = prev.currentFloor + 1;
         const { map, startPos, rooms } = generateMap(nextFloor);
         newState.map = computeVisibility(map, startPos, visionRadiusFor(newPlayer.characterClass, newPlayer.stats.level));
@@ -924,6 +949,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         newState.restaurantStock = null;
         newState.ammoCacheStock = null;
         newState.restaurantSoldCount = 0;
+        newState.zodiac = resetZodiacFloorCaps(prev.zodiac ?? createDefaultZodiacState());
 
         // Companion descent: favorite companion (or random if none) descends with the player.
         const recruitedCompanions = prev.enemies.filter(e =>
@@ -1019,7 +1045,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, mana: Math.max(0, (newPlayer.stats.mana ?? 0) - 1) } };
           const boltMood = getMood(newPlayer.stats.moodValue, newPlayer.stats.hp, newPlayer.stats.maxHp, newPlayer.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
           const _boltPassives = computeBagPassives(newPlayer.inventory);
-          const boltResult = resolveCombat(applyEquipmentAndPassives(newPlayer), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall });
+          const boltResult = resolveCombat(applyEquipmentAndPassives(newPlayer, newState.zodiac), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall, critBonus: getZodiacPassives(newState.zodiac).crit });
 
           const boltDmg = boltTarget.hp - boltResult.enemyHp;
           const boltPlayerDmg = newPlayer.stats.hp - boltResult.playerHp;
@@ -1182,7 +1208,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, mana: Math.max(0, (waitPlayer.stats.mana ?? 0) - 1) } };
           const boltMood = getMood(waitPlayer.stats.moodValue, waitPlayer.stats.hp, waitPlayer.stats.maxHp, waitPlayer.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
           const _boltPassives = computeBagPassives(waitPlayer.inventory);
-          const boltResult = resolveCombat(applyEquipmentAndPassives(waitPlayer), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall });
+          const boltResult = resolveCombat(applyEquipmentAndPassives(waitPlayer, prev.zodiac), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall, critBonus: getZodiacPassives(prev.zodiac).crit });
           const boltDmg = boltTarget.hp - boltResult.enemyHp;
           const boltPlayerDmg = waitPlayer.stats.hp - boltResult.playerHp;
           if (boltDmg > 0) waitFloats.push({ id: `bolt-e-${boltTarget.id}-${prev.turn}`, pos: { ...boltTarget.pos }, text: `-${boltDmg}`, color: '#a78bfa', life: 2 });

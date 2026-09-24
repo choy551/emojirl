@@ -841,6 +841,22 @@ interface BedRestDialogProps {
   blockReason?: string;
 }
 
+export function ZodiacDescendDialog({ onStay, onDescend }: { onStay: () => void; onDescend: () => void }) {
+  useDialogHotkeys(onDescend, onStay);
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70">
+      <div className="bg-card border border-violet-400/50 rounded-xl p-5 max-w-sm w-full mx-4 shadow-2xl text-center">
+        <div className="text-3xl mb-2">🕳️</div>
+        <p className="text-sm text-white/90 mb-4">You haven&apos;t pledged a Zodiac Ruler. After D:7 you won&apos;t be able to choose a Ruler to be re-born under. Descend anyway?</p>
+        <div className="flex gap-2">
+          <button className="flex-1 min-h-11 text-sm rounded-lg bg-secondary/40 border border-border/60" onClick={onStay}>Stay</button>
+          <button className="flex-1 min-h-11 text-sm font-bold rounded-lg bg-violet-600/80 text-white" onClick={onDescend}>Descend anyway</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LavaStepDialog({ onYes, onNo }: { onYes: () => void; onNo: () => void }) {
   useDialogHotkeys(onYes, onNo);
   return (

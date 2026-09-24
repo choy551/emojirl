@@ -1,5 +1,6 @@
 import { GameState, MapGrid, Position, EmojiItem, FloatingText, Enemy } from './types';
 import { chebyshev, cardinalFromTo } from './geo';
+import { applyPietyDelta } from './zodiac';
 
 export const LAVA_EMOJI = '🟧';
 export const VOLCANO_EMOJI = '🌋';
@@ -237,6 +238,7 @@ export function tickVolcanoAndLava(state: GameState): GameState {
   }
 
   const enemies: Enemy[] = [];
+  let zodiac = state.zodiac;
   for (const e of state.enemies) {
     if (!lavaOn(map, e.pos)) { enemies.push(e); continue; }
     const dmg = lavaDamageForFloor(state.currentFloor, e.maxHp);
@@ -254,6 +256,11 @@ export function tickVolcanoAndLava(state: GameState): GameState {
         text: `🔥 ${e.emoji} ${e.name} is consumed by lava!`,
         turn,
       });
+      if (e.isRecruited && zodiac) {
+        const loss = applyPietyDelta(zodiac, -15, 'aquarius_companion_death');
+        zodiac = loss.zodiac;
+        if (loss.log) logs.push({ id: `zodiac-lava-${e.id}-${turn}`, text: loss.log, turn });
+      }
     } else {
       logs.push({
         id: `lava-ehit-${e.id}-${turn}`,
@@ -297,6 +304,7 @@ export function tickVolcanoAndLava(state: GameState): GameState {
 
   return {
     ...state,
+    zodiac,
     volcanoNextSpewTurn,
     map,
     items,

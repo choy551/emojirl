@@ -10,6 +10,7 @@ import {
 } from '../../game/gameHelpers';
 import { applyInstantItemUse, canBuyAndUse } from '../../game/shopUse';
 import { _flashSignals } from '../../game/flashSignals';
+import { noteSparseConsume, createDefaultZodiacState } from '../../game/zodiac';
 import type { GameRefs, GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 
 /** Open a rope vault. If `consumeInventoryId` is set, spend that bag rope; shop Buy & Use passes null. */
@@ -170,7 +171,16 @@ export function useItemActions(
       const healIndex = best.idx;
 
       const item = best.it;
-      const stats = { ...prev.player.stats };
+      const filled = sortBagSlots(prev.player.inventory).filter(i => !i.consumed).length;
+      const sparse = noteSparseConsume(prev.zodiac ?? createDefaultZodiacState(), filled);
+      const base = {
+        ...prev,
+        zodiac: sparse.zodiac,
+        logs: sparse.log
+          ? [{ id: `zodiac-sparse-heal-${prev.turn}`, text: sparse.log, turn: prev.turn }, ...prev.logs].slice(0, 24)
+          : prev.logs,
+      };
+      const stats = { ...base.player.stats };
       const amount = cookedEatHeal(item, prev.chefLessonCount ?? 0, stats.maxHp);
       const wasLow = stats.hp / stats.maxHp <= 0.3;
 
@@ -212,7 +222,7 @@ export function useItemActions(
       const consumed = prev.player.inventory.filter((_, idx) => idx !== healIndex);
       const { inventory: newInventory, bank: newBank } = refillBagFromBank(consumed, prev.player.bank);
 
-      const midState = { ...prev, player: { ...prev.player, stats, inventory: newInventory, bank: newBank }, turn: prev.turn + 1 };
+      const midState = { ...base, player: { ...base.player, stats, inventory: newInventory, bank: newBank }, turn: base.turn + 1 };
       return applyEnemyTurns(midState, runEnemyTurns(midState));
     });
   }, [addLog, setGameState]);
@@ -316,7 +326,9 @@ export function useItemActions(
       const slotItem = prevBagItems[bagSlotIndex];
       if (!slotItem) return prev;
 
-      const applied = applyInstantItemUse(prev, slotItem, {
+      const filled = prevBagItems.filter(i => !i.consumed).length;
+      const sparse = noteSparseConsume(prev.zodiac ?? createDefaultZodiacState(), filled);
+      const applied = applyInstantItemUse({ ...prev, zodiac: sparse.zodiac }, slotItem, {
         source: 'bag',
         addLog: () => {}, // withLog already writes state.logs; real addLog would duplicate
         applyMonkeyDropOnKill,
@@ -350,7 +362,10 @@ export function useItemActions(
         newInventory = r.inventory; newSoulBank = r.bank;
       }
 
-      return { ...applied, player: { ...applied.player, inventory: newInventory, bank: newSoulBank } };
+      const logs = sparse.log
+        ? [{ id: `zodiac-sparse-${prev.turn}`, text: sparse.log, turn: prev.turn }, ...applied.logs].slice(0, 24)
+        : applied.logs;
+      return { ...applied, logs, player: { ...applied.player, inventory: newInventory, bank: newSoulBank } };
     });
   }, [handleUseRope, addLog, gameStateRef, setGameState, setBagTab, setBankOpen, setSelectedItemId, dirPickModeRef, setDirPickMode, setDrownWarnSlot, setLastBoatWarnSlot, boatConfirmedRef, applyMonkeyDropOnKill]);
 

@@ -1,6 +1,7 @@
 import { GameState, MapGrid, Position } from './types';
 import { computeBagPassives } from './inventory';
 import { markEnemySeen } from './discoveries';
+import { createDefaultZodiacState, noteZodiacVision } from './zodiac';
 
 export const VISION_RADIUS = 4;
 
@@ -76,7 +77,26 @@ export function withVisibility(state: GameState): GameState {
       }
     }
   }
-  const nextState = { ...state, map: newMap };
+  const beforeSeen: boolean[] = [];
+  const afterSeen: boolean[] = [];
+  for (let y = 0; y < state.map.length; y++) {
+    for (let x = 0; x < state.map[y].length; x++) {
+      beforeSeen.push(!!state.map[y][x].seen);
+      afterSeen.push(!!newMap[y][x].seen);
+    }
+  }
+  const revealedNow = state.enemies
+    .filter(e => newMap[e.pos.y]?.[e.pos.x]?.visible && !state.map[e.pos.y]?.[e.pos.x]?.visible)
+    .map(e => e.id);
+  const visionPiety = noteZodiacVision(state.zodiac ?? createDefaultZodiacState(), beforeSeen, afterSeen, revealedNow);
+  const nextState = {
+    ...state,
+    map: newMap,
+    zodiac: visionPiety.zodiac,
+    logs: visionPiety.logs.length
+      ? [...visionPiety.logs.map(text => ({ id: `zodiac-vis-${text}`, text, turn: state.turn })), ...state.logs].slice(0, 24)
+      : state.logs,
+  };
   markVisibleEnemiesSeen(nextState);
   return nextState;
 }

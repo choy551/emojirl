@@ -299,6 +299,50 @@ describe('room vault', () => {
   });
 });
 
+describe('ecumenical temple', () => {
+  function dryReachable(map: MapGrid, from: { x: number; y: number }, to: { x: number; y: number }) {
+    const pass = new Set([...PLAYER_PASSABLE_TILES, 'stairs', 'door-closed', 'door-open', 'zodiac-altar']);
+    const q = [from];
+    const seen = new Set([`${from.x},${from.y}`]);
+    while (q.length) {
+      const p = q.shift()!;
+      if (p.x === to.x && p.y === to.y) return true;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]) {
+        const nx = p.x + dx, ny = p.y + dy;
+        const key = `${nx},${ny}`;
+        if (seen.has(key)) continue;
+        if (!pass.has(map[ny]?.[nx]?.type)) continue;
+        seen.add(key);
+        q.push({ x: nx, y: ny });
+      }
+    }
+    return false;
+  }
+
+  it('puts the only stairs inside the D:7 temple with four rulers', () => {
+    const { map, startPos, stairsPos } = generateMap(7);
+    const stairs: { x: number; y: number }[] = [];
+    const rulers = new Set<string>();
+    for (let y = 0; y < map.length; y++) {
+      for (let x = 0; x < map[y].length; x++) {
+        if (map[y][x].type === 'stairs') stairs.push({ x, y });
+        if (map[y][x].type === 'zodiac-altar' && map[y][x].altarRuler) rulers.add(map[y][x].altarRuler!);
+      }
+    }
+    expect(stairs).toEqual([stairsPos]);
+    expect(map[stairsPos.y][stairsPos.x].emoji).toBe('🕳️');
+    expect(rulers).toEqual(new Set(['taurus', 'leo', 'aquarius', 'scorpio']));
+    expect(dryReachable(map, startPos, stairsPos)).toBe(true);
+    const south = map[stairsPos.y + 2]?.[stairsPos.x];
+    expect(south?.altarRuler).toBe('scorpio');
+  });
+
+  it('does not place altars off D:7', () => {
+    const { map } = generateMap(6);
+    expect(map.some(row => row.some(t => t.type === 'zodiac-altar'))).toBe(false);
+  });
+});
+
 describe('volcano vault', () => {
   it('places a volcano core surrounded by lava', () => {
     const map = blank(11, 11);

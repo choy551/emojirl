@@ -1,4 +1,5 @@
 import { Player, EmojiItem } from './types';
+import { getZodiacPassives } from './zodiac';
 import type { BagPassiveSummary } from './types';
 import { STACKABLE_BAG_CAPS, isStackableBagPassive } from './passives';
 
@@ -235,7 +236,7 @@ export function tickActiveBuffs(stats: import('./types').PlayerStats): import('.
   return { ...stats, activeBuffs: updated.length ? updated : undefined };
 }
 
-export function applyEquipmentAndPassives(player: Player): Player {
+export function applyEquipmentAndPassives(player: Player, zodiac?: import('./zodiac').ZodiacState | null): Player {
   const passives = computeBagPassives(player.inventory);
   const eq = player.equipment;
   const slots = [eq.body, eq.mainHand, eq.offHand, eq.accessory].filter(Boolean) as EmojiItem[];
@@ -257,15 +258,19 @@ export function applyEquipmentAndPassives(player: Player): Player {
   }
   const buffAtk = (player.stats.activeBuffs ?? []).filter(b => b.stat === 'attack').reduce((s, b) => s + b.amount, 0);
   const buffDef = (player.stats.activeBuffs ?? []).filter(b => b.stat === 'defense').reduce((s, b) => s + b.amount, 0);
+  const zp = getZodiacPassives(zodiac);
+  const maxHp = player.stats.maxHp + zp.maxHp;
   return {
     ...player,
     stats: {
       ...player.stats,
-      attack:  player.stats.attack  + passives.attack  + eqAtk + buffAtk,
-      defense: player.stats.defense + passives.defense + eqDef + buffDef,
-      speed:   player.stats.speed   + passives.speed   + eqSpd,
-      evasion: player.stats.evasion + passives.evasion + eqEva,
-      luck:    player.stats.luck    + passives.luck    + eqLck,
+      attack:  player.stats.attack  + passives.attack  + eqAtk + buffAtk + zp.attack,
+      defense: player.stats.defense + passives.defense + eqDef + buffDef + zp.defense,
+      speed:   player.stats.speed   + passives.speed   + eqSpd + zp.speed,
+      evasion: player.stats.evasion + passives.evasion + eqEva + zp.evasion,
+      luck:    player.stats.luck    + passives.luck    + eqLck + zp.luck,
+      maxHp,
+      hp: Math.min(player.stats.hp, maxHp),
     },
   };
 }

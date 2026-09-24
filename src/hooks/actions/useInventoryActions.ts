@@ -9,6 +9,7 @@ import {
 } from '../../game/gameHelpers';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 import { _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../../game/flashSignals';
+import { noteBankDeposit, createDefaultZodiacState } from '../../game/zodiac';
 
 export function useInventoryActions(
   setters: GameSetters,
@@ -30,6 +31,11 @@ export function useInventoryActions(
         if (srcInvIdx !== -1) {
           const [item] = inv.splice(srcInvIdx, 1);
           bank.push(item);
+          const deposited = noteBankDeposit(prev.zodiac ?? createDefaultZodiacState());
+          const logs = deposited.log
+            ? [{ id: Math.random().toString(), text: deposited.log, turn: prev.turn }, ...prev.logs].slice(0, 24)
+            : prev.logs;
+          return { ...prev, zodiac: deposited.zodiac, logs, player: { ...prev.player, inventory: inv, bank } };
         }
       } else if (typeof dest === 'number') {
         const bagItems = sortBagSlots(inv);

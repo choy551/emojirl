@@ -24,7 +24,8 @@ export type TileType =
   | 'restaurant'
   | 'boss-floor'
   | 'campfire'
-  | 'bed';
+  | 'bed'
+  | 'zodiac-altar';
 
 export interface Tile {
   type: TileType;
@@ -33,11 +34,13 @@ export interface Tile {
   visible: boolean;
   /** Remaining bed sleeps; only meaningful for type === 'bed'. */
   usesLeft?: number;
+  /** Set only when type === 'zodiac-altar'. */
+  altarRuler?: import('./zodiac').ZodiacRuler;
 }
 
 export type MapGrid = Tile[][];
 
-export type RoomTheme = 'normal' | 'shrine' | 'shop' | 'restaurant' | 'forest' | 'boss' | 'market' | 'monster-den' | 'treasure-vault' | 'bush-ambush' | 'volcano' | 'room-vault';
+export type RoomTheme = 'normal' | 'shrine' | 'shop' | 'restaurant' | 'forest' | 'boss' | 'market' | 'monster-den' | 'treasure-vault' | 'bush-ambush' | 'volcano' | 'room-vault' | 'zodiac-temple';
 
 export type MoodType = 
   | 'happy' | 'very_happy' | 'sad' | 'crying' 
@@ -285,6 +288,8 @@ export interface GameState {
   chefLessonCount?: number;
   /** Cowboy already saw the first Dual Guns fanfare this run. */
   dualGunsFanfareDone?: boolean;
+  /** Ecumenical Temple pledge. Always set after load / new run. */
+  zodiac?: import('./zodiac').ZodiacState;
 }
 
 export interface ControlSettings {

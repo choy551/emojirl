@@ -9,6 +9,7 @@ import {
   handleGodBlessedImmunity, levelFromXP,
 } from '../../game/gameHelpers';
 import { applyLevelUp } from '../../game/playerTurn';
+import { getZodiacPassives } from '../../game/zodiac';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 
 export function useCombatActions(
@@ -120,7 +121,7 @@ export function useCombatActions(
       const boostedPlayer = { ...blinkEffPlayer, pos: blinkPos, stats: { ...blinkEffPlayer.stats, attack: Math.round(blinkEffPlayer.stats.attack * 2) } };
 
       addLog(`🥷 Blink Strike → ${target.emoji} ${target.name}!`);
-      const combatResult = resolveCombat(boostedPlayer, target, addLog, { mood, advantage: _blinkPassives.advantageDice, execBlow: _blinkPassives.execBlow });
+      const combatResult = resolveCombat(boostedPlayer, target, addLog, { mood, advantage: _blinkPassives.advantageDice, execBlow: _blinkPassives.execBlow, critBonus: getZodiacPassives(prev.zodiac).crit });
 
       let actuallyKilled = combatResult.enemyDied;
       const blinkDmg = target.hp - Math.max(0, combatResult.enemyHp);
@@ -254,7 +255,7 @@ export function useCombatActions(
       const boostedPlayer = { ...blinkEffPlayer, pos: blinkPos, stats: { ...blinkEffPlayer.stats, attack: Math.round(blinkEffPlayer.stats.attack * 2) } };
 
       addLog(`🥷 Blink Strike → ${target.emoji} ${target.name}!`);
-      const combatResult = resolveCombat(boostedPlayer, target, addLog, { mood, advantage: _blinkPassives.advantageDice, execBlow: _blinkPassives.execBlow });
+      const combatResult = resolveCombat(boostedPlayer, target, addLog, { mood, advantage: _blinkPassives.advantageDice, execBlow: _blinkPassives.execBlow, critBonus: getZodiacPassives(prev.zodiac).crit });
 
       let actuallyKilledX = combatResult.enemyDied;
       const blinkDmg = target.hp - Math.max(0, combatResult.enemyHp);

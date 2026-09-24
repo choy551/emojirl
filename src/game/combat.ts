@@ -90,7 +90,7 @@ export function resolveCombat(
   player: Player,
   enemy: Enemy,
   addLog: (msg: string) => void,
-  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean; floor?: number } = {}
+  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean; floor?: number; critBonus?: number } = {}
 ): CombatResult {
   const cls = player.characterClass;
   const mods = getMoodModifiers(opts.mood ?? 'neutral', player.stats.hp, player.stats.maxHp, opts.cowboyMoodValue);
@@ -109,7 +109,7 @@ export function resolveCombat(
 
   // ── 2. Hit resolution ──────────────────────────────────────────────────────
   const baseHit = 85 + mods.hitChance;
-  const critChance = 5 + (player.stats.luck ?? 1) + mods.critBonus;
+  const critChance = 5 + (player.stats.luck ?? 1) + mods.critBonus + (opts.critBonus ?? 0);
   const rollCrit = (hpNow: number) => {
     const skullBonus = opts.execBlow ? skullCritBonus(hpNow, enemy.maxHp) : 0;
     return r() * 100 < critChance + skullBonus;

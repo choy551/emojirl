@@ -5,7 +5,7 @@ import { chebyshev } from './geo';
 export type ContextActionKind =
   | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear' | 'talk'
   | 'cook' | 'close-door' | 'rest'
-  | 'open-shop' | 'open-cache' | 'open-restaurant' | 'open-slots'
+  | 'open-shop' | 'open-cache' | 'open-restaurant' | 'open-slots' | 'open-zodiac'
   | 'descend' | 'shrine' | 'pickup' | 'wait' | 'explore';
 
 export interface ContextActionDescriptor {
@@ -33,6 +33,7 @@ export function resolveContextAction(
   // Standing on an interactive tile -> open its UI.
   if (here?.type === 'shop-item' && here.emoji === '🏪') return { kind: 'open-shop', label: 'Shop', icon: '🏪' };
   if (here?.type === 'slot-shrine') return { kind: 'open-slots', label: 'Spin', icon: '🎰' };
+  if (here?.type === 'zodiac-altar') return { kind: 'open-zodiac', label: 'Altar', icon: here.emoji || '♉' };
   if (here?.type === 'shop-item' && here.emoji === '📦') return { kind: 'open-cache', label: 'Ammo', icon: '📦' };
   if (here?.type === 'restaurant') return { kind: 'open-restaurant', label: 'Eat', icon: '🍽️' };
   if (here?.type === 'bed') return { kind: 'rest', label: 'Rest', icon: '🛏️' };

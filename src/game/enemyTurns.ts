@@ -14,6 +14,7 @@ import { computeNinjaEvasion, companionBountyShare, companionBountyPercent, comp
 import { isHostileCombatTarget } from './combat';
 import { applyLevelUp } from './playerTurn';
 import { markEnemyKilled } from './discoveries';
+import { settleZodiacTurn } from './zodiac';
 
 export interface EnemyTurnResult {
   enemies: Enemy[];
@@ -41,7 +42,7 @@ export interface EnemyTurnResult {
 export function runEnemyTurns(state: GameState, skipId?: string, sleeping = false): EnemyTurnResult {
   const { player } = state;
   let map = state.map;
-  const effectivePlayer = applyEquipmentAndPassives(player);
+  const effectivePlayer = applyEquipmentAndPassives(player, state.zodiac);
   // Player's true sight range (class/level + bag LOS passives). Ranged enemies may
   // only attack while the player can actually see them — i.e. within this radius
   // with clear line of sight — so archers can't snipe from the unseen fog.
@@ -913,6 +914,14 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     ...next,
     companionKillTally: bounty.tally,
     companionBountyOocTurns: bounty.ooc,
+  };
+  const zodiacTurn = settleZodiacTurn(state, next, inCombat);
+  next = {
+    ...next,
+    zodiac: zodiacTurn.zodiac,
+    logs: zodiacTurn.logs.length
+      ? [...zodiacTurn.logs.map(text => ({ id: `zodiac-${next.turn}-${text}`, text, turn: next.turn })), ...next.logs].slice(0, 24)
+      : next.logs,
   };
   if (bounty.refreshed) {
     next = {

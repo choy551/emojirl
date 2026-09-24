@@ -1,4 +1,5 @@
 import { MapGrid, Position, RoomTheme } from './types';
+import { ZODIAC_GLYPH, ZodiacRuler } from './zodiac';
 import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, coolLavaWaterContacts } from './lava';
 import { BED_EMOJI, BED_MAX_USES } from './tiles';
 
@@ -415,7 +416,7 @@ function placeAmmoCache(map: MapGrid, room: Room) {
 
 const FLOODABLE_TYPES = new Set(['wall', 'floor', 'grass']);
 const FEATURE_PROTECTED_THEMES = new Set([
-  'shop', 'market', 'restaurant', 'treasure-vault', 'volcano', 'boss', 'room-vault',
+  'shop', 'market', 'restaurant', 'treasure-vault', 'volcano', 'boss', 'room-vault', 'zodiac-temple',
 ]);
 
 function inRoom(r: Room, x: number, y: number): boolean {
@@ -659,7 +660,7 @@ function ensureStairsReachable(map: MapGrid, start: Position, stairs: Position):
   const DRY = new Set([
     'floor', 'stairs', 'boss-floor', 'grass',
     'door-open', 'door-closed',
-    'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'slot-shrine', 'bed',
+    'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'slot-shrine', 'zodiac-altar', 'bed',
     'campfire', 'obsidian',
   ]);
   if (reach(map, start, stairs, DRY)) return;
@@ -706,6 +707,67 @@ function placeLiquidFeatures(map: MapGrid, floor: number, rooms: Room[], startRo
       placeWaterBlob(map, sy, sx, size, rooms, startRoom, 'lava');
     }
   }
+}
+
+const TEMPLE_W = 11;
+const TEMPLE_H = 9;
+
+/** D:7 Ecumenical Temple. Stairs live only at the center. South door is the entrance. */
+export function placeEcumenicalTemple(map: MapGrid, rooms: Room[]): { stairs: Position; room: Room } {
+  const H = map.length;
+  const W = map[0].length;
+  let x = Math.max(1, Math.min(W - TEMPLE_W - 2, 4));
+  let y = Math.max(1, Math.min(H - TEMPLE_H - 2, H - TEMPLE_H - 3));
+  const start = rooms[0];
+  if (start && x < start.x + start.w + 1 && x + TEMPLE_W > start.x && y < start.y + start.h + 1 && y + TEMPLE_H > start.y) {
+    x = Math.min(W - TEMPLE_W - 2, start.x + start.w + 2);
+  }
+  for (let ry = y; ry < y + TEMPLE_H; ry++) {
+    for (let rx = x; rx < x + TEMPLE_W; rx++) {
+      map[ry][rx] = { type: 'floor', emoji: '⬜', seen: false, visible: false };
+    }
+  }
+  const cx = x + Math.floor(TEMPLE_W / 2);
+  const cy = y + Math.floor(TEMPLE_H / 2);
+  const altars: { dx: number; dy: number; ruler: ZodiacRuler }[] = [
+    { dx: 0, dy: -2, ruler: 'taurus' },
+    { dx: 2, dy: 0, ruler: 'leo' },
+    { dx: -2, dy: 0, ruler: 'aquarius' },
+    { dx: 0, dy: 2, ruler: 'scorpio' },
+  ];
+  for (const a of altars) {
+    map[cy + a.dy][cx + a.dx] = {
+      type: 'zodiac-altar',
+      emoji: ZODIAC_GLYPH[a.ruler],
+      altarRuler: a.ruler,
+      seen: false,
+      visible: false,
+    };
+  }
+  for (let yy = 0; yy < H; yy++) {
+    for (let xx = 0; xx < W; xx++) {
+      if (map[yy][xx].type === 'stairs') {
+        map[yy][xx] = { type: 'floor', emoji: '⬜', seen: false, visible: false };
+      }
+    }
+  }
+  map[cy][cx] = { type: 'stairs', emoji: '🕳️', seen: false, visible: false };
+  const doorY = y + TEMPLE_H;
+  const doorX = cx;
+  if (doorY < H - 1 && doorX > 0 && doorX < W - 1) {
+    map[doorY][doorX] = { type: 'door-closed', emoji: '🚪', seen: false, visible: false };
+    const outsideY = doorY + 1;
+    if (map[outsideY]?.[doorX]?.type === 'wall') {
+      map[outsideY][doorX] = { type: 'floor', emoji: '⬜', seen: false, visible: false };
+    }
+    const from = roomCenter(rooms[0]);
+    carveHCorridor(map, from.x, doorX, from.y);
+    carveVCorridor(map, from.y, outsideY, doorX);
+  }
+  return {
+    stairs: { x: cx, y: cy },
+    room: { x, y, w: TEMPLE_W, h: TEMPLE_H, theme: 'zodiac-temple' },
+  };
 }
 
 export function generateMap(floor: number): { map: MapGrid; startPos: Position; stairsPos: Position; rooms: Room[] } {
@@ -877,8 +939,14 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
 
   const startPos = roomCenter(rooms[0]);
   const lastRoom = rooms[rooms.length - 1];
-  const stairsPos = roomCenter(lastRoom);
+  let stairsPos = roomCenter(lastRoom);
   map[stairsPos.y][stairsPos.x] = { type: 'stairs', emoji: '🕳️', seen: false, visible: false };
+
+  if (floor === 7) {
+    const temple = placeEcumenicalTemple(map, rooms);
+    stairsPos = temple.stairs;
+    rooms.push(temple.room);
+  }
 
   const { map: cooled } = coolLavaWaterContacts(map);
 
