@@ -1,5 +1,5 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, MAX_CHEF_LESSONS, cookedHealBonus, foodHealDescription } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, MAX_CHEF_LESSONS, cookedHealBonus, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../game/gameHelpers';
 import { canEquipItem } from './itemUtils';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -68,6 +68,7 @@ export function RestaurantModal({
                     disabled={!canAfford}
                     onClick={() => {
                       let restAutoEquippedSlot: EquipSlot | null = null;
+                      let peacemakers = false;
                       setGameState(prev => {
                         if (!prev) return prev;
                         if (prev.player.stats.gold < price) return prev;
@@ -85,12 +86,25 @@ export function RestaurantModal({
                           const emptySlot = slots.find(s => !prev.player.equipment[s]);
                           if (emptySlot) {
                             restAutoEquippedSlot = emptySlot;
-                            return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, equipment: { ...prev.player.equipment, [emptySlot]: boughtItem } } };
+                            const nextEquipment = { ...prev.player.equipment, [emptySlot]: boughtItem };
+                            const fan = tryDualGunsFanfare({
+                              characterClass: prev.player.characterClass,
+                              prevEquipment: prev.player.equipment,
+                              nextEquipment,
+                              alreadyDone: prev.dualGunsFanfareDone,
+                            });
+                            if (fan.fired) peacemakers = true;
+                            return {
+                              ...prev,
+                              ...(fan.done ? { dualGunsFanfareDone: true } : {}),
+                              player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, equipment: nextEquipment },
+                            };
                           }
                         }
                         const { inventory, bank } = addToBag(prev.player.inventory, prev.player.bank, boughtItem);
                         return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, inventory, bank } };
                       });
+                      if (peacemakers) addLog(PEACEMAKERS_LOG);
                       addLog(restAutoEquippedSlot
                         ? `🔥 Bought ${item.emoji} ${item.name} for ${price}g — auto-equipped to ${restAutoEquippedSlot} slot!`
                         : `🔥 Bought ${item.emoji} ${item.name} for ${price}g!`);

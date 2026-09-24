@@ -477,6 +477,15 @@ export default function Game() {
     _flashSignals.spellEchoFlashPending = false;
     setSpellEchoFlashKey(k => k + 1);
   }, [gameState?.turn]);
+  const [dualGunsFanfareKey, setDualGunsFanfareKey] = useState(0);
+  const [dualGunsFanfareAt, setDualGunsFanfareAt] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!_flashSignals.dualGunsFanfarePending) return;
+    _flashSignals.dualGunsFanfarePending = false;
+    const pos = gameState?.player.pos;
+    if (pos) setDualGunsFanfareAt({ x: pos.x, y: pos.y });
+    setDualGunsFanfareKey(k => k + 1);
+  }, [gameState?.turn, gameState?.dualGunsFanfareDone, gameState?.player.pos.x, gameState?.player.pos.y]);
 
   // Explosion flash: when a bomb detonates, drive the tile overlay for ~400ms
   // NOTE: no cleanup return — timer is managed via ref to prevent premature
@@ -624,6 +633,7 @@ export default function Game() {
       companionKillTally: 0,
       companionBountyOocTurns: 0,
       chefLessonCount: 0,
+      dualGunsFanfareDone: false,
       floorAnnouncement: rooms.some(r => r.theme === 'volcano')
         ? {
             kind: 'volcano',
@@ -2325,6 +2335,17 @@ export default function Game() {
           55%  { opacity: 0.5; }
           100% { opacity: 0; }
         }
+        @keyframes dual-guns-fanfare {
+          0%   { opacity: 0; }
+          18%  { opacity: 0.85; }
+          55%  { opacity: 0.45; }
+          100% { opacity: 0; }
+        }
+        @keyframes dual-guns-pop {
+          0%   { opacity: 0; transform: translateY(8px) scale(0.5); }
+          22%  { opacity: 1; transform: translateY(0) scale(1.35); }
+          100% { opacity: 0; transform: translateY(-14px) scale(1); }
+        }
         @keyframes wizard-target-pulse {
           0%   { box-shadow: 0 0 6px #a78bfa, 0 0 12px rgba(167,139,250,0.25); opacity: 0.7; }
           100% { box-shadow: 0 0 12px #a78bfa, 0 0 24px rgba(167,139,250,0.55); opacity: 1; }
@@ -2830,6 +2851,32 @@ export default function Game() {
                 );
               })}
               {/* Floating alert overlays — ❗ when enemy spots the player */}
+              {dualGunsFanfareKey > 0 && dualGunsFanfareAt && [
+                { dx: 0, dy: 0, emoji: '🦅', lift: -12 },
+                { dx: 0, dy: -1, emoji: '🎆', lift: 0 },
+                { dx: 1, dy: 0, emoji: '🎇', lift: 0 },
+                { dx: 0, dy: 1, emoji: '🎆', lift: 0 },
+                { dx: -1, dy: 0, emoji: '🎇', lift: 0 },
+              ].map(spark => {
+                const vx = dualGunsFanfareAt.x + spark.dx - startX;
+                const vy = dualGunsFanfareAt.y + spark.dy - startY;
+                if (vx < 0 || vx >= viewWidth || vy < 0 || vy >= viewHeight) return null;
+                return (
+                  <div
+                    key={`dual-guns-${dualGunsFanfareKey}-${spark.dx}-${spark.dy}`}
+                    className="absolute pointer-events-none select-none leading-none"
+                    style={{
+                      left: vx * 32,
+                      top: vy * 32 + spark.lift,
+                      fontSize: spark.emoji === '🦅' ? 26 : 20,
+                      zIndex: 12,
+                      animation: 'dual-guns-pop 700ms ease-out forwards',
+                    }}
+                  >
+                    {spark.emoji}
+                  </div>
+                );
+              })}
               {gameState.floatingTexts.map(ft => {
                 const vx = ft.pos.x - startX;
                 const vy = ft.pos.y - startY;
@@ -3551,6 +3598,17 @@ export default function Game() {
             position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 110,
             background: 'radial-gradient(ellipse at center, rgba(147,197,253,0.9) 0%, rgba(59,130,246,0.55) 50%, rgba(37,99,235,0.08) 100%)',
             animation: 'spell-echo-flash 400ms ease-out forwards',
+          }}
+        />
+      )}
+
+      {dualGunsFanfareKey > 0 && (
+        <div
+          key={`dual-guns-${dualGunsFanfareKey}`}
+          style={{
+            position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 110,
+            background: 'radial-gradient(ellipse at center, rgba(251,191,36,0.75) 0%, rgba(245,158,11,0.35) 42%, rgba(120,53,15,0) 100%)',
+            animation: 'dual-guns-fanfare 700ms ease-out forwards',
           }}
         />
       )}

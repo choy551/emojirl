@@ -1,5 +1,5 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToBag, removeAndRefillBag, COOKED_OVERFLOW_THRESHOLD, cookedHealCount, isHealJunk, foodHealDescription } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToBag, removeAndRefillBag, COOKED_OVERFLOW_THRESHOLD, cookedHealCount, isHealJunk, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../game/gameHelpers';
 import { soulHelpText } from '../game/emojis';
 import { isStackableBagPassive } from '../game/passives';
 import { canBuyAndUse } from '../game/shopUse';
@@ -83,6 +83,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                       let overflowToBank = false;
                       let shopAmmoTotal: number | null = null;
                       let autoEquippedSlot: EquipSlot | null = null;
+                      let peacemakers = false;
                       setGameState(prev => {
                         if (!prev) return prev;
                         if (prev.player.stats.gold < price) return prev;
@@ -103,7 +104,19 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                           const emptySlot = slots.find(s => !prev.player.equipment[s]);
                           if (emptySlot) {
                             autoEquippedSlot = emptySlot;
-                            return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, equipment: { ...prev.player.equipment, [emptySlot]: boughtItem } } };
+                            const nextEquipment = { ...prev.player.equipment, [emptySlot]: boughtItem };
+                            const fan = tryDualGunsFanfare({
+                              characterClass: prev.player.characterClass,
+                              prevEquipment: prev.player.equipment,
+                              nextEquipment,
+                              alreadyDone: prev.dualGunsFanfareDone,
+                            });
+                            if (fan.fired) peacemakers = true;
+                            return {
+                              ...prev,
+                              ...(fan.done ? { dualGunsFanfareDone: true } : {}),
+                              player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, equipment: nextEquipment },
+                            };
                           }
                         }
                         const bankBefore = prev.player.bank.length;
@@ -115,6 +128,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                         const shopAmmoWord = item.emoji === '🪙' ? 'bullets' : 'arrows';
                         addLog(`🏪 ${item.emoji} +${item.ammoAmount} ${shopAmmoWord} for ${price}g — ${shopAmmoTotal} total`);
                       } else {
+                        if (peacemakers) addLog(PEACEMAKERS_LOG);
                         addLog(sentToBank
                           ? `🏪 Bought ${item.emoji} ${item.name} for ${price}g — your class can't equip it, sent to bank.`
                           : autoEquippedSlot

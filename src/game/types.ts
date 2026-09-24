@@ -283,6 +283,8 @@ export interface GameState {
   companionBountyOocTurns?: number;
   /** Run-wide restaurant lessons (0–5). Cooked food heals and sells better. */
   chefLessonCount?: number;
+  /** Cowboy already saw the first Dual Guns fanfare this run. */
+  dualGunsFanfareDone?: boolean;
 }
 
 export interface ControlSettings {

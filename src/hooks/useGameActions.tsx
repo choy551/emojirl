@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Player, Enemy, Position, FloatingText } from '../game/types';
+import { Player, Enemy, Position, FloatingText, GameState } from '../game/types';
 import { resolveCombat, getCowboyUnarmedBonus, isHostileCombatTarget } from '../game/combat';
 import { getRandomEmojiPower, getRandomFloorDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, getFoodHealItems } from '../game/emojis';
 import { getMood } from '../game/moods';
@@ -12,7 +12,7 @@ import {
   addToBag, levelFromXP,
   mpBonusForLevel, computeNinjaEvasion, getRandomCowboyFlavor, spawnEnemies,
   spawnVaultItems, handleGodBlessedImmunity,
-  getDungeonPressure, _flashSignals, restoreStolenEmojis, stolenEmojiSummary,
+  getDungeonPressure, _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG, restoreStolenEmojis, stolenEmojiSummary,
   applyBedRest, simulateSleep, SLEEP_TURNS, BED_OVERHEAL_MULT,
   evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
 } from '../game/gameHelpers';
@@ -26,6 +26,17 @@ import { useItemActions } from './actions/useItemActions';
 import { useCombatActions } from './actions/useCombatActions';
 
 const WAIT_HEAL = 1;
+
+function stampDualGunsFanfare(state: GameState, prevEquipment: Player['equipment'], addLog: (text: string) => void): GameState {
+  const fan = tryDualGunsFanfare({
+    characterClass: state.player.characterClass,
+    prevEquipment,
+    nextEquipment: state.player.equipment,
+    alreadyDone: state.dualGunsFanfareDone,
+  });
+  if (fan.fired) addLog(PEACEMAKERS_LOG);
+  return fan.done ? { ...state, dualGunsFanfareDone: true } : state;
+}
 
 export function useGameActions(refs: GameRefs, setters: GameSetters) {
   const {
@@ -371,7 +382,11 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                     : `Picked up ${pickedUp.emoji} ${pickedUp.name} (${pickedUp.description})`);
                 }
               }
-              const midState = { ...prev, player: bumpedPlayer, items: newItems, turn: prev.turn + 1 };
+              const midState = stampDualGunsFanfare(
+                { ...prev, player: bumpedPlayer, items: newItems, turn: prev.turn + 1 },
+                player.equipment,
+                addLog,
+              );
               return applyEnemyTurns(withVisibility(midState), runEnemyTurns(midState));
             } else {
               addLog("You can't swim! 🌊 (Find a ⛵ Boat to cross water)");
@@ -978,6 +993,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         newState.stealthMode = false;
         newState.ninjaFreeMoves = 0;
         newState.player = newPlayer;
+        newState = stampDualGunsFanfare(newState, player.equipment, addLog);
         newState.turn++;
         return newState;
       }
@@ -1087,6 +1103,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       }
 
       newState.player = newPlayer;
+      newState = stampDualGunsFanfare(newState, player.equipment, addLog);
       newState.turn++;
 
       // Assassin's Edge: free movement turns — enemies don't act

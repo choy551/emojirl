@@ -8,7 +8,7 @@ import {
   isNonStackableBagPassiveDuplicate, isActiveKindDuplicate, runEnemyTurns, applyEnemyTurns, cookedEatHeal,
 } from '../../game/gameHelpers';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
-import { _flashSignals } from '../../game/flashSignals';
+import { _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../../game/flashSignals';
 
 export function useInventoryActions(
   setters: GameSetters,
@@ -206,11 +206,18 @@ export function useInventoryActions(
       const bonusStr = Object.entries(item.equipBonus ?? {}).filter(([,v]) => (v ?? 0) !== 0).map(([k, v]) => `${(v ?? 0) > 0 ? '+' : ''}${v}${k.substring(0,3).toUpperCase()}`).join(' ');
       addLog(`${item.emoji} ${item.name} equipped${bonusStr ? ` (${bonusStr})` : ''}.`);
       const newEquipment = { ...player.equipment, [slot]: item };
-      const wasAlreadyDualGun = player.equipment.mainHand?.weaponKind === 'gun' && player.equipment.offHand?.weaponKind === 'gun';
-      if (cls === '🤠' && item.weaponKind === 'gun' && !wasAlreadyDualGun && newEquipment.mainHand?.weaponKind === 'gun' && newEquipment.offHand?.weaponKind === 'gun') {
-        addLog(`🤠 Real Cowboys fight with their fists... but a Real American Hero fights with his two Peacemakers!`);
-      }
-      return { ...prev, player: { ...player, inventory: newInv, bank: newBank, equipment: newEquipment } };
+      const fan = tryDualGunsFanfare({
+        characterClass: cls,
+        prevEquipment: player.equipment,
+        nextEquipment: newEquipment,
+        alreadyDone: prev.dualGunsFanfareDone,
+      });
+      if (fan.fired) addLog(PEACEMAKERS_LOG);
+      return {
+        ...prev,
+        ...(fan.done ? { dualGunsFanfareDone: true } : {}),
+        player: { ...player, inventory: newInv, bank: newBank, equipment: newEquipment },
+      };
     });
   }, [addLog, setGameState]);
 

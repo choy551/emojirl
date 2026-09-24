@@ -1,4 +1,4 @@
-import { Enemy, FloatingText } from './types';
+import { Enemy, FloatingText, Player } from './types';
 import { chebyshev } from './geo';
 
 export const _flashSignals = {
@@ -9,7 +9,31 @@ export const _flashSignals = {
   pressureFlashPending: false,
   lightningFlashPending: false,
   spellEchoFlashPending: false,
+  dualGunsFanfarePending: false,
 };
+
+export const PEACEMAKERS_LOG =
+  '🤠 Real Cowboys fight with their fists... but a Real American Hero fights with his two Peacemakers!';
+
+/** First time Cowboy completes Dual Guns this run. Flavor only. */
+export function tryDualGunsFanfare(opts: {
+  characterClass: string;
+  prevEquipment: Player['equipment'];
+  nextEquipment: Player['equipment'];
+  alreadyDone: boolean | undefined;
+}): { done: boolean; fired: boolean } {
+  if (opts.alreadyDone) return { done: true, fired: false };
+  if (opts.characterClass !== '🤠') return { done: false, fired: false };
+  const was = opts.prevEquipment.mainHand?.weaponKind === 'gun'
+    && opts.prevEquipment.offHand?.weaponKind === 'gun';
+  const now = opts.nextEquipment.mainHand?.weaponKind === 'gun'
+    && opts.nextEquipment.offHand?.weaponKind === 'gun';
+  if (!was && now) {
+    _flashSignals.dualGunsFanfarePending = true;
+    return { done: true, fired: true };
+  }
+  return { done: false, fired: false };
+}
 
 export const DIVINE_INSPIRE_RADIUS = 4;
 
