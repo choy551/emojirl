@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { moneyBagSellValue, getItemSellValue, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, cookedHealBonus, cookedSellBonus, MAX_CHEF_LESSONS, restaurantCookedSellPrice, cookedEatHeal, foodHealLabel, foodHealDescription } from './economy';
+import { moneyBagSellValue, getItemSellValue, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, cookedHealBonus, cookedSellBonus, MAX_CHEF_LESSONS, restaurantCookedSellPrice, cookedEatHeal, foodHealLabel, foodHealDescription, slotShrineCost, slotTierFromRoll, rollSlotTier, resolveSlotPrize, grantSlotPrizeItems } from './economy';
 import { MONEY_BAG } from './emojis';
 import type { EmojiItem } from './types';
 
@@ -149,5 +149,97 @@ describe("Chef's Lesson", () => {
     expect(foodHealDescription(steak, 5, 100)).toBe('+52 HP & +2 ATK for 10 turns (12 + 40 Chef)');
     expect(foodHealDescription(steak, 5, 100, false)).toBe('+52 HP & +2 ATK for 10 turns');
     expect(foodHealDescription(apple, 5, 100)).toBe('Restores 2 HP · cook on 🔥 for more');
+  });
+});
+
+describe('Slot Shrine', () => {
+  it('uses the locked floor cost curve', () => {
+    expect(slotShrineCost(1)).toBe(200);
+    expect(slotShrineCost(10)).toBe(800);
+    expect(slotShrineCost(16)).toBe(2480);
+    expect(slotShrineCost(20)).toBe(3600);
+    expect(slotShrineCost(25)).toBe(5000);
+    expect(slotShrineCost(32)).toBe(5000);
+  });
+
+  it('maps 1..100 onto the locked weights', () => {
+    expect(slotTierFromRoll(1)).toBe('junk');
+    expect(slotTierFromRoll(42)).toBe('junk');
+    expect(slotTierFromRoll(43)).toBe('common');
+    expect(slotTierFromRoll(70)).toBe('common');
+    expect(slotTierFromRoll(71)).toBe('uncommon');
+    expect(slotTierFromRoll(88)).toBe('uncommon');
+    expect(slotTierFromRoll(89)).toBe('rare');
+    expect(slotTierFromRoll(97)).toBe('rare');
+    expect(slotTierFromRoll(98)).toBe('godtier');
+    expect(slotTierFromRoll(100)).toBe('godtier');
+  });
+
+  it('rollSlotTier stays near the weight table', () => {
+    const n = 4000;
+    const counts = { junk: 0, common: 0, uncommon: 0, rare: 0, godtier: 0 };
+    for (let i = 0; i < n; i++) counts[rollSlotTier()]++;
+    const pct = (k: keyof typeof counts) => counts[k] / n;
+    expect(pct('junk')).toBeGreaterThan(0.37);
+    expect(pct('junk')).toBeLessThan(0.47);
+    expect(pct('godtier')).toBeGreaterThan(0.01);
+    expect(pct('godtier')).toBeLessThan(0.06);
+  });
+
+  it('resolves each tier into items or gold', () => {
+    const junkHeal = resolveSlotPrize('junk', 3, 200, '🧙', () => 0);
+    expect(junkHeal.items).toHaveLength(1);
+    expect(junkHeal.items[0].healAmount).toBeGreaterThan(0);
+    expect(junkHeal.goldGain).toBe(0);
+
+    const junkGold = resolveSlotPrize('junk', 4, 200, '🧙', () => 0.9);
+    expect(junkGold.items).toHaveLength(0);
+    expect(junkGold.goldGain).toBe(15 + 4 * 2);
+
+    const bullets = resolveSlotPrize('common', 1, 200, '🤠', () => 0);
+    expect(bullets.items[0].emoji).toBe('🪙');
+    const arrows = resolveSlotPrize('common', 1, 200, '🧝', () => 0);
+    expect(arrows.items[0].emoji).toBe('🏹');
+    const food = resolveSlotPrize('common', 1, 200, '🧙', () => 0);
+    expect(food.items[0].healAmount).toBeGreaterThan(0);
+
+    const rare = resolveSlotPrize('rare', 6, 800, '🧙', () => 0);
+    expect(rare.items[0].isEquipment).toBe(true);
+
+    const jackpot = resolveSlotPrize('godtier', 10, 800, '🧙', () => 0.9);
+    expect(jackpot.items).toHaveLength(0);
+    expect(jackpot.goldGain).toBe(Math.round(800 * 2.5));
+    expect(jackpot.label).toContain('JACKPOT');
+
+    const pair = resolveSlotPrize('godtier', 10, 800, '🧙', () => 0.5);
+    expect(pair.items).toHaveLength(2);
+  });
+
+  it('cashes out a non-equipment prize when the hotbar is full', () => {
+    const fillers: EmojiItem[] = Array.from({ length: 9 }, (_, i) => ({
+      id: `f${i}`, emoji: '💀', name: 'Skull', description: 'soul', consumed: false,
+      bagPassive: { description: 'x', nonStackable: true },
+    }));
+    const prize: EmojiItem = {
+      id: 'prize', emoji: '💣', name: 'Bomb', description: 'boom', consumed: false, activeKind: 'bomb',
+    };
+    const granted = grantSlotPrizeItems(fillers, [], [prize], 3);
+    expect(granted.inventory).toHaveLength(9);
+    expect(granted.bank).toHaveLength(0);
+    expect(granted.gold).toBe(getItemSellValue(prize, 1, 3));
+    expect(granted.logs[0]).toBe(`Bag full — cashed out for 🪙${granted.gold}`);
+  });
+
+  it('banks equipment instead of cashing it out', () => {
+    const fillers: EmojiItem[] = Array.from({ length: 9 }, (_, i) => ({
+      id: `f${i}`, emoji: '💀', name: 'Skull', description: 'soul', consumed: false,
+    }));
+    const sword: EmojiItem = {
+      id: 'sw', emoji: '⚔️', name: 'Sword', description: 'blade', consumed: false, isEquipment: true,
+    };
+    const granted = grantSlotPrizeItems(fillers, [], [sword], 3);
+    expect(granted.gold).toBe(0);
+    expect(granted.bank.map(i => i.id)).toEqual(['sw']);
+    expect(granted.logs).toHaveLength(0);
   });
 });

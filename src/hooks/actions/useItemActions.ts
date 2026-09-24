@@ -62,7 +62,7 @@ export function applyRopeVault(
 
   const midX = vaultX + Math.floor(vw / 2);
   const midY = vaultY + Math.floor(vh / 2);
-  const PASSABLE_TO_CONNECT = new Set(['floor', 'grass', 'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'boss-floor', 'stairs', 'door-open', 'door-closed', 'bed']);
+  const PASSABLE_TO_CONNECT = new Set(['floor', 'grass', 'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'slot-shrine', 'boss-floor', 'stairs', 'door-open', 'door-closed', 'bed']);
   const scanDirs = [
     { sx: midX,        sy: vaultY - 1,  dx:  0, dy: -1 },
     { sx: midX,        sy: vaultY + vh, dx:  0, dy:  1 },

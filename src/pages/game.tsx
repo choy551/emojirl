@@ -34,6 +34,7 @@ import { BankPanel } from '../components/BankPanel';
 import { ShopModal } from '../components/ShopModal';
 import { AmmoCacheModal } from '../components/AmmoCacheModal';
 import { RestaurantModal } from '../components/RestaurantModal';
+import { SlotShrineModal } from '../components/SlotShrineModal';
 import { ItemStatCard } from '../components/ItemStatCard';
 import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog, CompanionTalkDialog, BedRestDialog, LavaStepDialog } from '../components/InteractionDialogs';
 import { TacticsMenu } from '../components/TacticsMenu';
@@ -204,6 +205,9 @@ export default function Game() {
   const ammoCacheOpenRef = useRef(false);
   const [restaurantOpen, setRestaurantOpen] = useState(false);
   const restaurantOpenRef = useRef(false);
+  const [slotShrineOpen, setSlotShrineOpen] = useState(false);
+  const slotShrineOpenRef = useRef(false);
+  useEffect(() => { slotShrineOpenRef.current = slotShrineOpen; }, [slotShrineOpen]);
   const [restaurantItems, setRestaurantItems] = useState<EmojiItem[]>([]);
   const [restaurantSoldCount, setRestaurantSoldCount] = useState(0);
   const restaurantClosedRef = useRef(false);
@@ -309,6 +313,7 @@ export default function Game() {
       { id: 'tactics', isOpen: () => tacticsMenuOpen, close: () => setTacticsMenuOpen(false) },
       { id: 'actions', isOpen: () => actionsMenuOpen, close: () => setActionsMenuOpen(false) },
       { id: 'shop', isOpen: () => shopOpen, close: () => setShopOpen(false) },
+      { id: 'slots', isOpen: () => slotShrineOpen, close: () => setSlotShrineOpen(false) },
       { id: 'restaurant', isOpen: () => restaurantOpen, close: () => setRestaurantOpen(false) },
       { id: 'cache', isOpen: () => ammoCacheOpen, close: () => setAmmoCacheOpen(false) },
       { id: 'bank', isOpen: () => bankOpen, close: () => { if (selectedItemId) setSelectedItemId(null); else { setBankOpen(false); setSelectedItemId(null); } } },
@@ -342,6 +347,10 @@ export default function Game() {
         setShopItems(gameState.shopStock);
       }
       setShopOpen(true);
+    }
+    if (tile?.type === 'slot-shrine' && !slotShrineOpenRef.current) {
+      setSlotShrineOpen(true);
+      addLog('🎰 Slot Shrine — pay gold to spin. Fortune favors the bold…');
     }
     if (tile?.type === 'restaurant' && !restaurantOpenRef.current) {
       if (gameState.restaurantStock == null) {
@@ -426,6 +435,7 @@ export default function Game() {
     tacticsMenuOpen ||
     actionsMenuOpen ||
     shopOpen ||
+    slotShrineOpen ||
     restaurantOpen ||
     ammoCacheOpen ||
     bankOpen ||
@@ -805,6 +815,11 @@ export default function Game() {
         addLog('Autoexplore stopped: 🏪 shop found!');
         return;
       }
+      if (exploreTile?.type === 'slot-shrine') {
+        setAutoExplore(false);
+        addLog('Autoexplore stopped: 🎰 Slot Shrine.');
+        return;
+      }
       if (exploreTile?.type === 'bed') {
         setAutoExplore(false);
         addLog('Autoexplore stopped: 🛏️ a bed.');
@@ -1059,6 +1074,10 @@ export default function Game() {
       case 'open-shop': setShopOpen(true); break;
       case 'open-cache': setAmmoCacheOpen(true); break;
       case 'open-restaurant': setRestaurantOpen(true); break;
+      case 'open-slots':
+        setSlotShrineOpen(true);
+        addLog('🎰 Slot Shrine — pay gold to spin. Fortune favors the bold…');
+        break;
       case 'close-door': setTravelTarget(null); handleCloseDoor(); break;
       case 'rest':
         setTravelTarget(null);
@@ -1216,6 +1235,12 @@ export default function Game() {
       if (shopOpenRef.current) {
         e.preventDefault();
         if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setShopOpen(false); return; }
+        return;
+      }
+
+      if (slotShrineOpenRef.current) {
+        e.preventDefault();
+        if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setSlotShrineOpen(false); return; }
         return;
       }
 
@@ -1504,6 +1529,12 @@ export default function Game() {
           if (tile?.type === 'shop-item' && tile.emoji === '🏪') {
             e.preventDefault();
             setShopOpen(true);
+            return;
+          }
+          if (tile?.type === 'slot-shrine') {
+            e.preventDefault();
+            setSlotShrineOpen(true);
+            addLog('🎰 Slot Shrine — pay gold to spin. Fortune favors the bold…');
             return;
           }
           if (tile?.type === 'shop-item' && tile.emoji === '📦') {
@@ -1804,6 +1835,7 @@ export default function Game() {
           let tileBg: string | undefined;
           if (tileData.type === 'safe-floor' || tileData.type === 'shop-item') tileBg = 'rgba(180,120,40,0.18)';
           else if (tileData.type === 'shrine') tileBg = 'rgba(220,170,20,0.22)';
+          else if (tileData.type === 'slot-shrine') tileBg = 'rgba(180,80,200,0.22)';
           else if (tileData.type === 'boss-floor') tileBg = 'rgba(200,30,30,0.22)';
           else if (tileData.type === 'campfire') tileBg = 'rgba(255,140,0,0.25)';
           else if (tileData.type === 'bed') tileBg = 'rgba(80,140,200,0.28)';
@@ -3208,6 +3240,15 @@ export default function Game() {
           setAmmoCacheItems={persistAmmoCacheItems}
           addLog={addLog}
           onClose={() => setAmmoCacheOpen(false)}
+        />
+      )}
+
+      {slotShrineOpen && gameState && (
+        <SlotShrineModal
+          gameState={gameState}
+          setGameState={setGameState}
+          addLog={addLog}
+          onClose={() => setSlotShrineOpen(false)}
         />
       )}
 

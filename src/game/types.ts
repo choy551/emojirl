@@ -18,6 +18,7 @@ export type TileType =
   | 'volcano'
   | 'shrine'
   | 'shrine-used'
+  | 'slot-shrine'
   | 'safe-floor'
   | 'shop-item'
   | 'restaurant'

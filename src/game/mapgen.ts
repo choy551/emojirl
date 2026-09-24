@@ -262,6 +262,18 @@ function pickOrExpandRoomVault(map: MapGrid, rooms: Room[]): number {
   return -1;
 }
 
+/** First free safe-floor (or plain floor) becomes a repeatable 🎰 slot shrine. */
+export function tryPlaceSlotShrine(map: MapGrid, candidates: [number, number][]): boolean {
+  for (const [x, y] of candidates) {
+    const t = map[y]?.[x];
+    if (!t) continue;
+    if (t.type !== 'safe-floor' && t.type !== 'floor') continue;
+    map[y][x] = { type: 'slot-shrine', emoji: '🎰', seen: false, visible: false };
+    return true;
+  }
+  return false;
+}
+
 /** Market vault: safe floor with a shrine + shop stalls arranged around it. */
 function placeMarketVault(map: MapGrid, room: Room) {
   for (let ry = room.y; ry < room.y + room.h; ry++) {
@@ -282,6 +294,13 @@ function placeMarketVault(map: MapGrid, room: Room) {
       map[sy][sx] = { type: 'shop-item', emoji: '🍺', seen: false, visible: false };
     }
   }
+  // Diagonal 🎰 — never overwrites the center shrine or cardinal stalls.
+  tryPlaceSlotShrine(map, [
+    [cx + 1, cy - 1],
+    [cx - 1, cy - 1],
+    [cx + 1, cy + 1],
+    [cx - 1, cy + 1],
+  ]);
 }
 
 /** Water moat: flood the room + a wide border with water, leaving only a tiny 3×3 island at center. */
@@ -354,6 +373,12 @@ function placeShop(map: MapGrid, room: Room) {
   const cx = room.x + Math.floor(room.w / 2);
   const cy = room.y + Math.floor(room.h / 2);
   map[cy][cx] = { type: 'shop-item', emoji: '🏪', seen: false, visible: false };
+  tryPlaceSlotShrine(map, [
+    [cx + 1, cy],
+    [cx, cy + 1],
+    [cx - 1, cy],
+    [cx, cy - 1],
+  ]);
 }
 
 function placeRestaurant(map: MapGrid, room: Room) {
@@ -634,7 +659,7 @@ function ensureStairsReachable(map: MapGrid, start: Position, stairs: Position):
   const DRY = new Set([
     'floor', 'stairs', 'boss-floor', 'grass',
     'door-open', 'door-closed',
-    'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'bed',
+    'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'slot-shrine', 'bed',
     'campfire', 'obsidian',
   ]);
   if (reach(map, start, stairs, DRY)) return;

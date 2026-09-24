@@ -1,5 +1,6 @@
 import { EmojiItem, MapGrid, Position } from './types';
 import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, cookFood, HEAL_DROPS, COOKABLE_EMOJIS } from './emojis';
+import { addToBag } from './inventory';
 
 /** Gold stolen by a 🐦‍⬛ Crow on a successful hit. Scales with dungeon floor. */
 export function crowGoldSteal(floor: number, playerGold: number): number {
@@ -137,6 +138,136 @@ export function pickBestDishesToSell(items: EmojiItem[], soldCount: number): Emo
 
 export function getItemBuyPrice(item: EmojiItem, floor: number): number {
   return getItemSellValue(item) * 2 + Math.floor(floor / 2);
+}
+
+/** Slot Shrine spin cost. D1=200, D10=800, D25+=5000. */
+export function slotShrineCost(floor: number): number {
+  const f = Math.max(1, floor);
+  if (f <= 10) return Math.round(200 + (800 - 200) * (f - 1) / 9);
+  if (f >= 25) return 5000;
+  return Math.round(800 + (5000 - 800) * (f - 10) / 15);
+}
+
+export type SlotTier = 'junk' | 'common' | 'uncommon' | 'rare' | 'godtier';
+
+export const SLOT_REEL_FACE: Record<SlotTier, string> = {
+  junk: '🥔', common: '🥫', uncommon: '⚡', rare: '🛡️', godtier: '👑',
+};
+
+/** r is 1..100. ≤42 junk, ≤70 common, ≤88 uncommon, ≤97 rare, else godtier. */
+export function slotTierFromRoll(r: number): SlotTier {
+  if (r <= 42) return 'junk';
+  if (r <= 70) return 'common';
+  if (r <= 88) return 'uncommon';
+  if (r <= 97) return 'rare';
+  return 'godtier';
+}
+
+export function rollSlotTier(rng: () => number = Math.random): SlotTier {
+  const r = Math.floor(rng() * 100) + 1;
+  return slotTierFromRoll(r);
+}
+
+function stampSlotItem(drop: Omit<EmojiItem, 'id' | 'consumed'>, tag: string): EmojiItem {
+  return { ...drop, id: `slot-${tag}-${Math.random().toString(36).slice(2)}`, consumed: false };
+}
+
+export interface SlotPrize {
+  items: EmojiItem[];
+  goldGain: number;
+  label: string;
+}
+
+/**
+ * Weighted prize for one spin. Reels are flavor — this is not 3-match payout math.
+ * `rng` returns [0, 1) and is only used for the tier's internal coin flips.
+ */
+export function resolveSlotPrize(
+  tier: SlotTier,
+  floor: number,
+  cost: number,
+  playerClass?: string,
+  rng: () => number = Math.random,
+): SlotPrize {
+  const face = SLOT_REEL_FACE[tier];
+  if (tier === 'junk') {
+    if (rng() < 0.5) {
+      const item = stampSlotItem(getRandomHealDrop(), 'heal');
+      return { items: [item], goldGain: 0, label: `Junk ${face} — ${item.emoji} ${item.name}` };
+    }
+    const goldGain = Math.max(15, 15 + floor * 2);
+    return { items: [], goldGain, label: `Junk ${face} — 🪙${goldGain}` };
+  }
+  if (tier === 'common') {
+    const drop = playerClass === '🤠'
+      ? getBulletDrop()
+      : playerClass === '🧝'
+        ? getAmmoDrop()
+        : getRandomHealDrop();
+    const item = stampSlotItem(drop, 'common');
+    return { items: [item], goldGain: 0, label: `Common ${face} — ${item.emoji} ${item.name}` };
+  }
+  if (tier === 'uncommon') {
+    const drop = rng() < 0.5 ? getRandomActiveDrop() : getRandomEmojiPower();
+    const item = stampSlotItem(drop, 'unc');
+    return { items: [item], goldGain: 0, label: `Uncommon ${face} — ${item.emoji} ${item.name}` };
+  }
+  if (tier === 'rare') {
+    const item = stampSlotItem(getRandomEquipmentDrop(floor), 'eq');
+    return { items: [item], goldGain: 0, label: `Rare ${face} — ${item.emoji} ${item.name}` };
+  }
+  const pick = rng();
+  if (pick < 1 / 3) {
+    const a = stampSlotItem(getRandomEquipmentDrop(floor), 'god-eq');
+    const b = stampSlotItem(getRandomEquipmentDrop(floor), 'god-eq');
+    const keep = getItemBuyPrice(a, floor) >= getItemBuyPrice(b, floor) ? a : b;
+    return { items: [keep], goldGain: 0, label: `Godtier ${face} — ${keep.emoji} ${keep.name}` };
+  }
+  if (pick < 2 / 3) {
+    const power = stampSlotItem(getRandomEmojiPower(), 'god-soul');
+    const active = stampSlotItem(getRandomActiveDrop(), 'god-act');
+    return {
+      items: [power, active],
+      goldGain: 0,
+      label: `Godtier ${face} — ${power.emoji} ${power.name} and ${active.emoji} ${active.name}`,
+    };
+  }
+  const goldGain = Math.round(cost * 2.5);
+  return { items: [], goldGain, label: `Godtier ${face} — JACKPOT 🪙${goldGain}` };
+}
+
+/** Put prize items in the bag. Non-equipment that will not fit is cashed out. */
+export function grantSlotPrizeItems(
+  inventory: EmojiItem[],
+  bank: EmojiItem[],
+  items: EmojiItem[],
+  floor: number,
+): { inventory: EmojiItem[]; bank: EmojiItem[]; gold: number; logs: string[] } {
+  let inv = inventory;
+  let bnk = bank;
+  let gold = 0;
+  const logs: string[] = [];
+  for (const item of items) {
+    const before = bnk.length;
+    const next = addToBag(inv, bnk, item);
+    const added = next.bank.slice(before);
+    const cashed = added.filter(it => !it.isEquipment);
+    const keptEquip = added.filter(it => it.isEquipment);
+    if (cashed.length > 0) {
+      for (const c of cashed) {
+        const copies = Math.max(1, c.stackCount ?? 1);
+        const n = getItemSellValue(c, 1, floor) * copies;
+        gold += n;
+        logs.push(`Bag full — cashed out for 🪙${n}`);
+      }
+      inv = next.inventory;
+      bnk = [...next.bank.slice(0, before), ...keptEquip];
+    } else {
+      inv = next.inventory;
+      bnk = next.bank;
+    }
+  }
+  return { inventory: inv, bank: bnk, gold, logs };
 }
 
 export function generateAmmoCacheStock(floor: number, playerClass?: string): EmojiItem[] {

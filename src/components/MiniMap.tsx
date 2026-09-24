@@ -40,6 +40,7 @@ export function MiniMap({ map, playerPos, enemies }: MiniMapProps) {
           else if (tile.type === 'tree') color = '#1a5020';
           else if (tile.type === 'stairs') color = '#8060d0';
           else if (tile.type === 'shrine') color = '#3a2e00';
+          else if (tile.type === 'slot-shrine') color = '#5a2068';
           else if (tile.type === 'shrine-used') color = '#2e2e2e';
           else if (tile.type === 'safe-floor' || tile.type === 'shop-item') color = '#2e1e08';
           else if (tile.type === 'boss-floor') color = '#5a1a1a';
@@ -57,6 +58,7 @@ export function MiniMap({ map, playerPos, enemies }: MiniMapProps) {
           else if (tile.type === 'tree') color = '#0f2d14';
           else if (tile.type === 'stairs') color = '#403060';
           else if (tile.type === 'shrine') color = '#1e1800';
+          else if (tile.type === 'slot-shrine') color = '#3a1848';
           else if (tile.type === 'shrine-used') color = '#1e1e1e';
           else if (tile.type === 'safe-floor' || tile.type === 'shop-item') color = '#1a1008';
           else if (tile.type === 'boss-floor') color = '#3a0a0a';
@@ -80,6 +82,8 @@ export function MiniMap({ map, playerPos, enemies }: MiniMapProps) {
         let dotColor: string | null = null;
         if (tile.type === 'shrine') {
           dotColor = tile.visible ? '#ffd700' : '#9a7a10';
+        } else if (tile.type === 'slot-shrine') {
+          dotColor = tile.visible ? '#e060f0' : '#804090';
         } else if (tile.type === 'shrine-used') {
           dotColor = tile.visible ? '#aaaaaa' : '#555555';
         } else if (tile.type === 'safe-floor' || tile.type === 'shop-item') {

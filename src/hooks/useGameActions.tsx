@@ -811,6 +811,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
       }
 
+      if (tile.type === 'slot-shrine') {
+        // Repeatable gold sink. Modal opens from the page; the tile is not consumed.
+      }
+
       if (tile.type === 'shrine') {
         const shrineAmt = 2 + Math.floor((prev.currentFloor - 1) / 2);
         const oldMaxHp = newPlayer.stats.maxHp;

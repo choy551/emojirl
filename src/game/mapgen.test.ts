@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { MapGrid, Tile } from './types';
 import {
   canFloodTile, placeWaterBlob, placeRiver, placeBushAmbush, placeVolcanoVault,
-  generateMap, placeDoors, placeRoomVault,
+  generateMap, placeDoors, placeRoomVault, tryPlaceSlotShrine,
 } from './mapgen';
 import { hasLOSBetween } from './pathfinding';
 import { OPAQUE_TILES } from './vision';
@@ -312,5 +312,70 @@ describe('volcano vault', () => {
     const ring = [map[cy][cx + 1], map[cy][cx - 1], map[cy + 1][cx], map[cy - 1][cx]];
     expect(ring.every(t => t.type === 'lava' && t.emoji === LAVA_EMOJI)).toBe(true);
     expect(map[room.y][room.x].type).toBe('floor');
+  });
+});
+
+describe('slot shrine placement', () => {
+  it('writes the first free safe-floor and skips occupied tiles', () => {
+    const map = blank(5, 5);
+    map[2][3] = tile('shop-item', '🏪');
+    map[3][2] = tile('safe-floor', '⬜');
+    expect(tryPlaceSlotShrine(map, [[3, 2], [2, 3]])).toBe(true);
+    expect(map[3][2].type).toBe('slot-shrine');
+    expect(map[3][2].emoji).toBe('🎰');
+    expect(map[2][3].emoji).toBe('🏪');
+    expect(tryPlaceSlotShrine(map, [[2, 3]])).toBe(false);
+  });
+
+  it('puts 🎰 beside shops and on a market diagonal without covering 🛕 or 🍺', () => {
+    let shops = 0;
+    let markets = 0;
+    for (let i = 0; i < 60 && (shops < 8 || markets < 4); i++) {
+      const { map, rooms } = generateMap(8);
+      for (const room of rooms) {
+        if (room.theme === 'shrine') {
+          const cx = room.x + Math.floor(room.w / 2);
+          const cy = room.y + Math.floor(room.h / 2);
+          expect(map[cy][cx].type).toBe('shrine');
+          expect(map[cy][cx].emoji).toBe('🛕');
+        }
+        if (room.theme === 'shop') {
+          shops++;
+          let shop: { x: number; y: number } | null = null;
+          let slots = 0;
+          for (let y = room.y; y < room.y + room.h; y++) {
+            for (let x = room.x; x < room.x + room.w; x++) {
+              if (map[y][x].emoji === '🏪') shop = { x, y };
+              if (map[y][x].type === 'slot-shrine') slots++;
+            }
+          }
+          expect(shop).not.toBeNull();
+          expect(slots).toBe(1);
+          const adj = [[1, 0], [0, 1], [-1, 0], [0, -1]].some(([dx, dy]) =>
+            map[shop!.y + dy][shop!.x + dx].type === 'slot-shrine'
+          );
+          expect(adj).toBe(true);
+        }
+        if (room.theme === 'market') {
+          markets++;
+          const cx = room.x + Math.floor(room.w / 2);
+          const cy = room.y + Math.floor(room.h / 2);
+          expect(map[cy][cx].type).toBe('shrine');
+          expect(map[cy][cx].emoji).toBe('🛕');
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]) {
+            const t = map[cy + dy]?.[cx + dx];
+            if (!t || t.type === 'wall') continue;
+            if (t.type === 'shop-item') expect(t.emoji).toBe('🍺');
+            expect(t.type).not.toBe('slot-shrine');
+          }
+          const diag = [[1, -1], [-1, -1], [1, 1], [-1, 1]].filter(([dx, dy]) =>
+            map[cy + dy]?.[cx + dx]?.type === 'slot-shrine'
+          );
+          expect(diag.length).toBe(1);
+        }
+      }
+    }
+    expect(shops).toBeGreaterThan(0);
+    expect(markets).toBeGreaterThan(0);
   });
 });
