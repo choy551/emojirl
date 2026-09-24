@@ -238,6 +238,8 @@ export default function Game() {
   const [pauseMenuOpen, setPauseMenuOpen] = useState(false);
   const pauseMenuOpenRef = useRef(false);
   useEffect(() => { pauseMenuOpenRef.current = pauseMenuOpen; }, [pauseMenuOpen]);
+  const actionsMenuOpenRef = useRef(false);
+  useEffect(() => { actionsMenuOpenRef.current = actionsMenuOpen; }, [actionsMenuOpen]);
   const [showRTFM, setShowRTFM] = useState(false);
   const showRTFMRef = useRef(false);
   useEffect(() => { showRTFMRef.current = showRTFM; }, [showRTFM]);
@@ -1450,6 +1452,10 @@ export default function Game() {
         }
         if (logOpenRef.current) {
           setLogOpen(false);
+          return;
+        }
+        if (actionsMenuOpenRef.current) {
+          setActionsMenuOpen(false);
           return;
         }
         setPauseMenuOpen(true);
