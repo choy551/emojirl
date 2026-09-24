@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getDungeonPressure, companionBountyShare, companionBountyPercent, tickCompanionBountyOoc, autoRestNeedsBountyWait, applyCompanionLevelUp, COMPANION_BOUNTY_OOC_TURNS } from './progression';
+import { applySpawnPressure, spawnEnemies } from './spawning';
 import type { Enemy } from './types';
 
 describe('getDungeonPressure', () => {
@@ -13,6 +14,42 @@ describe('getDungeonPressure', () => {
     expect(getDungeonPressure(18)).toEqual({ atk: 9, def: 6 });
     expect(getDungeonPressure(25)).toEqual({ atk: 30, def: 20 });
     expect(getDungeonPressure(30)).toEqual({ atk: 45, def: 30 });
+  });
+});
+
+describe('spawn pressure HP', () => {
+  const base = { hp: 14, attack: 5, defense: 1 };
+
+  it('adds pressure.atk to HP and leaves pressure-off stats unchanged', () => {
+    expect(applySpawnPressure(base, getDungeonPressure(15))).toEqual(base);
+    expect(applySpawnPressure(base, getDungeonPressure(16))).toEqual({ hp: 17, attack: 8, defense: 3 });
+    expect(applySpawnPressure({ hp: 17, attack: 1, defense: 0 }, getDungeonPressure(20)).hp).toBe(32);
+    expect(applySpawnPressure({ hp: 22, attack: 1, defense: 0 }, getDungeonPressure(25)).hp).toBe(52);
+  });
+
+  it('spawns spiders at floor-scaled HP plus the pressure bonus', () => {
+    const room = { x: 1, y: 1, w: 10, h: 8, theme: 'normal' as const };
+    const rooms = [{ x: 0, y: 0, w: 3, h: 3, theme: 'normal' as const }, room];
+    const spiders = (floor: number) => {
+      const found: number[] = [];
+      for (let i = 0; i < 40; i++) {
+        for (const e of spawnEnemies(floor, rooms, { x: 0, y: 0 }, 0)) {
+          if (e.name === 'Spider') found.push(e.maxHp);
+        }
+      }
+      return found;
+    };
+    const at = (floor: number) => {
+      const hp = spiders(floor);
+      expect(hp.length).toBeGreaterThan(0);
+      expect(new Set(hp)).toEqual(new Set([hp[0]]));
+      return hp[0];
+    };
+    // Spider base hp 2. floorScale then +pressure.atk. D15 has no pressure.
+    expect(at(15)).toBe(13);
+    expect(at(16)).toBe(17);
+    expect(at(20)).toBe(32);
+    expect(at(25)).toBe(51);
   });
 });
 

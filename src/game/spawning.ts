@@ -28,6 +28,20 @@ function scaleEnemy<T extends { hp: number; attack: number; defense: number }>(t
   };
 }
 
+/** Spawn-only. HP bonus matches pressure ATK (+3 per floor after 15). */
+export function applySpawnPressure<T extends { hp: number; attack: number; defense: number }>(
+  base: T,
+  pressure: { atk: number; def: number },
+): T {
+  if (pressure.atk <= 0) return base;
+  return {
+    ...base,
+    attack: base.attack + pressure.atk,
+    defense: base.defense + pressure.def,
+    hp: base.hp + pressure.atk,
+  };
+}
+
 function scaleBoss<T extends { hp: number; attack: number; defense: number }>(type: T, tier: number): T {
   if (tier <= 0) return type;
   return {
@@ -66,9 +80,7 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
         const pos = spots[j];
         const rawType = getAmbushRangedType();
         const base = scaleEnemy(floorScale(rawType, floor), difficultyTier);
-        const type = pressure.atk > 0
-          ? { ...base, attack: base.attack + pressure.atk, defense: base.defense + pressure.def }
-          : base;
+        const type = applySpawnPressure(base, pressure);
         enemies.push({
           ...type,
           ranged: true,
@@ -84,9 +96,7 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
     if (room.theme === 'boss') {
       const rawBoss = getBossForFloor(floor);
       const bossBase = scaleBoss(floorScale(rawBoss, floor), difficultyTier);
-      const bossType = pressure.atk > 0
-        ? { ...bossBase, attack: bossBase.attack + pressure.atk, defense: bossBase.defense + pressure.def }
-        : bossBase;
+      const bossType = applySpawnPressure(bossBase, pressure);
       const cx = room.x + Math.floor(room.w / 2);
       const cy = room.y + Math.floor(room.h / 2);
       enemies.push({
@@ -105,9 +115,7 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
         for (let rx = room.x + 1; rx < room.x + room.w - 1; rx++) {
           if ((rx + ry) % 2 !== 0) continue;
           const base = scaleEnemy(floorScale(getRandomEnemy(floor, difficultyTier), floor), difficultyTier);
-          const type = pressure.atk > 0
-            ? { ...base, attack: base.attack + pressure.atk, defense: base.defense + pressure.def }
-            : base;
+          const type = applySpawnPressure(base, pressure);
           enemies.push({
             ...type,
             id: `den-${i}-${ry}-${rx}-${Math.random()}`,
@@ -127,9 +135,7 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
     for (let j = 0; j < count; j++) {
       const rawType = room.theme === 'forest' ? getForestEnemy(floor) : getRandomEnemy(floor, difficultyTier);
       const base = scaleEnemy(floorScale(rawType, floor), difficultyTier);
-      const type = pressure.atk > 0
-        ? { ...base, attack: base.attack + pressure.atk, defense: base.defense + pressure.def }
-        : base;
+      const type = applySpawnPressure(base, pressure);
       let spawnPos: Position = {
         x: room.x + 1 + Math.floor(Math.random() * (room.w - 2 || 1)),
         y: room.y + 1 + Math.floor(Math.random() * (room.h - 2 || 1)),
@@ -174,9 +180,7 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
         const echoBoss = getBossForFloor(floor - 5);
         const rawEcho = getEchoEnemy(echoBoss);
         const echoBase = scaleEnemy(floorScale(rawEcho, floor), difficultyTier);
-        const echoType = pressure.atk > 0
-          ? { ...echoBase, attack: echoBase.attack + pressure.atk, defense: echoBase.defense + pressure.def }
-          : echoBase;
+        const echoType = applySpawnPressure(echoBase, pressure);
         const replaceIdx = roomEnemyStart + Math.floor(Math.random() * (enemies.length - roomEnemyStart));
         const replacePos = enemies[replaceIdx].pos;
         enemies[replaceIdx] = {
