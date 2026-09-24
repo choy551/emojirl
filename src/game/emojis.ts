@@ -164,20 +164,51 @@ export function getEmojiPowerByEmoji(emoji: string): Omit<EmojiItem, 'id' | 'con
   return found ? { ...found } : getRandomEmojiPower();
 }
 
+type CatalogItem = {
+  emoji: string;
+  name?: string;
+  description: string;
+  isEquipment?: boolean;
+  healAmount?: number;
+  ammoAmount?: number;
+  activeKind?: string;
+  bagPassive?: { description?: string };
+};
+
+/** Soul wording only. Gear, food, and ammo that share an emoji keep their own copy. */
+function soulCatalogEntry(item: CatalogItem) {
+  if (item.isEquipment || item.healAmount !== undefined || item.ammoAmount !== undefined || item.activeKind) return undefined;
+  return EMOJI_POWERS.find(e => e.emoji === item.emoji);
+}
+
+function equipmentCatalogDescription(item: CatalogItem): string | undefined {
+  if (!item.isEquipment || !item.name) return undefined;
+  return EQUIPMENT_DROPS.find(e => e.name === item.name)?.description;
+}
+
 /** Live catalog copy so saved items pick up wording nerfs without a new drop. */
-export function soulHelpText(item: { emoji: string; description: string; bagPassive?: { description?: string } }): {
+export function soulHelpText(item: CatalogItem): {
   description: string;
   bagPassiveDescription?: string;
 } {
-  const cat = EMOJI_POWERS.find(e => e.emoji === item.emoji);
+  const gear = equipmentCatalogDescription(item);
+  if (item.isEquipment) {
+    return { description: gear ?? item.description };
+  }
+  const cat = soulCatalogEntry(item);
   return {
     description: cat?.description ?? item.description,
     bagPassiveDescription: cat?.bagPassive?.description ?? item.bagPassive?.description,
   };
 }
 
-export function applySoulCatalogCopy<T extends { emoji: string; description: string; bagPassive?: { description?: string } }>(item: T): T {
-  const cat = EMOJI_POWERS.find(e => e.emoji === item.emoji);
+export function applySoulCatalogCopy<T extends CatalogItem>(item: T): T {
+  if (item.isEquipment) {
+    const gear = equipmentCatalogDescription(item);
+    if (!gear || gear === item.description) return item;
+    return { ...item, description: gear };
+  }
+  const cat = soulCatalogEntry(item);
   if (!cat) return item;
   return {
     ...item,
