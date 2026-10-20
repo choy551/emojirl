@@ -3,6 +3,7 @@ import type { BagPassiveSummary } from './types';
 import { STACKABLE_BAG_CAPS, isStackableBagPassive } from './passives';
 import { EMOJI_POWERS } from './emojis';
 import { hotbarCapFor, padGhostHotbar, voidGhostCapacity } from './voidDamage';
+import { drinkEvasionBonus } from './drinks';
 
 export function isNonStackableBagPassiveDuplicate(item: EmojiItem, inv: EmojiItem[]): boolean {
   if (!item.bagPassive?.nonStackable) return false;
@@ -74,7 +75,7 @@ function addItemsToBag(
         }
         continue;
       }
-      const bagCount = newInv.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment).length;
+      const bagCount = newInv.filter(isHotbarBagItem).length;
       if (bagCount >= cap) { newBank.push({ ...item, stackCount: addCount }); continue; }
       if (addCount > cap) {
         newInv.push({ ...item, stackCount: cap });
@@ -84,8 +85,8 @@ function addItemsToBag(
       newInv.push({ ...item, stackCount: addCount });
       continue;
     }
-    const bagCount = newInv.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment).length;
-    if (item.healAmount !== undefined || item.ammoAmount !== undefined || bagCount < cap) {
+    const bagCount = newInv.filter(isHotbarBagItem).length;
+    if (item.healAmount !== undefined || item.ammoAmount !== undefined || item.drinkTier !== undefined || bagCount < cap) {
       newInv.push(item);
     } else {
       newBank.push(item);
@@ -102,7 +103,7 @@ export function activeKindLabel(kind: string): string {
 }
 
 export function sortBagSlots(inv: EmojiItem[]): EmojiItem[] {
-  const items = inv.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment);
+  const items = inv.filter(isHotbarBagItem);
   return [...items].sort((a, b) => {
     const score = (i: EmojiItem) => {
       if (i.consumed) return 3;
@@ -116,7 +117,7 @@ export function sortBagSlots(inv: EmojiItem[]): EmojiItem[] {
 }
 
 function isHotbarBagItem(item: EmojiItem): boolean {
-  return item.healAmount === undefined && item.ammoAmount === undefined && !item.isEquipment;
+  return item.healAmount === undefined && item.ammoAmount === undefined && item.drinkTier === undefined && !item.isEquipment;
 }
 
 function isEligibleBankPull(item: EmojiItem, inventory: EmojiItem[]): boolean {
@@ -260,7 +261,7 @@ export function passiveInventory(player: Player): EmojiItem[] {
   const slottedReals = cells.filter((s): s is EmojiItem => !!s && !s.isVoidGhost);
   const slottedIds = new Set(slottedReals.map(s => s.id));
   const kept = player.inventory.filter(i => {
-    const hotbarSoul = i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment && !i.isVoidGhost;
+    const hotbarSoul = i.healAmount === undefined && i.ammoAmount === undefined && i.drinkTier === undefined && !i.isEquipment && !i.isVoidGhost;
     if (!hotbarSoul) return true;
     return slottedIds.has(i.id);
   });
@@ -412,7 +413,7 @@ export function applyEquipmentAndPassives(player: Player): Player {
       attack:  player.stats.attack  + passives.attack  + eqAtk + buffAtk,
       defense: player.stats.defense + passives.defense + eqDef + buffDef,
       speed:   player.stats.speed   + passives.speed   + eqSpd,
-      evasion: player.stats.evasion + passives.evasion + eqEva,
+      evasion: player.stats.evasion + passives.evasion + eqEva + drinkEvasionBonus(player),
       luck:    player.stats.luck    + passives.luck    + eqLck,
     },
   };

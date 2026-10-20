@@ -6,9 +6,11 @@ import { rarityTooltipSuffix } from '../../game/dropTable';
 interface MobileBagStripProps {
   bagSlots: (EmojiItem | null)[];
   healSlots: EmojiItem[];
+  drinkSlots: EmojiItem[];
   activeProjectileKind?: string;
   onUseSlot: (i: number) => void;
   onUseHeal: () => void;
+  onUseDrink: () => void;
   onOpenBag: () => void;
   itemInspectProps: (item: EmojiItem | null) => DOMAttributes<HTMLButtonElement>;
   /** Compact 3×3 grid for one-handed thumb reach; default is the full-width strip. */
@@ -18,7 +20,7 @@ interface MobileBagStripProps {
 
 /** Compact horizontal quick-use hotbar shown on touch devices in place of the sidebar. */
 export function MobileBagStrip({
-  bagSlots, healSlots, activeProjectileKind, onUseSlot, onUseHeal, onOpenBag, itemInspectProps,
+  bagSlots, healSlots, drinkSlots, activeProjectileKind, onUseSlot, onUseHeal, onUseDrink, onOpenBag, itemInspectProps,
   layout = 'bar', align = 'stretch',
 }: MobileBagStripProps) {
   const slots = (
@@ -64,10 +66,21 @@ export function MobileBagStrip({
           data-testid="mobile-heal"
           onClick={onUseHeal}
           className="relative w-8 h-8 shrink-0 bg-card border border-emerald-500/40 rounded flex items-center justify-center text-base active:scale-90 transition-transform"
-          title="Use best heal (H)"
+          title="Use best heal (h)"
         >
           {healSlots[0].emoji}
           {healSlots.length > 1 && <span className="absolute bottom-0 right-px text-[7px] text-emerald-400 font-bold leading-none">×{healSlots.length}</span>}
+        </button>
+      )}
+      {drinkSlots.length > 0 && (
+        <button
+          data-testid="mobile-drink"
+          onClick={onUseDrink}
+          className="relative w-8 h-8 shrink-0 bg-card border border-sky-500/40 rounded flex items-center justify-center text-base active:scale-90 transition-transform"
+          title="Drink (H). Never restores HP."
+        >
+          {drinkSlots[0].emoji}
+          {drinkSlots.length > 1 && <span className="absolute bottom-0 right-px text-[7px] text-sky-300 font-bold leading-none">×{drinkSlots.length}</span>}
         </button>
       )}
       <button

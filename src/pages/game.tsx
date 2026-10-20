@@ -15,7 +15,8 @@ import { BlinkTalentModal } from '../components/BlinkTalentModal';
 import { getRandomEmojiPower } from '../game/emojis';
 import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
-import { getMood, MOODS } from '../game/moods';
+import { MOODS } from '../game/moods';
+import { isDrinkStealthActive, playerMood } from '../game/drinks';
 import { getClassDef } from '../game/classes';
 import { classFlies, crownItem, fencerEvasion, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, startFloorContract } from '../game/prestige';
 import { GENIE_BASE_MP } from '../game/prestigeConstants';
@@ -704,6 +705,7 @@ export default function Game() {
     handleWait,
     handleCloseDoor,
     handleUseHeal,
+    handleUseDrink,
     applyWizardMode,
     handleCycleRangedTarget,
     applyNinjaMode,
@@ -1488,7 +1490,7 @@ export default function Game() {
             if (selId === item.id) {
               // Second Enter on selected non-equipment item: pull it into the hotbar
               if (!item.isEquipment) {
-                const bagNonHeal = gs.player.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined);
+                const bagNonHeal = gs.player.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && i.drinkTier === undefined);
                 handleBankMove(item.id, bagNonHeal.length < 9 ? bagNonHeal.length : 0);
               }
               setSelectedItemId(null);
@@ -1777,8 +1779,9 @@ export default function Game() {
         setAutoRest(v => !v);
         return;
       }
-      // Use heal consumable: h
+      // Use heal consumable: h. Uppercase H drinks and never restores HP.
       if (e.key === 'h') { e.preventDefault(); handleUseHeal(); return; }
+      if (e.key === 'H') { e.preventDefault(); handleUseDrink(); return; }
       // Cook food at campfire: f
       if (e.key === 'f') { e.preventDefault(); handleCook(); return; }
       // Close adjacent door: c
@@ -1876,7 +1879,7 @@ export default function Game() {
       window.removeEventListener('keyup', handleKeyUp);
 
     };
-  }, [handleMove, handleWait, handleUseHeal, handleCook, handleCloseDoor, handleUseSlot, handleBankMove, setAutoRest, applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, handleBlinkStrike, handleBlinkStrikeOnTarget, enterBlinkTargetMode, exitBlinkTargetMode, applyRangerMode, handleCowboyTactics, handleFireProjectile, addLog, doContextAction, shopItems, ammoCacheItems, cycleVoidAttack, beginUnmake, castUnmakeAt, exitUnmakeTargetMode]);
+  }, [handleMove, handleWait, handleUseHeal, handleUseDrink, handleCook, handleCloseDoor, handleUseSlot, handleBankMove, setAutoRest, applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, handleBlinkStrike, handleBlinkStrikeOnTarget, enterBlinkTargetMode, exitBlinkTargetMode, applyRangerMode, handleCowboyTactics, handleFireProjectile, addLog, doContextAction, shopItems, ammoCacheItems, cycleVoidAttack, beginUnmake, castUnmakeAt, exitUnmakeTargetMode]);
 
   // ── render ────────────────────────────────────────────────────────────────
   if (!gameState) return <div className="p-8 text-center text-muted-foreground">Loading depths...</div>;
@@ -1906,14 +1909,17 @@ export default function Game() {
       };
     });
   };
-  const currentMood = getMood(player.stats.moodValue, player.stats.hp, player.stats.maxHp, player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, player.characterClass === '🤠');
+  const currentMood = playerMood(player);
   const moodData = MOODS[currentMood];
 
   // ── Detection / Aggro status ───────────────────────────────────────────────
   const engagedEnemies = gameState.enemies.filter(e => e.engaged);
   const huntedByVisible = engagedEnemies.some(e => gameState.map[e.pos.y]?.[e.pos.x]?.visible);
   // Stealth only counts if no enemies have already spotted the player
-  const isNinjaStealth = (player.characterClass === '🥷' || isHitman(player.characterClass)) && (gameState.stealthMode || (player.characterClass === '🥷' && autoStealth)) && engagedEnemies.length === 0;
+  const isNinjaStealth = (
+    ((player.characterClass === '🥷' || isHitman(player.characterClass)) && (gameState.stealthMode || (player.characterClass === '🥷' && autoStealth)))
+    || isDrinkStealthActive(player)
+  ) && engagedEnemies.length === 0;
   const detectionState: 'unseen' | 'seen' | 'hunted' =
     huntedByVisible ? 'hunted' :
     engagedEnemies.length > 0 ? 'seen' :
@@ -1967,6 +1973,7 @@ export default function Game() {
   });
   const mobileGeneralActions: ActionItem[] = [
     { id: 'heal', icon: '❤️', label: 'Heal', onUse: handleUseHeal },
+    { id: 'drink', icon: '🧃', label: 'Drink', onUse: handleUseDrink },
     { id: 'rest', icon: '💤', label: 'Rest', active: autoRest, onUse: () => { setTravelTarget(null); setAutoExplore(false); setAutoRest(v => !v); } },
     { id: 'explore', icon: '🔭', label: 'Explore', active: autoExplore, onUse: () => { setTravelTarget(null); setAutoRest(false); setAutoExplore(v => !v); } },
     { id: 'cook', icon: '🔥', label: 'Cook', onUse: handleCook },
@@ -2524,6 +2531,7 @@ export default function Game() {
     }
   }
   const healSlots = player.inventory.filter(i => i.healAmount !== undefined && !i.consumed);
+  const drinkSlots = player.inventory.filter(i => i.drinkTier !== undefined && !i.consumed);
 
   const xpThisLevel = xpThresholdForLevel(player.stats.level);
   const xpNextLevel = xpThresholdForLevel(player.stats.level + 1);
@@ -2666,9 +2674,11 @@ export default function Game() {
           <MobileBagStrip
             bagSlots={bagSlots}
             healSlots={healSlots}
+            drinkSlots={drinkSlots}
             activeProjectileKind={gameState.activeProjectile?.kind}
             onUseSlot={handleUseSlot}
             onUseHeal={handleUseHeal}
+            onUseDrink={handleUseDrink}
             onOpenBag={() => setBankOpen(true)}
             itemInspectProps={itemInspectProps}
             align={oneHanded ? thumbSide : 'stretch'}
@@ -2941,8 +2951,8 @@ export default function Game() {
           );
         })()}
 
-        {/* Active food buffs */}
-        {(player.stats.activeBuffs ?? []).length > 0 && (
+        {/* Active food buffs and the current drink */}
+        {((player.stats.activeBuffs ?? []).length > 0 || (player.drinkBuff && player.drinkBuff.turnsLeft > 0)) && (
           <>
             <div className="h-7 w-px bg-border/40 shrink-0" />
             <div className="flex gap-1 shrink-0">
@@ -2957,6 +2967,16 @@ export default function Game() {
                   <span className="text-orange-400/60">{buf.turnsLeft}t</span>
                 </div>
               ))}
+              {player.drinkBuff && player.drinkBuff.turnsLeft > 0 && (
+                <div
+                  title={`${player.drinkBuff.label} — ${player.drinkBuff.turnsLeft} turns left. Drinks never restore HP.`}
+                  className="flex items-center gap-0.5 bg-sky-950/40 border border-sky-500/40 rounded px-1.5 py-0.5 text-[9px] text-sky-300"
+                >
+                  <span>🧃</span>
+                  <span className="font-bold">{player.drinkBuff.label}</span>
+                  <span className="text-sky-400/60">{player.drinkBuff.turnsLeft}t</span>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -3913,10 +3933,12 @@ export default function Game() {
         gameState={gameState}
         bagSlots={bagSlots}
         healSlots={healSlots}
+        drinkSlots={drinkSlots}
         bagPassiveSummary={bagPassiveSummary}
         equippedPlayer={applyEquipmentAndPassives(player)}
         handleUseSlot={handleUseSlot}
         handleUseHeal={handleUseHeal}
+        handleUseDrink={handleUseDrink}
         setBankOpen={setBankOpen}
         setBagTab={setBagTab}
         setSelectedItemId={setSelectedItemId}

@@ -9,6 +9,7 @@ import {
 } from '../../game/gameHelpers';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 import { _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../../game/flashSignals';
+import { applyDrinkToPlayer } from '../../game/drinks';
 import { creditVoidBoss, hotbarCapFor } from '../../game/voidDamage';
 
 export function useInventoryActions(
@@ -109,6 +110,15 @@ export function useInventoryActions(
           : `${item.emoji} ${item.name}: +${amount} HP restored.`);
         const newBank = prev.player.bank.filter(i => i.id !== itemId);
         const mid = { ...prev, player: { ...prev.player, stats, bank: newBank }, turn: prev.turn + 1 };
+        return applyEnemyTurns(mid, runEnemyTurns(mid));
+      }
+
+      if (item.drinkTier !== undefined) {
+        const drank = applyDrinkToPlayer(prev.player, item);
+        if (!drank.ok) { addLog(drank.log); return prev; }
+        addLog(drank.log);
+        const newBank = prev.player.bank.filter(i => i.id !== itemId);
+        const mid = { ...prev, player: { ...drank.player, bank: newBank }, turn: prev.turn + 1 };
         return applyEnemyTurns(mid, runEnemyTurns(mid));
       }
 

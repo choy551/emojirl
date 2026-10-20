@@ -1,4 +1,5 @@
 import { EmojiItem } from './types';
+import { DRINK_FLOOR_DROP_CHANCE, getRandomDrinkDrop } from './drinks';
 
 export const HEAL_DROPS: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   { emoji: '🍎', name: 'Apple',    description: 'Restores 2 HP · cook on 🔥 for more',  healAmount: 2 },
@@ -22,9 +23,10 @@ export const MONEY_BAG: Omit<EmojiItem, 'id' | 'consumed'> = {
   isMoneyBag: true,
 };
 
-/** Ground/kill loot: mostly food, sometimes a money bag. */
+/** Ground/kill loot: mostly food, sometimes a drink or a money bag. */
 export function getRandomFloorDrop(): Omit<EmojiItem, 'id' | 'consumed'> {
   if (Math.random() < 0.08) return { ...MONEY_BAG };
+  if (Math.random() < DRINK_FLOOR_DROP_CHANCE) return getRandomDrinkDrop();
   return getRandomHealDrop();
 }
 

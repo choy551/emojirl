@@ -9,7 +9,10 @@ import {
   classFlies, fencerOutgoingMult, gunshotPlan, isArcaneCaster, isFencer,
   isGenie, isHitman, isRoyalGuard, notePrestigeKill, pierceDamage, tickPrestigeTimers, tileBeyond,
 } from '../game/prestige';
-import { getMood } from '../game/moods';
+import {
+  applyDrinkBuffTick, cowboyCombatMoodValue, isDrinkStealthActive, playerMood,
+  RANGER_SURVIVALIST_SAVE_CHANCE, rangerDrinkBonuses, resolveRangedAmmoSpend,
+} from '../game/drinks';
 import { markEnemySeen, markEmojiSeen, markEnemyKilled } from '../game/discoveries';
 import {
   moodMax, chebyshev, hasLOS, hasLOSBetween, VISION_RADIUS,
@@ -167,10 +170,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (enemy.tag === 'Friendly') continue;
           if (enemy.tag === 'Neutral' && !enemy.engaged) continue;
           markEnemySeen(enemy.emoji);
-          const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, cls === '🤠');
+          const mood = playerMood(prev.player);
           const effectiveCowboy = applyEquipmentAndPassives(player);
           const _cowboyPassives = playerBagPassives(prev.player);
-          const cResult = resolveCombat(effectiveCowboy, enemy, addLog, { mood, cowboyMoodValue: cls === '🤠' ? prev.player.stats.moodValue : undefined, advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true, damageMult: shotPlan.damageMult });
+          const cResult = resolveCombat(effectiveCowboy, enemy, addLog, { mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true, damageMult: shotPlan.damageMult });
           if (cResult.fled) { const midState = { ...prev, turn: prev.turn + 1 }; return applyEnemyTurns(midState, runEnemyTurns(midState)); }
           addLog(shotPlan.label);
           const cFloats: FloatingText[] = [];
@@ -237,10 +240,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (enemy.isSpectator) break;
           if (enemy.tag === 'Friendly') continue;
           if (enemy.tag === 'Neutral' && !enemy.engaged) continue;
-          const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, player.characterClass === '🤠');
+          const mood = playerMood(prev.player);
           const effectiveRanger = applyEquipmentAndPassives(player);
           const _rangerPassives = playerBagPassives(prev.player);
-          const combatResult = resolveCombat(effectiveRanger, enemy, addLog, { mood, cowboyMoodValue: player.characterClass === '🤠' ? prev.player.stats.moodValue : undefined, advantage: _rangerPassives.advantageDice, execBlow: _rangerPassives.execBlow, trueAim: _rangerPassives.trueAim, shieldWall: _rangerPassives.shieldWall, firstShot: (cls === '🧝' || voidRanged) && !enemy.engaged, isRanged: true });
+          const combatResult = resolveCombat(effectiveRanger, enemy, addLog, { mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), advantage: _rangerPassives.advantageDice, execBlow: _rangerPassives.execBlow, trueAim: _rangerPassives.trueAim, shieldWall: _rangerPassives.shieldWall, firstShot: (cls === '🧝' || voidRanged) && !enemy.engaged, isRanged: true });
 
           const offHandAmmo = player.equipment.offHand?.specialAmmoKind;
           let specialAmmoEffect: Partial<Enemy> = {};
@@ -278,11 +281,21 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const rangerBeam = { positions: _rBeam, color: '#fb923c' };
 
           let newEnemies = [...prev.enemies];
-          const ammoSaved = cls === '🧝' && Math.random() < 0.5;
-          if (ammoSaved) addLog(`🪶 Survivalist — ammo saved!`);
+          const drinkAmmo = rangerDrinkBonuses(prev.player);
+          const royalBrew = isRoyalGuard(cls) && (drinkAmmo.survivalistBonus > 0 || drinkAmmo.arrowReclaimChance > 0);
+          const ammoSpend = (cls === '🧝' || royalBrew)
+            ? resolveRangedAmmoSpend(
+              RANGER_SURVIVALIST_SAVE_CHANCE,
+              drinkAmmo.survivalistBonus,
+              drinkAmmo.arrowReclaimChance,
+              Math.random,
+            )
+            : { saved: false, reclaimed: false, ammoDelta: -1 };
+          if (ammoSpend.saved) addLog(`🪶 Survivalist — ammo saved!`);
+          else if (ammoSpend.reclaimed) addLog(`🏹 Arrow reclaimed!`);
           let newPlayer: Player = {
             ...player,
-            ammo: player.ammo - (ammoSaved ? 0 : 1),
+            ammo: player.ammo + ammoSpend.ammoDelta,
             stats: { ...player.stats, hp: combatResult.playerHp },
           };
 
@@ -546,7 +559,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           setPendingFairyId(enemy.id);
           return prev;
         }
-        const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, cls === '🤠');
+        const mood = playerMood(prev.player);
         const weakMelee = cls === '🧝' && player.ammo <= 0;
         const wizardMelee = cls === '🧙';
         const fencerSwing = isFencer(cls) ? fencerOutgoingMult(player.stats) : null;
@@ -566,7 +579,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const ninjaEvaCombatPlayer = cls === '🥷'
           ? { ...combatPlayer, stats: { ...combatPlayer.stats, evasion: computeNinjaEvasion(combatPlayer) } }
           : combatPlayer;
-        const combatResult = resolveCombat(ninjaEvaCombatPlayer, enemy, addLog, { weakMelee, wizardMelee, pistolWhip: isPistolWhip, mood, cowboyMoodValue: cls === '🤠' ? prev.player.stats.moodValue : undefined, dualStrike: false, quadStrike: hasDualBlades, advantage: _meleePassives.advantageDice, execBlow: _meleePassives.execBlow, shieldWall: _meleePassives.shieldWall, floor: prev.currentFloor, damageMult: fencerSwing?.mult ?? 1 });
+        const combatResult = resolveCombat(ninjaEvaCombatPlayer, enemy, addLog, { weakMelee, wizardMelee, pistolWhip: isPistolWhip, mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), dualStrike: false, quadStrike: hasDualBlades, advantage: _meleePassives.advantageDice, execBlow: _meleePassives.execBlow, shieldWall: _meleePassives.shieldWall, floor: prev.currentFloor, damageMult: fencerSwing?.mult ?? 1 });
 
         if (cls === '🤠' && !combatResult.fled) {
           const dmgDealt = enemy.hp - Math.max(0, combatResult.enemyHp);
@@ -648,7 +661,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           }
           newPlayer.stats.moodValue = Math.min(moodMax(cls), newPlayer.stats.moodValue + 10);
           if (cls === '🥷') {
-            const wasUnseen = !!prev.stealthMode;
+            const wasUnseen = !!prev.stealthMode || isDrinkStealthActive(prev.player);
             const freeMovesGain = wasUnseen ? 2 : 1;
             newState.ninjaFreeMoves = (prev.ninjaFreeMoves ?? 0) + freeMovesGain;
             if ((newPlayer.stats.blinkStrikeCooldown ?? 0) > 0) {
@@ -1058,7 +1071,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (!voidWizardShot) {
             newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, mana: Math.max(0, (newPlayer.stats.mana ?? 0) - 1) } };
           }
-          const boltMood = getMood(newPlayer.stats.moodValue, newPlayer.stats.hp, newPlayer.stats.maxHp, newPlayer.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
+          const boltMood = playerMood(newPlayer);
           const _boltPassives = playerBagPassives(newPlayer);
           const boltResult = resolveCombat(applyEquipmentAndPassives(newPlayer), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall });
 
@@ -1156,7 +1169,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const remaining = (prev.ninjaFreeMoves ?? 0) - 1;
         newState.ninjaFreeMoves = remaining;
         if (remaining > 0) addLog(`🥷 Ghost step! (${remaining} free move${remaining !== 1 ? 's' : ''} left)`);
-        return withVisibility(newState);
+        return withVisibility(applyDrinkBuffTick(newState));
       }
 
       return withVisibility(applyEnemyTurns(newState, runEnemyTurns(newState)));
@@ -1252,7 +1265,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (!voidWizardShot) {
             waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, mana: Math.max(0, (waitPlayer.stats.mana ?? 0) - 1) } };
           }
-          const boltMood = getMood(waitPlayer.stats.moodValue, waitPlayer.stats.hp, waitPlayer.stats.maxHp, waitPlayer.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
+          const boltMood = playerMood(waitPlayer);
           const _boltPassives = playerBagPassives(waitPlayer);
           const boltResult = resolveCombat(applyEquipmentAndPassives(waitPlayer), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall });
           const boltDmg = boltTarget.hp - boltResult.enemyHp;
@@ -1427,7 +1440,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
   } = useTacticsActions(refs, setters, addLog);
 
   const {
-    handleUseHeal, handleCook, handleUseRope, handleUseSlot, handleShopBuyAndUse,
+    handleUseHeal, handleUseDrink, handleCook, handleUseRope, handleUseSlot, handleShopBuyAndUse,
   } = useItemActions(refs, setters, addLog, applyMonkeyDropOnKill);
 
   const {
@@ -1445,6 +1458,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     handleCloseDoor,
     handleBedRest,
     handleUseHeal,
+    handleUseDrink,
     handleCook,
     applyWizardMode,
     handleCycleRangedTarget,

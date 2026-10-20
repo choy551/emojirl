@@ -10,7 +10,7 @@ import {
   grantBlinkCredits,
   resolveBlinkCooldown,
 } from '../../game/blinkStrike';
-import { getMood } from '../../game/moods';
+import { playerMood } from '../../game/drinks';
 import { markEnemyKilled } from '../../game/discoveries';
 import {
   moodMax, chebyshev, hasLOSBetween, PLAYER_PASSABLE_TILES, playerBagPassives,
@@ -130,7 +130,7 @@ export function useCombatActions(
     const blinkPos = adjFree.length > 0 ? adjFree[0] : prev.player.pos;
 
     const _blinkPassives = playerBagPassives(prev.player);
-    const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
+    const mood = playerMood(prev.player);
 
     addLog(`🥷 Blink Strike → ${targets.map(t => `${t.emoji} ${t.name}`).join(' & ')}!`);
 
