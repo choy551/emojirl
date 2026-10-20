@@ -1,4 +1,6 @@
 import { GameState, Player } from '../game/types';
+import { applyEquipmentAndPassives } from '../game/inventory';
+import { blinkStrikeDamagePhrase, blinkTalentById, blinkTalentProgress } from '../game/blinkStrike';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -90,12 +92,22 @@ export function TacticsMenu({
         {/* Ninja */}
         {player.characterClass === '🥷' && (
           <div className="space-y-1.5">
+            {(() => {
+              const progress = blinkTalentProgress(player.stats.blinkStrikeCredits ?? 0, player.stats.blinkTalents);
+              const owned = (player.stats.blinkTalents ?? []).map(id => blinkTalentById(id).name);
+              return (
+                <div className="px-1 pb-1 text-[11px] leading-snug" data-testid="tactics-blink-talents">
+                  <div className="font-bold text-violet-200">{progress.hudLabel}</div>
+                  <div className="text-muted-foreground">{progress.nextLabel}{owned.length ? ` · ${owned.join(', ')}` : ''}</div>
+                </div>
+              );
+            })()}
             <button
               className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${(player.stats.blinkStrikeCooldown ?? 0) === 0 ? 'hover:bg-violet-500/20 text-violet-200' : 'opacity-50 cursor-default'}`}
               onClick={() => { if ((player.stats.blinkStrikeCooldown ?? 0) === 0) { enterBlinkTargetMode(); onClose(); } }}
             >
               <span className="font-mono text-muted-foreground w-4 shrink-0">1</span>
-              ⚡ Blink Strike — teleport &amp; 2× damage
+              ⚡ Blink Strike — teleport &amp; {blinkStrikeDamagePhrase(applyEquipmentAndPassives(player).stats.luck)}
               <span className="ml-auto text-[10px] font-mono">
                 {(player.stats.blinkStrikeCooldown ?? 0) === 0 ? <span className="text-violet-400">READY · X</span> : <span className="text-zinc-400">{player.stats.blinkStrikeCooldown}t</span>}
               </span>

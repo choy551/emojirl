@@ -82,6 +82,10 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     blinkStrikeCooldown:           rawStats.blinkStrikeCooldown            as number | undefined,
     blinkStrikeInstakillChain:     rawStats.blinkStrikeInstakillChain      as number | undefined,
     blinkStrikeInstakillOutOfCombat: rawStats.blinkStrikeInstakillOutOfCombat as number | undefined,
+    blinkStrikeCredits:            rawStats.blinkStrikeCredits             as number | undefined,
+    blinkTalents:                  rawStats.blinkTalents                   as PlayerStats['blinkTalents'],
+    blinkStrikeMarks:              rawStats.blinkStrikeMarks               as PlayerStats['blinkStrikeMarks'],
+    blinkMeleeCdCharges:           rawStats.blinkMeleeCdCharges            as number | undefined,
     overhealDecayTick:             rawStats.overhealDecayTick             as number | undefined,
   };
 

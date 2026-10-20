@@ -10,6 +10,9 @@ interface MobileTopBarProps {
   onMenu: () => void;
   /** When set, the hamburger sits on this side for thumb reach. */
   menuSide?: 'left' | 'right';
+  /** Ninja-only compact Blink talent progress, e.g. "⚡12/44". */
+  blinkTalentCompact?: string;
+  blinkTalentTitle?: string;
 }
 
 function MiniBar({ pct, color, label, value }: { pct: number; color: string; label: string; value: string }) {
@@ -30,7 +33,7 @@ function MiniBar({ pct, color, label, value }: { pct: number; color: string; lab
 }
 
 /** Slim always-visible stat strip for touch devices. Tapping it opens the full StatsModal. */
-export function MobileTopBar({ player, className, level, currentFloor, xpProgress, onExpand, onMenu, menuSide = 'right' }: MobileTopBarProps) {
+export function MobileTopBar({ player, className, level, currentFloor, xpProgress, onExpand, onMenu, menuSide = 'right', blinkTalentCompact, blinkTalentTitle }: MobileTopBarProps) {
   const hp = player.stats.hp;
   const maxHp = player.stats.maxHp;
   const overheal = hp > maxHp;
@@ -63,6 +66,15 @@ export function MobileTopBar({ player, className, level, currentFloor, xpProgres
             {showAmmo && (
               <span className="font-bold tabular-nums text-amber-300/90 shrink-0">
                 {player.characterClass === '🧝' ? '🏹' : '🪙'}{player.ammo}
+              </span>
+            )}
+            {blinkTalentCompact && (
+              <span
+                className="font-bold tabular-nums text-violet-200 shrink-0"
+                data-testid="hud-blink-talents-mobile"
+                title={blinkTalentTitle}
+              >
+                {blinkTalentCompact}
               </span>
             )}
             <span className="font-bold tabular-nums text-amber-300 shrink-0 ml-auto">💰{player.stats.gold}</span>

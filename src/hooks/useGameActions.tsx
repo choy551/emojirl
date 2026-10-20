@@ -3,6 +3,7 @@ import { Player, Enemy, Position, FloatingText, GameState } from '../game/types'
 import { resolveCombat, getCowboyUnarmedBonus, isHostileCombatTarget } from '../game/combat';
 import { getFoodHealItems } from '../game/emojis';
 import { rollKillDrop } from '../game/dropTable';
+import { applyFlowingStrike } from '../game/blinkStrike';
 import { getMood } from '../game/moods';
 import { markEnemySeen, markEmojiSeen, markEnemyKilled } from '../game/discoveries';
 import {
@@ -553,6 +554,11 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
         let newEnemies = [...prev.enemies];
         let newPlayer: Player = { ...player, stats: { ...player.stats, hp: combatResult.playerHp } };
+        if (cls === '🥷' && !combatResult.fled) {
+          const flow = applyFlowingStrike(newPlayer.stats);
+          if (flow.log) addLog(flow.log);
+          newPlayer = { ...newPlayer, stats: flow.stats };
+        }
         if (combatResult.goldStolen && combatResult.goldStolen > 0) {
           newPlayer.stats.gold = Math.max(0, newPlayer.stats.gold - combatResult.goldStolen);
         }

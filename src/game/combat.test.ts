@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { isHostileCombatTarget, skullCritBonus } from './combat';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { isHostileCombatTarget, skullCritBonus, resolveCombat } from './combat';
+import { blinkStrikeMultiplierPercent, critStat } from './blinkStrike';
+import type { Enemy, Player } from './types';
 
 describe('isHostileCombatTarget', () => {
   it('treats untagged regular enemies as foes', () => {
@@ -22,6 +24,76 @@ describe('isHostileCombatTarget', () => {
   it('never targets arena spectators, even if flagged engaged', () => {
     expect(isHostileCombatTarget({ isSpectator: true, tag: 'Neutral', engaged: true })).toBe(false);
     expect(isHostileCombatTarget({ isSpectator: true })).toBe(false);
+  });
+});
+
+function ninja(stats: Partial<Player['stats']> = {}): Player {
+  return {
+    pos: { x: 0, y: 0 },
+    emoji: '🥷',
+    characterClass: '🥷',
+    ammo: 0,
+    inventory: [],
+    bank: [],
+    equipment: {},
+    stats: {
+      hp: 40, maxHp: 40, attack: 10, defense: 0, speed: 8, evasion: 0,
+      luck: 0, level: 1, xp: 0, moodValue: 0, gold: 0,
+      ...stats,
+    },
+  };
+}
+
+function rat(stats: Partial<Enemy> = {}): Enemy {
+  return {
+    id: 'rat', pos: { x: 1, y: 0 }, emoji: '🐀', name: 'Rat',
+    hp: 400, maxHp: 400, attack: 0, defense: 0, speed: 1, engaged: true,
+    ...stats,
+  };
+}
+
+function scriptedRandom(values: number[]) {
+  let i = 0;
+  vi.spyOn(Math, 'random').mockImplementation(() => values[Math.min(i++, values.length - 1)] ?? 0);
+}
+
+describe('Blink Strike damage', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('scales the hit with the soft-capped CRIT stat and doubles that on a crit', () => {
+    expect(critStat(0)).toBe(5);
+    expect(blinkStrikeMultiplierPercent(critStat(0))).toBe(210);
+    const logs: string[] = [];
+    scriptedRandom([0, 0.5, 0.99]);
+    const plain = resolveCombat(ninja(), rat(), m => logs.push(m), { blinkStrike: true, mood: 'neutral' });
+    expect(400 - plain.enemyHp).toBe(21);
+    expect(logs.some(l => l.includes('CRITICAL'))).toBe(false);
+
+    logs.length = 0;
+    scriptedRandom([0, 0, 0.99]);
+    const crit = resolveCombat(ninja(), rat(), m => logs.push(m), { blinkStrike: true, mood: 'neutral' });
+    expect(400 - crit.enemyHp).toBe(42);
+    expect(logs.some(l => l.includes('CRITICAL'))).toBe(true);
+  });
+
+  it('is 200% at 0 CRIT and stops at the CRIT soft cap instead of 400%', () => {
+    expect(blinkStrikeMultiplierPercent(0)).toBe(200);
+    expect(blinkStrikeMultiplierPercent(100)).toBe(398);
+    expect(critStat(200)).toBe(99);
+    scriptedRandom([0, 0.99, 0.99]);
+    const capped = resolveCombat(ninja({ attack: 51, luck: 94 }), rat(), () => {}, { blinkStrike: true, mood: 'neutral' });
+    const base = Math.round(51 * 398 / 100);
+    expect(400 - capped.enemyHp).toBe(base);
+    expect(base).not.toBe(51 * 4);
+    scriptedRandom([0, 0, 0.99]);
+    const crit = resolveCombat(ninja({ attack: 51, luck: 94 }), rat(), () => {}, { blinkStrike: true, mood: 'neutral' });
+    expect(400 - crit.enemyHp).toBe(base * 2);
+  });
+
+  it('still applies the unaware Shadow Strike multiplier under the Blink multiplier', () => {
+    scriptedRandom([0, 0.99, 0.99]);
+    const hit = resolveCombat(ninja(), rat({ engaged: false }), () => {}, { blinkStrike: true, mood: 'neutral' });
+    expect(400 - hit.enemyHp).toBe(Math.round(Math.round(10 * 2.1) * 1.6));
   });
 });
 

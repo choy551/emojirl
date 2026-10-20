@@ -1,4 +1,6 @@
 import { Player } from '../../game/types';
+import { applyEquipmentAndPassives } from '../../game/inventory';
+import { blinkStrikeMultiplierPercent, critStat } from '../../game/blinkStrike';
 
 // Mirrors the cooldown constants in useTacticsActions.ts (BLINK_ACTIVE + BLINK_CD).
 const BLINK_TOTAL_CD = 8;
@@ -98,10 +100,11 @@ export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
     }
     case '🥷': {
       const cd = player.stats.blinkStrikeCooldown ?? 0;
+      const pct = blinkStrikeMultiplierPercent(critStat(applyEquipmentAndPassives(player).stats.luck));
       return [
         {
           id: 'ninja-blink-strike', icon: '⚡', label: 'Blink Strike',
-          detail: cd > 0 ? `${cd}t` : 'Ready',
+          detail: cd > 0 ? `${pct}% · ${cd}t` : `${pct}% · Ready`,
           disabled: cd > 0,
           onUse: handleBlinkStrike,
         },

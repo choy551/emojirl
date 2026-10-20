@@ -1,6 +1,15 @@
 import { useCallback } from 'react';
 import { GameState, Player, FloatingText, PlacedBomb, ActiveProjectile } from '../../game/types';
 import { resolveCombat, isHostileCombatTarget } from '../../game/combat';
+import {
+  addBlinkMarks,
+  blinkLifestealHeal,
+  blinkMeleeChargesAfterCast,
+  blinkStrikeTargetCount,
+  creditsForBlinkTarget,
+  grantBlinkCredits,
+  resolveBlinkCooldown,
+} from '../../game/blinkStrike';
 import { getMood } from '../../game/moods';
 import { markEnemyKilled } from '../../game/discoveries';
 import {
@@ -93,6 +102,222 @@ export function useCombatActions(
     });
   }, [addLog, setGameState]);
 
+  const blinkInRange = (prev: GameState, enemy: GameState['enemies'][number]) => {
+    const dist = chebyshev(prev.player.pos, enemy.pos);
+    return dist >= 1 && dist <= 6 && hasLOSBetween(prev.map, prev.player.pos, enemy.pos) && !!prev.map[enemy.pos.y]?.[enemy.pos.x]?.visible
+      && isHostileCombatTarget(enemy);
+  };
+
+  const executeBlinkStrike = useCallback((prev: GameState, primary: GameState['enemies'][number]): GameState => {
+    const talents = prev.player.stats.blinkTalents;
+    const want = blinkStrikeTargetCount(talents);
+    const extras = want > 1
+      ? prev.enemies
+        .filter(e => e.id !== primary.id && blinkInRange(prev, e))
+        .sort((a, b) => chebyshev(prev.player.pos, a.pos) - chebyshev(prev.player.pos, b.pos))
+        .slice(0, want - 1)
+      : [];
+    const targets = [primary, ...extras];
+
+    const dirs8: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+    const adjFree = dirs8
+      .map(([dy, dx]) => ({ x: primary.pos.x + dx, y: primary.pos.y + dy }))
+      .filter(p => {
+        const tile = prev.map[p.y]?.[p.x];
+        return tile && PLAYER_PASSABLE_TILES.has(tile.type) &&
+          !prev.enemies.some(e => e.id !== primary.id && e.pos.x === p.x && e.pos.y === p.y);
+      });
+    const blinkPos = adjFree.length > 0 ? adjFree[0] : prev.player.pos;
+
+    const _blinkPassives = playerBagPassives(prev.player);
+    const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
+
+    addLog(`🥷 Blink Strike → ${targets.map(t => `${t.emoji} ${t.name}`).join(' & ')}!`);
+
+    let newEnemies = [...prev.enemies];
+    let newKillCounts = { ...prev.killCounts };
+    let ninjaFreeMoves = prev.ninjaFreeMoves ?? 0;
+    let newDifficultyTier = prev.difficultyTier ?? 0;
+    let runningHp = prev.player.stats.hp;
+    let xp = prev.player.stats.xp;
+    let level = prev.player.stats.level;
+    let maxHp = prev.player.stats.maxHp;
+    let maxMana = prev.player.stats.maxMana;
+    let mana = prev.player.stats.mana;
+    let anyKill = false;
+    let anyInstakill = false;
+    let totalDmg = 0;
+    let immediateCredits = 0;
+    const markIds: string[] = [];
+    const blinkFloats: FloatingText[] = [];
+    let playerDied = false;
+    let killer = { name: primary.name, emoji: primary.emoji };
+    let inventory = prev.player.inventory;
+    let bank = prev.player.bank;
+    const slainBosses: GameState['enemies'] = [];
+
+    for (const target of targets) {
+      const striker = applyEquipmentAndPassives({
+        ...prev.player,
+        pos: blinkPos,
+        inventory,
+        bank,
+        stats: { ...prev.player.stats, hp: runningHp, xp, level },
+      });
+      const combatResult = resolveCombat(striker, target, addLog, {
+        mood,
+        advantage: _blinkPassives.advantageDice,
+        execBlow: _blinkPassives.execBlow,
+        blinkStrike: true,
+      });
+      let actuallyKilled = combatResult.enemyDied;
+      const blinkDmg = target.hp - Math.max(0, combatResult.enemyHp);
+      totalDmg += Math.max(0, blinkDmg);
+      if (blinkDmg > 0) blinkFloats.push({ id: `blink-e-${target.id}-${prev.turn}`, pos: { ...target.pos }, text: `-${blinkDmg}`, color: '#818cf8', life: 2 });
+      runningHp = combatResult.playerHp;
+
+      let targetIdx = newEnemies.findIndex(e => e.id === target.id);
+      if (combatResult.enemyDied && target.godBlessed && targetIdx !== -1) {
+        const gb = handleGodBlessedImmunity(target, newEnemies, targetIdx, runningHp, prev.turn, addLog, blinkFloats);
+        if (gb.proc) {
+          actuallyKilled = false;
+          runningHp = gb.newPlayerHp;
+          newEnemies = gb.newEnemies;
+          targetIdx = newEnemies.findIndex(e => e.id === target.id);
+          if (runningHp <= 0) playerDied = true;
+        }
+      }
+
+      const instakill = actuallyKilled && target.hp >= target.maxHp;
+      const credit = creditsForBlinkTarget(instakill, actuallyKilled);
+      immediateCredits += credit.immediate;
+      if (credit.mark) markIds.push(target.id);
+
+      if (actuallyKilled) {
+        anyKill = true;
+        if (instakill) anyInstakill = true;
+        markEnemyKilled(target.emoji);
+        newKillCounts[target.emoji] = (newKillCounts[target.emoji] ?? 0) + 1;
+        if (targetIdx !== -1) newEnemies.splice(targetIdx, 1);
+        const dropped = applyMonkeyDropOnKill(target, { ...prev.player, inventory, bank, stats: { ...prev.player.stats, hp: runningHp, xp, level } });
+        inventory = dropped.inventory;
+        bank = dropped.bank;
+        const xpGain = target.isBoss ? 25 : 5;
+        const oldLevel = level;
+        xp += xpGain;
+        const newLevel = levelFromXP(xp);
+        addLog(`🏆 You defeated ${target.name}! +${xpGain} XP!`);
+        if (target.isBoss) {
+          addLog(`⬆️ Darkness stirs — enemies grow stronger from here on!`);
+          newDifficultyTier += 1;
+          slainBosses.push(target);
+        }
+        if (newLevel > oldLevel) {
+          const leveled = applyLevelUp(
+            { ...prev.player, inventory, bank, stats: { ...prev.player.stats, hp: runningHp, xp, level: oldLevel, maxHp, maxMana, mana } },
+            oldLevel,
+            newLevel,
+            addLog,
+          );
+          inventory = leveled.inventory;
+          bank = leveled.bank;
+          runningHp = leveled.stats.hp;
+          level = leveled.stats.level;
+          xp = leveled.stats.xp;
+          maxHp = leveled.stats.maxHp;
+          maxMana = leveled.stats.maxMana;
+          mana = leveled.stats.mana;
+        } else {
+          level = newLevel;
+        }
+      } else if (targetIdx !== -1) {
+        const live = newEnemies[targetIdx];
+        const blinkLanded = combatResult.enemyHp < target.hp && live.hp > 1;
+        const hp = live.godBlessed === false && target.godBlessed ? live.hp : combatResult.enemyHp;
+        const blinkBurn = blinkLanded && _blinkPassives.burningOnHit && hp > 0 ? { burningTurns: 3 } : {};
+        if (blinkLanded && _blinkPassives.burningOnHit) addLog(`🔥 ${target.emoji} is ignited!`);
+        if (live.hp > 0) {
+          newEnemies[targetIdx] = { ...live, hp: live.hp === 1 && target.godBlessed ? live.hp : hp, engaged: true, ...blinkBurn };
+        }
+      }
+
+      if (playerDied || runningHp <= 0 || combatResult.playerDied) {
+        playerDied = true;
+        killer = { name: target.name, emoji: target.emoji };
+        break;
+      }
+    }
+
+    const dmgToPlayer = prev.player.stats.hp - runningHp;
+    if (dmgToPlayer > 0) blinkFloats.push({ id: `blink-p-${prev.turn}`, pos: { ...blinkPos }, text: `-${dmgToPlayer}`, color: '#f97316', life: 2 });
+
+    const heal = runningHp > 0 ? blinkLifestealHeal(totalDmg, talents) : 0;
+    if (heal > 0 && runningHp < prev.player.stats.maxHp) {
+      const gained = Math.min(heal, prev.player.stats.maxHp - runningHp);
+      if (gained > 0) {
+        runningHp += gained;
+        addLog(`🥷 Blink lifesteal +${gained} HP.`);
+        blinkFloats.push({ id: `blink-ls-${prev.turn}`, pos: { ...blinkPos }, text: `+${gained}`, color: '#f472b6', life: 2 });
+      }
+    }
+
+    const cd = resolveBlinkCooldown({
+      talents,
+      killed: anyKill,
+      instakill: anyInstakill,
+      chain: prev.player.stats.blinkStrikeInstakillChain ?? 0,
+    });
+    addLog(cd.log);
+    if (anyKill) {
+      const freeMovesGain = prev.stealthMode ? 2 : 1;
+      ninjaFreeMoves += freeMovesGain;
+      addLog(`🥷 Assassin's Edge — ${freeMovesGain} free move${freeMovesGain > 1 ? 's' : ''}!`);
+    }
+
+    let newPlayer: Player = {
+      ...prev.player,
+      pos: blinkPos,
+      inventory,
+      bank,
+      stats: {
+        ...prev.player.stats,
+        hp: runningHp,
+        xp,
+        level,
+        maxHp,
+        maxMana,
+        mana,
+        blinkStrikeCooldown: cd.cooldown,
+        blinkStrikeInstakillChain: cd.chain,
+        blinkStrikeInstakillOutOfCombat: 0,
+        moodValue: anyKill
+          ? Math.min(moodMax('🥷'), prev.player.stats.moodValue + 15)
+          : Math.max(-100, prev.player.stats.moodValue - 5),
+        blinkMeleeCdCharges: blinkMeleeChargesAfterCast(talents),
+      },
+    };
+    const granted = grantBlinkCredits(newPlayer, immediateCredits);
+    granted.logs.forEach(addLog);
+    newPlayer = granted.player;
+    if (markIds.length) {
+      newPlayer = {
+        ...newPlayer,
+        stats: {
+          ...newPlayer.stats,
+          blinkStrikeMarks: addBlinkMarks(newPlayer.stats.blinkStrikeMarks, markIds, prev.turn + 1),
+        },
+      };
+    }
+
+    if (playerDied) {
+      return { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, gameOver: true, killer, killCounts: newKillCounts, difficultyTier: newDifficultyTier, floatingTexts: [...blinkFloats, ...prev.floatingTexts], ninjaFreeMoves };
+    }
+
+    let midState: GameState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, killCounts: newKillCounts, difficultyTier: newDifficultyTier, floatingTexts: [...blinkFloats, ...prev.floatingTexts], ninjaFreeMoves };
+    for (const boss of slainBosses) midState = creditVoidBoss(midState, boss);
+    return applyEnemyTurns(withVisibility(midState), runEnemyTurns(midState));
+  }, [addLog, applyMonkeyDropOnKill]);
+
   const handleBlinkStrikeOnTarget = useCallback((targetId: string) => {
     setGameState(prev => {
       if (!prev || prev.gameOver || prev.player.characterClass !== '🥷') return prev;
@@ -107,124 +332,13 @@ export function useCombatActions(
         addLog(`🥷 Blink Strike — ${target.name} is not hostile.`);
         return prev;
       }
-      const dist = chebyshev(prev.player.pos, target.pos);
-      if (dist < 1 || dist > 6 || !hasLOSBetween(prev.map, prev.player.pos, target.pos) || !prev.map[target.pos.y]?.[target.pos.x]?.visible) {
+      if (!blinkInRange(prev, target)) {
         addLog('🥷 Blink Strike — target out of range or LOS broken.');
         return prev;
       }
-
-      const dirs8: [number, number][] = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
-      const adjFree = dirs8
-        .map(([dy, dx]) => ({ x: target.pos.x + dx, y: target.pos.y + dy }))
-        .filter(p => {
-          const tile = prev.map[p.y]?.[p.x];
-          return tile && PLAYER_PASSABLE_TILES.has(tile.type) &&
-            !prev.enemies.some(e => e.id !== target.id && e.pos.x === p.x && e.pos.y === p.y);
-        });
-      const blinkPos = adjFree.length > 0 ? adjFree[0] : prev.player.pos;
-
-      const _blinkPassives = playerBagPassives(prev.player);
-      const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
-      const blinkEffPlayer = applyEquipmentAndPassives({ ...prev.player, pos: blinkPos });
-      const boostedPlayer = { ...blinkEffPlayer, pos: blinkPos, stats: { ...blinkEffPlayer.stats, attack: Math.round(blinkEffPlayer.stats.attack * 2) } };
-
-      addLog(`🥷 Blink Strike → ${target.emoji} ${target.name}!`);
-      const combatResult = resolveCombat(boostedPlayer, target, addLog, { mood, advantage: _blinkPassives.advantageDice, execBlow: _blinkPassives.execBlow });
-
-      let actuallyKilled = combatResult.enemyDied;
-      const blinkDmg = target.hp - Math.max(0, combatResult.enemyHp);
-
-      const blinkFloats: FloatingText[] = [];
-      if (blinkDmg > 0) blinkFloats.push({ id: `blink-e-${target.id}-${prev.turn}`, pos: { ...target.pos }, text: `-${blinkDmg}`, color: '#818cf8', life: 2 });
-      const dmgToPlayer = prev.player.stats.hp - combatResult.playerHp;
-      if (dmgToPlayer > 0) blinkFloats.push({ id: `blink-p-${prev.turn}`, pos: { ...blinkPos }, text: `-${dmgToPlayer}`, color: '#f97316', life: 2 });
-
-      let newEnemies = [...prev.enemies];
-      const targetIdx = newEnemies.findIndex(e => e.id === target.id);
-      let newKillCounts = { ...prev.killCounts };
-      let ninjaFreeMoves = prev.ninjaFreeMoves ?? 0;
-      let newDifficultyTier = prev.difficultyTier ?? 0;
-
-      let newPlayer: Player = {
-        ...prev.player,
-        pos: blinkPos,
-        stats: { ...prev.player.stats, hp: combatResult.playerHp, blinkStrikeCooldown: 8, moodValue: Math.max(-100, prev.player.stats.moodValue - 5) },
-      };
-
-      if (combatResult.enemyDied && target.godBlessed) {
-        const gb = handleGodBlessedImmunity(target, newEnemies, targetIdx, newPlayer.stats.hp, prev.turn, addLog, blinkFloats);
-        if (gb.proc) {
-          actuallyKilled = false;
-          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, hp: gb.newPlayerHp } };
-          newEnemies = gb.newEnemies;
-          if (gb.newPlayerHp <= 0) {
-            return { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, gameOver: true, killer: { name: target.name, emoji: target.emoji }, floatingTexts: [...blinkFloats, ...prev.floatingTexts] };
-          }
-        }
-      }
-
-      if (actuallyKilled) {
-        markEnemyKilled(target.emoji);
-        newKillCounts[target.emoji] = (newKillCounts[target.emoji] ?? 0) + 1;
-        if (targetIdx !== -1) newEnemies.splice(targetIdx, 1);
-        newPlayer = applyMonkeyDropOnKill(target, newPlayer);
-        const xpGain = target.isBoss ? 25 : 5;
-        const oldLevel = newPlayer.stats.level;
-        const newXP = newPlayer.stats.xp + xpGain;
-        const newLevel = levelFromXP(newXP);
-        newPlayer.stats.xp = newXP;
-        addLog(`🏆 You defeated ${target.name}! +${xpGain} XP!`);
-        if (target.isBoss) {
-          addLog(`⬆️ Darkness stirs — enemies grow stronger from here on!`);
-          newDifficultyTier = (prev.difficultyTier ?? 0) + 1;
-        }
-        if (newLevel > oldLevel) {
-          newPlayer = applyLevelUp(newPlayer, oldLevel, newLevel, addLog);
-        }
-        const blinkInstakill = target.hp >= target.maxHp;
-        const currentChain = prev.player.stats.blinkStrikeInstakillChain ?? 0;
-        if (blinkInstakill && currentChain < 3) {
-          const newChain = currentChain + 1;
-          newPlayer.stats.blinkStrikeCooldown = 0;
-          newPlayer.stats.blinkStrikeInstakillChain = newChain;
-          addLog(`🥷 Blink Kill! Chain ${newChain}/3 — instant reset!`);
-        } else if (blinkInstakill) {
-          newPlayer.stats.blinkStrikeCooldown = 3;
-          newPlayer.stats.blinkStrikeInstakillChain = currentChain;
-          addLog(`🥷 Blink Kill! Chain maxed — 3t cooldown.`);
-        } else {
-          newPlayer.stats.blinkStrikeCooldown = 7;
-          newPlayer.stats.blinkStrikeInstakillChain = 0;
-          addLog(`🥷 Blink Kill! Cooldown: 7t.`);
-        }
-        newPlayer.stats.moodValue = Math.min(moodMax('🥷'), prev.player.stats.moodValue + 15);
-        const freeMovesGain = prev.stealthMode ? 2 : 1;
-        ninjaFreeMoves += freeMovesGain;
-        addLog(`🥷 Assassin's Edge — ${freeMovesGain} free move${freeMovesGain > 1 ? 's' : ''}!`);
-      } else if (!target.godBlessed || !combatResult.enemyDied) {
-        if (targetIdx !== -1) {
-          const blinkLanded = combatResult.enemyHp < target.hp;
-          const blinkBurn = blinkLanded && _blinkPassives.burningOnHit ? { burningTurns: 3 } : {};
-          if (blinkLanded && _blinkPassives.burningOnHit) addLog(`🔥 ${target.emoji} is ignited!`);
-          newEnemies[targetIdx] = { ...target, hp: combatResult.enemyHp, engaged: true, ...blinkBurn };
-        }
-        newPlayer.stats.blinkStrikeInstakillChain = 0;
-        addLog(`🥷 Blink Strike — 8 turn cooldown started.`);
-      } else {
-        newPlayer.stats.blinkStrikeInstakillChain = 0;
-        addLog(`🥷 Blink Strike — 8 turn cooldown started.`);
-      }
-
-      if (combatResult.playerDied) {
-        return { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, gameOver: true, killer: { name: target.name, emoji: target.emoji }, floatingTexts: [...blinkFloats, ...prev.floatingTexts] };
-      }
-
-      newPlayer.stats.blinkStrikeInstakillOutOfCombat = 0;
-      let midState: GameState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, killCounts: newKillCounts, difficultyTier: newDifficultyTier, floatingTexts: [...blinkFloats, ...prev.floatingTexts], ninjaFreeMoves };
-      if (actuallyKilled && target.isBoss) midState = creditVoidBoss(midState, target);
-      return applyEnemyTurns(withVisibility(midState), runEnemyTurns(midState));
+      return executeBlinkStrike(prev, target);
     });
-  }, [addLog, setGameState]);
+  }, [addLog, executeBlinkStrike, setGameState]);
 
   const handleBlinkStrike = useCallback(() => {
     setGameState(prev => {
@@ -247,119 +361,9 @@ export function useCombatActions(
       const target = targets.reduce((a, b) =>
         chebyshev(prev.player.pos, a.pos) <= chebyshev(prev.player.pos, b.pos) ? a : b
       );
-
-      const dirs8: [number, number][] = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
-      const adjFree = dirs8
-        .map(([dy, dx]) => ({ x: target.pos.x + dx, y: target.pos.y + dy }))
-        .filter(p => {
-          const tile = prev.map[p.y]?.[p.x];
-          return tile && PLAYER_PASSABLE_TILES.has(tile.type) &&
-            !prev.enemies.some(e => e.id !== target.id && e.pos.x === p.x && e.pos.y === p.y);
-        });
-      const blinkPos = adjFree.length > 0 ? adjFree[0] : prev.player.pos;
-
-      const _blinkPassives = playerBagPassives(prev.player);
-      const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
-      const blinkEffPlayer = applyEquipmentAndPassives({ ...prev.player, pos: blinkPos });
-      const boostedPlayer = { ...blinkEffPlayer, pos: blinkPos, stats: { ...blinkEffPlayer.stats, attack: Math.round(blinkEffPlayer.stats.attack * 2) } };
-
-      addLog(`🥷 Blink Strike → ${target.emoji} ${target.name}!`);
-      const combatResult = resolveCombat(boostedPlayer, target, addLog, { mood, advantage: _blinkPassives.advantageDice, execBlow: _blinkPassives.execBlow });
-
-      let actuallyKilledX = combatResult.enemyDied;
-      const blinkDmg = target.hp - Math.max(0, combatResult.enemyHp);
-
-      const blinkFloats: FloatingText[] = [];
-      if (blinkDmg > 0) blinkFloats.push({ id: `blink-e-${target.id}-${prev.turn}`, pos: { ...target.pos }, text: `-${blinkDmg}`, color: '#818cf8', life: 2 });
-      const dmgToPlayer = prev.player.stats.hp - combatResult.playerHp;
-      if (dmgToPlayer > 0) blinkFloats.push({ id: `blink-p-${prev.turn}`, pos: { ...blinkPos }, text: `-${dmgToPlayer}`, color: '#f97316', life: 2 });
-
-      let newEnemies = [...prev.enemies];
-      const targetIdx = newEnemies.findIndex(e => e.id === target.id);
-      let newKillCounts = { ...prev.killCounts };
-      let ninjaFreeMoves = prev.ninjaFreeMoves ?? 0;
-      let newDifficultyTier = prev.difficultyTier ?? 0;
-
-      let newPlayer: Player = {
-        ...prev.player,
-        pos: blinkPos,
-        stats: { ...prev.player.stats, hp: combatResult.playerHp, blinkStrikeCooldown: 8, moodValue: Math.max(-100, prev.player.stats.moodValue - 5) },
-      };
-
-      if (combatResult.enemyDied && target.godBlessed) {
-        const gb = handleGodBlessedImmunity(target, newEnemies, targetIdx, newPlayer.stats.hp, prev.turn, addLog, blinkFloats);
-        if (gb.proc) {
-          actuallyKilledX = false;
-          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, hp: gb.newPlayerHp } };
-          newEnemies = gb.newEnemies;
-          if (gb.newPlayerHp <= 0) {
-            return { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, gameOver: true, killer: { name: target.name, emoji: target.emoji }, floatingTexts: [...blinkFloats, ...prev.floatingTexts] };
-          }
-        }
-      }
-
-      if (actuallyKilledX) {
-        markEnemyKilled(target.emoji);
-        newKillCounts[target.emoji] = (newKillCounts[target.emoji] ?? 0) + 1;
-        if (targetIdx !== -1) newEnemies.splice(targetIdx, 1);
-        newPlayer = applyMonkeyDropOnKill(target, newPlayer);
-        const xpGain = target.isBoss ? 25 : 5;
-        const oldLevel = newPlayer.stats.level;
-        const newXP = newPlayer.stats.xp + xpGain;
-        const newLevel = levelFromXP(newXP);
-        newPlayer.stats.xp = newXP;
-        addLog(`🏆 You defeated ${target.name}! +${xpGain} XP!`);
-        if (target.isBoss) {
-          addLog(`⬆️ Darkness stirs — enemies grow stronger from here on!`);
-          newDifficultyTier = (prev.difficultyTier ?? 0) + 1;
-        }
-        if (newLevel > oldLevel) {
-          newPlayer = applyLevelUp(newPlayer, oldLevel, newLevel, addLog);
-        }
-        const blinkInstakillX = target.hp >= target.maxHp;
-        const currentChainX = prev.player.stats.blinkStrikeInstakillChain ?? 0;
-        if (blinkInstakillX && currentChainX < 3) {
-          const newChain = currentChainX + 1;
-          newPlayer.stats.blinkStrikeCooldown = 0;
-          newPlayer.stats.blinkStrikeInstakillChain = newChain;
-          addLog(`🥷 Blink Kill! Chain ${newChain}/3 — instant reset!`);
-        } else if (blinkInstakillX) {
-          newPlayer.stats.blinkStrikeCooldown = 3;
-          newPlayer.stats.blinkStrikeInstakillChain = currentChainX;
-          addLog(`🥷 Blink Kill! Chain maxed — 3t cooldown.`);
-        } else {
-          newPlayer.stats.blinkStrikeCooldown = 7;
-          newPlayer.stats.blinkStrikeInstakillChain = 0;
-          addLog(`🥷 Blink Kill! Cooldown: 7t.`);
-        }
-        newPlayer.stats.moodValue = Math.min(moodMax('🥷'), prev.player.stats.moodValue + 15);
-        const freeMovesGain = prev.stealthMode ? 2 : 1;
-        ninjaFreeMoves += freeMovesGain;
-        addLog(`🥷 Assassin's Edge — ${freeMovesGain} free move${freeMovesGain > 1 ? 's' : ''}!`);
-      } else if (!target.godBlessed || !combatResult.enemyDied) {
-        if (targetIdx !== -1) {
-          const blinkLanded = combatResult.enemyHp < target.hp;
-          const blinkBurn = blinkLanded && _blinkPassives.burningOnHit ? { burningTurns: 3 } : {};
-          if (blinkLanded && _blinkPassives.burningOnHit) addLog(`🔥 ${target.emoji} is ignited!`);
-          newEnemies[targetIdx] = { ...target, hp: combatResult.enemyHp, engaged: true, ...blinkBurn };
-        }
-        newPlayer.stats.blinkStrikeInstakillChain = 0;
-        addLog(`🥷 Blink Strike — 8 turn cooldown started.`);
-      } else {
-        newPlayer.stats.blinkStrikeInstakillChain = 0;
-        addLog(`🥷 Blink Strike — 8 turn cooldown started.`);
-      }
-
-      if (combatResult.playerDied) {
-        return { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, gameOver: true, killer: { name: target.name, emoji: target.emoji }, floatingTexts: [...blinkFloats, ...prev.floatingTexts] };
-      }
-
-      newPlayer.stats.blinkStrikeInstakillOutOfCombat = 0;
-      let midState: GameState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, killCounts: newKillCounts, difficultyTier: newDifficultyTier, floatingTexts: [...blinkFloats, ...prev.floatingTexts], ninjaFreeMoves };
-      if (actuallyKilledX && target.isBoss) midState = creditVoidBoss(midState, target);
-      return applyEnemyTurns(withVisibility(midState), runEnemyTurns(midState));
+      return executeBlinkStrike(prev, target);
     });
-  }, [addLog, setGameState]);
+  }, [addLog, executeBlinkStrike, setGameState]);
 
   return { handlePlantBomb, handleFireProjectile, handleBlinkStrikeOnTarget, handleBlinkStrike };
 }

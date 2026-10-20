@@ -2,6 +2,7 @@ import { Player, GameState, BagPassiveSummary } from '../../game/types';
 import { applyEquipmentAndPassives, computeNinjaEvasion, pressureForRun } from '../../game/gameHelpers';
 import { getCowboyUnarmedBonus } from '../../game/combat';
 import { nullMomentumPercent } from '../../game/voidDamage';
+import { blinkStrikeDamagePhrase, blinkTalentById, blinkTalentProgress, critStat } from '../../game/blinkStrike';
 import { MiniMap } from '../MiniMap';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './oneHandedLayout';
 import { useDismissGuard } from '../../hooks/useDismissGuard';
@@ -32,7 +33,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
   const unarmed = player.characterClass === '🤠' && !player.equipment.mainHand?.weaponKind && !player.equipment.offHand?.weaponKind;
   const ironFist = (dualGuns && player.ammo <= 0) || unarmed ? getCowboyUnarmedBonus(player.stats.level) : 0;
   const atk = eff.stats.attack + ironFist;
-  const crit = Math.min(99, 5 + eff.stats.luck);
+  const crit = critStat(eff.stats.luck);
   const dodge = player.characterClass === '🥷' ? computeNinjaEvasion(eff) : Math.min(50, eff.stats.evasion ?? 0);
   const pressure = pressureForRun(currentFloor, gameState.deepDive);
   const voidDr = player.characterClass === '👤' ? nullMomentumPercent(player.stats.level) : 0;
@@ -116,6 +117,25 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
           {voidDr > 0 && <StatPill label="DR" value={`${voidDr}%`} color="text-zinc-200" />}
           {pressure.atk > 0 && <StatPill label="PRESSURE" value={`+${pressure.atk}/+${pressure.def}`} color="text-red-400" />}
         </div>
+
+        {player.characterClass === '🥷' && (() => {
+          const progress = blinkTalentProgress(player.stats.blinkStrikeCredits ?? 0, player.stats.blinkTalents);
+          const owned = player.stats.blinkTalents ?? [];
+          return (
+            <div data-testid="stats-blink-talents" className="rounded-lg border border-violet-400/30 bg-violet-500/10 px-2 py-2 text-[11px] leading-snug">
+              <div className="font-bold text-violet-200">{progress.statsLabel}</div>
+              <div className="text-muted-foreground">{progress.nextLabel} · {blinkStrikeDamagePhrase(eff.stats.luck)}</div>
+              {owned.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                  {owned.map(id => {
+                    const talent = blinkTalentById(id);
+                    return <li key={id}>⚡ {talent.name} — {talent.detail}</li>;
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Active food buffs */}
         {(player.stats.activeBuffs ?? []).length > 0 && (

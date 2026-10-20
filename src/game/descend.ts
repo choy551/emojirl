@@ -124,6 +124,12 @@ export function descendFloor(state: GameState, addLog: (text: string) => void): 
   if (cls === '🧙') newPlayer.stats.mana = newPlayer.stats.maxMana ?? 4;
   newState.stealthMode = false;
   newState.ninjaFreeMoves = 0;
+  // Marks are floor-local. Leaving them would credit the next floor's reused ids.
+  if (newPlayer.stats.blinkStrikeMarks) {
+    const stats = { ...newPlayer.stats };
+    delete stats.blinkStrikeMarks;
+    newPlayer = { ...newPlayer, stats };
+  }
   newState.player = newPlayer;
   newState = stampDualGunsFanfare(newState, prev.player.equipment, addLog);
   newState.turn++;
