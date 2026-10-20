@@ -1,6 +1,7 @@
 import { Player, Enemy, MoodType } from './types';
 import { crowGoldSteal } from './economy';
 import { applyNullMomentum } from './voidDamage';
+import { blinkStrikeDamageMultiplier, critStat } from './blinkStrike';
 
 /**
  * Auto-fire / barrage should only pick real foes: not companions, not friendlies,
@@ -93,7 +94,7 @@ export function resolveCombat(
   player: Player,
   enemy: Enemy,
   addLog: (msg: string) => void,
-  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean; floor?: number } = {}
+  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean; floor?: number; blinkStrike?: boolean } = {}
 ): CombatResult {
   const cls = player.characterClass;
   const mods = getMoodModifiers(opts.mood ?? 'neutral', player.stats.hp, player.stats.maxHp, opts.cowboyMoodValue);
@@ -185,6 +186,10 @@ export function resolveCombat(
       addLog(`You swing at ${enemy.emoji} — miss!`);
     } else {
       let rawDamage = player.stats.attack;
+      if (opts.blinkStrike) {
+        const mult = blinkStrikeDamageMultiplier(critStat(player.stats.luck ?? 0));
+        rawDamage = Math.round(rawDamage * mult);
+      }
       if (cls === '🥷' && !enemy.engaged) {
         rawDamage = Math.round(rawDamage * 1.6);
       } else if (opts.wizardMelee) {
@@ -202,7 +207,10 @@ export function resolveCombat(
       const actualDamage = Math.max(1, moodDamage - (enemy.defense ?? 0));
       newEnemyHp = enemy.hp - actualDamage;
 
-      if (cls === '🥷' && !enemy.engaged) {
+      if (opts.blinkStrike) {
+        const unaware = cls === '🥷' && !enemy.engaged;
+        addLog(`⚡ Blink Strike! ${actualDamage} dmg to ${enemy.emoji}${unaware ? ' (unaware)' : ''}${isCrit ? ' CRITICAL!' : ''}!`);
+      } else if (cls === '🥷' && !enemy.engaged) {
         addLog(`🥷 Shadow Strike! ${actualDamage} dmg to ${enemy.emoji} (unaware)!`);
       } else if (opts.wizardMelee) {
         addLog(`🧙 Frail melee — ${actualDamage} dmg to ${enemy.emoji} (no spells in range)`);

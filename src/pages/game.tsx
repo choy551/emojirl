@@ -2,6 +2,16 @@ import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { generateMap } from '../game/mapgen';
 import { Player, Enemy, EmojiItem, GameState, Position, EquipSlot } from '../game/types';
 import { getCowboyUnarmedBonus, isHostileCombatTarget } from '../game/combat';
+import {
+  blinkStrikeDamagePhrase,
+  blinkTalentById,
+  blinkTalentChoices,
+  blinkTalentProgress,
+  critStat,
+  pendingBlinkTalentOffer,
+} from '../game/blinkStrike';
+import type { BlinkTalentId } from '../game/types';
+import { BlinkTalentModal } from '../components/BlinkTalentModal';
 import { getRandomEmojiPower } from '../game/emojis';
 import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
@@ -265,6 +275,7 @@ export default function Game() {
   useEffect(() => { optionsOpenRef.current = optionsOpen; }, [optionsOpen]);
   const statsExpandedRef = useRef(false);
   useEffect(() => { statsExpandedRef.current = statsExpanded; }, [statsExpanded]);
+  const pickBlinkTalentRef = useRef<(id: BlinkTalentId) => void>(() => {});
   const [showRTFM, setShowRTFM] = useState(false);
   const showRTFMRef = useRef(false);
   useEffect(() => { showRTFMRef.current = showRTFM; }, [showRTFM]);
@@ -317,6 +328,7 @@ export default function Game() {
   // Android hardware/gesture Back and browser Back: close the top menu first.
   useAndroidBackButton(
     () => closeTopOverlay([
+      { id: 'blink-talent', isOpen: () => !!pendingBlinkTalentOffer(gameStateRef.current?.player.stats.blinkStrikeCredits ?? 0, gameStateRef.current?.player.characterClass === '🥷' ? gameStateRef.current.player.stats.blinkTalents : undefined), close: () => { /* pick is required */ } },
       { id: 'announce', isOpen: () => !!gameStateRef.current?.floorAnnouncement, close: () => setGameState(prev => prev ? { ...prev, floorAnnouncement: null } : prev) },
       { id: 'stat-card', isOpen: () => !!statCardItem, close: () => setStatCardItem(null) },
       { id: 'boat-warn', isOpen: () => lastBoatWarnSlot !== null, close: () => setLastBoatWarnSlot(null) },
@@ -468,7 +480,8 @@ export default function Game() {
     statsExpanded ||
     optionsOpen ||
     showRTFM ||
-    pauseMenuOpen
+    pauseMenuOpen ||
+    (gameState?.player.characterClass === '🥷' && !!pendingBlinkTalentOffer(gameState.player.stats.blinkStrikeCredits ?? 0, gameState.player.stats.blinkTalents))
   );
   const blockingOverlayOpenRef = useRef(false);
   useEffect(() => { blockingOverlayOpenRef.current = blockingOverlayOpen; }, [blockingOverlayOpen]);
@@ -1301,6 +1314,18 @@ export default function Game() {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      const talentState = gameStateRef.current;
+      const talentOffer = talentState?.player.characterClass === '🥷'
+        ? pendingBlinkTalentOffer(talentState.player.stats.blinkStrikeCredits ?? 0, talentState.player.stats.blinkTalents)
+        : null;
+      if (talentOffer) {
+        e.preventDefault();
+        if (e.repeat) return;
+        const n = parseInt(e.key, 10);
+        const choice = talentOffer.choices[n - 1];
+        if (choice) pickBlinkTalentRef.current(choice.id);
+        return;
+      }
       // ── RTFM overlay: let the browser scroll natively, only Esc closes ────
       if (showRTFMRef.current) {
         if (e.key === 'Escape') { e.preventDefault(); setShowRTFM(false); setPauseMenuOpen(true); }
@@ -1808,6 +1833,29 @@ export default function Game() {
 
   const { player, currentFloor } = gameState;
   const cls = getClassDef(player.characterClass);
+  const ninjaBlink = player.characterClass === '🥷'
+    ? {
+        phrase: blinkStrikeDamagePhrase(applyEquipmentAndPassives(player).stats.luck),
+        progress: blinkTalentProgress(player.stats.blinkStrikeCredits ?? 0, player.stats.blinkTalents),
+        offer: pendingBlinkTalentOffer(player.stats.blinkStrikeCredits ?? 0, player.stats.blinkTalents),
+      }
+    : null;
+  pickBlinkTalentRef.current = (id: BlinkTalentId) => {
+    const choices = blinkTalentChoices(gameStateRef.current?.player.stats.blinkTalents);
+    if (!choices.some(choice => choice.id === id)) return;
+    const talent = blinkTalentById(id);
+    setGameState(prev => {
+      if (!prev || prev.player.characterClass !== '🥷') return prev;
+      const owned = prev.player.stats.blinkTalents ?? [];
+      const offer = pendingBlinkTalentOffer(prev.player.stats.blinkStrikeCredits ?? 0, owned);
+      if (!offer || !offer.choices.some(choice => choice.id === id)) return prev;
+      addLog(`🥷 Blink talent: ${talent.name}.`);
+      return {
+        ...prev,
+        player: { ...prev.player, stats: { ...prev.player.stats, blinkTalents: [...owned, id] } },
+      };
+    });
+  };
   const currentMood = getMood(player.stats.moodValue, player.stats.hp, player.stats.maxHp, player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, player.characterClass === '🤠');
   const moodData = MOODS[currentMood];
 
@@ -2558,6 +2606,8 @@ export default function Game() {
             onExpand={() => setStatsExpanded(true)}
             onMenu={() => setPauseMenuOpen(true)}
             menuSide={oneHanded ? thumbSide : 'right'}
+            blinkTalentCompact={ninjaBlink ? `${ninjaBlink.progress.compactLabel}${ninjaBlink.progress.nextTier ? ` ${ninjaBlink.progress.nextTier}` : ''}` : undefined}
+            blinkTalentTitle={ninjaBlink ? `${ninjaBlink.progress.hudLabel} · ${ninjaBlink.progress.nextLabel}` : undefined}
           />
           <MobileBagStrip
             bagSlots={bagSlots}
@@ -2592,10 +2642,19 @@ export default function Game() {
                   <span
                     className={`px-1 py-px rounded text-[8px] font-bold border ${(player.stats.blinkStrikeCooldown ?? 0) === 0 ? 'bg-violet-500/30 text-violet-200 border-violet-400/60' : 'bg-zinc-700/40 text-zinc-400 border-zinc-600/40'}`}
                     style={blinkReadyFlash ? { animation: 'blink-cd-ready 0.7s ease-out forwards' } : blinkCdReducedFlash ? { animation: 'blink-cd-reduced 0.6s ease-out forwards' } : undefined}
-                    title="Blink Strike — kills reduce cooldown by 1 (2 if unseen). Instakills: -2."
+                    title={`Blink Strike — ${ninjaBlink?.phrase ?? 'strike'}. ${ninjaBlink?.progress.hudLabel ?? ''} ${ninjaBlink?.progress.nextLabel ?? ''}. Kills reduce cooldown by 1 (2 if unseen). Instakills: -2.`}
                   >
                     ⚡{(player.stats.blinkStrikeCooldown ?? 0) === 0 ? 'BLINK' : player.stats.blinkStrikeCooldown}
                   </span>
+                  {ninjaBlink && (
+                    <span
+                      className="px-1 py-px rounded text-[8px] font-bold border border-violet-400/40 bg-violet-500/15 text-violet-100"
+                      data-testid="hud-blink-talents"
+                      title={`${ninjaBlink.progress.hudLabel} · ${ninjaBlink.progress.nextLabel}`}
+                    >
+                      {ninjaBlink.progress.compactLabel} {ninjaBlink.progress.nextTier ?? 'done'}
+                    </span>
+                  )}
                 </span>
               )}
               {player.characterClass === '🧝' && (rangerMode === 'ranged' ? '🏹 Ranged' : rangerMode === 'flee' ? '💨 Flee' : '⚔️ Melee')}
@@ -2782,7 +2841,7 @@ export default function Game() {
           const _effPlayer = applyEquipmentAndPassives(player);
           const displayedAtk = _effPlayer.stats.attack + hudIronFistBonus;
           const atkTitle = hudIronFistBonus > 0 ? `ATK ${_effPlayer.stats.attack} + ${hudIronFistBonus} Iron Fist` : '';
-          const crit = Math.min(99, 5 + _effPlayer.stats.luck);
+          const crit = critStat(_effPlayer.stats.luck);
           const dodge = player.characterClass === '🥷' ? computeNinjaEvasion(_effPlayer) : Math.min(50, _effPlayer.stats.evasion ?? 0);
           const voidDr = player.characterClass === '👤' ? nullMomentumPercent(player.stats.level) : 0;
           return (
@@ -2797,6 +2856,16 @@ export default function Game() {
                 <span className="font-bold text-rose-300">{crit}%</span>
                 <span className="text-muted-foreground/50">CRIT</span>
               </div>
+              {ninjaBlink && (
+                <div
+                  className="bg-card/60 border border-violet-400/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5"
+                  data-testid="hud-blink-talents-bar"
+                  title={`${ninjaBlink.progress.hudLabel} · ${ninjaBlink.progress.nextLabel}`}
+                >
+                  <span className="font-bold text-violet-200">{ninjaBlink.progress.ratio}</span>
+                  <span className="text-muted-foreground/50">{ninjaBlink.progress.nextTier ?? 'DONE'}</span>
+                </div>
+              )}
               <div className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
                 <span className="font-bold text-sky-300">{dodge}%</span>
                 <span className="text-muted-foreground/50">DODGE</span>
@@ -3245,6 +3314,14 @@ export default function Game() {
           toggleSetting={toggleControlSetting}
           isMobile={isMobile}
           onClose={() => setOptionsOpen(false)}
+        />
+      )}
+
+      {ninjaBlink?.offer && !gameState.gameOver && (
+        <BlinkTalentModal
+          tierLabel={ninjaBlink.offer.tierLabel}
+          choices={ninjaBlink.offer.choices}
+          onPick={id => pickBlinkTalentRef.current(id)}
         />
       )}
 
@@ -3835,7 +3912,13 @@ export default function Game() {
       {/* ── RTFM overlay (preserves game state) ─────────────────────── */}
       {showRTFM && (
         <div className="fixed inset-0 z-50 overflow-auto bg-background">
-          <HowToPlay onBack={() => { setShowRTFM(false); setPauseMenuOpen(true); }} killCounts={gameState?.killCounts} />
+          <HowToPlay
+            onBack={() => { setShowRTFM(false); setPauseMenuOpen(true); }}
+            killCounts={gameState?.killCounts}
+            blinkLuck={ninjaBlink ? applyEquipmentAndPassives(player).stats.luck : undefined}
+            blinkCredits={ninjaBlink ? (player.stats.blinkStrikeCredits ?? 0) : undefined}
+            blinkTalents={player.stats.blinkTalents}
+          />
         </div>
       )}
     </div>

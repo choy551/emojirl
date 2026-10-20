@@ -6,6 +6,15 @@ import { EMOJI_POWERS } from "../game/emojis";
 import { ENEMY_TYPES } from "../game/enemies";
 import { CHARACTER_CLASSES } from "../game/classes";
 import {
+  BLINK_TALENTS,
+  BLINK_TALENT_CREDITS_PER_TIER,
+  BLINK_TALENT_DELAYED_KILL_TURNS,
+  BLINK_TALENT_INSTAKILL_CREDITS,
+  blinkStrikeRulesBlurb,
+  blinkTalentProgress,
+  type BlinkTalentId,
+} from "../game/blinkStrike";
+import {
   getSeenEmojis,
   getSeenEnemies,
   getEnemyKillCounts,
@@ -38,9 +47,16 @@ function Section({
 export default function HowToPlay({
   onBack,
   killCounts,
+  blinkLuck,
+  blinkCredits,
+  blinkTalents,
 }: {
   onBack?: () => void;
   killCounts?: Record<string, number>;
+  /** Live Ninja Blink Strike stats when RTFM is opened mid-run. */
+  blinkLuck?: number;
+  blinkCredits?: number;
+  blinkTalents?: BlinkTalentId[];
 }) {
   const [seenEmojis, setSeenEmojis] = useState<Set<string>>(new Set());
   const [seenEnemies, setSeenEnemies] = useState<Set<string>>(new Set());
@@ -294,7 +310,7 @@ export default function HowToPlay({
               <div className="flex items-center gap-2">
                 <Kbd>X</Kbd>
                 <span className="text-muted-foreground">
-                  — Ninja only: activate Blink Strike (teleport &amp; 2× strike, 8t cooldown). Instakilling resets the cooldown to 0 — chain up to 3 instakills in a row for instant resets, then each further instakill gives a reduced 3t cooldown instead. Regular kills reduce to 7t; missing gives full 8t. The instakill chain (2/3 or 3/3) fades back to 0 after 10 turns out of combat.
+                  — Ninja only: activate Blink Strike (teleport and strike, 8t cooldown). {blinkStrikeRulesBlurb(blinkLuck)} Instakilling resets the cooldown to 0 — chain up to 3 instakills in a row for instant resets (talents can extend or remove that cap), then each further instakill gives a reduced 3t cooldown instead. Regular kills reduce to 7t; missing gives full 8t. The instakill chain fades back to 0 after 10 turns out of combat once it has reached 2 or more. Talents unlock every {BLINK_TALENT_CREDITS_PER_TIER} Blink credits.
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -498,6 +514,48 @@ export default function HowToPlay({
               </div>
             </div>
           ))}
+        </div>
+      </Section>
+
+      <Section title="Blink Strike Talents">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Ninja only. Blink Strike credits are tracked for the run. An instakill
+          is worth {BLINK_TALENT_INSTAKILL_CREDITS} credits. A Blink that does not
+          instakill — a fizzle or a normal hit — is worth 1 credit if that target
+          dies within {BLINK_TALENT_DELAYED_KILL_TURNS} turns. Every{" "}
+          {BLINK_TALENT_CREDITS_PER_TIER} credits opens a permanent pick. The first
+          three offers are tier-locked (two branches each). Later offers (T4+) let
+          you take any talent you skipped, until all six are yours.
+        </p>
+        {blinkCredits != null && (
+          <p className="text-xs font-semibold text-violet-200" data-testid="rtfm-blink-talents">
+            {blinkTalentProgress(blinkCredits, blinkTalents).hudLabel}
+            {" · "}
+            {blinkTalentProgress(blinkCredits, blinkTalents).nextLabel}
+            {blinkLuck != null ? ` · ${blinkStrikeRulesBlurb(blinkLuck).split(".")[0]}.` : ""}
+          </p>
+        )}
+        <div className="space-y-2">
+          {([1, 2, 3] as const).map(tier => (
+            <div key={tier} className="bg-card/50 border border-border/50 rounded-lg p-3 text-xs">
+              <div className="font-bold text-violet-300 mb-1">Tier {tier}</div>
+              <ul className="space-y-1">
+                {BLINK_TALENTS.filter(t => t.tier === tier).map(t => (
+                  <li key={t.id}>
+                    <span className="font-semibold text-foreground">{t.name}: </span>
+                    <span className="text-muted-foreground">{t.detail}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <div className="bg-card/50 border border-border/50 rounded-lg p-3 text-xs">
+            <div className="font-bold text-violet-300 mb-1">T4+</div>
+            <p className="text-muted-foreground">
+              Each further {BLINK_TALENT_CREDITS_PER_TIER} credits offers any talent
+              from the tiers above that you have not picked yet.
+            </p>
+          </div>
         </div>
       </Section>
 

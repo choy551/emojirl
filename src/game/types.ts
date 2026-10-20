@@ -44,6 +44,20 @@ export type MoodType =
   | 'angry' | 'scared' | 'confident' | 'desperate' 
   | 'neutral' | 'excited' | 'confused' | 'in_love';
 
+export type BlinkTalentId =
+  | 'shorter-cd'
+  | 'lifesteal'
+  | 'flowing-strikes'
+  | 'longer-chain'
+  | 'twin-strike'
+  | 'endless-chain';
+
+export interface BlinkStrikeMark {
+  enemyId: string;
+  /** GameState.turn after the Blink action is committed. */
+  blinkTurn: number;
+}
+
 export interface PlayerStats {
   hp: number;
   maxHp: number;
@@ -62,6 +76,14 @@ export interface PlayerStats {
   blinkStrikeCooldown?: number;
   blinkStrikeInstakillChain?: number;
   blinkStrikeInstakillOutOfCombat?: number;
+  /** Run-long Blink Strike talent credits. */
+  blinkStrikeCredits?: number;
+  /** Talents picked this run, in unlock order. */
+  blinkTalents?: BlinkTalentId[];
+  /** Non-instakill Blinks waiting on a death within the credit window. */
+  blinkStrikeMarks?: BlinkStrikeMark[];
+  /** Remaining melee attacks that reduce Blink cooldown (Flowing Strikes). */
+  blinkMeleeCdCharges?: number;
   overhealDecayTick?: number;
 }
 

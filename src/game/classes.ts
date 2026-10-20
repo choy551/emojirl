@@ -1,3 +1,5 @@
+import { BLINK_TALENT_CREDITS_PER_TIER, blinkStrikeMultiplierPercent, blinkStrikeRulesBlurb, critStat, CRIT_STAT_SOFT_CAP } from './blinkStrike';
+
 export interface ClassDefinition {
   name: string;
   tagline: string;
@@ -40,7 +42,10 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
       { label: 'Shadow Walker', detail: '+0.8% evasion per level (cap: ~55% total). First strike on any unaware enemy deals +60% damage.' },
       { label: 'Assassin\'s Edge', detail: 'Every melee kill grants 1 free movement turn (enemies don\'t act). Killing while Unseen grants 2 free moves.' },
     ],
-    active: { label: 'Blink Strike', detail: 'Teleport to the nearest visible enemy within 6 tiles and strike for double damage. Cooldown: 8 turns. Each melee kill reduces cooldown by 1; instakills reduce it by 2.' },
+    active: {
+      label: 'Blink Strike',
+      detail: `Teleport to the nearest visible enemy within 6 tiles and strike for ${blinkStrikeMultiplierPercent(critStat(2))}% damage at base CRIT ${critStat(2)} (soft cap ${CRIT_STAT_SOFT_CAP}). ${blinkStrikeRulesBlurb()} Cooldown: 8 turns. Each melee kill reduces cooldown by 1; instakills reduce it by 2. Talents unlock every ${BLINK_TALENT_CREDITS_PER_TIER} Blink credits.`,
+    },
   },
   '🧝': {
     name: 'Ranger',
