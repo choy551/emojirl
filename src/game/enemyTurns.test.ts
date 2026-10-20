@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Enemy, GameState, MapGrid, Player, Tile } from './types';
 import { applyEnemyTurns, runEnemyTurns } from './enemyTurns';
+import { COMPANION_BOUNTY_OOC_TURNS, COMPANION_BOUNTY_REFRESH_LOG } from './progression';
 
 function tile(type: Tile['type'], emoji: string): Tile {
   return { type, emoji, seen: true, visible: true };
@@ -158,7 +159,7 @@ describe('companion kill XP and bounty', () => {
     );
   }
 
-  it('grants full XP to the companion and 50% to the player', () => {
+  function killAtTally(tally: number, extra: Partial<GameState> = {}): GameState {
     const companion = foe({
       id: 'c1', emoji: '🥷', name: 'Lost Ninja', tag: 'Friendly',
       isAdventurer: true, isRecruited: true, pos: { x: 2, y: 2 },
@@ -168,40 +169,191 @@ describe('companion kill XP and bounty', () => {
       id: 'g1', emoji: '👺', name: 'Goblin', tag: 'Hostile',
       pos: { x: 2, y: 3 }, hp: 1, maxHp: 1, engaged: true, attack: 1,
     });
-    const state = {
+    const state: GameState = {
       ...base([companion, goblin]),
       map: openFloor(),
       player: { ...playerAt(1, 1), stats: { ...playerAt(1, 1).stats, xp: 0, level: 1 } },
-      companionKillTally: 0,
+      companionKillTally: tally,
+      ...extra,
     };
-    const next = applyEnemyTurns(state, runEnemyTurns(state));
+    return applyEnemyTurns(state, runEnemyTurns(state));
+  }
+
+  it('grants full XP to the companion and 50% to the player', () => {
+    const next = killAtTally(0);
     expect(next.enemies.some(e => e.id === 'g1')).toBe(false);
     const c = next.enemies.find(e => e.id === 'c1')!;
     expect(c.xp).toBe(5);
     expect(next.player.stats.xp).toBe(3);
     expect(next.companionKillTally).toBe(1);
-    expect(next.logs.some(l => l.text.includes('Companion bounty'))).toBe(false);
+    expect(next.logs.filter(l => l.text.includes('Companion killed')).map(l => l.text))
+      .toEqual(['🥷 Companion killed 👺']);
+    expect(next.logs.some(l => l.text.includes('takes down'))).toBe(false);
+    expect(next.logs.some(l => l.text.includes('%'))).toBe(false);
+    expect(next.logs.some(l => l.text.includes('reached level 2'))).toBe(true);
   });
 
-  it('logs bounty only when the share tier drops', () => {
-    const companion = foe({
-      id: 'c1', emoji: '🥷', name: 'Lost Ninja', tag: 'Friendly',
+  it('puts the new XP share on the kill line when the tier drops, and nowhere else', () => {
+    const next = killAtTally(4);
+    expect(next.companionKillTally).toBe(5);
+    expect(next.player.stats.xp).toBe(3);
+    expect(next.logs.filter(l => l.text.includes('Companion killed')).map(l => l.text))
+      .toEqual(['🥷 Companion killed 👺 (40% XP)']);
+    expect(next.logs.filter(l => l.text.includes('40%'))).toHaveLength(1);
+    expect(next.logs.some(l => l.text.startsWith('Companion bounty'))).toBe(false);
+  });
+
+  it.each([
+    [9, 30],
+    [14, 20],
+    [19, 10],
+  ] as const)('tally %i drops the share to %i% inside that one kill line', (tally, pct) => {
+    const next = killAtTally(tally);
+    expect(next.logs.filter(l => l.text.includes('Companion killed')).map(l => l.text))
+      .toEqual([`🥷 Companion killed 👺 (${pct}% XP)`]);
+    expect(next.logs.filter(l => l.text.includes(`${pct}%`))).toHaveLength(1);
+  });
+
+  it('does not repeat the share on later kills in the same tier, including the 10% floor', () => {
+    for (const tally of [5, 6, 20, 24]) {
+      const next = killAtTally(tally);
+      expect(next.logs.filter(l => l.text.includes('Companion killed')).map(l => l.text))
+        .toEqual(['🥷 Companion killed 👺']);
+    }
+  });
+
+  it('logs 🐕 Companion killed 🐀 and does not log a hit that fails to kill', () => {
+    const dog = foe({
+      id: 'c1', emoji: '🐕', name: 'Dog', tag: 'Friendly',
       isAdventurer: true, isRecruited: true, pos: { x: 2, y: 2 },
       attack: 8, hp: 12, maxHp: 12, xp: 0, level: 1,
     });
-    const goblin = foe({
-      id: 'g1', emoji: '👺', name: 'Goblin', tag: 'Hostile',
+    const rat = foe({
+      id: 'r1', emoji: '🐀', name: 'Rat', tag: 'Hostile',
       pos: { x: 2, y: 3 }, hp: 1, maxHp: 1, engaged: true, attack: 1,
     });
+    const killedState = {
+      ...base([dog, rat]), map: openFloor(), player: playerAt(1, 1), companionKillTally: 0,
+    };
+    const killed = applyEnemyTurns(killedState, runEnemyTurns(killedState));
+    expect(killed.logs.some(l => l.text === '🐕 Companion killed 🐀')).toBe(true);
+
+    const tough = foe({
+      id: 'r2', emoji: '🐀', name: 'Rat', tag: 'Hostile',
+      pos: { x: 2, y: 3 }, hp: 30, maxHp: 30, engaged: true, attack: 1,
+    });
+    const grazer = foe({
+      id: 'c2', emoji: '🐕', name: 'Dog', tag: 'Friendly',
+      isAdventurer: true, isRecruited: true, pos: { x: 2, y: 2 },
+      attack: 8, hp: 12, maxHp: 12, xp: 0, level: 1,
+    });
+    const grazedState = { ...base([grazer, tough]), map: openFloor(), player: playerAt(1, 1) };
+    const grazed = applyEnemyTurns(grazedState, runEnemyTurns(grazedState));
+    expect(grazed.enemies.some(e => e.id === 'r2')).toBe(true);
+    expect(grazed.logs.some(l => l.text.includes('Companion killed'))).toBe(false);
+    expect(grazed.companionKillTally ?? 0).toBe(0);
+  });
+
+  it('announces a share change once when two companions kill on the same turn', () => {
+    const dog = foe({
+      id: 'c1', emoji: '🐕', name: 'Dog', tag: 'Friendly',
+      isAdventurer: true, isRecruited: true, pos: { x: 2, y: 2 },
+      attack: 8, hp: 12, maxHp: 12, xp: 40, level: 3,
+    });
+    const ninja = foe({
+      id: 'c2', emoji: '🥷', name: 'Lost Ninja', tag: 'Friendly',
+      isAdventurer: true, isRecruited: true, pos: { x: 4, y: 4 },
+      attack: 8, hp: 12, maxHp: 12, xp: 40, level: 3,
+    });
+    const rat = foe({
+      id: 'r1', emoji: '🐀', name: 'Rat', tag: 'Hostile',
+      pos: { x: 2, y: 3 }, hp: 1, maxHp: 1, engaged: true, attack: 1,
+    });
+    const goblin = foe({
+      id: 'g1', emoji: '👺', name: 'Goblin', tag: 'Hostile',
+      pos: { x: 4, y: 3 }, hp: 1, maxHp: 1, engaged: true, attack: 1,
+    });
     const state = {
-      ...base([companion, goblin]),
+      ...base([dog, ninja, rat, goblin]),
       map: openFloor(),
       player: playerAt(1, 1),
-      companionKillTally: 4,
+      companionKillTally: 3,
     };
     const next = applyEnemyTurns(state, runEnemyTurns(state));
     expect(next.companionKillTally).toBe(5);
-    expect(next.player.stats.xp).toBe(3);
-    expect(next.logs.some(l => l.text === 'Companion bounty: 40% XP')).toBe(true);
+    expect(next.logs.filter(l => l.text.includes('Companion killed')).map(l => l.text)).toEqual([
+      '🐕 Companion killed 🐀',
+      '🥷 Companion killed 👺 (40% XP)',
+    ]);
+    expect(next.logs.filter(l => l.text.includes('%'))).toHaveLength(1);
+  });
+
+  it('logs one reset to 50% after 20 out-of-combat turns and does not repeat it', () => {
+    let state: GameState = {
+      ...base([]),
+      map: openFloor(),
+      player: playerAt(1, 1),
+      companionKillTally: 12,
+      companionBountyOocTurns: 0,
+    };
+    for (let i = 0; i < COMPANION_BOUNTY_OOC_TURNS - 1; i++) {
+      state = { ...state, turn: state.turn + 1 };
+      state = applyEnemyTurns(state, runEnemyTurns(state));
+      expect(state.companionKillTally).toBe(12);
+      expect(state.logs.some(l => l.text === COMPANION_BOUNTY_REFRESH_LOG)).toBe(false);
+    }
+    state = { ...state, turn: state.turn + 1 };
+    state = applyEnemyTurns(state, runEnemyTurns(state));
+    expect(state.companionKillTally).toBe(0);
+    expect(state.companionBountyOocTurns).toBe(0);
+    expect(state.logs.filter(l => l.text === COMPANION_BOUNTY_REFRESH_LOG)).toHaveLength(1);
+
+    for (let i = 0; i < 5; i++) {
+      state = { ...state, turn: state.turn + 1 };
+      state = applyEnemyTurns(state, runEnemyTurns(state));
+    }
+    expect(state.logs.filter(l => l.text === COMPANION_BOUNTY_REFRESH_LOG)).toHaveLength(1);
+  });
+
+  it('does not log a reset when the share is already 50% or a hostile is still engaged', () => {
+    let calm: GameState = {
+      ...base([]),
+      map: openFloor(),
+      player: playerAt(1, 1),
+      companionKillTally: 0,
+      companionBountyOocTurns: 0,
+    };
+    for (let i = 0; i < COMPANION_BOUNTY_OOC_TURNS; i++) {
+      calm = { ...calm, turn: calm.turn + 1 };
+      calm = applyEnemyTurns(calm, runEnemyTurns(calm));
+    }
+    expect(calm.logs.some(l => l.text === COMPANION_BOUNTY_REFRESH_LOG)).toBe(false);
+
+    const goblin = foe({
+      id: 'g1', emoji: '👺', name: 'Goblin', tag: 'Hostile',
+      pos: { x: 4, y: 4 }, engaged: true, paralyzedTurns: 40,
+    });
+    let fighting: GameState = {
+      ...base([goblin]),
+      map: openFloor(),
+      player: playerAt(1, 1),
+      companionKillTally: 12,
+      companionBountyOocTurns: 19,
+    };
+    for (let i = 0; i < COMPANION_BOUNTY_OOC_TURNS; i++) {
+      fighting = { ...fighting, turn: fighting.turn + 1 };
+      fighting = applyEnemyTurns(fighting, runEnemyTurns(fighting));
+    }
+    expect(fighting.companionKillTally).toBe(12);
+    expect(fighting.companionBountyOocTurns).toBe(0);
+    expect(fighting.logs.some(l => l.text === COMPANION_BOUNTY_REFRESH_LOG)).toBe(false);
+  });
+
+  it('a companion kill spends the out-of-combat count without logging a reset', () => {
+    const next = killAtTally(4, { companionBountyOocTurns: 19 });
+    expect(next.companionKillTally).toBe(5);
+    expect(next.companionBountyOocTurns).toBe(0);
+    expect(next.logs.some(l => l.text === '🥷 Companion killed 👺 (40% XP)')).toBe(true);
+    expect(next.logs.some(l => l.text === COMPANION_BOUNTY_REFRESH_LOG)).toBe(false);
   });
 });

@@ -10,7 +10,7 @@ import { passableTilesForEnemy } from './enemies';
 import { tickVolcanoAndLava } from './lava';
 import { _flashSignals } from './flashSignals';
 import { nearRestaurant, crowGoldSteal } from './economy';
-import { computeNinjaEvasion, companionBountyShare, companionBountyPercent, companionKillXp, applyCompanionLevelUp, tickCompanionBountyOoc, levelFromXP } from './progression';
+import { computeNinjaEvasion, companionBountyShare, companionBountyPercent, companionKillXp, companionKillLogText, applyCompanionLevelUp, tickCompanionBountyOoc, levelFromXP, COMPANION_BOUNTY_REFRESH_LOG } from './progression';
 import { isHostileCombatTarget } from './combat';
 import { applyLevelUp } from './playerTurn';
 import { markEnemyKilled } from './discoveries';
@@ -296,25 +296,26 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             const effectiveAtk = enemy.attack + soulAtkBonus;
             const dmg = Math.max(1, effectiveAtk - Math.floor((companionTarget.defense ?? 0) / 2));
             const newTargetHp = companionTarget.hp - dmg;
-            const logPrefix = enemy.bear ? '🐻' : '🤝';
             newFloatingTexts.push({ id: `companion-${enemy.id}-${state.turn}`, pos: { ...companionTarget.pos }, text: `-${dmg}`, color: enemy.bear ? '#f59e0b' : '#22d3ee', life: 2 });
             if (newTargetHp <= 0) {
               reclaimMonkeyLoot(companionTarget);
               newEnemies[ti] = { ...companionTarget, hp: 0 };
-              log(`${logPrefix} ${enemy.emoji} ${enemy.name} takes down ${companionTarget.emoji} ${companionTarget.name}!`);
               markEnemyKilled(companionTarget.emoji);
               const baseXp = companionKillXp(!!companionTarget.isBoss);
               const share = companionBountyShare(companionKillTally);
               playerXpGain += Math.round(baseXp * share);
-              const oldShare = share;
               companionKillTally += 1;
               companionKillsThisTurn += 1;
               const newShare = companionBountyShare(companionKillTally);
-              if (newShare < oldShare) {
-                log(newShare <= 0.10
-                  ? 'Companion bounty: 10% XP (min)'
-                  : `Companion bounty: ${companionBountyPercent(companionKillTally)}% XP`);
+              // Share lives on the kill line, and only when the tier just dropped,
+              // so a second "Companion bounty" line never duplicates it.
+              let changedShare: number | undefined;
+              if (newShare < share) {
+                const pct = companionBountyPercent(companionKillTally);
+                const marker = `(${pct}% XP)`;
+                if (!newLogs.some(l => l.text.includes(marker))) changedShare = pct;
               }
+              log(companionKillLogText(enemy.emoji, companionTarget.emoji, changedShare));
               const killer = newEnemies[i];
               const oldLv = killer.level ?? 1;
               const newXp = (killer.xp ?? 0) + baseXp;
@@ -914,10 +915,13 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     companionKillTally: bounty.tally,
     companionBountyOocTurns: bounty.ooc,
   };
-  if (bounty.refreshed) {
+  const refreshAlreadyLogged = next.logs.some(
+    l => l.turn === next.turn && l.text === COMPANION_BOUNTY_REFRESH_LOG,
+  );
+  if (bounty.refreshed && !refreshAlreadyLogged) {
     next = {
       ...next,
-      logs: [{ id: `bounty-refresh-${next.turn}`, text: 'Companion bounty refreshed (50% XP)', turn: next.turn }, ...next.logs].slice(0, 24),
+      logs: [{ id: `bounty-refresh-${next.turn}`, text: COMPANION_BOUNTY_REFRESH_LOG, turn: next.turn }, ...next.logs].slice(0, 24),
     };
   }
 
