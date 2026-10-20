@@ -134,7 +134,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
           if (p.vampiricStrike > 0) tags.push(`🩸 Vampiric×${p.vampiricStrike}`);
           if (p.lightningBolt > 0) tags.push(p.lightningBolt > 1 ? `⚡ Chain Arc×${p.lightningBolt}` : '⚡ Chain Arc');
           if (p.thorns) tags.push(`💎 Thorns×${p.thorns}`);
-          if (p.bonusLoot) tags.push(`🍀 Loot×${p.bonusLoot}`);
+          if (p.bonusLoot) tags.push(`🍀 Loot×${p.bonusLoot} · rarer`);
           if (p.execBlow) tags.push('💥 Death Crit');
           if (p.trueVision) tags.push('👁️ True Vision');
           if (p.itemMagnet) tags.push('🧲 Magnet');

@@ -165,7 +165,7 @@ export default function HowToPlay({
             {
               label: "🍀 LCK",
               color: "text-yellow-400",
-              desc: "Luck — directly adds to your crit chance. Base crit = 5% + LCK + mood bonus. A lucky character lands critical hits that deal double damage much more often. Also subtly improves loot quality.",
+              desc: "Luck — directly adds to your crit chance. Base crit = 5% + LCK + mood bonus. A lucky character lands critical hits that deal double damage much more often. Loot quality is shifted by the 🍀 Clover bag passive, not by the LCK stat itself.",
             },
             {
               label: "🔮 MP",
@@ -691,7 +691,7 @@ export default function HowToPlay({
               name: "Clover",
               effect: "Bonus Loot",
               detail:
-                "Enemy drop chance rises by +15% per copy (base 55%, capped at 95%). Two clovers ≈ 85% drops.",
+                "Each copy does two things. Drop chance: 55% + 15% per copy, capped at 95% (two clovers = 85%). Rarity: every tier above Common is multiplied by 1.5^copies relative to the tier below, so kills shift toward Rare and Legendary (💀 💰 🍀 and peers) instead of only dropping more often.",
               color: "text-lime-400",
             },
             {

@@ -1,9 +1,10 @@
 import { EmojiItem } from './types';
 import { soulHelpText } from './emojis';
+import { CLOVER_TIER_STEP, cloverLootSummary } from './dropTable';
 
 /** Per-emoji caps for the stackable-passive collapse mechanic. */
 export const STACKABLE_BAG_CAPS: Record<string, number> = {
-  '🍀': 3,   // bonusLoot: 55% + 3×15% = 100%, capped to 95% in practice
+  '🍀': 3,   // drop chance 55%+15%×3 capped at 95%; tier weight ×(3/2)^(i×3)
   '💊': 4,   // regeneration: 5-turn interval shrinks to 1-turn minimum after 4 copies
   '🛡️': 9,  // shieldWall: no natural gameplay cap
   '🍄': 9,   // healOnKill: no natural gameplay cap
@@ -46,8 +47,8 @@ export function getStackableBonusLabel(item: EmojiItem): string | null {
   if (p.shieldWall)   return '25% block, −1 dmg per ×';
   // healOnKill: +1 HP per kill per copy (acc.healOnKill += sc)
   if (p.healOnKill)   return '+1 HP per kill per ×';
-  // bonusLoot: base 55% + 15% per copy (Math.min(95, 0.55 + 0.15 * stacks))
-  if (p.bonusLoot)    return '+15% drop chance per ×';
+  // bonusLoot: P(drop)=min(95%, 55%+15%×c) and tier mass × (3/2)^(i×c)
+  if (p.bonusLoot)    return `+15% drop chance and ×${CLOVER_TIER_STEP} tier-step weight per ×`;
   // thorns: reflect N dmg per hit where N = total copies (acc.thorns += sc)
   if (p.thorns)       return '+1 reflect dmg per ×';
   // regeneration: +1 HP every (6 − copies) turns, min 1-turn interval
@@ -66,7 +67,7 @@ export function getStackableCumulativeLabel(item: EmojiItem): string | null {
   const n = item.stackCount ?? 1;
   if (p.shieldWall)   return `${n * 25}% block chance, −${n} incoming dmg`;
   if (p.healOnKill)   return `+${n} HP per kill`;
-  if (p.bonusLoot)    return `${Math.min(95, Math.round((0.55 + 0.15 * n) * 100))}% item drop chance`;
+  if (p.bonusLoot)    return cloverLootSummary(n);
   if (p.thorns)       return `+${n} reflect dmg per hit`;
   if (p.regeneration) return `+1 HP every ${Math.max(1, 6 - n)} turns`;
   if (p.vampiricStrike) return `+${n} HP per hit`;

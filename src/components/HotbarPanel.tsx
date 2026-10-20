@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { EmojiItem } from '../game/types';
 import { getPassiveTooltipSuffix } from '../game/passives';
+import { rarityTooltipSuffix } from '../game/dropTable';
 import { activeKindEmoji } from './itemUtils';
 import { ActivePassivesPanel } from './ActivePassivesPanel';
 
@@ -67,7 +68,7 @@ export function HotbarPanel({
                 }
               }}
               {...itemInspectProps(item)}
-              title={item ? `[${i + 1}] ${item.name}: ${item.description.replace(/ · Bag: [^·]+$/, '')}${getPassiveTooltipSuffix(item)}${bankDupes > 0 ? ` · ${bankDupes} more in Bank` : ''}` : `Empty slot ${i + 1}`}
+              title={item ? `[${i + 1}] ${item.name}: ${item.description.replace(/ · Bag: [^·]+$/, '')}${getPassiveTooltipSuffix(item)}${bankDupes > 0 ? ` · ${bankDupes} more in Bank` : ''}${rarityTooltipSuffix(item)}` : `Empty slot ${i + 1}`}
               className={`relative aspect-square rounded border flex items-center justify-center text-xl transition-all
                 ${focusedBagIdx === i ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-black/50' : ''}
                 ${item?.isVoidGhost ? 'opacity-40 border-violet-400/40 bg-violet-950/20 cursor-pointer' : !item

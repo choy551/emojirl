@@ -1,6 +1,7 @@
 import type { DOMAttributes } from 'react';
 import { EmojiItem } from '../../game/types';
 import { activeKindEmoji } from '../itemUtils';
+import { rarityTooltipSuffix } from '../../game/dropTable';
 
 interface MobileBagStripProps {
   bagSlots: (EmojiItem | null)[];
@@ -40,7 +41,7 @@ export function MobileBagStrip({
             onClick={() => onUseSlot(i)}
             {...itemInspectProps(item)}
             className={`relative w-full aspect-square bg-card border rounded flex items-center justify-center text-base active:scale-90 transition-transform ${item.isVoidGhost ? 'opacity-40 border-violet-400/40' : item.isEquipment ? 'border-amber-500/60' : item.activeKind ? 'border-amber-600/40' : 'border-border'}`}
-            title={`[${i + 1}] ${item.name}`}
+            title={`[${i + 1}] ${item.name}${rarityTooltipSuffix(item)}`}
           >
             {item.emoji}
             <span className="absolute top-0 left-px text-[6px] text-muted-foreground/60 font-bold leading-none">{i + 1}</span>

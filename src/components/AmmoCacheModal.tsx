@@ -3,6 +3,7 @@ import { getItemBuyPrice, addToPlayerBag } from '../game/gameHelpers';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
+import { RarityLabel } from './RarityLabel';
 
 interface AmmoCacheModalProps {
   gameState: GameState;
@@ -59,7 +60,7 @@ export function AmmoCacheModal({ gameState, setGameState, ammoCacheItems, setAmm
               <div key={item.id} className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">
                 <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-bold leading-tight">{item.name}</div>
+                  <div className="text-xs font-bold leading-tight flex items-center gap-1.5">{item.name} <RarityLabel item={item} className="text-[9px]" /></div>
                   <div className="text-[10px] text-muted-foreground leading-snug">{item.description}</div>
                 </div>
                 <button

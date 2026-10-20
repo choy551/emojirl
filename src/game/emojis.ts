@@ -136,7 +136,7 @@ export const EMOJI_POWERS: { emoji: string; name: string; description: string; e
   { emoji: '🔥', name: 'Fire',         description: '+3 ATK · Bag: +1 ATK, all attacks ignite',     effect: { attackBonus: 3, moodBonus: 10, label: 'Flames ignite your blade!' },                     bagPassive: { description: '+1 ATK · all attacks ignite 🔥', attackBonus: 1, burningOnHit: true, nonStackable: true } },
   { emoji: '⚡', name: 'Lightning',    description: 'Use: instakill nearest visible foe · Bag: melee arcs 75/50/25% ATK (stacks)', effect: { instakillNearest: true, moodBonus: 10, label: 'Lightning strikes!' },   bagPassive: { description: 'Melee hits arc to 1–3 nearby foes at 75%/50%/25% ATK; +25% per extra ⚡ (cap 4)', lightningBolt: true } },
   { emoji: '💎', name: 'Diamond',      description: '+3 DEF · Bag: thorns',                        effect: { defenseBonus: 3, moodBonus: 8, label: 'You harden like diamond!' },                       bagPassive: { description: 'Reflect 1 dmg per copy when struck 💎', thorns: true } },
-  { emoji: '🍀', name: 'Clover',       description: '+5 LCK, +20 mood · Bag: bonus loot',         effect: { luckBonus: 5, moodBonus: 30, label: 'Luck is on your side!' },                            bagPassive: { description: 'Enemy drop rate increases per copy 🍀', bonusLoot: true } },
+  { emoji: '🍀', name: 'Clover',       description: '+5 LCK, +20 mood · Bag: more drops, rarer tiers', effect: { luckBonus: 5, moodBonus: 30, label: 'Luck is on your side!' },                     bagPassive: { description: 'Enemy drops are more likely and shift toward rarer tiers per copy 🍀', bonusLoot: true } },
   { emoji: '💀', name: 'Skull',        description: '+2 ATK, +2 SPD · Bag: crits scale with foe HP',            effect: { attackBonus: 2, speedBonus: 2, moodBonus: 5, label: 'Death lends you its strength!' },     bagPassive: { description: '+25% crit at full HP, up to +50% at ≤25% HP 💀', execBlow: true, nonStackable: true } },
   { emoji: '🌟', name: 'Star',         description: '+20 XP & mood boost · Bag: +1 vision, alert',  effect: { xpBonus: 20, moodBonus: 20, label: 'You shine brighter!' },                               bagPassive: { description: '+1 vision · enemies are more alert', losBonus: 1, stealthPenalty: 1, nonStackable: true } },
   { emoji: '🔮', name: 'Crystal Ball', description: '+1 ATK/DEF/SPD/EVA · Bag: true vision',      effect: { attackBonus: 1, defenseBonus: 1, speedBonus: 1, evasionBonus: 1, hpBonus: 2, moodBonus: 15, label: 'The future reveals itself to you!' }, bagPassive: { description: 'See all enemies through walls 🔮', trueVision: true, nonStackable: true } },
@@ -329,18 +329,29 @@ export const EQUIPMENT_DROPS_T3: Omit<EmojiItem, 'id' | 'consumed'>[] = [
 // Combined pool for any direct array access
 export const EQUIPMENT_DROPS = [...EQUIPMENT_DROPS_T1, ...EQUIPMENT_DROPS_T2, ...EQUIPMENT_DROPS_T3];
 
-// Floor-scaled drop: T1 only on floors 1-9, T2 mixes in at floor 10, T3 at floor 20.
-export function getRandomEquipmentDrop(floor = 1): Omit<EmojiItem, 'id' | 'consumed'> {
-  let pool: typeof EQUIPMENT_DROPS_T1;
-  if (floor >= 30) {
-    pool = Math.random() < 0.20 ? EQUIPMENT_DROPS_T2 : EQUIPMENT_DROPS_T3;
-  } else if (floor >= 20) {
-    const r = Math.random();
-    pool = r < 0.10 ? EQUIPMENT_DROPS_T1 : r < 0.50 ? EQUIPMENT_DROPS_T2 : EQUIPMENT_DROPS_T3;
-  } else if (floor >= 10) {
-    pool = Math.random() < 0.30 ? EQUIPMENT_DROPS_T1 : EQUIPMENT_DROPS_T2;
-  } else {
-    pool = EQUIPMENT_DROPS_T1;
+/** Floor-scaled gear pool: T1 on floors 1–9, T2 from 10, T3 from 20. */
+export function equipmentPoolForFloor(floor = 1, rng: () => number = Math.random): typeof EQUIPMENT_DROPS_T1 {
+  if (floor >= 30) return rng() < 0.20 ? EQUIPMENT_DROPS_T2 : EQUIPMENT_DROPS_T3;
+  if (floor >= 20) {
+    const r = rng();
+    return r < 0.10 ? EQUIPMENT_DROPS_T1 : r < 0.50 ? EQUIPMENT_DROPS_T2 : EQUIPMENT_DROPS_T3;
   }
-  return pool[Math.floor(Math.random() * pool.length)];
+  if (floor >= 10) return rng() < 0.30 ? EQUIPMENT_DROPS_T1 : EQUIPMENT_DROPS_T2;
+  return EQUIPMENT_DROPS_T1;
+}
+
+// Floor-scaled drop: T1 only on floors 1-9, T2 mixes in at floor 10, T3 at floor 20.
+export function getRandomEquipmentDrop(floor = 1, rng: () => number = Math.random): Omit<EmojiItem, 'id' | 'consumed'> {
+  const pool = equipmentPoolForFloor(floor, rng);
+  return pool[Math.floor(rng() * pool.length)];
+}
+
+/** Named gear for one emoji, using the floor's power tier (T1/T2/T3). */
+export function equipmentVariantForEmoji(emoji: string, floor = 1, rng: () => number = Math.random): Omit<EmojiItem, 'id' | 'consumed'> {
+  const pool = equipmentPoolForFloor(floor, rng);
+  const matches = pool.filter(e => e.emoji === emoji);
+  const src = matches.length > 0 ? matches : EQUIPMENT_DROPS.filter(e => e.emoji === emoji);
+  if (src.length === 0) return pool[Math.floor(rng() * pool.length)];
+  if (src.length === 1) return src[0];
+  return src[Math.floor(rng() * src.length)];
 }
