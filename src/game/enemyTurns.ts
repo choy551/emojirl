@@ -1,6 +1,9 @@
 import { Enemy, EmojiItem, GameState, Position, FloatingText, PlacedBomb, ActiveProjectile } from './types';
 import { chebyshev } from './geo';
-import { applyEquipmentAndPassives, addToBag, computeBagPassives } from './inventory';
+import { applyEquipmentAndPassives, addToPlayerBag, playerBagPassives, parkVoidOverflow, countVoidPressureSlots } from './inventory';
+import { applyNullMomentum, creditVoidBoss, occupiedGhosts, voidClassTurnDamage, voidDamageFor, voidGhostCapacity, VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from './voidDamage';
+import { applyEntropicTithe, type GhostKillEffect } from './voidAbilities';
+import { unlockVoidClass } from './voidMeta';
 import { stealOneSoulEmoji, applySoulThefts, stolenEmojiSummary } from './monkeyLoot';
 import { resolveProjectileFlight } from './projectiles';
 import { withVisibility, visionRadiusFor } from './vision';
@@ -37,6 +40,10 @@ export interface EnemyTurnResult {
   playerXpGain?: number;
   companionKillTally?: number;
   companionKillsThisTurn?: number;
+  /** Depth bosses (floor % 5 === 0) killed during this enemy phase. */
+  depthBossKills?: number;
+  /** Ghost-passive kills this phase (burn ticks). Loot stays suppressed; tithe is applied after. */
+  titheKills?: GhostKillEffect[];
 }
 
 export function runEnemyTurns(state: GameState, skipId?: string, sleeping = false): EnemyTurnResult {
@@ -46,10 +53,13 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   // Player's true sight range (class/level + bag LOS passives). Ranged enemies may
   // only attack while the player can actually see them — i.e. within this radius
   // with clear line of sight — so archers can't snipe from the unseen fog.
-  const playerVisionRadius = Math.max(1, visionRadiusFor(player.characterClass, player.stats.level) + computeBagPassives(player.inventory).losBonus);
+  const playerVisionRadius = Math.max(1, visionRadiusFor(player.characterClass, player.stats.level) + playerBagPassives(player).losBonus);
   const newEnemies = [...state.enemies];
   let playerHp = player.stats.hp;
   let playerDied = false;
+  let depthBossKills = 0;
+  const titheKills: GhostKillEffect[] = [];
+  const soften = (raw: number) => applyNullMomentum(raw, player);
   let killer: { name: string; emoji: string } | undefined;
   const newLogs: Array<{ id: string; text: string; turn: number }> = [];
   const newFloatingTexts: FloatingText[] = [];
@@ -159,7 +169,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     playerInventoryAdditions.push(...shot.stolenReturns);
     if (shot.beam) enemyBeam = shot.beam;
     if (shot.playerDamage > 0) {
-      playerHp = Math.max(0, playerHp - shot.playerDamage);
+      playerHp = Math.max(0, playerHp - soften(shot.playerDamage));
     }
     if (shot.playerDied) {
       playerDied = true;
@@ -175,7 +185,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     ([dx, dy]) => map[player.pos.y + dy]?.[player.pos.x + dx]?.type === 'water'
   );
 
-  const _freezePassives = computeBagPassives(state.player.inventory);
+  const _freezePassives = playerBagPassives(state.player);
   if (_freezePassives.freezeAura) {
     for (let i = 0; i < newEnemies.length; i++) {
       if (!newEnemies[i].isSpectator && chebyshev(newEnemies[i].pos, state.player.pos) <= 1 && (newEnemies[i].slowedTurns ?? 0) < 2) {
@@ -191,13 +201,28 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     playerHp = Math.min(player.stats.maxHp, playerHp + 1);
     log('💊 You regenerate! (+1 HP)');
   }
-  const _soulCount = player.inventory.filter(i => !i.consumed && !i.isEquipment && i.bagPassive && !i.activeKind && i.healAmount == null && i.ammoAmount == null).length;
-  if (_soulCount === 0) {
-    const _emojilessDmg = state.currentFloor;
-    playerHp -= _emojilessDmg;
-    log(`💀 You are emoji-less! Taking ${_emojilessDmg} dmg/turn (floor ${state.currentFloor}). Find an emoji or die!`);
-    _flashSignals.emojilessFlashPending = true;
-    if (playerHp <= 0) { playerDied = true; killer = { name: 'the void', emoji: '💀' }; }
+  if (player.characterClass === '👤') {
+    const filled = countVoidPressureSlots(player);
+    if (filled > 0) {
+      const dmg = voidClassTurnDamage(filled, state.currentFloor);
+      playerHp -= dmg;
+      log(`👤 Void pressure (${filled} held) — ${dmg} dmg…`);
+      _flashSignals.emojilessFlashPending = true;
+      if (playerHp <= 0) {
+        playerDied = true;
+        if (!killer) killer = { name: 'the void', emoji: '👤' };
+        log(VOID_DEATH_TEXT);
+      }
+    }
+  } else {
+    const _soulCount = player.inventory.filter(i => !i.consumed && !i.isEquipment && !i.isVoidGhost && i.bagPassive && !i.activeKind && i.healAmount == null && i.ammoAmount == null).length;
+    if (_soulCount === 0) {
+      const _emojilessDmg = voidDamageFor(1, state.currentFloor);
+      playerHp -= _emojilessDmg;
+      log(`💀 You are emoji-less! Taking ${_emojilessDmg} dmg/turn (floor ${state.currentFloor}). Find an emoji or die!`);
+      _flashSignals.emojilessFlashPending = true;
+      if (playerHp <= 0) { playerDied = true; if (!killer) killer = { name: 'the void', emoji: '💀' }; }
+    }
   }
 
   for (let i = 0; i < newEnemies.length; i++) {
@@ -214,6 +239,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
         reclaimMonkeyLoot(enemy);
         newEnemies[i] = { ...enemy, hp: 0, burningTurns: 0 };
         log(`🔥 ${enemy.name} burns to ash!`);
+        titheKills.push('burningOnHit');
         continue;
       }
       newEnemies[i] = { ...enemy, hp: newHp, burningTurns: newBurning };
@@ -304,6 +330,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
               reclaimMonkeyLoot(companionTarget);
               newEnemies[ti] = { ...companionTarget, hp: 0 };
               markEnemyKilled(companionTarget.emoji);
+              if (companionTarget.isBoss && !companionTarget.isEcho && state.currentFloor % 5 === 0) depthBossKills++;
               const baseXp = companionKillXp(!!companionTarget.isBoss);
               const share = companionBountyShare(companionKillTally);
               playerXpGain += Math.round(baseXp * share);
@@ -425,7 +452,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     }
 
     const baseDetectionRadius = detectionRadius(enemy.speed);
-    const _bagPassivesDetect = computeBagPassives(state.player.inventory);
+    const _bagPassivesDetect = playerBagPassives(state.player);
     const isStealthy = (state.stealthMode && state.player.characterClass === '🥷') || _bagPassivesDetect.stealthBonus > 0;
     // When player lingers in the restaurant 3×3 safe zone, every mob on the map aggroes —
     // the smell of food and activity draws everything in. They lose track once the player leaves.
@@ -600,7 +627,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
         if (Math.random() * 100 < dodgeChance) {
           log(`The ${enemy.name} ${rangedVerb} — you dodge!`);
         } else {
-          const dmg = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+          const dmg = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
           playerHp -= dmg;
           log(`The ${enemy.name} ${rangedVerb} at you for ${dmg} damage!`);
           if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
@@ -616,7 +643,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             if (Math.random() * 100 < dodgeChance2) {
               log(`🔥 The ${enemy.name} ${rangedVerb} again — you dodge!`);
             } else {
-              const dmg2 = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+              const dmg2 = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
               playerHp -= dmg2;
               log(`🔥 The ${enemy.name} ${rangedVerb} again for ${dmg2} damage! (Berserk!)`);
               if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
@@ -646,9 +673,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
         if (Math.random() * 100 < dodgeChance) {
           log(`${enemy.emoji} ${enemy.name} attacks — you dodge!`);
         } else {
-          const dmg = enemy.crow
+          const dmg = soften(enemy.crow
             ? 1
-            : Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+            : Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
           playerHp -= dmg;
           log(`${enemy.emoji} ${enemy.name} hits you for ${dmg} dmg!`);
           if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
@@ -665,7 +692,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             if (Math.random() * 100 < dodgeChance2) {
               log(`🔥 ${enemy.emoji} ${enemy.name} attacks again — you dodge!`);
             } else {
-              const dmg2 = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+              const dmg2 = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
               playerHp -= dmg2;
               log(`🔥 ${enemy.emoji} ${enemy.name} attacks again for ${dmg2} dmg! (Berserk!)`);
               if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
@@ -698,7 +725,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             if (Math.random() * 100 < dodgeChance) {
               log(`${enemy.emoji} ${enemy.name} lunges — you dodge!`);
             } else {
-              const dmg = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+              const dmg = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
               playerHp -= dmg;
               log(`${enemy.emoji} ${enemy.name} lunges at you for ${dmg} dmg!`);
               if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
@@ -714,7 +741,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
                 if (Math.random() * 100 < dodgeChance2) {
                   log(`🔥 ${enemy.emoji} ${enemy.name} attacks again — you dodge!`);
                 } else {
-                  const dmg2 = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+                  const dmg2 = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
                   playerHp -= dmg2;
                   log(`🔥 ${enemy.emoji} ${enemy.name} attacks again for ${dmg2} dmg! (Berserk!)`);
                   if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
@@ -817,7 +844,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     }
   }
 
-  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn };
+  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn, depthBossKills, titheKills };
 }
 
 export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): GameState {
@@ -832,7 +859,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     newInventory = applySoulThefts(newInventory, result.playerInventoryRemovals);
   }
   if (result.playerInventoryAdditions.length > 0) {
-    const added = addToBag(newInventory, newBank, ...result.playerInventoryAdditions);
+    const added = addToPlayerBag({ ...state.player, inventory: newInventory, bank: newBank }, ...result.playerInventoryAdditions);
     newInventory = added.inventory;
     newBank = added.bank;
   }
@@ -925,6 +952,37 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     next = {
       ...next,
       logs: [{ id: `bounty-refresh-${next.turn}`, text: COMPANION_BOUNTY_REFRESH_LOG, turn: next.turn }, ...next.logs].slice(0, 24),
+    };
+  }
+
+  for (const effect of result.titheKills ?? []) {
+    next = applyEntropicTithe(next, effect);
+  }
+  next = { ...next, player: parkVoidOverflow(next.player) };
+  for (let i = 0; i < (result.depthBossKills ?? 0); i++) {
+    next = creditVoidBoss(next, { isBoss: true });
+  }
+  if (next.player.characterClass === '👤') {
+    const cap = voidGhostCapacity(next.currentFloor, next.voidBossesCleared ?? next.player.voidBossesCleared ?? 0);
+    const held = occupiedGhosts(next.player.ghostHotbar);
+    if (held > cap && !next.voidGhostOverCapLogged) {
+      next = {
+        ...next,
+        voidGhostOverCapLogged: true,
+        logs: [{
+          id: `void-overcap-${next.turn}`,
+          text: `👤 Only ${cap} ghost${cap === 1 ? '' : 's'} act on this depth. Extra ghosts linger without power.`,
+          turn: next.turn,
+        }, ...next.logs].slice(0, 24),
+      };
+    } else if (held <= cap && next.voidGhostOverCapLogged) {
+      next = { ...next, voidGhostOverCapLogged: false };
+    }
+  }
+  if (next.gameOver && next.killer?.name === 'the void' && unlockVoidClass()) {
+    next = {
+      ...next,
+      logs: [{ id: `void-unlock-${next.turn}`, text: VOID_UNLOCK_TEXT, turn: next.turn }, ...next.logs].slice(0, 24),
     };
   }
 

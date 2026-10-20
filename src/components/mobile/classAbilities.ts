@@ -30,12 +30,17 @@ export interface ClassAbilityArgs {
   handleCowboyTactics: () => void;
   handleBlinkStrike: () => void;
   applyNinjaMode: (stealth: boolean) => void;
+  cycleVoidAttack?: () => void;
+  beginUnmake?: () => void;
+  unmakeSpent?: boolean;
+  voidAttackMode?: 'melee' | 'ranger' | 'wizard';
 }
 
 export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
   const {
     player, turn, blinkTurn, trailblazeTurn, yeehawTurn, rangerMode, wizardMode, stealthOn,
     applyWizardMode, applyRangerMode, handleCowboyTactics, handleBlinkStrike, applyNinjaMode,
+    cycleVoidAttack, beginUnmake, unmakeSpent, voidAttackMode,
   } = args;
 
   switch (player.characterClass) {
@@ -106,6 +111,26 @@ export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
           disabled: false,
           active: stealthOn,
           onUse: () => applyNinjaMode(!stealthOn),
+        },
+      ];
+    }
+    case '👤': {
+      const mode = voidAttackMode ?? 'melee';
+      const modeLabel = mode === 'ranger' ? 'Ranger' : mode === 'wizard' ? 'Wizard' : 'Melee';
+      const modeIcon = mode === 'ranger' ? '🏹' : mode === 'wizard' ? '🎯' : '⚔️';
+      return [
+        {
+          id: 'void-attack-mode', icon: modeIcon, label: modeLabel,
+          detail: 'Cycle',
+          disabled: false,
+          active: mode !== 'melee',
+          onUse: () => cycleVoidAttack?.(),
+        },
+        {
+          id: 'void-unmake', icon: '🕳️', label: 'Unmake',
+          detail: unmakeSpent ? 'Spent' : 'U',
+          disabled: !!unmakeSpent,
+          onUse: () => beginUnmake?.(),
         },
       ];
     }

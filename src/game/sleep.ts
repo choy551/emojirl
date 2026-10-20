@@ -1,9 +1,10 @@
 import { Enemy, GameState, MapGrid, Player, Position, Tile } from './types';
 import { chebyshev } from './geo';
-import { applyEquipmentAndPassives, computeBagPassives } from './inventory';
+import { applyEquipmentAndPassives, playerBagPassives } from './inventory';
 import { applyEnemyTurns, runEnemyTurns } from './enemyTurns';
 import { hasLineOfSight, visionRadiusFor } from './vision';
 import { BED_EMOJI, BED_MAX_USES } from './tiles';
+import { applyNullMomentum } from './voidDamage';
 
 export { BED_MAX_USES };
 
@@ -34,7 +35,7 @@ export function findSleepThreatInSight(state: GameState): Enemy | undefined {
   const { player, map, enemies } = state;
   const radius = Math.max(
     1,
-    visionRadiusFor(player.characterClass, player.stats.level) + computeBagPassives(player.inventory).losBonus,
+    visionRadiusFor(player.characterClass, player.stats.level) + playerBagPassives(player).losBonus,
   );
   return enemies.find(e =>
     isSleepThreat(e) &&
@@ -108,7 +109,7 @@ export function simulateSleep(state: GameState, turns = SLEEP_TURNS): SleepResul
     }
     const finder = s.enemies.find(e => isSleepThreat(e) && chebyshev(e.pos, s.player.pos) <= 1);
     if (finder) {
-      const dmg = sneakAttackDamage(s.player, finder);
+      const dmg = applyNullMomentum(sneakAttackDamage(s.player, finder), s.player);
       const hp = Math.max(0, s.player.stats.hp - dmg);
       const died = hp <= 0;
       return {

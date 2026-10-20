@@ -1,7 +1,8 @@
 import { ActiveProjectile, Enemy, EmojiItem, FloatingText, Player, Position } from './types';
-import { applyEquipmentAndPassives, computeBagPassives } from './inventory';
+import { applyEquipmentAndPassives, playerBagPassives } from './inventory';
 import { stolenEmojiSummary } from './monkeyLoot';
 import { RANGED_BLOCKING_TILES } from './tiles';
+import { applyNullMomentum } from './voidDamage';
 
 export interface ProjectileResolution {
   projectile: ActiveProjectile | null;
@@ -75,7 +76,7 @@ export function resolveProjectileFlight(
   };
 
   const atk = applyEquipmentAndPassives(player).stats.attack;
-  const ignite = computeBagPassives(player.inventory).burningOnHit;
+  const ignite = playerBagPassives(player).burningOnHit;
   let enemies = [...enemiesIn];
   let playerDamage = 0;
   let playerDied = false;
@@ -156,7 +157,7 @@ export function resolveProjectileFlight(
         }
       }
       if (Math.max(Math.abs(player.pos.x - blastPos.x), Math.abs(player.pos.y - blastPos.y)) <= blastRadius) {
-        const selfDmg = Math.max(1, bombAtk);
+        const selfDmg = applyNullMomentum(Math.max(1, bombAtk), player);
         playerDamage += selfDmg;
         log(`💥 You're caught in your own explosion! -${selfDmg} HP!`);
         floats.push({ id: `bomb-self-${proj.id}`, pos: { ...player.pos }, text: `-${selfDmg}`, color: '#f97316', life: 2 });

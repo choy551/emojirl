@@ -1,5 +1,5 @@
 import { GameState, EmojiItem } from '../game/types';
-import { getItemBuyPrice, addToBag } from '../game/gameHelpers';
+import { getItemBuyPrice, addToPlayerBag } from '../game/gameHelpers';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
@@ -70,7 +70,7 @@ export function AmmoCacheModal({ gameState, setGameState, ammoCacheItems, setAmm
                       if (prev.player.stats.gold < price) return prev;
                       const boughtItem = { ...item, id: `cache-bought-${Math.random().toString(36).slice(2)}` };
                       const newGold = prev.player.stats.gold - price;
-                      const { inventory, bank } = addToBag(prev.player.inventory, prev.player.bank, boughtItem);
+                      const { inventory, bank } = addToPlayerBag(prev.player, boughtItem);
                       return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, inventory, bank } };
                     });
                     addLog(`📦 Bought ${item.emoji} ${item.name} for ${price}g!`);

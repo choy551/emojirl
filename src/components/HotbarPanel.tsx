@@ -12,6 +12,7 @@ interface HotbarPanelProps {
   onSelect: (itemId: string | null) => void;
   onMove: (sourceId: string, dest: string | number | 'bank') => void;
   onShowStatCard: (item: EmojiItem) => void;
+  onBanishGhost?: (slot: number) => void;
 }
 
 export function HotbarPanel({
@@ -22,6 +23,7 @@ export function HotbarPanel({
   onSelect,
   onMove,
   onShowStatCard,
+  onBanishGhost,
 }: HotbarPanelProps) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -52,6 +54,7 @@ export function HotbarPanel({
             <button
               key={i}
               onClick={() => {
+                if (item?.isVoidGhost) { onBanishGhost?.(i); return; }
                 if (!item) {
                   if (selectedItemId) { onMove(selectedItemId, i); onSelect(null); }
                 } else if (isSelected) {
@@ -67,7 +70,7 @@ export function HotbarPanel({
               title={item ? `[${i + 1}] ${item.name}: ${item.description.replace(/ · Bag: [^·]+$/, '')}${getPassiveTooltipSuffix(item)}${bankDupes > 0 ? ` · ${bankDupes} more in Bank` : ''}` : `Empty slot ${i + 1}`}
               className={`relative aspect-square rounded border flex items-center justify-center text-xl transition-all
                 ${focusedBagIdx === i ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-black/50' : ''}
-                ${!item
+                ${item?.isVoidGhost ? 'opacity-40 border-violet-400/40 bg-violet-950/20 cursor-pointer' : !item
                   ? 'border-border/20 bg-black/20 cursor-default'
                   : isSelected
                     ? 'border-green-400 bg-green-900/30 scale-105 shadow-[0_0_8px_rgba(74,222,128,0.4)]'
@@ -77,6 +80,7 @@ export function HotbarPanel({
             >
               {item ? item.emoji : null}
               <span className={`absolute top-0.5 left-1 text-[8px] font-bold leading-none ${item ? 'text-muted-foreground/60' : 'text-muted-foreground/20'}`}>{i + 1}</span>
+              {item?.isVoidGhost && <span className="absolute bottom-0.5 left-0.5 text-[8px] leading-none">👤</span>}
               {item && kindEmoji && (
                 <span className="absolute bottom-0.5 right-0.5 text-[9px] leading-none">{kindEmoji}</span>
               )}

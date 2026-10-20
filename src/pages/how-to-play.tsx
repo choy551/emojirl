@@ -100,9 +100,12 @@ export default function HowToPlay({
         <p className="text-muted-foreground leading-relaxed">
           Descend through procedurally generated dungeon floors. Pick up emoji
           powers to boost your stats. If your emoji bag empties completely, you
-          take 1 damage every turn (scaling to your current floor depth, so 5
-          damage at floor 5!) until you find an emoji — so always keep at least
-          one! Bump into enemies to attack. Reach the stairs{" "}
+          take Void damage every turn equal to the floor (so 5 damage at floor 5)
+          until you find an emoji — the log reads{" "}
+          <em>💀 You are emoji-less!</em> Die that way and you unlock{" "}
+          <strong className="text-foreground">👤 The Void</strong>, who has the
+          pressure backwards: each filled hotbar slot burns, and an empty hotbar
+          is safe. Bump into enemies to attack. Reach the stairs{" "}
           <span className="text-lg">🔽</span> to descend deeper.
         </p>
         <p className="text-muted-foreground leading-relaxed">
@@ -137,6 +140,11 @@ export default function HowToPlay({
               label: "🛡️ DEF",
               color: "text-sky-400",
               desc: "Defence — reduces incoming damage. Formula: damage taken = max(1, enemy ATK − ⌊DEF ÷ 2⌋). DEF is halved before subtracting, so every 2 points removes 1 damage. There is no hard cap.",
+            },
+            {
+              label: "👤 DR",
+              color: "text-zinc-300",
+              desc: "Null Momentum — The Void only. Incoming damage (attacks, lava, blasts) is reduced by 1% + 1% per level, hard cap 44%. Level 1 is 2%. Rounded down, and a hit still deals at least 1. Void pressure is not reduced. Shown in the Stats row.",
             },
             {
               label: "💨 SPD",
@@ -274,7 +282,8 @@ export default function HowToPlay({
                 • <strong>Wizard 🧙</strong>: 1 nearest / 2 furthest / 3 manual / 4 hold-fire (Arcane Barrage tactics)<br />
                 • <strong>Ninja 🥷</strong>: 1 enter Blink target mode / 2–3 stealth modes / 4 toggle auto-stealth<br />
                 • <strong>Ranger 🧝</strong>: 1 ranged / 2 melee / 3 flee (Trailblaze)<br />
-                • <strong>Cowboy 🤠</strong>: 1 yeehaw tactics (special flavor/ability)
+                • <strong>Cowboy 🤠</strong>: 1 yeehaw tactics (special flavor/ability)<br />
+                • <strong>The Void 👤</strong>: <em>t</em> cycles Melee → Ranger autos → Wizard autos (locked styles are skipped, with a progress line such as “Wizard autos: 4/10 magic emoji”). Ranger autos unlock after 10 ranged emoji (bows, arrows, guns, bullets, boomerangs). Wizard autos unlock after 10 magic emoji (potions, crystals, stars, spellbooks, wands). <em>U</em> aims Unmake.
               </div>
               <div className="flex items-center gap-2">
                 <Kbd>T</Kbd>
@@ -494,6 +503,17 @@ export default function HowToPlay({
 
       {/* Classes */}
       <Section title="Classes">
+        <p className="text-xs text-muted-foreground">
+          Every class except The Void takes emoji-less Void damage while no soul sits in the hotbar.
+          The Void 👤 inverts that: filled hotbar slots 1–9 deal <em>floor × filled + filled</em> damage each turn.
+          Bank and equipment are safe. Consume a soul emoji from the hotbar ten times to keep its bag passive as a faded ghost.
+          One ghost acts on depths 1–4; each depth boss (floors 5, 10, 15…) lets one more act, up to nine. Extra ghosts wait in the Bank.
+          Null Momentum reduces incoming damage by 1% + 1% per level (hard cap 44%) and shows up as DR in Stats.
+          A kill from a ghost's arc, thorns, or burn drops nothing and instead counts as one consume of that emoji.
+          Press <em>t</em> to cycle Melee, Ranger autos, and Wizard autos — the ranged styles start locked until you consume 10 matching emoji.
+          Ranger autos are the Ranger’s directional shot and spend ammo. Wizard autos use the Wizard’s nearest / furthest / manual targeting and do not spend mana.
+          Press <em>U</em> for Unmake, once per floor.
+        </p>
         <div className="space-y-3">
           {Object.entries(CHARACTER_CLASSES).map(([emoji, cls]) => (
             <div

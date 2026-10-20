@@ -4,11 +4,13 @@ import { resolveCombat, isHostileCombatTarget } from '../../game/combat';
 import { getMood } from '../../game/moods';
 import { markEnemyKilled } from '../../game/discoveries';
 import {
-  moodMax, chebyshev, hasLOSBetween, PLAYER_PASSABLE_TILES, computeBagPassives,
+  moodMax, chebyshev, hasLOSBetween, PLAYER_PASSABLE_TILES, playerBagPassives,
   applyEquipmentAndPassives, removeAndRefillBag, withVisibility, runEnemyTurns, applyEnemyTurns,
   handleGodBlessedImmunity, levelFromXP,
 } from '../../game/gameHelpers';
 import { applyLevelUp } from '../../game/playerTurn';
+import { creditVoidBoss } from '../../game/voidDamage';
+import { noteThemedHotbarConsume } from '../../game/voidAbilities';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 
 export function useCombatActions(
@@ -79,7 +81,14 @@ export function useCombatActions(
           newInv = prev.player.inventory.map(it => it.id === item.id ? { ...it, charges: newCharges } : it);
         }
       }
-      const midState = { ...prev, player: { ...prev.player, inventory: newInv, bank: newProjBank }, activeProjectile: proj, turn: prev.turn + 1 };
+      let themeLogs = prev.logs;
+      if (prev.player.characterClass === '👤') {
+        const themed = noteThemedHotbarConsume(item);
+        if (themed) {
+          themeLogs = [{ id: `void-theme-${prev.turn}-${item.id}`, text: themed.text, turn: prev.turn }, ...prev.logs].slice(0, 24);
+        }
+      }
+      const midState = { ...prev, logs: themeLogs, player: { ...prev.player, inventory: newInv, bank: newProjBank }, activeProjectile: proj, turn: prev.turn + 1 };
       return applyEnemyTurns(midState, runEnemyTurns(midState));
     });
   }, [addLog, setGameState]);
@@ -114,7 +123,7 @@ export function useCombatActions(
         });
       const blinkPos = adjFree.length > 0 ? adjFree[0] : prev.player.pos;
 
-      const _blinkPassives = computeBagPassives(prev.player.inventory);
+      const _blinkPassives = playerBagPassives(prev.player);
       const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
       const blinkEffPlayer = applyEquipmentAndPassives({ ...prev.player, pos: blinkPos });
       const boostedPlayer = { ...blinkEffPlayer, pos: blinkPos, stats: { ...blinkEffPlayer.stats, attack: Math.round(blinkEffPlayer.stats.attack * 2) } };
@@ -211,7 +220,8 @@ export function useCombatActions(
       }
 
       newPlayer.stats.blinkStrikeInstakillOutOfCombat = 0;
-      const midState: GameState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, killCounts: newKillCounts, difficultyTier: newDifficultyTier, floatingTexts: [...blinkFloats, ...prev.floatingTexts], ninjaFreeMoves };
+      let midState: GameState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, killCounts: newKillCounts, difficultyTier: newDifficultyTier, floatingTexts: [...blinkFloats, ...prev.floatingTexts], ninjaFreeMoves };
+      if (actuallyKilled && target.isBoss) midState = creditVoidBoss(midState, target);
       return applyEnemyTurns(withVisibility(midState), runEnemyTurns(midState));
     });
   }, [addLog, setGameState]);
@@ -248,7 +258,7 @@ export function useCombatActions(
         });
       const blinkPos = adjFree.length > 0 ? adjFree[0] : prev.player.pos;
 
-      const _blinkPassives = computeBagPassives(prev.player.inventory);
+      const _blinkPassives = playerBagPassives(prev.player);
       const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
       const blinkEffPlayer = applyEquipmentAndPassives({ ...prev.player, pos: blinkPos });
       const boostedPlayer = { ...blinkEffPlayer, pos: blinkPos, stats: { ...blinkEffPlayer.stats, attack: Math.round(blinkEffPlayer.stats.attack * 2) } };
@@ -345,7 +355,8 @@ export function useCombatActions(
       }
 
       newPlayer.stats.blinkStrikeInstakillOutOfCombat = 0;
-      const midState: GameState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, killCounts: newKillCounts, difficultyTier: newDifficultyTier, floatingTexts: [...blinkFloats, ...prev.floatingTexts], ninjaFreeMoves };
+      let midState: GameState = { ...prev, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, killCounts: newKillCounts, difficultyTier: newDifficultyTier, floatingTexts: [...blinkFloats, ...prev.floatingTexts], ninjaFreeMoves };
+      if (actuallyKilledX && target.isBoss) midState = creditVoidBoss(midState, target);
       return applyEnemyTurns(withVisibility(midState), runEnemyTurns(midState));
     });
   }, [addLog, setGameState]);

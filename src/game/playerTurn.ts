@@ -1,7 +1,7 @@
 import { Player, FloatingText, Position } from './types';
 import { getRandomEmojiPower } from './emojis';
 import { markEmojiSeen } from './discoveries';
-import { addToBag, activeKindLabel } from './inventory';
+import { addToPlayerBag, activeKindLabel } from './inventory';
 import { moodMax, hpBonusForLevel, mpBonusForLevel } from './progression';
 
 /**
@@ -82,7 +82,7 @@ export function applyLevelUp(
   const extraEmoji = player.characterClass === '🧙'
     ? [{ ...getRandomEmojiPower(), id: `lvlup2-${Math.random()}`, consumed: false }]
     : [];
-  const { inventory, bank, nonStackableBanked, duplicateActiveBanked } = addToBag(player.inventory, player.bank, newEmoji, ...extraEmoji);
+  const { inventory, bank, nonStackableBanked, duplicateActiveBanked } = addToPlayerBag(player, newEmoji, ...extraEmoji);
   markEmojiSeen(newEmoji.emoji); extraEmoji.forEach(e => markEmojiSeen(e.emoji));
   nonStackableBanked.forEach(i => addLog(`Extra ${i.emoji} → Bank (already carried)`));
   duplicateActiveBanked.forEach(i => addLog(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));

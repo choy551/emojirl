@@ -11,7 +11,7 @@ const HEAL_DISPLAY_LIMIT = 9;
 interface RightSidebarProps {
   player: Player;
   gameState: Pick<GameState, 'map' | 'enemies' | 'activeProjectile' | 'chefLessonCount'>;
-  bagSlots: EmojiItem[];
+  bagSlots: (EmojiItem | null)[];
   healSlots: EmojiItem[];
   bagPassiveSummary: BagPassiveSummary;
   equippedPlayer: Player;
@@ -128,7 +128,7 @@ export function RightSidebar({
                 {...itemInspectProps(item)}
                 title={`[${i + 1}] ${item.name}: ${item.description.replace(/ · Bag: [^·]+$/, '')}${item.charges !== undefined && item.charges >= 0 ? ` (${item.charges}×)` : ''}${getPassiveTooltipSuffix(item)}${bankDupes > 0 ? ` · ${bankDupes} more in Bank` : ''} · Right-click for details`}
                 className={`relative aspect-square bg-card border rounded flex items-center justify-center text-xl transition-all
-                  ${item.isEquipment
+                  ${item.isVoidGhost ? 'opacity-40 border-violet-400/40' : item.isEquipment
                     ? 'border-amber-500/60 hover:border-amber-300 cursor-pointer shadow-sm hover:scale-105 active:scale-95 shadow-amber-900/30'
                     : item.activeKind
                       ? 'border-amber-600/40 hover:border-amber-400 cursor-pointer shadow-sm hover:scale-105 active:scale-95'
@@ -137,6 +137,7 @@ export function RightSidebar({
                 {item.emoji}
                 <>
                   <span className="absolute top-0.5 left-1 text-[8px] text-muted-foreground font-bold leading-none">{i + 1}</span>
+                  {item.isVoidGhost && <span className="absolute bottom-0.5 left-0.5 text-[8px] leading-none">👤</span>}
                   {item.isEquipment && <span className="absolute bottom-0.5 right-0.5 text-[8px] leading-none">⚔️</span>}
                   {!item.isEquipment && kindEmoji && (
                     <span className="absolute bottom-0.5 right-0.5 text-[9px] leading-none">{kindEmoji}</span>

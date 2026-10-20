@@ -6,9 +6,9 @@ import { getMood } from '../game/moods';
 import { markEnemySeen, markEmojiSeen, markEnemyKilled } from '../game/discoveries';
 import {
   moodMax, chebyshev, hasLOS, hasLOSBetween, VISION_RADIUS,
-  eagleEyeRange, PLAYER_PASSABLE_TILES, computeBagPassives,
+  eagleEyeRange, PLAYER_PASSABLE_TILES, playerBagPassives,
   applyEquipmentAndPassives, withVisibility, runEnemyTurns, applyEnemyTurns, tickActiveBuffs,
-  addToBag, levelFromXP,
+  addToPlayerBag, levelFromXP,
   mpBonusForLevel, computeNinjaEvasion, getRandomCowboyFlavor, handleGodBlessedImmunity,
   _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG, restoreStolenEmojis, stolenEmojiSummary,
   applyBedRest, simulateSleep, SLEEP_TURNS, BED_OVERHEAL_MULT,
@@ -16,6 +16,8 @@ import {
 } from '../game/gameHelpers';
 import { lightningArcDamage } from '../game/passives';
 import { canEquipItem } from '../components/itemUtils';
+import { creditVoidBoss } from '../game/voidDamage';
+import { applyEntropicTithe } from '../game/voidAbilities';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
 import { descendFloor } from '../game/descend';
 import { shouldPromptFinaleStairs, spectatorBumpText } from '../game/finale';
@@ -45,6 +47,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     blinkTurnRef, trailblazeTurnRef,
     lavaStepConfirmedRef,
     finalePromptRef,
+    voidAttackModeRef,
   } = refs;
   const {
     setGameState, setWizardTactics, setRangerMode,
@@ -119,7 +122,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       if (isBlinkActive) {
         const pos2 = { x: from.x + 2 * dx, y: from.y + 2 * dy };
         const destTile = _outerState.map[pos2.y]?.[pos2.x];
-        const canSwim = computeBagPassives(_outerState.player.inventory).canSwim;
+        const canSwim = playerBagPassives(_outerState.player).canSwim;
         if (destTile && (PLAYER_PASSABLE_TILES.has(destTile.type) || destTile.type === 'door-closed' || (destTile.type === 'water' && canSwim))) {
           walkDest = pos2;
         }
@@ -160,7 +163,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           markEnemySeen(enemy.emoji);
           const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, true);
           const effectiveCowboy = applyEquipmentAndPassives(player);
-          const _cowboyPassives = computeBagPassives(prev.player.inventory);
+          const _cowboyPassives = playerBagPassives(prev.player);
           const cResult = resolveCombat(effectiveCowboy, enemy, addLog, { mood, cowboyMoodValue: prev.player.stats.moodValue, advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true });
           if (cResult.fled) { const midState = { ...prev, turn: prev.turn + 1 }; return applyEnemyTurns(midState, runEnemyTurns(midState)); }
           addLog(`🤠 Dual guns — BANG BANG!`);
@@ -201,7 +204,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
       }
 
-      if (cls === '🧝' && rangerModeRef.current === 'ranged') {
+      const voidRanged = cls === '👤' && voidAttackModeRef.current === 'ranger';
+      if ((cls === '🧝' && rangerModeRef.current === 'ranged') || voidRanged) {
         for (let range = 2; range <= eagleEyeRange(player.stats.level); range++) {
           const tx = player.pos.x + dx * range;
           const ty = player.pos.y + dy * range;
@@ -219,7 +223,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (enemy.tag === 'Neutral' && !enemy.engaged) continue;
           const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, player.characterClass === '🤠');
           const effectiveRanger = applyEquipmentAndPassives(player);
-          const _rangerPassives = computeBagPassives(prev.player.inventory);
+          const _rangerPassives = playerBagPassives(prev.player);
           const combatResult = resolveCombat(effectiveRanger, enemy, addLog, { mood, cowboyMoodValue: player.characterClass === '🤠' ? prev.player.stats.moodValue : undefined, advantage: _rangerPassives.advantageDice, execBlow: _rangerPassives.execBlow, trueAim: _rangerPassives.trueAim, shieldWall: _rangerPassives.shieldWall, firstShot: !enemy.engaged });
 
           const offHandAmmo = player.equipment.offHand?.specialAmmoKind;
@@ -258,7 +262,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const rangerBeam = { positions: _rBeam, color: '#fb923c' };
 
           let newEnemies = [...prev.enemies];
-          const ammoSaved = Math.random() < 0.5;
+          const ammoSaved = cls === '🧝' && Math.random() < 0.5;
           if (ammoSaved) addLog(`🪶 Survivalist — ammo saved!`);
           let newPlayer: Player = {
             ...player,
@@ -295,7 +299,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                 drop = r2 < 0.10 ? getRandomEquipmentDrop(prev.currentFloor) : r2 < 0.22 ? getRandomActiveDrop() : r2 < 0.57 ? getAmmoDrop() : getRandomFloorDrop();
               }
               const newItem = { ...drop, id: `drop-${Math.random()}`, consumed: false, pos: enemy.pos };
-              const midState = { ...prev, killCounts: rangerKillCounts, player: newPlayer, enemies: newEnemies, items: [...prev.items, newItem], turn: prev.turn + 1, floatingTexts: rangedBaseFloats, pendingBeam: rangerBeam, difficultyTier: enemy.isBoss ? (prev.difficultyTier ?? 0) + 1 : (prev.difficultyTier ?? 0) };
+              let midState: GameState = { ...prev, killCounts: rangerKillCounts, player: newPlayer, enemies: newEnemies, items: [...prev.items, newItem], turn: prev.turn + 1, floatingTexts: rangedBaseFloats, pendingBeam: rangerBeam, difficultyTier: enemy.isBoss ? (prev.difficultyTier ?? 0) + 1 : (prev.difficultyTier ?? 0) };
+              if (enemy.isBoss) midState = creditVoidBoss(midState, enemy);
               return applyEnemyTurns(midState, runEnemyTurns(midState));
             }
           } else {
@@ -304,7 +309,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           }
 
           if (combatResult.playerDied) return { ...prev, killCounts: rangerKillCounts, player: newPlayer, enemies: newEnemies, floatingTexts: rangedBaseFloats, gameOver: true, killer: { name: enemy.name, emoji: enemy.emoji } };
-          const midState = { ...prev, killCounts: rangerKillCounts, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, floatingTexts: rangedBaseFloats, pendingBeam: rangerBeam };
+          let midState: GameState = { ...prev, killCounts: rangerKillCounts, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, floatingTexts: rangedBaseFloats, pendingBeam: rangerBeam };
+          if (combatResult.enemyDied && enemy.isBoss) midState = creditVoidBoss(midState, enemy);
           return applyEnemyTurns(midState, runEnemyTurns(midState, skipFightId));
         }
       }
@@ -317,7 +323,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const pos2 = { x: player.pos.x + 2 * dx, y: player.pos.y + 2 * dy };
         if (pos2.y >= 0 && pos2.y < prev.map.length && pos2.x >= 0 && pos2.x < prev.map[0].length) {
           const destTile = prev.map[pos2.y][pos2.x];
-          const _canSwimBlink = computeBagPassives(prev.player.inventory).canSwim;
+          const _canSwimBlink = playerBagPassives(prev.player).canSwim;
           const destPassable = PLAYER_PASSABLE_TILES.has(destTile.type) || destTile.type === 'door-closed' || (destTile.type === 'water' && _canSwimBlink);
           if (destPassable) newPos = pos2;
         }
@@ -346,7 +352,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       if (tile.type === 'lava') {
         // Walkable but deadly — damage is applied in tickVolcanoAndLava at end of turn.
       } else if (tile.type === 'water') {
-        const canSwim = computeBagPassives(prev.player.inventory).canSwim;
+        const canSwim = playerBagPassives(prev.player).canSwim;
         if (!canSwim) {
           const hasEnemyThere = prev.enemies.some(e => e.pos.x === newPos.x && e.pos.y === newPos.y);
           if (hasEnemyThere) {
@@ -379,7 +385,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                       : `Picked up ${pickedUp.emoji} ${pickedUp.name} → Equip tab (⚔️).`);
                   }
                 } else {
-                  const { inventory: _bInv, bank: _bBnk } = addToBag(bumpedPlayer.inventory, bumpedPlayer.bank, pickedUp);
+                  const { inventory: _bInv, bank: _bBnk } = addToPlayerBag(bumpedPlayer, pickedUp);
                   const wentToBank = _bBnk.length > bumpedPlayer.bank.length;
                   bumpedPlayer = { ...bumpedPlayer, inventory: _bInv, bank: _bBnk };
                   addLog(wentToBank
@@ -411,7 +417,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const tile2 = prev.map[pos2.y][pos2.x];
           const noEnemyAt2 = !prev.enemies.some(e => e.pos.x === pos2.x && e.pos.y === pos2.y);
           const tile2Passable = (PLAYER_PASSABLE_TILES.has(tile2.type) && tile2.type !== 'door-closed')
-            || (tile2.type === 'water' && computeBagPassives(prev.player.inventory).canSwim);
+            || (tile2.type === 'water' && playerBagPassives(prev.player).canSwim);
           if (tile2Passable && noEnemyAt2) newPos = pos2;
         }
       }
@@ -517,7 +523,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           : player;
         const effectiveMeleePlayer = applyEquipmentAndPassives(meleeBasePlayer);
         const combatPlayer = (holdFire || rangerFlee) ? { ...effectiveMeleePlayer, stats: { ...effectiveMeleePlayer.stats, defense: 0 } } : effectiveMeleePlayer;
-        const _meleePassives = computeBagPassives(prev.player.inventory);
+        const _meleePassives = playerBagPassives(prev.player);
         const ninjaEvaCombatPlayer = cls === '🥷'
           ? { ...combatPlayer, stats: { ...combatPlayer.stats, evasion: computeNinjaEvasion(combatPlayer) } }
           : combatPlayer;
@@ -664,6 +670,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                 newPlayer = applyMonkeyDropOnKill(tgt, newPlayer);
                 newEnemies.splice(idx, 1);
                 newPlayer.stats.xp += tgt.isBoss ? 25 : 5;
+                const tithed = applyEntropicTithe({ ...prev, player: newPlayer, logs: newState.logs }, 'lightningBolt');
+                newPlayer = tithed.player;
+                newState.logs = tithed.logs;
               } else {
                 newEnemies[idx] = { ...tgt, hp: newHp, engaged: true };
               }
@@ -730,6 +739,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             if (thornNewHp <= 0) {
               newEnemies.splice(thornIdx, 1);
               addLog(`💎 Thorns finish off ${enemy.emoji}!`);
+              const tithed = applyEntropicTithe({ ...prev, player: newPlayer, logs: newState.logs }, 'thorns');
+              newPlayer = tithed.player;
+              newState.logs = tithed.logs;
             } else {
               newEnemies[thornIdx] = { ...newEnemies[thornIdx], hp: thornNewHp };
               addLog(`💎 Thorns reflect ${_meleePassives.thorns} dmg to ${enemy.emoji}!`);
@@ -746,6 +758,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         newState.player = newPlayer;
         newState.enemies = newEnemies;
         newState.turn++;
+        if (combatResult.enemyDied && !godBlessedProc && enemy.isBoss) newState = creditVoidBoss(newState, enemy);
         return applyEnemyTurns(newState, runEnemyTurns(newState, skipFightId));
       }
 
@@ -783,7 +796,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                 : `Picked up ${pickedUp.emoji} ${pickedUp.name} → Equip tab (⚔️).`);
             }
           } else {
-            const { inventory: _pInv, bank: _pBnk } = addToBag(newPlayer.inventory, newPlayer.bank, pickedUp);
+            const { inventory: _pInv, bank: _pBnk } = addToPlayerBag(newPlayer, pickedUp);
             const wentToBank = _pBnk.length > newPlayer.bank.length;
             newPlayer = { ...newPlayer, inventory: _pInv, bank: _pBnk };
             addLog(wentToBank
@@ -795,7 +808,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
       }
 
-      const _mvPassives = computeBagPassives(newPlayer.inventory);
+      const _mvPassives = playerBagPassives(newPlayer);
       if (_mvPassives.itemMagnet && newState.items.length > 0) {
         const magnetItems = newState.items.filter(it => it.pos && prev.map[it.pos.y]?.[it.pos.x]?.visible);
         if (magnetItems.length > 0) {
@@ -821,7 +834,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                     : `🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you → Equip tab (⚔️).`);
                 }
               } else {
-                const { inventory: _mInv, bank: _mBnk } = addToBag(newPlayer.inventory, newPlayer.bank, pickedUp);
+                const { inventory: _mInv, bank: _mBnk } = addToPlayerBag(newPlayer, pickedUp);
                 const magnetWentToBank = _mBnk.length > newPlayer.bank.length;
                 newPlayer = { ...newPlayer, inventory: _mInv, bank: _mBnk };
                 addLog(magnetWentToBank
@@ -928,7 +941,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         return descendFloor({ ...newState, player: newPlayer }, addLog);
       }
 
-      if (cls === '🧙') {
+      if (cls === '🧙' || (cls === '👤' && voidAttackModeRef.current === 'wizard')) {
         const boltCandidates = newState.enemies.filter(e => {
           const dist = chebyshev(newPlayer.pos, e.pos);
           return dist > 1 && dist <= VISION_RADIUS && hasLOSBetween(newState.map, newPlayer.pos, e.pos)
@@ -944,11 +957,14 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                  [...boltCandidates].sort((a, b) => chebyshev(newPlayer.pos, a.pos) - chebyshev(newPlayer.pos, b.pos))[0])
               : [...boltCandidates].sort((a, b) => chebyshev(newPlayer.pos, a.pos) - chebyshev(newPlayer.pos, b.pos))[0];
 
-        if (boltTarget && (newPlayer.stats.mana ?? 0) > 0) {
+        const voidWizardShot = cls === '👤';
+        if (boltTarget && (voidWizardShot || (newPlayer.stats.mana ?? 0) > 0)) {
           markEnemySeen(boltTarget.emoji);
-          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, mana: Math.max(0, (newPlayer.stats.mana ?? 0) - 1) } };
+          if (!voidWizardShot) {
+            newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, mana: Math.max(0, (newPlayer.stats.mana ?? 0) - 1) } };
+          }
           const boltMood = getMood(newPlayer.stats.moodValue, newPlayer.stats.hp, newPlayer.stats.maxHp, newPlayer.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
-          const _boltPassives = computeBagPassives(newPlayer.inventory);
+          const _boltPassives = playerBagPassives(newPlayer);
           const boltResult = resolveCombat(applyEquipmentAndPassives(newPlayer), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall });
 
           const boltDmg = boltTarget.hp - boltResult.enemyHp;
@@ -979,6 +995,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               addLog(`🏆 You defeated ${boltTarget.name}! +${boltXpGain} XP!`);
               addLog(`⬆️ Darkness stirs — enemies grow stronger from here on!`);
               newState.difficultyTier = (newState.difficultyTier ?? 0) + 1;
+              newState = creditVoidBoss(newState, boltTarget);
             }
             if (boltNewLevel > boltOldLevel) {
               newPlayer = applyLevelUp(newPlayer, boltOldLevel, boltNewLevel, addLog);
@@ -1046,7 +1063,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
       return withVisibility(applyEnemyTurns(newState, runEnemyTurns(newState)));
     });
-  }, [addLog, setGameState, rangerModeRef, wizardTacticsRef, autoStealthRef, lastCowboyFlavorTurnRef, blinkTurnRef, trailblazeTurnRef, setWizardTactics, setRangerMode, setBlinkTurn, setTrailblazeTurn, gameStateRef]);
+  }, [addLog, setGameState, rangerModeRef, wizardTacticsRef, autoStealthRef, lastCowboyFlavorTurnRef, blinkTurnRef, trailblazeTurnRef, setWizardTactics, setRangerMode, setBlinkTurn, setTrailblazeTurn, gameStateRef, voidAttackModeRef]);
 
   const handleWait = useCallback(() => {
     setGameState(prev => {
@@ -1062,7 +1079,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       const onCampfire = nearCampfire || nearRest;
       const campfireBonus = onCampfire ? 2 : 0;
       const stats = { ...prev.player.stats };
-      const waitPassives = computeBagPassives(prev.player.inventory);
+      const waitPassives = playerBagPassives(prev.player);
       const regen = waitPassives.combatRegen || 0;
       const totalHeal = WAIT_HEAL + regen + campfireBonus;
       const atFull = stats.hp >= stats.maxHp;
@@ -1091,7 +1108,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       const waitFloats: FloatingText[] = [];
       let waitBeam: { positions: Position[]; color: string } | undefined;
 
-      if (cls === '🧙') {
+      if (cls === '🧙' || (cls === '👤' && voidAttackModeRef.current === 'wizard')) {
         const boltCandidates = waitEnemies.filter(e => {
           const dist = chebyshev(waitPlayer.pos, e.pos);
           return dist > 1 && dist <= VISION_RADIUS && hasLOSBetween(prev.map, waitPlayer.pos, e.pos)
@@ -1107,11 +1124,14 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                  [...boltCandidates].sort((a, b) => chebyshev(waitPlayer.pos, a.pos) - chebyshev(waitPlayer.pos, b.pos))[0])
               : [...boltCandidates].sort((a, b) => chebyshev(waitPlayer.pos, a.pos) - chebyshev(waitPlayer.pos, b.pos))[0];
 
-        if (boltTarget && (waitPlayer.stats.mana ?? 0) > 0) {
+        const voidWizardShot = cls === '👤';
+        if (boltTarget && (voidWizardShot || (waitPlayer.stats.mana ?? 0) > 0)) {
           markEnemySeen(boltTarget.emoji);
-          waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, mana: Math.max(0, (waitPlayer.stats.mana ?? 0) - 1) } };
+          if (!voidWizardShot) {
+            waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, mana: Math.max(0, (waitPlayer.stats.mana ?? 0) - 1) } };
+          }
           const boltMood = getMood(waitPlayer.stats.moodValue, waitPlayer.stats.hp, waitPlayer.stats.maxHp, waitPlayer.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
-          const _boltPassives = computeBagPassives(waitPlayer.inventory);
+          const _boltPassives = playerBagPassives(waitPlayer);
           const boltResult = resolveCombat(applyEquipmentAndPassives(waitPlayer), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall });
           const boltDmg = boltTarget.hp - boltResult.enemyHp;
           const boltPlayerDmg = waitPlayer.stats.hp - boltResult.playerHp;
@@ -1178,7 +1198,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         if (ohDecayW.float) waitFloats.push(ohDecayW.float);
       }
 
-      const midState = {
+      const waitedBoss = prev.enemies.find(e => e.isBoss && !e.isEcho && !waitEnemies.find(w => w.id === e.id));
+      let midState: GameState = {
         ...prev,
         player: waitPlayer,
         enemies: waitEnemies,
@@ -1199,9 +1220,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           ...prev.logs,
         ].slice(0, 24),
       };
+      if (waitedBoss) midState = creditVoidBoss(midState, waitedBoss);
       return withVisibility(applyEnemyTurns(midState, runEnemyTurns(midState)));
     });
-  }, [addLog, setGameState, wizardTacticsRef]);
+  }, [addLog, setGameState, wizardTacticsRef, voidAttackModeRef]);
 
   const handleCloseDoor = useCallback(() => {
     setGameState(prev => {

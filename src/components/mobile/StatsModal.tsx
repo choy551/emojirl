@@ -1,6 +1,7 @@
 import { Player, GameState, BagPassiveSummary } from '../../game/types';
 import { applyEquipmentAndPassives, computeNinjaEvasion, pressureForRun } from '../../game/gameHelpers';
 import { getCowboyUnarmedBonus } from '../../game/combat';
+import { nullMomentumPercent } from '../../game/voidDamage';
 import { MiniMap } from '../MiniMap';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './oneHandedLayout';
 import { useDismissGuard } from '../../hooks/useDismissGuard';
@@ -34,6 +35,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
   const crit = Math.min(99, 5 + eff.stats.luck);
   const dodge = player.characterClass === '🥷' ? computeNinjaEvasion(eff) : Math.min(50, eff.stats.evasion ?? 0);
   const pressure = pressureForRun(currentFloor, gameState.deepDive);
+  const voidDr = player.characterClass === '👤' ? nullMomentumPercent(player.stats.level) : 0;
   const p = bagPassiveSummary;
   const hp = player.stats.hp;
   const maxHp = player.stats.maxHp;
@@ -111,6 +113,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
           <StatPill label="LCK" value={eff.stats.luck} color="text-pink-400" />
           <StatPill label="CRIT" value={`${crit}%`} color="text-rose-300" />
           <StatPill label="DODGE" value={`${dodge}%`} color="text-sky-300" />
+          {voidDr > 0 && <StatPill label="DR" value={`${voidDr}%`} color="text-zinc-200" />}
           {pressure.atk > 0 && <StatPill label="PRESSURE" value={`+${pressure.atk}/+${pressure.def}`} color="text-red-400" />}
         </div>
 

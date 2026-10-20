@@ -1,5 +1,5 @@
 import { GameState, MapGrid, Position } from './types';
-import { computeBagPassives } from './inventory';
+import { playerBagPassives } from './inventory';
 import { markEnemySeen } from './discoveries';
 
 export const VISION_RADIUS = 4;
@@ -63,7 +63,7 @@ export function computeVisibility(map: MapGrid, playerPos: Position, radius = VI
 
 export function withVisibility(state: GameState): GameState {
   const baseRadius = visionRadiusFor(state.player.characterClass, state.player.stats.level);
-  const passives = computeBagPassives(state.player.inventory);
+  const passives = playerBagPassives(state.player);
   const radius = Math.max(1, baseRadius + passives.losBonus);
   let newMap = computeVisibility(state.map, state.player.pos, radius);
   if (passives.trueVision) {

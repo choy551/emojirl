@@ -98,6 +98,9 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     equipment:       refreshEquipmentCopy((rawPlayer.equipment as Equipment) ?? {}),
     // optional fields
     trailblazerCooldown: rawPlayer.trailblazerCooldown as number | undefined,
+    ghostHotbar: Array.isArray(rawPlayer.ghostHotbar) ? (rawPlayer.ghostHotbar as Player['ghostHotbar']) : undefined,
+    ghostBank: Array.isArray(rawPlayer.ghostBank) ? (rawPlayer.ghostBank as Player['ghostBank']) : undefined,
+    voidBossesCleared: (rawPlayer.voidBossesCleared as number | undefined) ?? (raw.voidBossesCleared as number | undefined) ?? 0,
   };
 
   // ── GameState ─────────────────────────────────────────────────────────────
@@ -137,6 +140,12 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     dualGunsFanfareDone:      raw.dualGunsFanfareDone === true,
     bossrush:                 (raw.bossrush as GameState['bossrush']) ?? undefined,
     deepDive:                 raw.deepDive === true,
+    voidBossesCleared:        (raw.voidBossesCleared as number) ?? (player.voidBossesCleared ?? 0),
+    voidGhostOverCapLogged:   raw.voidGhostOverCapLogged === true,
+    voidAttackMode:           raw.voidAttackMode === 'ranger' || raw.voidAttackMode === 'wizard' || raw.voidAttackMode === 'melee'
+      ? raw.voidAttackMode
+      : undefined,
+    unmakeUsedFloor:          typeof raw.unmakeUsedFloor === 'number' ? raw.unmakeUsedFloor : undefined,
   };
 }
 
