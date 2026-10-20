@@ -1,4 +1,5 @@
 import { Enemy, Player } from './types';
+import { FINALE_FLOOR } from './finaleConstants';
 
 export function moodMax(characterClass: string): number {
   return characterClass === '🤠' ? Infinity : 100;
@@ -32,6 +33,19 @@ export function getDungeonPressure(floor: number): { atk: number; def: number } 
   if (floor <= 15) return { atk: 0, def: 0 };
   const depth = floor - 15;
   return { atk: depth * 3, def: depth * 2 };
+}
+
+/**
+ * Pressure for a run. After the player dives past D:27, each deeper floor uses
+ * 2× that floor's normal curve. The multiplier is not compounded across floors:
+ * D:29 is 2× normal D:29, not 2× the already-doubled D:28 value.
+ */
+export function pressureForRun(floor: number, deepDive?: boolean): { atk: number; def: number } {
+  const base = getDungeonPressure(floor);
+  if (deepDive && floor > FINALE_FLOOR) {
+    return { atk: base.atk * 2, def: base.def * 2 };
+  }
+  return base;
 }
 
 export const COMPANION_BOUNTY_OOC_TURNS = 20;

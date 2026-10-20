@@ -207,6 +207,8 @@ export interface Enemy {
   tag?: 'Hostile' | 'Neutral' | 'Friendly';
   /** Cross and stand on water and lava; immune to lava damage. */
   flying?: boolean;
+  /** Final-arena crowd. Blocks movement. Does not fight, and grants no XP. */
+  isSpectator?: boolean;
   ghostly?: boolean;
   madScientist?: boolean;
   waterAggro?: boolean;
@@ -287,6 +289,20 @@ export interface GameState {
   chefLessonCount?: number;
   /** Cowboy already saw the first Dual Guns fanfare this run. */
   dualGunsFanfareDone?: boolean;
+  /** D:27 boss rush. Absent on every other floor. */
+  bossrush?: BossrushState;
+  /** Set when the player dives past D:27. Doubles pressure on each deeper floor. */
+  deepDive?: boolean;
+}
+
+export interface BossrushState {
+  /** Wave currently in the ring (1-based). */
+  wave: number;
+  /** Turns left before the next wave. 0 while a wave is active. */
+  graceTurns: number;
+  /** Final wave cleared and the north stairway is on the map. */
+  revealed: boolean;
+  stairs: Position;
 }
 
 export interface ControlSettings {

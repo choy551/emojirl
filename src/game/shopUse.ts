@@ -145,7 +145,7 @@ export function applyInstantItemUse(
   let zapKillCounts = s.killCounts;
 
   if (effect?.instakillNearest) {
-    const visible = s.enemies.filter(e => s.map[e.pos.y]?.[e.pos.x]?.visible);
+    const visible = s.enemies.filter(e => !e.isSpectator && s.map[e.pos.y]?.[e.pos.x]?.visible);
     if (visible.length === 0) {
       log(`${item.emoji} No visible enemies to strike!`);
       return null;

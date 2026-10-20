@@ -7,7 +7,7 @@ import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { getMood, MOODS } from '../game/moods';
 import { getClassDef } from '../game/classes';
-import { saveScore } from '../game/leaderboard';
+import { saveScore, leaderboardEntryFromRun } from '../game/leaderboard';
 import { saveGame, loadGame, clearSave, getRawSave } from '../game/save';
 import { isStackableBagPassive } from '../game/passives';
 import { useIsMobile } from '../hooks/use-mobile';
@@ -38,7 +38,7 @@ import { AmmoCacheModal } from '../components/AmmoCacheModal';
 import { RestaurantModal } from '../components/RestaurantModal';
 import { SlotShrineModal } from '../components/SlotShrineModal';
 import { ItemStatCard } from '../components/ItemStatCard';
-import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog, CompanionTalkDialog, BedRestDialog, LavaStepDialog } from '../components/InteractionDialogs';
+import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog, CompanionTalkDialog, BedRestDialog, LavaStepDialog, FinalePromptDialog } from '../components/InteractionDialogs';
 import { TacticsMenu } from '../components/TacticsMenu';
 import { GoToMenu } from '../components/GoToMenu';
 import { EquipmentTab } from '../components/EquipmentTab';
@@ -52,7 +52,7 @@ import {
   computeVisibility, visionRadiusFor,
   _flashSignals,
   bfsStepToward, bfsNextStep, bfsNextStepWallHug, PLAYER_PASSABLE_TILES,
-  getDungeonPressure,
+  pressureForRun, claimFinaleWin, descendFloor,
   isAutoexploreThreat, autoexploreOccupiedKeys, autoexploreInteractBlockKeys, isAutoexploreInteractNpc,
   classifyStairsFinish, scanGotoDestinations, evaluateBedSleep, autoRestNeedsBountyWait,
 } from '../game/gameHelpers';
@@ -191,6 +191,9 @@ export default function Game() {
   const [pendingLavaStep, setPendingLavaStep] = useState<{ dx: number; dy: number } | null>(null);
   const pendingLavaStepRef = useRef<{ dx: number; dy: number } | null>(null);
   useEffect(() => { pendingLavaStepRef.current = pendingLavaStep; }, [pendingLavaStep]);
+  const [finalePrompt, setFinalePrompt] = useState<'win' | 'dive' | null>(null);
+  const finalePromptRef = useRef<'win' | 'dive' | null>(null);
+  useEffect(() => { finalePromptRef.current = finalePrompt; }, [finalePrompt]);
   const [shopOpen, setShopOpen] = useState(false);
   const shopOpenRef = useRef(false);
   const [shopItems, setShopItems] = useState<EmojiItem[]>([]);
@@ -307,6 +310,7 @@ export default function Game() {
       { id: 'boat-warn', isOpen: () => lastBoatWarnSlot !== null, close: () => setLastBoatWarnSlot(null) },
       { id: 'drown-warn', isOpen: () => drownWarnSlot !== null, close: () => setDrownWarnSlot(null) },
       { id: 'lava-warn', isOpen: () => pendingLavaStep !== null, close: () => setPendingLavaStep(null) },
+      { id: 'finale', isOpen: () => finalePrompt !== null, close: () => setFinalePrompt(p => p === 'win' ? 'dive' : null) },
       { id: 'bed', isOpen: () => bedRestOpen, close: () => setBedRestOpen(false) },
       { id: 'talk', isOpen: () => !!pendingCompanionTalkId, close: () => setPendingCompanionTalkId(null) },
       { id: 'bear', isOpen: () => !!pendingBearInteraction, close: () => setPendingBearInteraction(null) },
@@ -429,6 +433,7 @@ export default function Game() {
     lastBoatWarnSlot !== null ||
     drownWarnSlot !== null ||
     pendingLavaStep ||
+    finalePrompt ||
     bedRestOpen ||
     pendingCompanionTalkId ||
     pendingBearInteraction ||
@@ -544,17 +549,8 @@ export default function Game() {
   function saveCurrentScore(state: GameState) {
     if (scoreSaved.current) return;
     scoreSaved.current = true;
-    const { player, currentFloor } = state;
-    const cls = getClassDef(player.characterClass);
-    saveScore({
-      characterClass: player.characterClass,
-      className: cls.name,
-      floor: currentFloor,
-      level: player.stats.level,
-      xp: player.stats.xp,
-      timestamp: Date.now(),
-      maxPressure: getDungeonPressure(currentFloor).atk,
-    });
+    const cls = getClassDef(state.player.characterClass);
+    saveScore(leaderboardEntryFromRun(state, cls.name, Date.now()));
   }
 
   useEffect(() => {
@@ -686,6 +682,7 @@ export default function Game() {
       dirPickModeRef,
       boatConfirmedRef,
       lavaStepConfirmedRef,
+      finalePromptRef,
       blinkTurnRef,
       trailblazeTurnRef,
       restaurantClosedRef,
@@ -706,6 +703,7 @@ export default function Game() {
       setDrownWarnSlot,
       setLastBoatWarnSlot,
       setPendingLavaStep,
+      setFinalePrompt,
       setPendingFairyId,
       setPendingMonkeyInteraction,
       setPendingAdventurerInteraction,
@@ -819,7 +817,8 @@ export default function Game() {
           }
         }
       }
-      const autoBlockedSet = new Set([...interactBlockedSet, ...barBlockedSet, ...stairsBlockedSet]);
+      const spectatorBlocked = enemies.filter(e => e.isSpectator).map(e => `${e.pos.x},${e.pos.y}`);
+      const autoBlockedSet = new Set([...interactBlockedSet, ...barBlockedSet, ...stairsBlockedSet, ...spectatorBlocked]);
       const exploreTile = state.map[player.pos.y]?.[player.pos.x];
       if (exploreTile?.type === 'restaurant') {
         setAutoExplore(false);
@@ -1073,6 +1072,10 @@ export default function Game() {
       return;
     }
     const enemyAt = enemies.find(e => e.pos.x === mapX && e.pos.y === mapY);
+    if (enemyAt?.isSpectator) {
+      setTravelTarget(null);
+      return;
+    }
     if (enemyAt && enemyAt.tag !== 'Friendly') {
       setTravelTarget({ x: mapX, y: mapY, enemyId: enemyAt.id });
       return;
@@ -1237,7 +1240,7 @@ export default function Game() {
         setGameState(prev => prev ? { ...prev, floorAnnouncement: null } : prev);
         return;
       }
-      if (pendingLavaStepRef.current) {
+      if (pendingLavaStepRef.current || finalePromptRef.current) {
         e.preventDefault();
         return;
       }
@@ -1799,6 +1802,7 @@ export default function Game() {
   if (player.characterClass === '🧝' && rangerMode === 'ranged' && player.ammo > 0) {
     const _maxRange = eagleEyeRange(player.stats.level);
     for (const e of gameState.enemies) {
+      if (e.isSpectator) continue;
       if (!gameState.map[e.pos.y]?.[e.pos.x]?.visible) continue;
       const _edx = e.pos.x - player.pos.x;
       const _edy = e.pos.y - player.pos.y;
@@ -1862,7 +1866,7 @@ export default function Game() {
           }
 
           let threatDotColor: string | null = null;
-          if (enemy && !isPlayer) {
+          if (enemy && !isPlayer && !enemy.isSpectator) {
             const r = detectionRadius(enemy.speed);
             if (r <= 3) threatDotColor = '#22c55e';
             else if (r <= 5) threatDotColor = '#eab308';
@@ -2706,7 +2710,7 @@ export default function Game() {
 
         {/* Dungeon Pressure badge (floor 16+) */}
         {(() => {
-          const pressure = getDungeonPressure(currentFloor);
+          const pressure = pressureForRun(currentFloor, gameState.deepDive);
           if (pressure.atk === 0) return null;
           const tierStyle =
             pressure.atk <= 6
@@ -2770,9 +2774,14 @@ export default function Game() {
         ) : null}
         {gameState.gameOver ? (
           <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-50">
-            <div className="text-8xl mb-4">💀</div>
-            <h1 className="text-5xl font-black text-destructive mb-2 tracking-widest">YOU DIED</h1>
-            {gameState.killer && (
+            <div className="text-8xl mb-4">{gameState.victory ? '🏆' : '💀'}</div>
+            <h1 className={`text-5xl font-black mb-2 tracking-widest ${gameState.victory ? 'text-amber-300' : 'text-destructive'}`}>
+              {gameState.victory ? 'YOU WIN' : 'YOU DIED'}
+            </h1>
+            {gameState.victory && (
+              <p className="text-xl mb-1 text-amber-200 font-semibold">The dungeon ends at D:27.</p>
+            )}
+            {!gameState.victory && gameState.killer && (
               <p className="text-xl mb-1 text-orange-300 font-semibold">
                 Slain by {gameState.killer.emoji} {gameState.killer.name}
               </p>
@@ -2780,7 +2789,7 @@ export default function Game() {
             <p className="text-muted-foreground mb-1">Final mood: {moodData.emoji} {moodData.name}</p>
             <p className="text-lg mb-1">Floor {currentFloor} · Level {player.stats.level} · {player.stats.xp} XP</p>
             {(() => {
-              const pressure = getDungeonPressure(currentFloor);
+              const pressure = pressureForRun(currentFloor, gameState.deepDive);
               if (pressure.atk <= 0) return null;
               return (
                 <p className="text-sm font-semibold mb-4" style={{ color: '#f97316' }}>
@@ -3165,6 +3174,22 @@ export default function Game() {
             setPendingLavaStep(null);
             handleMove(step.dx, step.dy);
           }}
+        />
+      )}
+
+      {finalePrompt && (
+        <FinalePromptDialog
+          step={finalePrompt}
+          onWin={() => {
+            setFinalePrompt(null);
+            setGameState(prev => prev ? claimFinaleWin(prev) : prev);
+          }}
+          onAskDive={() => setFinalePrompt('dive')}
+          onDive={() => {
+            setFinalePrompt(null);
+            setGameState(prev => prev ? descendFloor({ ...prev, deepDive: true }, addLog) : prev);
+          }}
+          onStay={() => setFinalePrompt(null)}
         />
       )}
 

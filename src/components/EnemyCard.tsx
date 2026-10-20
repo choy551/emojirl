@@ -29,6 +29,23 @@ export function EnemyCard({ enemy, vx, vy, viewWidth, viewHeight }: EnemyCardPro
     ? vy * TILE_PX
     : Math.max(0, vy * TILE_PX - (POPUP_H - TILE_PX));
 
+  if (enemy.isSpectator) {
+    return (
+      <div
+        className="absolute z-30 pointer-events-none select-none"
+        style={{ left, top, width: POPUP_W }}
+      >
+        <div className="bg-card border border-border rounded-lg shadow-xl p-2.5 text-xs space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xl leading-none">{enemy.emoji}</span>
+            <div className="font-bold text-foreground leading-tight">Spectator</div>
+          </div>
+          <p className="text-muted-foreground leading-snug">Here for the show. They block the aisle and won't fight.</p>
+        </div>
+      </div>
+    );
+  }
+
   const hpPct = Math.max(0, Math.min(1, enemy.hp / enemy.maxHp));
   const hpColor = hpPct > 0.5 ? '#22c55e' : hpPct > 0.25 ? '#eab308' : '#ef4444';
 

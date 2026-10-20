@@ -106,6 +106,12 @@ export default function HowToPlay({
           <span className="text-lg">🔽</span> to descend deeper.
         </p>
         <p className="text-muted-foreground leading-relaxed">
+          <strong className="text-foreground">D:27</strong> is the final floor: a circular arena
+          with the crowd in the stands and a boss rush in the pit. Clear the last wave and a
+          stairway opens at the north end. You can win the game there, or dive even deeper —
+          from D:28 on, Dungeon Pressure is doubled on each floor.
+        </p>
+        <p className="text-muted-foreground leading-relaxed">
           Your <strong className="text-foreground">Mood</strong> affects combat
           — a happy adventurer hits harder, dodges more, and lands crits. Taking
           damage, fleeing, and losing items all hurt your mood. Finding items,

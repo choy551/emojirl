@@ -1,5 +1,5 @@
 import { Player, GameState, BagPassiveSummary } from '../../game/types';
-import { applyEquipmentAndPassives, computeNinjaEvasion, getDungeonPressure } from '../../game/gameHelpers';
+import { applyEquipmentAndPassives, computeNinjaEvasion, pressureForRun } from '../../game/gameHelpers';
 import { getCowboyUnarmedBonus } from '../../game/combat';
 import { MiniMap } from '../MiniMap';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './oneHandedLayout';
@@ -33,7 +33,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
   const atk = eff.stats.attack + ironFist;
   const crit = Math.min(99, 5 + eff.stats.luck);
   const dodge = player.characterClass === '🥷' ? computeNinjaEvasion(eff) : Math.min(50, eff.stats.evasion ?? 0);
-  const pressure = getDungeonPressure(currentFloor);
+  const pressure = pressureForRun(currentFloor, gameState.deepDive);
   const p = bagPassiveSummary;
   const hp = player.stats.hp;
   const maxHp = player.stats.maxHp;

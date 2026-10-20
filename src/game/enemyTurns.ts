@@ -11,6 +11,7 @@ import { tickVolcanoAndLava } from './lava';
 import { _flashSignals } from './flashSignals';
 import { nearRestaurant, crowGoldSteal } from './economy';
 import { computeNinjaEvasion, companionBountyShare, companionBountyPercent, companionKillXp, companionKillLogText, applyCompanionLevelUp, tickCompanionBountyOoc, levelFromXP, COMPANION_BOUNTY_REFRESH_LOG } from './progression';
+import { tickBossrush } from './finale';
 import { isHostileCombatTarget } from './combat';
 import { applyLevelUp } from './playerTurn';
 import { markEnemyKilled } from './discoveries';
@@ -125,6 +126,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
       }
       for (let ei = newEnemies.length - 1; ei >= 0; ei--) {
         const e = newEnemies[ei];
+        if (e.isSpectator) continue;
         if (chebyshev(e.pos, bomb.pos) <= bomb.radius) {
           const dmg = Math.max(1, player.stats.attack * 2 - (e.defense ?? 0));
           const newHp = e.hp - dmg;
@@ -176,7 +178,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   const _freezePassives = computeBagPassives(state.player.inventory);
   if (_freezePassives.freezeAura) {
     for (let i = 0; i < newEnemies.length; i++) {
-      if (chebyshev(newEnemies[i].pos, state.player.pos) <= 1 && (newEnemies[i].slowedTurns ?? 0) < 2) {
+      if (!newEnemies[i].isSpectator && chebyshev(newEnemies[i].pos, state.player.pos) <= 1 && (newEnemies[i].slowedTurns ?? 0) < 2) {
         newEnemies[i] = { ...newEnemies[i], slowedTurns: 2, slowSkipNext: false };
       }
     }
@@ -203,6 +205,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
 
     if (enemy.id === skipId) continue;
     if (enemy.hp <= 0) continue;
+    if (enemy.isSpectator) continue;
 
     if ((enemy.burningTurns ?? 0) > 0) {
       const newBurning = enemy.burningTurns! - 1;
@@ -925,5 +928,5 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     };
   }
 
-  return withVisibility(tickVolcanoAndLava(next));
+  return withVisibility(tickBossrush(tickVolcanoAndLava(next)));
 }

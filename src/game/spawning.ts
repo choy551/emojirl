@@ -1,8 +1,8 @@
 import { Enemy, EmojiItem, MapGrid, Position } from './types';
 import type { Room } from './geo';
-import { getRandomEnemy, getForestEnemy, getBossForFloor, getEchoEnemy, getRandomAdventurer, adventurerSpawnChance, ADVENTURER_FAVORITE_EMOJIS, rollAmbushCount, getAmbushRangedType, enemyMaySpawnOnTile } from './enemies';
+import { getRandomEnemy, getForestEnemy, getBossForFloor, getEchoEnemy, getRandomAdventurer, adventurerSpawnChance, ADVENTURER_FAVORITE_EMOJIS, rollAmbushCount, getAmbushRangedType, enemyMaySpawnOnTile, BOSS_TYPES } from './enemies';
 import { getRandomEmojiPower, getBulletDrop, getRandomEquipmentDrop, getEmojiPowerByEmoji, VOLCANO_VALUABLE_EMOJIS, MONEY_BAG } from './emojis';
-import { getDungeonPressure } from './progression';
+import { pressureForRun } from './progression';
 
 function floorScale<T extends { hp: number; attack: number; defense: number }>(type: T, floor: number): T {
   if (floor <= 1) return type;
@@ -51,9 +51,27 @@ function scaleBoss<T extends { hp: number; attack: number; defense: number }>(ty
   };
 }
 
-export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position, difficultyTier = 0, map?: MapGrid): Enemy[] {
+/** A boss-rush combatant scaled like a normal floor boss (or a diminished echo). */
+export function makeBossrushFighter(
+  floor: number,
+  difficultyTier: number,
+  pressure: { atk: number; def: number },
+  kind: 'boss' | 'echo',
+  variantIndex: number,
+) {
+  const raw = BOSS_TYPES[Math.abs(variantIndex) % BOSS_TYPES.length];
+  if (kind === 'echo') {
+    const echo = getEchoEnemy(raw);
+    const scaled = applySpawnPressure(scaleEnemy(floorScale(echo, floor), difficultyTier), pressure);
+    return { ...scaled, isBoss: false as const, isEcho: true as const };
+  }
+  const scaled = applySpawnPressure(scaleBoss(floorScale(raw, floor), difficultyTier), pressure);
+  return { ...scaled, isBoss: true as const, isEcho: false as const };
+}
+
+export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position, difficultyTier = 0, map?: MapGrid, deepDive = false): Enemy[] {
   const enemies: Enemy[] = [];
-  const pressure = getDungeonPressure(floor);
+  const pressure = pressureForRun(floor, deepDive);
   for (let i = 1; i < rooms.length; i++) {
     const room = rooms[i];
     if (room.theme === 'shop' || room.theme === 'market' || room.theme === 'restaurant') continue;

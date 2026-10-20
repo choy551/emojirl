@@ -1,6 +1,7 @@
 import { MapGrid, Position, RoomTheme } from './types';
 import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, coolLavaWaterContacts } from './lava';
 import { BED_EMOJI, BED_MAX_USES } from './tiles';
+import { FINALE_FLOOR } from './finaleConstants';
 
 const MAP_WIDTH = 50;
 const MAP_HEIGHT = 28;
@@ -708,7 +709,79 @@ function placeLiquidFeatures(map: MapGrid, floor: number, rooms: Room[], startRo
   }
 }
 
+/** Center of the D:27 arena. y grows south. */
+export const ARENA_CENTER: Position = { x: 24, y: 13 };
+/** Open pit the player and the boss rush fight in. */
+export const ARENA_PIT_RADIUS = 4.5;
+/** Outer edge of the seating. Beyond this is wall. */
+export const ARENA_OUTER_RADIUS = 11.25;
+
+export type ArenaZone = 'wall' | 'pit' | 'seat';
+
+export function arenaZone(x: number, y: number): ArenaZone {
+  const d = Math.hypot(x - ARENA_CENTER.x, y - ARENA_CENTER.y);
+  if (d > ARENA_OUTER_RADIUS) return 'wall';
+  if (d <= ARENA_PIT_RADIUS) return 'pit';
+  return 'seat';
+}
+
+export interface FinaleArena {
+  map: MapGrid;
+  startPos: Position;
+  stairsPos: Position;
+  rooms: Room[];
+  seats: Position[];
+  pitTiles: Position[];
+}
+
+/**
+ * Fixed circular arena for D:27. Concentric seating rings surround an open pit.
+ * The north stairway is not placed — the boss rush reveals it.
+ */
+export function generateFinaleArena(): FinaleArena {
+  const map: MapGrid = Array(MAP_HEIGHT)
+    .fill(null)
+    .map(() => Array(MAP_WIDTH).fill(null).map(() => ({ type: 'wall' as const, emoji: '⬛', seen: false, visible: false })));
+
+  const seats: Position[] = [];
+  const pitTiles: Position[] = [];
+  for (let y = 0; y < MAP_HEIGHT; y++) {
+    for (let x = 0; x < MAP_WIDTH; x++) {
+      const zone = arenaZone(x, y);
+      if (zone === 'wall') continue;
+      if (zone === 'pit') {
+        map[y][x] = { type: 'boss-floor', emoji: '🟥', seen: false, visible: false };
+        pitTiles.push({ x, y });
+      } else {
+        map[y][x] = { type: 'floor', emoji: '⬜', seen: false, visible: false };
+        seats.push({ x, y });
+      }
+    }
+  }
+
+  const byColumn = (preferHighY: boolean) => (a: Position, b: Position) => {
+    if (a.y !== b.y) return preferHighY ? b.y - a.y : a.y - b.y;
+    return Math.abs(a.x - ARENA_CENTER.x) - Math.abs(b.x - ARENA_CENTER.x);
+  };
+  const startPos = [...pitTiles].sort(byColumn(true))[0];
+  const stairsPos = [...pitTiles].sort(byColumn(false))[0];
+
+  const rooms: Room[] = [{
+    x: ARENA_CENTER.x - 2,
+    y: ARENA_CENTER.y - 2,
+    w: 5,
+    h: 5,
+    theme: 'normal',
+  }];
+
+  return { map, startPos, stairsPos, rooms, seats, pitTiles };
+}
+
 export function generateMap(floor: number): { map: MapGrid; startPos: Position; stairsPos: Position; rooms: Room[] } {
+  if (floor === FINALE_FLOOR) {
+    const arena = generateFinaleArena();
+    return { map: arena.map, startPos: arena.startPos, stairsPos: arena.stairsPos, rooms: arena.rooms };
+  }
   const map: MapGrid = Array(MAP_HEIGHT)
     .fill(null)
     .map(() => Array(MAP_WIDTH).fill(null).map(() => ({ type: 'wall', emoji: '⬛', seen: false, visible: false })));
