@@ -202,10 +202,18 @@ export default function Home() {
                     <div className="font-semibold text-foreground leading-tight">{entry.className}</div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
                       <span>Floor {entry.floor}</span>
+                      {entry.won && (
+                        <span
+                          className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-bold bg-amber-950/50 text-amber-300 border border-amber-600/40"
+                          title="Won the game on D:27"
+                        >
+                          🏆 Win
+                        </span>
+                      )}
                       {(entry.maxPressure ?? 0) > 0 && (
                         <span
                           className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-bold bg-orange-950/50 text-orange-400 border border-orange-700/40"
-                          title={`Dungeon pressure was +${entry.maxPressure} at time of death`}
+                          title={`Dungeon pressure was +${entry.maxPressure} at the end of the run`}
                         >
                           🔥 +{entry.maxPressure}
                         </span>

@@ -15,3 +15,5 @@ export * from './goto';
 export * from './lava';
 export * from './sleep';
 export * from './shopUse';
+export * from './finale';
+export * from './descend';

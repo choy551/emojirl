@@ -18,6 +18,11 @@ describe('isHostileCombatTarget', () => {
   it('allows neutrals only after they aggro', () => {
     expect(isHostileCombatTarget({ tag: 'Neutral', engaged: true })).toBe(true);
   });
+
+  it('never targets arena spectators, even if flagged engaged', () => {
+    expect(isHostileCombatTarget({ isSpectator: true, tag: 'Neutral', engaged: true })).toBe(false);
+    expect(isHostileCombatTarget({ isSpectator: true })).toBe(false);
+  });
 });
 
 describe('skullCritBonus', () => {

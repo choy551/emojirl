@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { GameState, Enemy, EmojiItem } from '../game/types';
 import { restoreStolenEmojis, stolenEmojiSummary, cookedEatHeal } from '../game/gameHelpers';
 import { useDialogHotkeys } from '../hooks/useDialogHotkeys';
+import { useDismissGuard } from '../hooks/useDismissGuard';
+import { FINALE_DIVE_PROMPT, FINALE_WIN_PROMPT } from '../game/finale';
 
 type SetGameState = React.Dispatch<React.SetStateAction<GameState | null>>;
 
@@ -839,6 +841,51 @@ interface BedRestDialogProps {
   usesLeft: number;
   canSleep: boolean;
   blockReason?: string;
+}
+
+export function FinalePromptDialog({
+  step,
+  onWin,
+  onAskDive,
+  onDive,
+  onStay,
+}: {
+  step: 'win' | 'dive';
+  onWin: () => void;
+  onAskDive: () => void;
+  onDive: () => void;
+  onStay: () => void;
+}) {
+  const yes = step === 'win' ? onWin : onDive;
+  const no = step === 'win' ? onAskDive : onStay;
+  const dismiss = useDismissGuard(no);
+  useDialogHotkeys(yes, no);
+  const title = step === 'win' ? 'The stairway' : 'Dive deeper?';
+  const question = step === 'win' ? FINALE_WIN_PROMPT : FINALE_DIVE_PROMPT;
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-4" onClick={dismiss}>
+      <div
+        className="bg-card border border-amber-400/50 rounded-xl p-5 max-w-sm w-full shadow-2xl shadow-amber-900/40 text-center"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="text-5xl mb-2">{step === 'win' ? '🕳️' : '⬇️'}</div>
+        <h2 className="text-sm font-bold text-amber-300 uppercase tracking-widest mb-2">{title}</h2>
+        <p className="text-sm sm:text-base text-white/90 mb-5 leading-relaxed">{question}</p>
+        <div className="flex flex-col-reverse sm:flex-row gap-2">
+          <button
+            data-testid={step === 'win' ? 'finale-win-no' : 'finale-dive-no'}
+            className="flex-1 text-base py-3 rounded-lg bg-secondary/40 border border-border/60 text-muted-foreground hover:bg-secondary/60 active:scale-[0.98] transition-colors"
+            onClick={no}
+          >No</button>
+          <button
+            data-testid={step === 'win' ? 'finale-win-yes' : 'finale-dive-yes'}
+            className="flex-1 text-base py-3 rounded-lg bg-amber-600/80 border border-amber-500/60 text-white font-bold hover:bg-amber-600 active:scale-[0.98] transition-colors"
+            onClick={yes}
+          >Yes ⏎</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function LavaStepDialog({ onYes, onNo }: { onYes: () => void; onNo: () => void }) {

@@ -87,6 +87,10 @@ export function resolveProjectileFlight(
 
   const applyHit = (idx: number, kind: ActiveProjectile['kind']): boolean => {
     const target = enemies[idx];
+    if (target.isSpectator) {
+      log(`${target.emoji} The shot thuds into the crowd and stops.`);
+      return true;
+    }
     if (kind === 'gun') {
       const dmg = gunDmg(atk, target.defense ?? 0);
       log(`🔫 Bullet hits ${target.emoji} ${target.name} for ${dmg} dmg!`);
@@ -139,6 +143,7 @@ export function resolveProjectileFlight(
       const bombAtk = atk * 2;
       for (let ei = enemies.length - 1; ei >= 0; ei--) {
         const e = enemies[ei];
+        if (e.isSpectator) continue;
         if (Math.max(Math.abs(e.pos.x - blastPos.x), Math.abs(e.pos.y - blastPos.y)) > blastRadius) continue;
         const dmg = Math.max(1, bombAtk - (e.defense ?? 0));
         log(`💥 Explosion hits ${e.emoji} ${e.name} for ${dmg} dmg!`);

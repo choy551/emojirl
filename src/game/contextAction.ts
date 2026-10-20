@@ -1,6 +1,7 @@
 import { GameState, Enemy } from './types';
 import { COOKABLE_EMOJIS } from './emojis';
 import { chebyshev } from './geo';
+import { FINALE_FLOOR } from './finaleConstants';
 
 export type ContextActionKind =
   | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear' | 'talk'
@@ -60,6 +61,7 @@ export function resolveContextAction(
 
   // Adjacent hostile -> attack. (Excludes recruitable/neutral NPCs handled below.)
   const hostile = adjEnemy(e =>
+    !e.isSpectator &&
     e.tag !== 'Friendly' &&
     !(e.isAdventurer && !e.isRecruited && !e.engaged) &&
     !(e.monkey && !e.engaged) &&
@@ -89,7 +91,10 @@ export function resolveContextAction(
   if (shrineDir) return { kind: 'shrine', label: 'Pray', icon: '⛩️', dir: shrineDir };
 
   const stairDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'stairs');
-  if (stairDir) return { kind: 'descend', label: 'Descend', icon: '🕳️', dir: stairDir };
+  if (stairDir) {
+    const finale = state.currentFloor === FINALE_FLOOR && !state.deepDive;
+    return { kind: 'descend', label: finale ? 'Stairs' : 'Descend', icon: '🕳️', dir: stairDir };
+  }
 
   const itemDir = neighbours.find(d => items.some(it => it.pos.x === px + d.dx && it.pos.y === py + d.dy));
   if (itemDir) return { kind: 'pickup', label: 'Pick up', icon: '🫳', dir: itemDir };

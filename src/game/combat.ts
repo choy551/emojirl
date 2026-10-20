@@ -10,7 +10,9 @@ export function isHostileCombatTarget(e: {
   isRecruited?: boolean;
   tag?: string;
   engaged?: boolean;
+  isSpectator?: boolean;
 }): boolean {
+  if (e.isSpectator) return false;
   if (e.isRecruited) return false;
   if (e.tag === 'Friendly') return false;
   if (e.tag === 'Neutral' && !e.engaged) return false;

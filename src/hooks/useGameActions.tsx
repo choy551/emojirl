@@ -3,22 +3,22 @@ import { Player, Enemy, Position, FloatingText, GameState } from '../game/types'
 import { resolveCombat, getCowboyUnarmedBonus, isHostileCombatTarget } from '../game/combat';
 import { getRandomEmojiPower, getRandomFloorDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, getFoodHealItems } from '../game/emojis';
 import { getMood } from '../game/moods';
-import { generateMap } from '../game/mapgen';
 import { markEnemySeen, markEmojiSeen, markEnemyKilled } from '../game/discoveries';
 import {
-  moodMax, chebyshev, hasLOS, hasLOSBetween, VISION_RADIUS, visionRadiusFor,
-  eagleEyeRange, PLAYER_PASSABLE_TILES, computeVisibility, computeBagPassives,
+  moodMax, chebyshev, hasLOS, hasLOSBetween, VISION_RADIUS,
+  eagleEyeRange, PLAYER_PASSABLE_TILES, computeBagPassives,
   applyEquipmentAndPassives, withVisibility, runEnemyTurns, applyEnemyTurns, tickActiveBuffs,
   addToBag, levelFromXP,
-  mpBonusForLevel, computeNinjaEvasion, getRandomCowboyFlavor, spawnEnemies,
-  spawnVaultItems, handleGodBlessedImmunity,
-  getDungeonPressure, _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG, restoreStolenEmojis, stolenEmojiSummary,
+  mpBonusForLevel, computeNinjaEvasion, getRandomCowboyFlavor, handleGodBlessedImmunity,
+  _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG, restoreStolenEmojis, stolenEmojiSummary,
   applyBedRest, simulateSleep, SLEEP_TURNS, BED_OVERHEAL_MULT,
   evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
 } from '../game/gameHelpers';
 import { lightningArcDamage } from '../game/passives';
 import { canEquipItem } from '../components/itemUtils';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
+import { descendFloor } from '../game/descend';
+import { shouldPromptFinaleStairs, spectatorBumpText } from '../game/finale';
 import type { GameRefs, GameSetters } from './actions/types';
 import { useTacticsActions } from './actions/useTacticsActions';
 import { useInventoryActions } from './actions/useInventoryActions';
@@ -44,6 +44,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     lastCowboyFlavorTurnRef,
     blinkTurnRef, trailblazeTurnRef,
     lavaStepConfirmedRef,
+    finalePromptRef,
   } = refs;
   const {
     setGameState, setWizardTactics, setRangerMode,
@@ -51,6 +52,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     setPendingAdventurerInteraction, setPendingBearInteraction,
     setBlinkTurn, setTrailblazeTurn,
     setPendingLavaStep,
+    setFinalePrompt,
   } = setters;
 
   const BLINK_ACTIVE = 3;
@@ -105,6 +107,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const enemy = _outerState.enemies.find(e => e.pos.x === tx && e.pos.y === ty);
           if (!enemy) continue;
           if (!hasLOS(_outerState.map, from, dx, dy, range)) break;
+          if (enemy.isSpectator) break;
           if (enemy.tag === 'Friendly') continue;
           if (enemy.tag === 'Neutral' && !enemy.engaged) continue;
           cowboyWouldShoot = true;
@@ -151,6 +154,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (enemyIdx === -1) continue;
           if (!hasLOS(prev.map, player.pos, dx, dy, range)) break;
           const enemy = prev.enemies[enemyIdx];
+          if (enemy.isSpectator) break;
           if (enemy.tag === 'Friendly') continue;
           if (enemy.tag === 'Neutral' && !enemy.engaged) continue;
           markEnemySeen(enemy.emoji);
@@ -210,6 +214,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           }
 
           const enemy = prev.enemies[enemyIdx];
+          if (enemy.isSpectator) break;
           if (enemy.tag === 'Friendly') continue;
           if (enemy.tag === 'Neutral' && !enemy.engaged) continue;
           const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, player.characterClass === '🤠');
@@ -444,6 +449,11 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const enemy = prev.enemies[enemyIndex];
         markEnemySeen(enemy.emoji);
 
+        if (enemy.isSpectator) {
+          addLog(spectatorBumpText(enemy.emoji));
+          return prev;
+        }
+
         if ((enemy.isAdventurer || enemy.bear) && enemy.isRecruited) {
           // DCSS-style: bump into recruited companion (adventurer or bear) swaps positions
           const companion = prev.enemies[enemyIndex];
@@ -634,7 +644,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
         if (_meleePassives.lightningBolt && playerLanded) {
           const arcCandidates = newEnemies.filter(e2 =>
-            e2.id !== enemy.id && chebyshev(e2.pos, enemy.pos) <= 2 && e2.hp > 0
+            e2.id !== enemy.id && !e2.isSpectator && chebyshev(e2.pos, enemy.pos) <= 2 && e2.hp > 0
           );
           if (arcCandidates.length > 0) {
             const arcCount = Math.min(arcCandidates.length, 1 + Math.floor(Math.random() * 3));
@@ -911,91 +921,11 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       }
 
       if (tile.type === 'stairs') {
-        const nextFloor = prev.currentFloor + 1;
-        const { map, startPos, rooms } = generateMap(nextFloor);
-        newState.map = computeVisibility(map, startPos, visionRadiusFor(newPlayer.characterClass, newPlayer.stats.level));
-        newPlayer.pos = startPos;
-        newState.currentFloor = nextFloor;
-        newState.placedBombs = [];
-        newState.activeProjectile = null;
-        newState.pendingExplosion = undefined;
-        newState.pendingBeam = undefined;
-        newState.shopStock = null;
-        newState.restaurantStock = null;
-        newState.ammoCacheStock = null;
-        newState.restaurantSoldCount = 0;
-
-        // Companion descent: favorite companion (or random if none) descends with the player.
-        const recruitedCompanions = prev.enemies.filter(e =>
-          e.isRecruited && e.tag === 'Friendly' && e.hp > 0
-        );
-        const favoriteCompanion = recruitedCompanions.find(e => e.isFavoriteCompanion);
-        const descendingCompanion = favoriteCompanion ??
-          (recruitedCompanions.length > 0
-            ? recruitedCompanions[Math.floor(Math.random() * recruitedCompanions.length)]
-            : null);
-        const leftBehind = recruitedCompanions.filter(e => descendingCompanion && e.id !== descendingCompanion.id);
-        if (leftBehind.length > 0) {
-          addLog(`🏕️ New recruits stay behind in the safer levels of the Dungeon!`);
+        if (shouldPromptFinaleStairs(prev)) {
+          if (!finalePromptRef.current) setFinalePrompt('win');
+          return prev;
         }
-
-        const freshEnemies = spawnEnemies(nextFloor, rooms, startPos, prev.difficultyTier ?? 0, map);
-        if (descendingCompanion) {
-          // Place descending companion adjacent to the player's start position
-          const adjacentOffsets = [
-            { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
-            { x: 1, y: 1 }, { x: -1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: -1 },
-          ];
-          const spawnedSet = new Set(freshEnemies.map(e => `${e.pos.x},${e.pos.y}`));
-          const slot = adjacentOffsets
-            .map(o => ({ x: startPos.x + o.x, y: startPos.y + o.y }))
-            .find(p => {
-              const t = map[p.y]?.[p.x];
-              return t && (t.type === 'floor' || t.type === 'safe-floor') && !spawnedSet.has(`${p.x},${p.y}`);
-            });
-          const companionPos = slot ?? startPos;
-          freshEnemies.push({ ...descendingCompanion, pos: companionPos });
-          if (!favoriteCompanion && recruitedCompanions.length > 1) {
-            addLog(`🤝 ${descendingCompanion.emoji} ${descendingCompanion.name} follows you deeper into the dungeon!`);
-          } else if (favoriteCompanion) {
-            addLog(`⭐ ${descendingCompanion.emoji} ${descendingCompanion.name} stays by your side as you descend.`);
-          }
-        }
-        newState.enemies = freshEnemies;
-        newState.items = spawnVaultItems(rooms, newPlayer.characterClass, nextFloor, map);
-
-        if (nextFloor % 5 === 0) {
-          addLog(`⚠️ Floor ${nextFloor} — a boss lurks here! Prepare yourself!`);
-        } else {
-          addLog(`Descended to floor ${nextFloor}.`);
-        }
-        const newPressure = getDungeonPressure(nextFloor);
-        const highestWarned = prev.highestPressureTierWarned ?? 0;
-        if (newPressure.atk > 0 && newPressure.atk > highestWarned) {
-          addLog(`⚠️ Dungeon Pressure rises to +${newPressure.atk} ATK / +${newPressure.def} DEF!`);
-          newState.highestPressureTierWarned = newPressure.atk;
-          _flashSignals.pressureFlashPending = true;
-        }
-        if (rooms.some(r => r.theme === 'monster-den')) addLog(`🦴 You sense a terrible presence nearby...`);
-        if (rooms.some(r => r.theme === 'treasure-vault')) addLog(`💎 You sense hidden treasure surrounded by water...`);
-        if (rooms.some(r => r.theme === 'bush-ambush')) addLog(`🌿 You hear bowstrings drawn behind the bushes...`);
-        if (rooms.some(r => r.theme === 'room-vault')) addLog(`🛏️ A small room is tucked inside these halls...`);
-        if (rooms.some(r => r.theme === 'volcano')) {
-          addLog(`🌋 There is a Volcano on this floor!`);
-          newState.floorAnnouncement = {
-            kind: 'volcano',
-            title: 'There is a Volcano on this floor!',
-            body: 'Hurry & pick up the valuable Emoji around it before it all burns in Lava!',
-          };
-        }
-        newPlayer.stats.moodValue = Math.min(moodMax(cls), newPlayer.stats.moodValue + 15);
-        if (cls === '🧙') newPlayer.stats.mana = newPlayer.stats.maxMana ?? 4;
-        newState.stealthMode = false;
-        newState.ninjaFreeMoves = 0;
-        newState.player = newPlayer;
-        newState = stampDualGunsFanfare(newState, player.equipment, addLog);
-        newState.turn++;
-        return newState;
+        return descendFloor({ ...newState, player: newPlayer }, addLog);
       }
 
       if (cls === '🧙') {
