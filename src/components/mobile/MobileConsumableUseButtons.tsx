@@ -1,5 +1,6 @@
 import { EmojiItem } from '../../game/types';
 import { mobileQuickUseLabel } from '../../game/mobileQuickUse';
+import { rarityTooltipSuffix } from '../../game/dropTable';
 
 interface Entry {
   slot: number;
@@ -41,7 +42,7 @@ export function MobileConsumableUseButtons({ entries, dirPickMode, activeProject
             ].join(' ')}
             style={{ width: 52, height: 52 }}
             aria-label={`${label} ${item.name}`}
-            title={`${item.emoji} ${item.name}`}
+            title={`${item.emoji} ${item.name}${rarityTooltipSuffix(item)}`}
           >
             <span style={{ fontSize: '1.15rem', lineHeight: 1 }}>{item.emoji}</span>
             <span className="text-[8px] font-bold leading-none mt-0.5">{label}</span>

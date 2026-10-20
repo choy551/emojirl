@@ -1,6 +1,8 @@
 import { Enemy, EmojiItem, FloatingText, GameState, Player } from './types';
 import type { SoulEffect } from './emojis';
-import { EMOJI_POWERS, getRandomEmojiPower, getRandomFloorDrop, getRandomActiveDrop, getRandomEquipmentDrop } from './emojis';
+import { EMOJI_POWERS, getRandomEmojiPower } from './emojis';
+import { rollKillDrop } from './dropTable';
+import { computeBagPassives } from './inventory';
 import { markEnemySeen, markEnemyKilled, markEmojiSeen } from './discoveries';
 import { moodMax, levelFromXP, hpBonusForLevel } from './progression';
 import { addToPlayerBag, activeKindLabel } from './inventory';
@@ -188,9 +190,14 @@ export function applyInstantItemUse(
     }
     newEnemies = s.enemies.filter(e => e.id !== target.id);
     newPlayer = opts.applyMonkeyDropOnKill(target, newPlayer);
-    if (target.isBoss || Math.random() < 0.50) {
-      const r2 = Math.random();
-      const drop = r2 < 0.12 ? getRandomEquipmentDrop(s.currentFloor) : r2 < 0.28 ? getRandomActiveDrop() : getRandomFloorDrop();
+    const drop = rollKillDrop({
+      boss: !!target.isBoss,
+      clover: computeBagPassives(newPlayer.inventory).bonusLoot,
+      floor: s.currentFloor,
+      playerClass: cls,
+      cowboyDualGuns: cls === '🤠' && newPlayer.equipment.mainHand?.weaponKind === 'gun' && newPlayer.equipment.offHand?.weaponKind === 'gun',
+    });
+    if (drop) {
       newItems = [...newItems, { ...drop, id: `zap-drop-${Math.random()}`, consumed: false, pos: target.pos }];
     }
     floats.push({ id: `zap-${target.id}-${s.turn}`, pos: { ...target.pos }, text: '⚡ ZAP!', color: '#fbbf24', life: 3 });

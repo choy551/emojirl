@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Player, EmojiItem, GameState, EquipSlot, BagPassiveSummary } from '../game/types';
 import { getPassiveTooltipSuffix } from '../game/passives';
+import { cloverLootSummary, rarityTooltipSuffix } from '../game/dropTable';
 import { getCowboyUnarmedBonus } from '../game/combat';
 import { MiniMap } from './MiniMap';
 import { activeKindEmoji } from './itemUtils';
@@ -126,7 +127,7 @@ export function RightSidebar({
                 data-testid={`soul-slot-${i + 1}`}
                 onClick={() => handleUseSlot(i)}
                 {...itemInspectProps(item)}
-                title={`[${i + 1}] ${item.name}: ${item.description.replace(/ · Bag: [^·]+$/, '')}${item.charges !== undefined && item.charges >= 0 ? ` (${item.charges}×)` : ''}${getPassiveTooltipSuffix(item)}${bankDupes > 0 ? ` · ${bankDupes} more in Bank` : ''} · Right-click for details`}
+                title={`[${i + 1}] ${item.name}: ${item.description.replace(/ · Bag: [^·]+$/, '')}${item.charges !== undefined && item.charges >= 0 ? ` (${item.charges}×)` : ''}${getPassiveTooltipSuffix(item)}${bankDupes > 0 ? ` · ${bankDupes} more in Bank` : ''}${rarityTooltipSuffix(item)} · Right-click for details`}
                 className={`relative aspect-square bg-card border rounded flex items-center justify-center text-xl transition-all
                   ${item.isVoidGhost ? 'opacity-40 border-violet-400/40' : item.isEquipment
                     ? 'border-amber-500/60 hover:border-amber-300 cursor-pointer shadow-sm hover:scale-105 active:scale-95 shadow-amber-900/30'
@@ -177,7 +178,7 @@ export function RightSidebar({
                 data-testid={`heal-slot-${item.id}`}
                 onClick={handleUseHeal}
                 {...itemInspectProps(item)}
-                title={`${item.name}: ${foodHealDescription(item, gameState.chefLessonCount ?? 0, player.stats.maxHp)} · Right-click for details`}
+                title={`${item.name}: ${foodHealDescription(item, gameState.chefLessonCount ?? 0, player.stats.maxHp)}${rarityTooltipSuffix(item)} · Right-click for details`}
                 className="relative w-9 h-9 bg-card border border-emerald-500/40 rounded flex items-center justify-center text-lg hover:border-emerald-400 hover:scale-105 transition-all cursor-pointer shadow-sm"
               >
                 {item.emoji}
@@ -205,7 +206,7 @@ export function RightSidebar({
                         <button
                           key={item.id}
                           onClick={() => { handleUseHeal(); setOverflowOpen(false); }}
-                          title={`${item.name}: ${foodHealDescription(item, gameState.chefLessonCount ?? 0, player.stats.maxHp)}`}
+                          title={`${item.name}: ${foodHealDescription(item, gameState.chefLessonCount ?? 0, player.stats.maxHp)}${rarityTooltipSuffix(item)}`}
                           className="w-8 h-8 bg-card border border-emerald-500/40 rounded flex items-center justify-center text-base hover:border-emerald-400 hover:scale-110 transition-all cursor-pointer shadow-sm"
                         >
                           {item.emoji}
@@ -264,7 +265,7 @@ export function RightSidebar({
                   key={slot}
                   onClick={() => { setBagTab('equipment'); setBankOpen(true); setSelectedItemId(null); }}
                   {...itemInspectProps(item)}
-                  title={`${label} ${item.name}: ${item.description} — click to manage, right-click for details`}
+                  title={`${label} ${item.name}: ${item.description}${rarityTooltipSuffix(item)} — click to manage, right-click for details`}
                   className="flex items-center gap-1 px-1.5 py-1 bg-card border border-amber-600/30 rounded text-sm hover:border-amber-400 transition-all cursor-pointer"
                 >
                   <span className="text-[9px] text-muted-foreground/40">{label}</span>
@@ -336,7 +337,7 @@ export function RightSidebar({
           });
         }
         if (p.thorns)         tags.push({ icon: '💎', label: `Thorns ×${p.thorns}`, color: 'text-cyan-400', desc: `Reflect ${p.thorns} damage back to attackers in melee (stacks per copy).` });
-        if (p.bonusLoot)      tags.push({ icon: '🍀', label: `+Loot ×${p.bonusLoot}`, color: 'text-amber-300', desc: `${Math.round(Math.min(95, 55 + 15 * p.bonusLoot))}% enemy drop chance (stacks per copy; base 55%).` });
+        if (p.bonusLoot)      tags.push({ icon: '🍀', label: `+Loot ×${p.bonusLoot}`, color: 'text-amber-300', desc: `${cloverLootSummary(p.bonusLoot)}. Base 55% + 15% per copy (cap 95%); each copy also multiplies the next rarity tier's weight by 1.5.` });
         if (p.execBlow)       tags.push({ icon: '💥', label: 'Death Crit', color: 'text-orange-400', desc: '+25% crit at full HP, up to +50% when the foe is at ≤25% HP.' });
         if (p.trueVision)     tags.push({ icon: '👁️', label: 'True Vision', color: 'text-violet-400', desc: 'See enemies through walls and in the dark.' });
         if (p.itemMagnet)     tags.push({ icon: '🧲', label: 'Magnet', color: 'text-blue-300', desc: 'Nearby ground items drift toward you.' });

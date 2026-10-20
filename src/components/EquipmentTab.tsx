@@ -1,5 +1,7 @@
 import { Player, EmojiItem, EquipSlot } from '../game/types';
 import { canEquipItem, equipRestrictionReason } from './itemUtils';
+import { RarityLabel } from './RarityLabel';
+import { rarityTooltipSuffix } from '../game/dropTable';
 
 interface EquipmentTabProps {
   player: Player;
@@ -52,7 +54,7 @@ export function EquipmentTab({
           .filter(e => e.newVal !== 0 || e.curVal !== 0);
         return (
           <div className="bg-black/30 rounded-lg p-2.5 text-xs space-y-1.5 border border-primary/30">
-            <div className="font-bold text-foreground">{selectedItem.emoji} {selectedItem.name}</div>
+            <div className="font-bold text-foreground flex items-center gap-1.5">{selectedItem.emoji} {selectedItem.name} <RarityLabel item={selectedItem} className="text-[9px]" /></div>
             <div className="text-muted-foreground/70 leading-relaxed">{selectedItem.description}</div>
             {diffEntries.length > 0 && (
               <div className="space-y-1 pt-0.5">
@@ -167,7 +169,7 @@ export function EquipmentTab({
                     }
                   }}
                   {...itemInspectProps(item)}
-                  title={canEquip ? `${item.name}: ${item.description} — click to equip` : `🚫 ${restrictionMsg}`}
+                  title={canEquip ? `${item.name}: ${item.description}${rarityTooltipSuffix(item)} — click to equip` : `🚫 ${restrictionMsg}`}
                   className={`relative aspect-square rounded border flex items-center justify-center text-xl transition-all
                     ${focusedBagIdx === eqIdx ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-black/50' : ''}
                     ${!canEquip

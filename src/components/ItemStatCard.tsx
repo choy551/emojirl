@@ -1,6 +1,7 @@
 import { EmojiItem } from '../game/types';
 import { isStackableBagPassive, getStackableBonusLabel, getStackableCumulativeLabel } from '../game/passives';
 import { soulHelpText } from '../game/emojis';
+import { RarityLabel } from './RarityLabel';
 import { foodHealLabel, foodHealDescription, cookedEatHeal } from '../game/economy';
 
 interface ItemStatCardProps {
@@ -49,7 +50,10 @@ export function ItemStatCard({ item: si, onClose, chefLessonCount = 0, maxHp = 0
           <div className="text-5xl leading-none select-none">{si.emoji}</div>
           <div className="flex-1 min-w-0">
             <div className="text-base font-bold text-foreground leading-tight">{si.name}</div>
-            <div className="text-[11px] text-muted-foreground/60 mt-0.5">{typeLabel}</div>
+            <div className="text-[11px] text-muted-foreground/60 mt-0.5 flex flex-wrap items-center gap-1.5">
+              <span>{typeLabel}</span>
+              <RarityLabel item={si} className="text-[10px]" />
+            </div>
           </div>
         </div>
 

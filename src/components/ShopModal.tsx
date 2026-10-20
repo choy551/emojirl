@@ -4,6 +4,7 @@ import { soulHelpText } from '../game/emojis';
 import { isStackableBagPassive } from '../game/passives';
 import { canBuyAndUse } from '../game/shopUse';
 import { canEquipItem } from './itemUtils';
+import { RarityLabel } from './RarityLabel';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
@@ -72,7 +73,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                 <div key={item.id} className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">
                   <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-bold leading-tight">{item.name}</div>
+                    <div className="text-xs font-bold leading-tight flex items-center gap-1.5">{item.name} <RarityLabel item={item} className="text-[9px]" /></div>
                     <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.healAmount !== undefined ? foodHealDescription(item, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp) : soulHelpText(item).description}</div>
                   </div>
                   <div className="flex flex-row items-center gap-1 shrink-0">
@@ -201,7 +202,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                 <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold leading-tight">
-                    {item.name}{inBank ? ' (bank)' : ''}
+                    {item.name}{inBank ? ' (bank)' : ''} <RarityLabel item={item} className="text-[9px]" />
                     {item.isEquipment && !canEquipItem(item, cls) && <span className="ml-1 text-[9px] text-red-400/80 font-normal">wrong class</span>}
                   </div>
                   <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.healAmount !== undefined ? foodHealDescription(item, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp) : soulHelpText(item).description}</div>

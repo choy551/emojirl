@@ -1,10 +1,10 @@
 import { useCallback } from 'react';
 import { EquipSlot } from '../../game/types';
-import { getRandomFloorDrop, getRandomActiveDrop, getRandomEquipmentDrop } from '../../game/emojis';
+import { rollKillDrop } from '../../game/dropTable';
 import { markEnemySeen, markEnemyKilled } from '../../game/discoveries';
 import { isStackableBagPassive } from '../../game/passives';
 import {
-  moodMax, levelFromXP, addToPlayerBag, activeKindLabel, sortBagSlots, buildHotbarSlots,
+  moodMax, levelFromXP, addToPlayerBag, activeKindLabel, sortBagSlots, buildHotbarSlots, computeBagPassives,
   isNonStackableBagPassiveDuplicate, isActiveKindDuplicate, runEnemyTurns, applyEnemyTurns, cookedEatHeal,
 } from '../../game/gameHelpers';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
@@ -164,9 +164,14 @@ export function useInventoryActions(
         addLog(`⚡ ZAP! ${target.emoji} ${target.name} is obliterated!`);
         newEnemies = prev.enemies.filter(e => e.id !== target.id);
         newPlayer = applyMonkeyDropOnKill(target, newPlayer);
-        if (target.isBoss || Math.random() < 0.50) {
-          const r2 = Math.random();
-          const drop = r2 < 0.12 ? getRandomEquipmentDrop(prev.currentFloor) : r2 < 0.28 ? getRandomActiveDrop() : getRandomFloorDrop();
+        const drop = rollKillDrop({
+          boss: !!target.isBoss,
+          clover: computeBagPassives(newPlayer.inventory).bonusLoot,
+          floor: prev.currentFloor,
+          playerClass: newPlayer.characterClass,
+          cowboyDualGuns: newPlayer.characterClass === '🤠' && newPlayer.equipment.mainHand?.weaponKind === 'gun' && newPlayer.equipment.offHand?.weaponKind === 'gun',
+        });
+        if (drop) {
           newItems = [...newItems, { ...drop, id: `zap-drop-${Math.random()}`, consumed: false, pos: target.pos }];
         }
       }

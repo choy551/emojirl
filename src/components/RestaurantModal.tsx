@@ -1,6 +1,7 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
 import { getItemBuyPrice, getItemSellValue, addToPlayerBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, MAX_CHEF_LESSONS, cookedHealBonus, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../game/gameHelpers';
 import { canEquipItem } from './itemUtils';
+import { RarityLabel } from './RarityLabel';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
@@ -61,7 +62,7 @@ export function RestaurantModal({
                 <div key={item.id} className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">
                   <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-bold leading-tight">{item.name}{item.isCooked ? ' ✨' : ''}</div>
+                    <div className="text-xs font-bold leading-tight flex items-center gap-1.5">{item.name}{item.isCooked ? ' ✨' : ''} <RarityLabel item={item} className="text-[9px]" /></div>
                     <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{foodHealDescription(item, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp)}</div>
                   </div>
                   <button
@@ -259,7 +260,7 @@ export function RestaurantModal({
                     <div key={item.id} className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">
                       <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold leading-tight">{item.name}{inBank ? ' (bank)' : ''}{item.isCooked ? ' ✨' : ''}</div>
+                        <div className="text-xs font-bold leading-tight flex items-center gap-1.5">{item.name}{inBank ? ' (bank)' : ''}{item.isCooked ? ' ✨' : ''} <RarityLabel item={item} className="text-[9px]" /></div>
                         <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{foodHealDescription(item, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp)}</div>
                       </div>
                       <button

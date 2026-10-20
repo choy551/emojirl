@@ -5,6 +5,8 @@ import { soulHelpText } from '../game/emojis';
 import { isNonStackableBagPassiveDuplicate, isActiveKindDuplicate } from '../game/gameHelpers';
 import { foodHealDescription } from '../game/economy';
 import { activeKindEmoji } from './itemUtils';
+import { RarityLabel } from './RarityLabel';
+import { rarityTooltipSuffix } from '../game/dropTable';
 import { ActivePassivesPanel } from './ActivePassivesPanel';
 
 interface BankPanelProps {
@@ -64,7 +66,7 @@ export function BankPanel({
             return (
               <div
                 key={i}
-                title={hItem ? `[${i + 1}] ${hItem.name}: ${hItem.description.replace(/ · Bag: [^·]+$/, '')}${getPassiveTooltipSuffix(hItem)}${hBankDupes > 0 ? ` · ${hBankDupes} more in Bank` : ''}` : `Empty slot ${i + 1}`}
+                title={hItem ? `[${i + 1}] ${hItem.name}: ${hItem.description.replace(/ · Bag: [^·]+$/, '')}${getPassiveTooltipSuffix(hItem)}${hBankDupes > 0 ? ` · ${hBankDupes} more in Bank` : ''}${rarityTooltipSuffix(hItem)}` : `Empty slot ${i + 1}`}
                 className={`relative aspect-square rounded flex items-center justify-center text-sm border select-none
                   ${hItem?.isVoidGhost ? 'opacity-40 border-violet-400/40 bg-violet-950/20' : hItem ? 'border-border/60 bg-black/30' : 'border-border/20 bg-black/10'}`}
               >
@@ -134,7 +136,7 @@ export function BankPanel({
         const wouldBeDuplicate = alreadyActiveNonStack || alreadyActiveKind;
         return (
           <div className="bg-black/30 rounded-lg p-2.5 text-xs space-y-1 border border-primary/30 mb-3">
-            <div className="font-bold text-foreground">{si.emoji} {si.name}</div>
+            <div className="font-bold text-foreground flex items-center gap-1.5">{si.emoji} {si.name} <RarityLabel item={si} className="text-[9px]" /></div>
             <div className="text-muted-foreground/70 leading-snug">
               {si.healAmount !== undefined
                 ? foodHealDescription(si, chefLessonCount, player.stats.maxHp)
@@ -216,7 +218,7 @@ export function BankPanel({
                     else { onSelect(item.id); }
                   }}
                   {...itemInspectProps(item)}
-                  title={`${item.name}${items.length > 1 ? ` ×${items.length}` : ''}: ${item.healAmount !== undefined ? foodHealDescription(item, chefLessonCount, player.stats.maxHp) : item.description}${passiveComputedSuffix}${isStackableBagPassive(item) ? ' · Stackable — compounding power per copy' : ''}`}
+                  title={`${item.name}${items.length > 1 ? ` ×${items.length}` : ''}: ${item.healAmount !== undefined ? foodHealDescription(item, chefLessonCount, player.stats.maxHp) : item.description}${passiveComputedSuffix}${isStackableBagPassive(item) ? ' · Stackable — compounding power per copy' : ''}${rarityTooltipSuffix(item)}`}
                   className={`relative aspect-square rounded border flex items-center justify-center text-xl transition-all cursor-pointer
                     ${focusedBagIdx === bankIdx ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-black/50' : ''}
                     ${isSelected
