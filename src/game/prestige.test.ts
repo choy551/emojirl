@@ -201,7 +201,8 @@ describe('prestige kits', () => {
   it('scales fencer crit up with HP and evasion up as HP falls', () => {
     expect(fencerCritBonus(10, 10)).toBe(FENCER_CRIT_AT_FULL);
     expect(fencerCritBonus(10, 10)).toBeGreaterThan(fencerCritBonus(1, 10));
-    expect(fencerEvasion(1, 10, 8)).toBe(FENCER_EVA_AT_EMPTY);
+    expect(fencerEvasion(0, 10, 8)).toBe(FENCER_EVA_AT_EMPTY);
+    expect(fencerEvasion(1, 10, 8)).toBeLessThan(FENCER_EVA_AT_EMPTY);
     expect(fencerEvasion(10, 10, 8)).toBeLessThan(fencerEvasion(1, 10, 8));
   });
 
