@@ -46,6 +46,23 @@ export function companionBountyPercent(tally: number): number {
   return Math.round(companionBountyShare(tally) * 100);
 }
 
+/** Logged once when 20 out-of-combat turns snap the stacking penalty back to 50%. */
+export const COMPANION_BOUNTY_REFRESH_LOG = 'Companion bounty refreshed (50% XP)';
+
+/**
+ * Compact companion-kill line. `changedSharePercent` is the player's new XP
+ * share (40/30/20/10) and is set only on the kill that dropped the tier.
+ */
+export function companionKillLogText(
+  companionEmoji: string,
+  enemyEmoji: string,
+  changedSharePercent?: number,
+): string {
+  const base = `${companionEmoji} Companion killed ${enemyEmoji}`;
+  if (changedSharePercent == null) return base;
+  return `${base} (${changedSharePercent}% XP)`;
+}
+
 export function companionKillXp(isBoss: boolean): number {
   return isBoss ? 25 : 5;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getDungeonPressure, companionBountyShare, companionBountyPercent, tickCompanionBountyOoc, autoRestNeedsBountyWait, applyCompanionLevelUp, COMPANION_BOUNTY_OOC_TURNS } from './progression';
+import { getDungeonPressure, companionBountyShare, companionBountyPercent, companionKillLogText, tickCompanionBountyOoc, autoRestNeedsBountyWait, applyCompanionLevelUp, COMPANION_BOUNTY_OOC_TURNS, COMPANION_BOUNTY_REFRESH_LOG } from './progression';
 import { applySpawnPressure, spawnEnemies } from './spawning';
 import type { Enemy } from './types';
 
@@ -64,6 +64,18 @@ describe('companionBountyShare', () => {
     expect(companionBountyShare(20)).toBe(0.1);
     expect(companionBountyShare(99)).toBe(0.1);
     expect(companionBountyPercent(5)).toBe(40);
+  });
+});
+
+describe('companionKillLogText', () => {
+  it('names the kill with emojis and adds the new share only when the tier changed', () => {
+    expect(companionKillLogText('🐕', '🐀')).toBe('🐕 Companion killed 🐀');
+    expect(companionKillLogText('🐕', '🐀', 50)).toBe('🐕 Companion killed 🐀 (50% XP)');
+    expect(companionKillLogText('🥷', '👺', 40)).toBe('🥷 Companion killed 👺 (40% XP)');
+    expect(companionKillLogText('🥷', '👺', 30)).toBe('🥷 Companion killed 👺 (30% XP)');
+    expect(companionKillLogText('🥷', '👺', 20)).toBe('🥷 Companion killed 👺 (20% XP)');
+    expect(companionKillLogText('🥷', '👺', 10)).toBe('🥷 Companion killed 👺 (10% XP)');
+    expect(COMPANION_BOUNTY_REFRESH_LOG).toBe('Companion bounty refreshed (50% XP)');
   });
 });
 
