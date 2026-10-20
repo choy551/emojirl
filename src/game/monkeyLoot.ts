@@ -1,6 +1,7 @@
 import { EmojiItem, Player } from './types';
-import { addToBag } from './inventory';
+import { addToBag, addToBagCapped } from './inventory';
 import { isStackableBagPassive } from './passives';
+import { hotbarCapFor } from './voidDamage';
 
 export function isSoulEmoji(i: EmojiItem): boolean {
   return !i.consumed && !i.isEquipment && !!i.bagPassive && !i.activeKind &&
@@ -47,14 +48,17 @@ export function applySoulThefts(inventory: EmojiItem[], sourceIds: string[]): Em
 }
 
 export function restoreStolenEmojis(
-  player: Pick<Player, 'inventory' | 'bank'>,
+  player: Pick<Player, 'inventory' | 'bank'> & Partial<Pick<Player, 'characterClass' | 'ghostHotbar'>>,
   stolen: EmojiItem[],
 ): { inventory: EmojiItem[]; bank: EmojiItem[]; banked: number } {
   if (stolen.length === 0) {
     return { inventory: player.inventory, bank: player.bank, banked: 0 };
   }
   const before = player.bank.length;
-  const added = addToBag(player.inventory, player.bank, ...stolen);
+  const cap = hotbarCapFor({ characterClass: player.characterClass ?? '🧙', ghostHotbar: player.ghostHotbar });
+  const added = cap >= 9
+    ? addToBag(player.inventory, player.bank, ...stolen)
+    : addToBagCapped(player.inventory, player.bank, cap, ...stolen);
   return { inventory: added.inventory, bank: added.bank, banked: added.bank.length - before };
 }
 

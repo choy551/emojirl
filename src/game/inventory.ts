@@ -1,6 +1,8 @@
-import { Player, EmojiItem } from './types';
+import { Player, EmojiItem, VoidGhost } from './types';
 import type { BagPassiveSummary } from './types';
 import { STACKABLE_BAG_CAPS, isStackableBagPassive } from './passives';
+import { EMOJI_POWERS } from './emojis';
+import { hotbarCapFor, padGhostHotbar, voidGhostCapacity } from './voidDamage';
 
 export function isNonStackableBagPassiveDuplicate(item: EmojiItem, inv: EmojiItem[]): boolean {
   if (!item.bagPassive?.nonStackable) return false;
@@ -17,10 +19,37 @@ export function addToBag(
   bank: EmojiItem[],
   ...items: EmojiItem[]
 ): { inventory: EmojiItem[]; bank: EmojiItem[]; nonStackableBanked: EmojiItem[]; duplicateActiveBanked: EmojiItem[] } {
+  return addItemsToBag(inv, bank, items, 9);
+}
+
+/** Same as addToBag, but the hotbar holds at most `hotbarCap` real souls (Void ghosts reserve the rest). */
+export function addToBagCapped(
+  inv: EmojiItem[],
+  bank: EmojiItem[],
+  hotbarCap: number,
+  ...items: EmojiItem[]
+): { inventory: EmojiItem[]; bank: EmojiItem[]; nonStackableBanked: EmojiItem[]; duplicateActiveBanked: EmojiItem[] } {
+  return addItemsToBag(inv, bank, items, hotbarCap);
+}
+
+export function addToPlayerBag(
+  player: Player,
+  ...items: EmojiItem[]
+): { inventory: EmojiItem[]; bank: EmojiItem[]; nonStackableBanked: EmojiItem[]; duplicateActiveBanked: EmojiItem[] } {
+  return addItemsToBag(player.inventory, player.bank, items, hotbarCapFor(player));
+}
+
+function addItemsToBag(
+  inv: EmojiItem[],
+  bank: EmojiItem[],
+  items: EmojiItem[],
+  hotbarCap: number,
+): { inventory: EmojiItem[]; bank: EmojiItem[]; nonStackableBanked: EmojiItem[]; duplicateActiveBanked: EmojiItem[] } {
   const newInv = [...inv];
   const newBank = [...bank];
   const nonStackableBanked: EmojiItem[] = [];
   const duplicateActiveBanked: EmojiItem[] = [];
+  const cap = Math.max(0, hotbarCap);
   for (const item of items) {
     if (item.isEquipment) { newBank.push(item); continue; }
     if (item.bagPassive?.nonStackable) {
@@ -46,7 +75,7 @@ export function addToBag(
         continue;
       }
       const bagCount = newInv.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment).length;
-      if (bagCount >= 9) { newBank.push({ ...item, stackCount: addCount }); continue; }
+      if (bagCount >= cap) { newBank.push({ ...item, stackCount: addCount }); continue; }
       if (addCount > cap) {
         newInv.push({ ...item, stackCount: cap });
         newBank.push({ ...item, id: `${item.id}-overflow`, stackCount: addCount - cap });
@@ -56,7 +85,7 @@ export function addToBag(
       continue;
     }
     const bagCount = newInv.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment).length;
-    if (item.healAmount !== undefined || item.ammoAmount !== undefined || bagCount < 9) {
+    if (item.healAmount !== undefined || item.ammoAmount !== undefined || bagCount < cap) {
       newInv.push(item);
     } else {
       newBank.push(item);
@@ -182,6 +211,125 @@ export function removeAndRefillBag(
   return refillBagFromBank(without, bank);
 }
 
+function ghostToDisplayItem(ghost: VoidGhost, dormant: boolean): EmojiItem {
+  const power = EMOJI_POWERS.find(e => e.emoji === ghost.emoji);
+  return {
+    id: `void-ghost:${ghost.emoji}`,
+    emoji: ghost.emoji,
+    name: power?.name ?? 'Ghost',
+    description: power?.description ?? 'A remembered soul.',
+    consumed: false,
+    bagPassive: power?.bagPassive,
+    stackCount: Math.max(1, ghost.stacks),
+    isVoidGhost: true,
+    isVoidGhostDormant: dormant || undefined,
+  };
+}
+
+/** 9-slot hotbar. Ghosts keep their indices; real souls fill the holes in sortBagSlots order. */
+export function buildHotbarSlots(player: Player): (EmojiItem | null)[] {
+  const ghosts = padGhostHotbar(player.ghostHotbar);
+  const reals = sortBagSlots(player.inventory).filter(i => !i.isVoidGhost);
+  const slots: (EmojiItem | null)[] = Array.from({ length: 9 }, () => null);
+  if (player.characterClass === '👤') {
+    let activeLeft = voidGhostCapacity(0, player.voidBossesCleared ?? 0);
+    for (let i = 0; i < 9; i++) {
+      const ghost = ghosts[i];
+      if (!ghost) continue;
+      const dormant = activeLeft <= 0;
+      if (!dormant) activeLeft -= 1;
+      slots[i] = ghostToDisplayItem(ghost, dormant);
+    }
+  }
+  let r = 0;
+  for (let i = 0; i < 9 && r < reals.length; i++) {
+    if (slots[i] == null) slots[i] = reals[r++];
+  }
+  return slots;
+}
+
+/** Real hotbar items only — ghosts, equipment, and empty slots do not count. */
+export function countVoidPressureSlots(player: Player): number {
+  return buildHotbarSlots(player).filter(s => s && !s.isVoidGhost).length;
+}
+
+/** Inventory that actually contributes bag passives. Void ghosts in active slots are included. */
+export function passiveInventory(player: Player): EmojiItem[] {
+  if (player.characterClass !== '👤') return player.inventory;
+  const cells = buildHotbarSlots(player);
+  const slottedReals = cells.filter((s): s is EmojiItem => !!s && !s.isVoidGhost);
+  const slottedIds = new Set(slottedReals.map(s => s.id));
+  const kept = player.inventory.filter(i => {
+    const hotbarSoul = i.healAmount === undefined && i.ammoAmount === undefined && !i.isEquipment && !i.isVoidGhost;
+    if (!hotbarSoul) return true;
+    return slottedIds.has(i.id);
+  });
+  const ghosts = cells.filter((s): s is EmojiItem => !!s?.isVoidGhost && !s.isVoidGhostDormant);
+  return [...kept, ...ghosts];
+}
+
+export function playerBagPassives(player: Player): BagPassiveSummary {
+  return computeBagPassives(passiveInventory(player));
+}
+
+/** If ghosts reserve hotbar slots, real souls past the remaining room go to the bank. */
+export function parkVoidOverflow(player: Player): Player {
+  if (player.characterClass !== '👤') return player;
+  const room = hotbarCapFor(player);
+  const reals = sortBagSlots(player.inventory).filter(i => !i.isVoidGhost);
+  if (reals.length <= room) return player;
+  const overflowIds = new Set(reals.slice(room).map(i => i.id));
+  return {
+    ...player,
+    inventory: player.inventory.filter(i => !overflowIds.has(i.id)),
+    bank: [...player.bank, ...reals.filter(i => overflowIds.has(i.id))],
+  };
+}
+
+export function grantGhostStack(player: Player, emoji: string, stacks: number): Player {
+  const hot = padGhostHotbar(player.ghostHotbar);
+  const hi = hot.findIndex(g => g?.emoji === emoji);
+  if (hi !== -1) {
+    hot[hi] = { emoji, stacks };
+    return { ...player, ghostHotbar: hot };
+  }
+  const bank = [...(player.ghostBank ?? [])];
+  const bi = bank.findIndex(g => g.emoji === emoji);
+  if (bi !== -1) {
+    bank[bi] = { emoji, stacks };
+    return { ...player, ghostHotbar: hot, ghostBank: bank };
+  }
+  const cells = buildHotbarSlots({ ...player, ghostHotbar: hot, ghostBank: bank });
+  const empty = cells.findIndex(c => c == null);
+  if (empty !== -1) {
+    hot[empty] = { emoji, stacks };
+    return { ...player, ghostHotbar: hot, ghostBank: bank };
+  }
+  bank.push({ emoji, stacks });
+  return { ...player, ghostHotbar: hot, ghostBank: bank };
+}
+
+export function manifestPlayerGhost(player: Player, emoji: string): { player: Player; ok: boolean } {
+  const bank = [...(player.ghostBank ?? [])];
+  const bi = bank.findIndex(g => g.emoji === emoji);
+  if (bi === -1) return { player, ok: false };
+  const cells = buildHotbarSlots(player);
+  const empty = cells.findIndex(c => c == null);
+  if (empty === -1) return { player, ok: false };
+  const hot = padGhostHotbar(player.ghostHotbar);
+  hot[empty] = bank[bi];
+  bank.splice(bi, 1);
+  return { player: { ...player, ghostHotbar: hot, ghostBank: bank }, ok: true };
+}
+
+export function banishPlayerGhost(player: Player, slot: number): Player {
+  const hot = padGhostHotbar(player.ghostHotbar);
+  const ghost = hot[slot];
+  if (!ghost) return player;
+  hot[slot] = null;
+  return { ...player, ghostHotbar: hot, ghostBank: [...(player.ghostBank ?? []), ghost] };
+}
+
 export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {
   const acc = {
     attack: 0, defense: 0, speed: 0, evasion: 0, luck: 0,
@@ -236,7 +384,7 @@ export function tickActiveBuffs(stats: import('./types').PlayerStats): import('.
 }
 
 export function applyEquipmentAndPassives(player: Player): Player {
-  const passives = computeBagPassives(player.inventory);
+  const passives = playerBagPassives(player);
   const eq = player.equipment;
   const slots = [eq.body, eq.mainHand, eq.offHand, eq.accessory].filter(Boolean) as EmojiItem[];
   let eqAtk = 0, eqDef = 0, eqSpd = 0, eqEva = 0, eqLck = 0;

@@ -7,7 +7,7 @@ interface ActivePassivesPanelProps {
 }
 
 export function ActivePassivesPanel({ bagSlots }: ActivePassivesPanelProps) {
-  const passiveItems = bagSlots.filter((item): item is EmojiItem => !!(item && hasBagPassive(item)));
+  const passiveItems = bagSlots.filter((item): item is EmojiItem => !!(item && hasBagPassive(item) && !item.isVoidGhostDormant));
   if (passiveItems.length === 0) return null;
   let totalAtk = 0, totalDef = 0, totalSpd = 0, totalEva = 0, totalLck = 0, totalVis = 0;
   for (const item of passiveItems) {

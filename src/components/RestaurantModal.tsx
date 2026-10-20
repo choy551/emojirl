@@ -1,5 +1,5 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, MAX_CHEF_LESSONS, cookedHealBonus, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToPlayerBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, MAX_CHEF_LESSONS, cookedHealBonus, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../game/gameHelpers';
 import { canEquipItem } from './itemUtils';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -101,7 +101,7 @@ export function RestaurantModal({
                             };
                           }
                         }
-                        const { inventory, bank } = addToBag(prev.player.inventory, prev.player.bank, boughtItem);
+                        const { inventory, bank } = addToPlayerBag(prev.player, boughtItem);
                         return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, inventory, bank } };
                       });
                       if (peacemakers) addLog(PEACEMAKERS_LOG);

@@ -1,6 +1,6 @@
 import { EmojiItem, MapGrid, Position } from './types';
 import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, cookFood, HEAL_DROPS, COOKABLE_EMOJIS } from './emojis';
-import { addToBag } from './inventory';
+import { addToBag, addToBagCapped } from './inventory';
 
 /** Gold stolen by a 🐦‍⬛ Crow on a successful hit. Scales with dungeon floor. */
 export function crowGoldSteal(floor: number, playerGold: number): number {
@@ -242,6 +242,7 @@ export function grantSlotPrizeItems(
   bank: EmojiItem[],
   items: EmojiItem[],
   floor: number,
+  hotbarCap = 9,
 ): { inventory: EmojiItem[]; bank: EmojiItem[]; gold: number; logs: string[] } {
   let inv = inventory;
   let bnk = bank;
@@ -249,7 +250,7 @@ export function grantSlotPrizeItems(
   const logs: string[] = [];
   for (const item of items) {
     const before = bnk.length;
-    const next = addToBag(inv, bnk, item);
+    const next = hotbarCap >= 9 ? addToBag(inv, bnk, item) : addToBagCapped(inv, bnk, hotbarCap, item);
     const added = next.bank.slice(before);
     const cashed = added.filter(it => !it.isEquipment);
     const keptEquip = added.filter(it => it.isEquipment);

@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { getMood, MOODS } from '../game/moods';
 import { getClassDef } from '../game/classes';
 import { saveScore, leaderboardEntryFromRun } from '../game/leaderboard';
+import { startingVoidLoadout } from '../game/voidMeta';
+import { VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from '../game/voidDamage';
 import { saveGame, loadGame, clearSave, getRawSave } from '../game/save';
 import { isStackableBagPassive } from '../game/passives';
 import { useIsMobile } from '../hooks/use-mobile';
@@ -45,9 +47,10 @@ import { EquipmentTab } from '../components/EquipmentTab';
 import { canEquipItem } from '../components/itemUtils';
 import { RightSidebar } from '../components/RightSidebar';
 import {
-  chebyshev, computeBagPassives, applyEquipmentAndPassives, computeNinjaEvasion,
+  chebyshev, playerBagPassives, applyEquipmentAndPassives, computeNinjaEvasion,
   VISION_RADIUS, hasLOS, hasLOSBetween, detectionRadius,
-  eagleEyeRange, sortBagSlots, generateShopStock, generateAmmoCacheStock, generateRestaurantStock,
+  eagleEyeRange, sortBagSlots, buildHotbarSlots, banishPlayerGhost, manifestPlayerGhost,
+  generateShopStock, generateAmmoCacheStock, generateRestaurantStock,
   spawnEnemies, spawnVaultItems, xpThresholdForLevel,
   computeVisibility, visionRadiusFor,
   _flashSignals,
@@ -583,6 +586,7 @@ export default function Game() {
       id: `start-${i}`,
       consumed: false,
     }));
+    const voidLoad = vessel === '👤' ? startingVoidLoadout(0) : null;
 
     const initialPlayer: Player = {
       pos: startPos,
@@ -607,6 +611,9 @@ export default function Game() {
       inventory: startingPowers,
       bank: [],
       equipment: {},
+      ghostHotbar: voidLoad?.ghostHotbar,
+      ghostBank: voidLoad?.ghostBank,
+      voidBossesCleared: 0,
     };
 
     setGameState({
@@ -617,7 +624,7 @@ export default function Game() {
       enemies: spawnEnemies(1, rooms, startPos, 0, map),
       items: spawnVaultItems(rooms, vessel, 1, map),
       turn: 1,
-      logs: [{ id: 'l1', text: vessel === '🤠' ? `Welcome, Cowboy. Only real Cowboys fight with their fists! Descend and collect emojis.` : `Welcome, ${cls.name}. Descend and collect emojis.`, turn: 1 }],
+      logs: [{ id: 'l1', text: vessel === '🤠' ? `Welcome, Cowboy. Only real Cowboys fight with their fists! Descend and collect emojis.` : vessel === '👤' ? `Welcome, The Void. Emptiness is peace — filled souls burn.` : `Welcome, ${cls.name}. Descend and collect emojis.`, turn: 1 }],
       floatingTexts: [],
       gameOver: false,
       victory: false,
@@ -636,6 +643,7 @@ export default function Game() {
       companionBountyOocTurns: 0,
       chefLessonCount: 0,
       dualGunsFanfareDone: false,
+      voidBossesCleared: 0,
       floorAnnouncement: rooms.some(r => r.theme === 'volcano')
         ? {
             kind: 'volcano',
@@ -865,7 +873,7 @@ export default function Game() {
         addLog('Autoexplore stopped: 🛏️ a bed nearby.');
         return;
       }
-      const explorePassives = computeBagPassives(player.inventory);
+      const explorePassives = playerBagPassives(player);
 
       const visibleItems = items.filter(it => state.map[it.pos.y]?.[it.pos.x]?.visible);
       if (visibleItems.length > 0) {
@@ -984,7 +992,7 @@ export default function Game() {
         if (hostileNear) { setTravelTarget(null); addLog('Travel stopped: enemy in sight!'); return; }
       }
 
-      const passives = computeBagPassives(player.inventory);
+      const passives = playerBagPassives(player);
       const targetType = state.map[target.y]?.[target.x]?.type;
       const passable = new Set<string>([...PLAYER_PASSABLE_TILES]);
       if (passives.canSwim) passable.add('water');
@@ -1163,7 +1171,7 @@ export default function Game() {
         return;
       }
 
-      const passives = computeBagPassives(state.player.inventory);
+      const passives = playerBagPassives(state.player);
       const safeRadius = visionRadiusFor(state.player.characterClass, state.player.stats.level) + passives.losBonus;
       const { x: px, y: py } = state.player.pos;
       const hasVisibleEnemy = state.enemies.some(e => {
@@ -1338,9 +1346,13 @@ export default function Game() {
           const tab = bagTabRef.current;
           const idx = focusedBagIdxRef.current;
           const selId = selectedItemIdRef.current;
-          const bagSlots = sortBagSlots(gs.player.inventory);
+          const bagSlots = buildHotbarSlots(gs.player);
           if (tab === 'hotbar') {
             const item = bagSlots[idx] ?? null;
+            if (item?.isVoidGhost) {
+              setGameState(prev => prev ? { ...prev, player: banishPlayerGhost(prev.player, idx) } : prev);
+              return;
+            }
             if (!item) { if (selId) { handleBankMove(selId, idx); setSelectedItemId(null); } }
             else if (selId === item.id) { setSelectedItemId(null); }
             else if (selId) { handleBankMove(selId, idx); setSelectedItemId(null); }
@@ -2279,7 +2291,8 @@ export default function Game() {
     visibleMap.push(<div key={`row-${y}`} className="flex">{row}</div>);
   }
 
-  const bagSlots  = sortBagSlots(player.inventory);
+  const realBagSlots = sortBagSlots(player.inventory);
+  const bagSlots = buildHotbarSlots(player);
   const itemInspectProps = (item: EmojiItem | null) => ({
     onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); if (item) setStatCardItem(item); },
     onPointerDown: (e: React.PointerEvent) => {
@@ -2291,9 +2304,9 @@ export default function Game() {
     onPointerLeave:  () => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } },
     onPointerCancel: () => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } },
   });
-  const bagPassiveSummary = computeBagPassives(player.inventory);
+  const bagPassiveSummary = playerBagPassives(player);
   // Stack counts for stackable-passive emojis — uses stackCount on the item directly
-  const stackableCounts = bagSlots.reduce<Record<string, number>>((acc, item) => {
+  const stackableCounts = realBagSlots.reduce<Record<string, number>>((acc, item) => {
     if (!item.consumed && isStackableBagPassive(item)) {
       acc[item.emoji] = (acc[item.emoji] ?? 0) + (item.stackCount ?? 1);
     }
@@ -2781,10 +2794,17 @@ export default function Game() {
             {gameState.victory && (
               <p className="text-xl mb-1 text-amber-200 font-semibold">The dungeon ends at D:27.</p>
             )}
-            {!gameState.victory && gameState.killer && (
+            {!gameState.victory && player.characterClass === '👤' && gameState.killer?.name === 'the void' ? (
+              <p className="text-xl mb-1 text-violet-200 font-semibold text-center px-6">
+                {VOID_DEATH_TEXT}
+              </p>
+            ) : !gameState.victory && gameState.killer && (
               <p className="text-xl mb-1 text-orange-300 font-semibold">
                 Slain by {gameState.killer.emoji} {gameState.killer.name}
               </p>
+            )}
+            {gameState.logs.some(l => l.text === VOID_UNLOCK_TEXT) && (
+              <p className="text-sm mb-2 text-violet-300/90 text-center px-6">{VOID_UNLOCK_TEXT}</p>
             )}
             <p className="text-muted-foreground mb-1">Final mood: {moodData.emoji} {moodData.name}</p>
             <p className="text-lg mb-1">Floor {currentFloor} · Level {player.stats.level} · {player.stats.xp} XP</p>
@@ -3239,8 +3259,9 @@ export default function Game() {
                   setDrownWarnSlot(null);
                   setGameState(prev => {
                     if (!prev) return prev;
-                    const bagItems = sortBagSlots(prev.player.inventory);
+                    const bagItems = buildHotbarSlots(prev.player);
                     const slotItem = bagItems[slot];
+                    if (slotItem?.isVoidGhost) return prev;
                     if (!slotItem) return prev;
                     const newInventory = prev.player.inventory.filter(i => i.id !== slotItem.id);
                     addLog(`💀 You discarded your ⛵ Boat while adrift — the waves swallow you whole!`);
@@ -3430,6 +3451,7 @@ export default function Game() {
                 onSelect={setSelectedItemId}
                 onMove={handleBankMove}
                 onShowStatCard={setStatCardItem}
+                onBanishGhost={slot => setGameState(prev => prev ? { ...prev, player: banishPlayerGhost(prev.player, slot) } : prev)}
               />
             )}
 
@@ -3446,6 +3468,15 @@ export default function Game() {
                 onClose={() => setBankOpen(false)}
                 onShowStatCard={setStatCardItem}
                 chefLessonCount={gameState?.chefLessonCount ?? 0}
+                onBanishGhost={slot => setGameState(prev => prev ? { ...prev, player: banishPlayerGhost(prev.player, slot) } : prev)}
+                onManifestGhost={emoji => setGameState(prev => {
+                  if (!prev) return prev;
+                  const res = manifestPlayerGhost(prev.player, emoji);
+                  if (!res.ok) {
+                    return { ...prev, logs: [{ id: Math.random().toString(), text: 'No empty hotbar slot — bank an item or banish a ghost.', turn: prev.turn }, ...prev.logs].slice(0, 24) };
+                  }
+                  return { ...prev, player: res.player };
+                })}
               />
             )}
 

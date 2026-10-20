@@ -5,10 +5,13 @@ import {
 } from '../../game/emojis';
 import { isStackableBagPassive } from '../../game/passives';
 import {
-  moodMax, sortBagSlots, refillBagFromBank, removeAndRefillBag, takeOneMatchingFromBank,
+  moodMax, refillBagFromBank, removeAndRefillBag, takeOneMatchingFromBank,
   tickActiveBuffs, withVisibility, runEnemyTurns, applyEnemyTurns, getItemBuyPrice, cookedEatHeal,
+  buildHotbarSlots, grantGhostStack,
 } from '../../game/gameHelpers';
 import { applyInstantItemUse, canBuyAndUse } from '../../game/shopUse';
+import { GHOST_LINGER_TEXT, isVoidSoulSpend } from '../../game/voidDamage';
+import { recordHotbarSoulConsume } from '../../game/voidMeta';
 import { _flashSignals } from '../../game/flashSignals';
 import type { GameRefs, GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 
@@ -266,9 +269,13 @@ export function useItemActions(
   const handleUseSlot = useCallback((bagSlotIndex: number) => {
     const gs = gameStateRef.current;
     if (!gs || gs.gameOver) return;
-    const bagItems = sortBagSlots(gs.player.inventory);
+    const bagItems = buildHotbarSlots(gs.player);
     const item = bagItems[bagSlotIndex];
     if (!item || item.consumed) return;
+    if (item.isVoidGhost) {
+      addLog(GHOST_LINGER_TEXT);
+      return;
+    }
 
     if (item.isEquipment) {
       setBagTab('equipment');
@@ -312,9 +319,9 @@ export function useItemActions(
 
     setGameState(prev => {
       if (!prev || prev.gameOver) return prev;
-      const prevBagItems = sortBagSlots(prev.player.inventory);
+      const prevBagItems = buildHotbarSlots(prev.player);
       const slotItem = prevBagItems[bagSlotIndex];
-      if (!slotItem) return prev;
+      if (!slotItem || slotItem.isVoidGhost) return prev;
 
       const applied = applyInstantItemUse(prev, slotItem, {
         source: 'bag',
@@ -350,7 +357,20 @@ export function useItemActions(
         newInventory = r.inventory; newSoulBank = r.bank;
       }
 
-      return { ...applied, player: { ...applied.player, inventory: newInventory, bank: newSoulBank } };
+      let nextPlayer = { ...applied.player, inventory: newInventory, bank: newSoulBank };
+      let nextLogs = applied.logs;
+      if (!echo && prev.player.characterClass === '👤' && isVoidSoulSpend(slotItem)) {
+        const rec = recordHotbarSoulConsume(slotItem.emoji);
+        if (rec.crossed) {
+          nextPlayer = grantGhostStack(nextPlayer, slotItem.emoji, rec.unlocks);
+          const text = rec.unlocks <= 1
+            ? `👤 Ghost unlocked: ${slotItem.emoji}`
+            : `👤 Ghost unlocked: ${slotItem.emoji} (stack ×${rec.unlocks})`;
+          nextLogs = [{ id: `ghost-${applied.turn}-${slotItem.emoji}-${rec.unlocks}`, text, turn: applied.turn }, ...nextLogs].slice(0, 24);
+        }
+      }
+
+      return { ...applied, player: nextPlayer, logs: nextLogs };
     });
   }, [handleUseRope, addLog, gameStateRef, setGameState, setBagTab, setBankOpen, setSelectedItemId, dirPickModeRef, setDirPickMode, setDrownWarnSlot, setLastBoatWarnSlot, boatConfirmedRef, applyMonkeyDropOnKill]);
 

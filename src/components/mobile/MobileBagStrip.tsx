@@ -3,7 +3,7 @@ import { EmojiItem } from '../../game/types';
 import { activeKindEmoji } from '../itemUtils';
 
 interface MobileBagStripProps {
-  bagSlots: EmojiItem[];
+  bagSlots: (EmojiItem | null)[];
   healSlots: EmojiItem[];
   activeProjectileKind?: string;
   onUseSlot: (i: number) => void;
@@ -39,11 +39,12 @@ export function MobileBagStrip({
             data-testid={`mobile-slot-${i + 1}`}
             onClick={() => onUseSlot(i)}
             {...itemInspectProps(item)}
-            className={`relative w-full aspect-square bg-card border rounded flex items-center justify-center text-base active:scale-90 transition-transform ${item.isEquipment ? 'border-amber-500/60' : item.activeKind ? 'border-amber-600/40' : 'border-border'}`}
+            className={`relative w-full aspect-square bg-card border rounded flex items-center justify-center text-base active:scale-90 transition-transform ${item.isVoidGhost ? 'opacity-40 border-violet-400/40' : item.isEquipment ? 'border-amber-500/60' : item.activeKind ? 'border-amber-600/40' : 'border-border'}`}
             title={`[${i + 1}] ${item.name}`}
           >
             {item.emoji}
             <span className="absolute top-0 left-px text-[6px] text-muted-foreground/60 font-bold leading-none">{i + 1}</span>
+            {item.isVoidGhost && <span className="absolute bottom-0 left-px text-[7px] leading-none">👤</span>}
             {kindEmoji && <span className="absolute bottom-0 right-0 text-[7px] leading-none">{kindEmoji}</span>}
             {!item.isEquipment && !kindEmoji && (item.stackCount ?? 0) > 1 && (
               <span className="absolute bottom-0 right-px text-[7px] text-emerald-400 font-bold leading-none">×{item.stackCount}</span>

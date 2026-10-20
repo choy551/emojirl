@@ -1,5 +1,5 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToBag, removeAndRefillBag, COOKED_OVERFLOW_THRESHOLD, cookedHealCount, isHealJunk, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToPlayerBag, removeAndRefillBag, COOKED_OVERFLOW_THRESHOLD, cookedHealCount, isHealJunk, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../game/gameHelpers';
 import { soulHelpText } from '../game/emojis';
 import { isStackableBagPassive } from '../game/passives';
 import { canBuyAndUse } from '../game/shopUse';
@@ -120,7 +120,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                           }
                         }
                         const bankBefore = prev.player.bank.length;
-                        const { inventory, bank } = addToBag(prev.player.inventory, prev.player.bank, boughtItem);
+                        const { inventory, bank } = addToPlayerBag(prev.player, boughtItem);
                         overflowToBank = bank.length > bankBefore;
                         return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, inventory, bank } };
                       });

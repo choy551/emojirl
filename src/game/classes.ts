@@ -67,6 +67,18 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
       { label: 'Boundless Spirit', detail: 'Mood-boosting emoji items stack with no upper limit. Every 20 points above 100 adds +5% damage, +2 dodge, +3 crit, and +2% double-strike chance.' },
     ],
   },
+  '👤': {
+    name: 'The Void',
+    tagline: 'Absence made flesh — filled souls burn; emptiness is peace',
+    baseStats: { hp: 10, maxHp: 10, attack: 3, defense: 0, luck: 2, speed: 2, evasion: 10 },
+    startingEmojiSlots: 0,
+    startingAmmo: 0,
+    passives: [
+      { label: 'Inverted Burden', detail: 'Each filled hotbar slot (1–9) deals Void damage every turn. Bank and equipment are safe. Empty hotbar = no Void pressure.' },
+      { label: 'Mnemonic Hunger', detail: 'Every 10 hotbar consumes of the same soul emoji permanently unlock its bag passive as a ghost (Void runs only). Each further 10 adds one stack.' },
+      { label: 'Hollow Roster', detail: 'Active ghosts: 1 on D:1–4, +1 after each depth boss (D:5/10/15…), cap 9. Extra unlocks live in the Bank. Ghosts do not cause Inverted Burden.' },
+    ],
+  },
 };
 
 export function getClassDef(emoji: string): ClassDefinition {

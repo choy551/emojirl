@@ -3,7 +3,8 @@ import type { SoulEffect } from './emojis';
 import { EMOJI_POWERS, getRandomEmojiPower, getRandomFloorDrop, getRandomActiveDrop, getRandomEquipmentDrop } from './emojis';
 import { markEnemySeen, markEnemyKilled, markEmojiSeen } from './discoveries';
 import { moodMax, levelFromXP, hpBonusForLevel } from './progression';
-import { addToBag, activeKindLabel } from './inventory';
+import { addToPlayerBag, activeKindLabel } from './inventory';
+import { creditVoidBoss } from './voidDamage';
 import { withVisibility } from './vision';
 import { runEnemyTurns, applyEnemyTurns } from './enemyTurns';
 import { _flashSignals } from './flashSignals';
@@ -175,7 +176,7 @@ export function applyInstantItemUse(
       const lvlEmoji = { ...getRandomEmojiPower(), id: `zap-lvl-${Math.random()}`, consumed: false };
       markEmojiSeen(lvlEmoji.emoji);
       if (opts.source === 'bag') {
-        const { inventory: _inv, bank: _bnk, nonStackableBanked: _nsbZ, duplicateActiveBanked: _dabZ } = addToBag(newPlayer.inventory, newPlayer.bank, lvlEmoji);
+        const { inventory: _inv, bank: _bnk, nonStackableBanked: _nsbZ, duplicateActiveBanked: _dabZ } = addToPlayerBag(newPlayer, lvlEmoji);
         _nsbZ.forEach(i => log(`Extra ${i.emoji} → Bank (already carried)`));
         _dabZ.forEach(i => log(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
         newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, level: newLevel, maxHp: newMaxHp, hp: newMaxHp, moodValue: Math.min(moodMax(cls), newPlayer.stats.moodValue + 30) }, inventory: _inv, bank: _bnk };
@@ -195,7 +196,7 @@ export function applyInstantItemUse(
     floats.push({ id: `zap-${target.id}-${s.turn}`, pos: { ...target.pos }, text: '⚡ ZAP!', color: '#fbbf24', life: 3 });
   }
 
-  const midState = {
+  let midState: GameState = {
     ...s,
     killCounts: zapKillCounts,
     player: newPlayer,
@@ -204,5 +205,9 @@ export function applyInstantItemUse(
     floatingTexts: floats,
     turn: s.turn + 1,
   };
+  if (effect?.instakillNearest) {
+    const slain = s.enemies.find(e => !newEnemies.some(n => n.id === e.id));
+    if (slain?.isBoss) midState = creditVoidBoss(midState, slain);
+  }
   return withVisibility(applyEnemyTurns(midState, runEnemyTurns(midState)));
 }

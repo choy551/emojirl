@@ -1,17 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CHARACTER_CLASSES, getClassDef } from "../game/classes";
 import { getScores, clearScores, LeaderboardEntry } from "../game/leaderboard";
 import { hasSave, clearSave } from "../game/save";
+import { acknowledgeVoidUnlock, isVoidUnlocked, voidUnlockPending } from "../game/voidMeta";
+import { VOID_UNLOCK_TEXT } from "../game/voidDamage";
 
-const VESSELS = ["🧙", "🥷", "🧝", "🤠"] as const;
+const BASE_VESSELS = ["🧙", "🥷", "🧝", "🤠"] as const;
 const VESSEL_KEY = "emojirl_vessel";
 const ANNOUNCE_DISMISS_KEY = "emojirl_announce_dismissed_2026-09-10";
 
 function loadVessel(): string {
-  return localStorage.getItem(VESSEL_KEY) ?? "🧙";
+  const saved = localStorage.getItem(VESSEL_KEY) ?? "🧙";
+  if (saved === "👤" && !isVoidUnlocked()) return "🧙";
+  return saved;
 }
 
 function loadAnnounceDismissed(): boolean {
@@ -28,6 +32,12 @@ export default function Home() {
   const [scores, setScores] = useState<LeaderboardEntry[]>(getScores);
   const [savedRun, setSavedRun] = useState<boolean>(hasSave);
   const [announceDismissed, setAnnounceDismissed] = useState(loadAnnounceDismissed);
+  const [voidBanner, setVoidBanner] = useState(voidUnlockPending);
+  const vessels = isVoidUnlocked() ? [...BASE_VESSELS, "👤"] : [...BASE_VESSELS];
+
+  useEffect(() => {
+    if (voidBanner) acknowledgeVoidUnlock();
+  }, [voidBanner]);
 
   function dismissAnnounce() {
     setAnnounceDismissed(true);
@@ -48,6 +58,22 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full flex flex-col">
+      {voidBanner && (
+        <div
+          role="status"
+          className="relative w-full shrink-0 px-4 py-3 pr-11 bg-violet-950/90 border-b border-violet-500/50 text-violet-100 text-sm leading-snug text-center"
+        >
+          {VOID_UNLOCK_TEXT}
+          <button
+            type="button"
+            onClick={() => setVoidBanner(false)}
+            aria-label="Dismiss Void unlock"
+            className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-md text-violet-200/80 hover:bg-violet-800/70 hover:text-violet-50 transition-colors"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      )}
       {!announceDismissed && (
         <div
           role="status"
@@ -110,7 +136,7 @@ export default function Home() {
           <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Choose your vessel</h2>
 
           <div className="flex justify-center gap-4 text-4xl">
-            {VESSELS.map((v) => (
+            {vessels.map((v) => (
               <button
                 key={v}
                 onClick={() => select(v)}

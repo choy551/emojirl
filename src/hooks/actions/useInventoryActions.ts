@@ -4,11 +4,12 @@ import { getRandomFloorDrop, getRandomActiveDrop, getRandomEquipmentDrop } from 
 import { markEnemySeen, markEnemyKilled } from '../../game/discoveries';
 import { isStackableBagPassive } from '../../game/passives';
 import {
-  moodMax, levelFromXP, addToBag, activeKindLabel, sortBagSlots,
+  moodMax, levelFromXP, addToPlayerBag, activeKindLabel, sortBagSlots, buildHotbarSlots,
   isNonStackableBagPassiveDuplicate, isActiveKindDuplicate, runEnemyTurns, applyEnemyTurns, cookedEatHeal,
 } from '../../game/gameHelpers';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 import { _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../../game/flashSignals';
+import { creditVoidBoss, hotbarCapFor } from '../../game/voidDamage';
 
 export function useInventoryActions(
   setters: GameSetters,
@@ -32,16 +33,22 @@ export function useInventoryActions(
           bank.push(item);
         }
       } else if (typeof dest === 'number') {
+        const draft = { ...prev.player, inventory: inv, bank };
+        const cells = buildHotbarSlots(draft);
+        const dstCell = cells[dest] ?? null;
+        if (dstCell?.isVoidGhost) return prev;
         const bagItems = sortBagSlots(inv);
+        const cap = hotbarCapFor(draft);
         if (srcInvIdx !== -1) {
           const srcBagIdx = bagItems.findIndex(i => i.id === sourceId);
-          const dstBagItem = bagItems[dest] ?? null;
-          if (srcBagIdx !== -1 && srcBagIdx !== dest) {
-            const srcActualIdx = inv.indexOf(bagItems[srcBagIdx]);
-            if (dstBagItem) {
-              const dstActualIdx = inv.indexOf(dstBagItem);
-              [inv[srcActualIdx], inv[dstActualIdx]] = [inv[dstActualIdx], inv[srcActualIdx]];
-            } else if (bagItems.length < 9) {
+          const srcActualIdx = inv.findIndex(i => i.id === sourceId);
+          if (srcBagIdx !== -1 && srcActualIdx !== -1 && (!dstCell || dstCell.id !== sourceId)) {
+            if (dstCell && !dstCell.isVoidGhost) {
+              const dstActualIdx = inv.findIndex(i => i.id === dstCell.id);
+              if (dstActualIdx !== -1) {
+                [inv[srcActualIdx], inv[dstActualIdx]] = [inv[dstActualIdx], inv[srcActualIdx]];
+              }
+            } else if (!dstCell && bagItems.length < cap) {
               const [item] = inv.splice(srcActualIdx, 1);
               inv.push(item);
             }
@@ -51,16 +58,17 @@ export function useInventoryActions(
           if (isNonStackableBagPassiveDuplicate(srcItem, inv) || isActiveKindDuplicate(srcItem, inv)) {
             return prev; // prevent pulling duplicate non-stackable or active into hotbar
           }
+          if (!dstCell && bagItems.length >= cap) return prev;
           const [srcItemMoved] = bank.splice(srcBankIdx, 1);
-          const dstBagItem = bagItems[dest] ?? null;
-          if (dstBagItem) {
-            const dstActualIdx = inv.indexOf(dstBagItem);
-            bank.push(inv[dstActualIdx]);
-            inv[dstActualIdx] = srcItemMoved;
-          } else if (bagItems.length < 9) {
-            inv.push(srcItemMoved);
+          if (dstCell && !dstCell.isVoidGhost) {
+            const dstActualIdx = inv.findIndex(i => i.id === dstCell.id);
+            if (dstActualIdx === -1) { bank.push(srcItemMoved); }
+            else {
+              bank.push(inv[dstActualIdx]);
+              inv[dstActualIdx] = srcItemMoved;
+            }
           } else {
-            bank.push(srcItemMoved);
+            inv.push(srcItemMoved);
           }
         }
       } else {
@@ -163,7 +171,11 @@ export function useInventoryActions(
         }
       }
 
-      const mid = { ...prev, player: newPlayer, enemies: newEnemies, items: newItems, turn: prev.turn + 1 };
+      let mid = { ...prev, player: newPlayer, enemies: newEnemies, items: newItems, turn: prev.turn + 1 };
+      if (effect?.instakillNearest) {
+        const slain = prev.enemies.find(e => !newEnemies.some(n => n.id === e.id));
+        if (slain?.isBoss) mid = creditVoidBoss(mid, slain);
+      }
       return applyEnemyTurns(mid, runEnemyTurns(mid));
     });
   }, [addLog, setGameState]);
@@ -195,7 +207,7 @@ export function useInventoryActions(
       let newBank = [...player.bank];
       const currentEquipped = player.equipment[slot];
       if (currentEquipped) {
-        const result = addToBag(newInv, newBank, currentEquipped);
+        const result = addToPlayerBag({ ...player, inventory: newInv, bank: newBank }, currentEquipped);
         newInv = result.inventory; newBank = result.bank;
         result.nonStackableBanked.forEach(i => addLog(`Extra ${i.emoji} → Bank (already carried)`));
         result.duplicateActiveBanked.forEach(i => addLog(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
@@ -227,7 +239,7 @@ export function useInventoryActions(
       const { player } = prev;
       const item = player.equipment[slot];
       if (!item) return prev;
-      const { inventory, bank, nonStackableBanked: _nsbU, duplicateActiveBanked: _dabU } = addToBag(player.inventory, player.bank, item);
+      const { inventory, bank, nonStackableBanked: _nsbU, duplicateActiveBanked: _dabU } = addToPlayerBag(player, item);
       _nsbU.forEach(i => addLog(`Extra ${i.emoji} → Bank (already carried)`));
       _dabU.forEach(i => addLog(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
       const newEquipment = { ...player.equipment };

@@ -100,9 +100,12 @@ export default function HowToPlay({
         <p className="text-muted-foreground leading-relaxed">
           Descend through procedurally generated dungeon floors. Pick up emoji
           powers to boost your stats. If your emoji bag empties completely, you
-          take 1 damage every turn (scaling to your current floor depth, so 5
-          damage at floor 5!) until you find an emoji — so always keep at least
-          one! Bump into enemies to attack. Reach the stairs{" "}
+          take Void damage every turn equal to the floor (so 5 damage at floor 5)
+          until you find an emoji — the log reads{" "}
+          <em>💀 You are emoji-less!</em> Die that way and you unlock{" "}
+          <strong className="text-foreground">👤 The Void</strong>, who has the
+          pressure backwards: each filled hotbar slot burns, and an empty hotbar
+          is safe. Bump into enemies to attack. Reach the stairs{" "}
           <span className="text-lg">🔽</span> to descend deeper.
         </p>
         <p className="text-muted-foreground leading-relaxed">
@@ -494,6 +497,12 @@ export default function HowToPlay({
 
       {/* Classes */}
       <Section title="Classes">
+        <p className="text-xs text-muted-foreground">
+          Every class except The Void takes emoji-less Void damage while no soul sits in the hotbar.
+          The Void 👤 inverts that: filled hotbar slots 1–9 deal <em>floor × filled + filled</em> damage each turn.
+          Bank and equipment are safe. Consume a soul emoji from the hotbar ten times to keep its bag passive as a faded ghost.
+          One ghost acts on depths 1–4; each depth boss (floors 5, 10, 15…) lets one more act, up to nine. Extra ghosts wait in the Bank.
+        </p>
         <div className="space-y-3">
           {Object.entries(CHARACTER_CLASSES).map(([emoji, cls]) => (
             <div

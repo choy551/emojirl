@@ -18,6 +18,8 @@ interface BankPanelProps {
   onClose: () => void;
   onShowStatCard: (item: EmojiItem) => void;
   chefLessonCount?: number;
+  onBanishGhost?: (slot: number) => void;
+  onManifestGhost?: (emoji: string) => void;
 }
 
 export function BankPanel({
@@ -30,6 +32,8 @@ export function BankPanel({
   onConsume,
   onShowStatCard,
   chefLessonCount = 0,
+  onBanishGhost,
+  onManifestGhost,
 }: BankPanelProps) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,9 +66,10 @@ export function BankPanel({
                 key={i}
                 title={hItem ? `[${i + 1}] ${hItem.name}: ${hItem.description.replace(/ · Bag: [^·]+$/, '')}${getPassiveTooltipSuffix(hItem)}${hBankDupes > 0 ? ` · ${hBankDupes} more in Bank` : ''}` : `Empty slot ${i + 1}`}
                 className={`relative aspect-square rounded flex items-center justify-center text-sm border select-none
-                  ${hItem ? 'border-border/60 bg-black/30' : 'border-border/20 bg-black/10'}`}
+                  ${hItem?.isVoidGhost ? 'opacity-40 border-violet-400/40 bg-violet-950/20' : hItem ? 'border-border/60 bg-black/30' : 'border-border/20 bg-black/10'}`}
               >
                 {hItem ? hItem.emoji : <span className="text-[8px] text-muted-foreground/20">{i + 1}</span>}
+                {hItem?.isVoidGhost && <span className="absolute bottom-0 left-0.5 text-[7px] leading-none">👤</span>}
                 {hItem && !hKind && (hItem.stackCount ?? 0) > 1 && (
                   <span className="absolute bottom-0 right-0.5 text-[7px] text-emerald-400 font-bold leading-none">×{hItem.stackCount}</span>
                 )}
@@ -80,6 +85,40 @@ export function BankPanel({
           })}
         </div>
       </div>
+
+      {player.characterClass === '👤' && ((player.ghostBank?.length ?? 0) > 0 || (player.ghostHotbar ?? []).some(Boolean)) && (
+        <div className="mb-3">
+          <div className="text-xs text-muted-foreground/70 mb-1.5 font-medium">
+            Ghosts <span className="opacity-50">— loadout only, not items</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {(player.ghostHotbar ?? []).map((ghost, i) => ghost && (
+              <button
+                key={`ghost-hot-${i}`}
+                type="button"
+                onClick={() => onBanishGhost?.(i)}
+                title={`Banish ${ghost.emoji} to the ghost bank`}
+                className="opacity-40 px-1.5 py-1 rounded border border-violet-400/40 bg-violet-950/30 text-sm leading-none"
+              >
+                {ghost.emoji}
+                <span className="text-[9px] text-violet-200/80 ml-0.5">×{ghost.stacks} · {i + 1} · Banish</span>
+              </button>
+            ))}
+            {(player.ghostBank ?? []).map(ghost => (
+              <button
+                key={`ghost-bank-${ghost.emoji}`}
+                type="button"
+                onClick={() => onManifestGhost?.(ghost.emoji)}
+                title={`Manifest ${ghost.emoji} into an empty hotbar slot`}
+                className="px-1.5 py-1 rounded border border-border/50 bg-black/30 text-sm leading-none hover:border-violet-400/50"
+              >
+                {ghost.emoji}
+                <span className="text-[9px] text-muted-foreground ml-0.5">×{ghost.stacks} · Manifest</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="text-xs text-muted-foreground/70 mb-2 font-medium">
         Bank <span className="opacity-50">— overflow storage ({player.bank.filter(i => !i.isEquipment).length} items)</span>

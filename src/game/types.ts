@@ -124,6 +124,12 @@ export interface Equipment {
   accessory?: EmojiItem;
 }
 
+/** A remembered soul. Not an item — hotbar XOR with real loot, bank holds the rest. */
+export interface VoidGhost {
+  emoji: string;
+  stacks: number;
+}
+
 export interface Player {
   pos: Position;
   emoji: string;
@@ -134,6 +140,12 @@ export interface Player {
   bank: EmojiItem[];
   equipment: Equipment;
   trailblazerCooldown?: number;
+  /** Void 👤 only. Index = hotbar slot 0–8. A slot holds a ghost or a real item, never both. */
+  ghostHotbar?: (VoidGhost | null)[];
+  /** Unlocked ghosts that are not currently in the hotbar. Unlimited. */
+  ghostBank?: VoidGhost[];
+  /** Depth bosses cleared this run (D:5/10/15…). Mirrors GameState.voidBossesCleared. */
+  voidBossesCleared?: number;
 }
 
 export type ActiveKind = 'bomb' | 'gun' | 'boomerang' | 'rope' | 'freeze';
@@ -159,6 +171,10 @@ export interface EmojiItem {
   isCooked?: boolean;
   cookedBuff?: { stat: 'attack' | 'defense'; amount: number; turns: number };
   isMoneyBag?: boolean;
+  /** Synthetic hotbar cell for a Void ghost. Not stored in inventory. */
+  isVoidGhost?: boolean;
+  /** In the hotbar, but past Hollow Roster capacity — no bag passive this depth. */
+  isVoidGhostDormant?: boolean;
 }
 
 export interface PlacedBomb {
@@ -293,6 +309,10 @@ export interface GameState {
   bossrush?: BossrushState;
   /** Set when the player dives past D:27. Doubles pressure on each deeper floor. */
   deepDive?: boolean;
+  /** Depth bosses (floor % 5 === 0) killed this run. Drives Void ghost capacity. */
+  voidBossesCleared?: number;
+  /** Already logged that the hotbar holds more ghosts than the current depth allows. */
+  voidGhostOverCapLogged?: boolean;
 }
 
 export interface BossrushState {

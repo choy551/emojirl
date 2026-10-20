@@ -1,6 +1,8 @@
 import { Enemy, EmojiItem, GameState, Position, FloatingText, PlacedBomb, ActiveProjectile } from './types';
 import { chebyshev } from './geo';
-import { applyEquipmentAndPassives, addToBag, computeBagPassives } from './inventory';
+import { applyEquipmentAndPassives, addToPlayerBag, playerBagPassives, parkVoidOverflow, countVoidPressureSlots } from './inventory';
+import { creditVoidBoss, occupiedGhosts, voidClassTurnDamage, voidDamageFor, voidGhostCapacity, VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from './voidDamage';
+import { unlockVoidClass } from './voidMeta';
 import { stealOneSoulEmoji, applySoulThefts, stolenEmojiSummary } from './monkeyLoot';
 import { resolveProjectileFlight } from './projectiles';
 import { withVisibility, visionRadiusFor } from './vision';
@@ -37,6 +39,8 @@ export interface EnemyTurnResult {
   playerXpGain?: number;
   companionKillTally?: number;
   companionKillsThisTurn?: number;
+  /** Depth bosses (floor % 5 === 0) killed during this enemy phase. */
+  depthBossKills?: number;
 }
 
 export function runEnemyTurns(state: GameState, skipId?: string, sleeping = false): EnemyTurnResult {
@@ -46,10 +50,11 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   // Player's true sight range (class/level + bag LOS passives). Ranged enemies may
   // only attack while the player can actually see them — i.e. within this radius
   // with clear line of sight — so archers can't snipe from the unseen fog.
-  const playerVisionRadius = Math.max(1, visionRadiusFor(player.characterClass, player.stats.level) + computeBagPassives(player.inventory).losBonus);
+  const playerVisionRadius = Math.max(1, visionRadiusFor(player.characterClass, player.stats.level) + playerBagPassives(player).losBonus);
   const newEnemies = [...state.enemies];
   let playerHp = player.stats.hp;
   let playerDied = false;
+  let depthBossKills = 0;
   let killer: { name: string; emoji: string } | undefined;
   const newLogs: Array<{ id: string; text: string; turn: number }> = [];
   const newFloatingTexts: FloatingText[] = [];
@@ -175,7 +180,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     ([dx, dy]) => map[player.pos.y + dy]?.[player.pos.x + dx]?.type === 'water'
   );
 
-  const _freezePassives = computeBagPassives(state.player.inventory);
+  const _freezePassives = playerBagPassives(state.player);
   if (_freezePassives.freezeAura) {
     for (let i = 0; i < newEnemies.length; i++) {
       if (!newEnemies[i].isSpectator && chebyshev(newEnemies[i].pos, state.player.pos) <= 1 && (newEnemies[i].slowedTurns ?? 0) < 2) {
@@ -191,13 +196,28 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     playerHp = Math.min(player.stats.maxHp, playerHp + 1);
     log('💊 You regenerate! (+1 HP)');
   }
-  const _soulCount = player.inventory.filter(i => !i.consumed && !i.isEquipment && i.bagPassive && !i.activeKind && i.healAmount == null && i.ammoAmount == null).length;
-  if (_soulCount === 0) {
-    const _emojilessDmg = state.currentFloor;
-    playerHp -= _emojilessDmg;
-    log(`💀 You are emoji-less! Taking ${_emojilessDmg} dmg/turn (floor ${state.currentFloor}). Find an emoji or die!`);
-    _flashSignals.emojilessFlashPending = true;
-    if (playerHp <= 0) { playerDied = true; killer = { name: 'the void', emoji: '💀' }; }
+  if (player.characterClass === '👤') {
+    const filled = countVoidPressureSlots(player);
+    if (filled > 0) {
+      const dmg = voidClassTurnDamage(filled, state.currentFloor);
+      playerHp -= dmg;
+      log(`👤 Void pressure (${filled} held) — ${dmg} dmg…`);
+      _flashSignals.emojilessFlashPending = true;
+      if (playerHp <= 0) {
+        playerDied = true;
+        if (!killer) killer = { name: 'the void', emoji: '👤' };
+        log(VOID_DEATH_TEXT);
+      }
+    }
+  } else {
+    const _soulCount = player.inventory.filter(i => !i.consumed && !i.isEquipment && !i.isVoidGhost && i.bagPassive && !i.activeKind && i.healAmount == null && i.ammoAmount == null).length;
+    if (_soulCount === 0) {
+      const _emojilessDmg = voidDamageFor(1, state.currentFloor);
+      playerHp -= _emojilessDmg;
+      log(`💀 You are emoji-less! Taking ${_emojilessDmg} dmg/turn (floor ${state.currentFloor}). Find an emoji or die!`);
+      _flashSignals.emojilessFlashPending = true;
+      if (playerHp <= 0) { playerDied = true; if (!killer) killer = { name: 'the void', emoji: '💀' }; }
+    }
   }
 
   for (let i = 0; i < newEnemies.length; i++) {
@@ -304,6 +324,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
               reclaimMonkeyLoot(companionTarget);
               newEnemies[ti] = { ...companionTarget, hp: 0 };
               markEnemyKilled(companionTarget.emoji);
+              if (companionTarget.isBoss && !companionTarget.isEcho && state.currentFloor % 5 === 0) depthBossKills++;
               const baseXp = companionKillXp(!!companionTarget.isBoss);
               const share = companionBountyShare(companionKillTally);
               playerXpGain += Math.round(baseXp * share);
@@ -425,7 +446,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     }
 
     const baseDetectionRadius = detectionRadius(enemy.speed);
-    const _bagPassivesDetect = computeBagPassives(state.player.inventory);
+    const _bagPassivesDetect = playerBagPassives(state.player);
     const isStealthy = (state.stealthMode && state.player.characterClass === '🥷') || _bagPassivesDetect.stealthBonus > 0;
     // When player lingers in the restaurant 3×3 safe zone, every mob on the map aggroes —
     // the smell of food and activity draws everything in. They lose track once the player leaves.
@@ -817,7 +838,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     }
   }
 
-  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn };
+  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn, depthBossKills };
 }
 
 export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): GameState {
@@ -832,7 +853,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     newInventory = applySoulThefts(newInventory, result.playerInventoryRemovals);
   }
   if (result.playerInventoryAdditions.length > 0) {
-    const added = addToBag(newInventory, newBank, ...result.playerInventoryAdditions);
+    const added = addToPlayerBag({ ...state.player, inventory: newInventory, bank: newBank }, ...result.playerInventoryAdditions);
     newInventory = added.inventory;
     newBank = added.bank;
   }
@@ -925,6 +946,34 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     next = {
       ...next,
       logs: [{ id: `bounty-refresh-${next.turn}`, text: COMPANION_BOUNTY_REFRESH_LOG, turn: next.turn }, ...next.logs].slice(0, 24),
+    };
+  }
+
+  next = { ...next, player: parkVoidOverflow(next.player) };
+  for (let i = 0; i < (result.depthBossKills ?? 0); i++) {
+    next = creditVoidBoss(next, { isBoss: true });
+  }
+  if (next.player.characterClass === '👤') {
+    const cap = voidGhostCapacity(next.currentFloor, next.voidBossesCleared ?? next.player.voidBossesCleared ?? 0);
+    const held = occupiedGhosts(next.player.ghostHotbar);
+    if (held > cap && !next.voidGhostOverCapLogged) {
+      next = {
+        ...next,
+        voidGhostOverCapLogged: true,
+        logs: [{
+          id: `void-overcap-${next.turn}`,
+          text: `👤 Only ${cap} ghost${cap === 1 ? '' : 's'} act on this depth. Extra ghosts linger without power.`,
+          turn: next.turn,
+        }, ...next.logs].slice(0, 24),
+      };
+    } else if (held <= cap && next.voidGhostOverCapLogged) {
+      next = { ...next, voidGhostOverCapLogged: false };
+    }
+  }
+  if (next.gameOver && next.killer?.name === 'the void' && unlockVoidClass()) {
+    next = {
+      ...next,
+      logs: [{ id: `void-unlock-${next.turn}`, text: VOID_UNLOCK_TEXT, turn: next.turn }, ...next.logs].slice(0, 24),
     };
   }
 

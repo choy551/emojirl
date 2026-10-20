@@ -4,6 +4,7 @@ import {
   slotShrineCost, rollSlotTier, resolveSlotPrize, grantSlotPrizeItems,
   SLOT_REEL_FACE, SlotPrize, SlotTier,
 } from '../game/gameHelpers';
+import { hotbarCapFor } from '../game/voidDamage';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
@@ -39,7 +40,7 @@ export function SlotShrineModal({ gameState, setGameState, addLog, onClose }: Sl
     const { prize, tier, floor } = job;
     setStateRef.current(prev => {
       if (!prev) return prev;
-      const placed = grantSlotPrizeItems(prev.player.inventory, prev.player.bank, prize.items, floor);
+      const placed = grantSlotPrizeItems(prev.player.inventory, prev.player.bank, prize.items, floor, hotbarCapFor(prev.player));
       return {
         ...prev,
         player: {

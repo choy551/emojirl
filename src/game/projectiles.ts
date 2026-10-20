@@ -1,5 +1,5 @@
 import { ActiveProjectile, Enemy, EmojiItem, FloatingText, Player, Position } from './types';
-import { applyEquipmentAndPassives, computeBagPassives } from './inventory';
+import { applyEquipmentAndPassives, playerBagPassives } from './inventory';
 import { stolenEmojiSummary } from './monkeyLoot';
 import { RANGED_BLOCKING_TILES } from './tiles';
 
@@ -75,7 +75,7 @@ export function resolveProjectileFlight(
   };
 
   const atk = applyEquipmentAndPassives(player).stats.attack;
-  const ignite = computeBagPassives(player.inventory).burningOnHit;
+  const ignite = playerBagPassives(player).burningOnHit;
   let enemies = [...enemiesIn];
   let playerDamage = 0;
   let playerDied = false;
