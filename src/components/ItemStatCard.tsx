@@ -3,16 +3,31 @@ import { isStackableBagPassive, getStackableBonusLabel, getStackableCumulativeLa
 import { soulHelpText } from '../game/emojis';
 import { RarityLabel } from './RarityLabel';
 import { foodHealLabel, foodHealDescription, cookedEatHeal } from '../game/economy';
+import { bagConsumeRefusal, canConsumeBagItem } from '../game/bagConsume';
 
 interface ItemStatCardProps {
   item: EmojiItem;
   onClose: () => void;
   chefLessonCount?: number;
   maxHp?: number;
+  /** Set when the mobile bag Items long-press opened this card. */
+  consumeSlot?: number | null;
+  onConsume?: (slot: number) => void;
+  onConsumeRefused?: (item: EmojiItem) => void;
 }
 
-export function ItemStatCard({ item: si, onClose, chefLessonCount = 0, maxHp = 0 }: ItemStatCardProps) {
+export function ItemStatCard({
+  item: si,
+  onClose,
+  chefLessonCount = 0,
+  maxHp = 0,
+  consumeSlot = null,
+  onConsume,
+  onConsumeRefused,
+}: ItemStatCardProps) {
   const help = soulHelpText(si);
+  const offerConsume = typeof consumeSlot === 'number';
+  const canConsume = offerConsume && canConsumeBagItem(si);
   const effect = (si as any).effect as Record<string, number | boolean> | undefined;
   const consumeLines: string[] = [];
   if (effect) {
@@ -138,6 +153,27 @@ export function ItemStatCard({ item: si, onClose, chefLessonCount = 0, maxHp = 0
           <div className="text-xs text-amber-400/80">Charges remaining: <span className="font-bold">×{si.charges}</span></div>
         )}
 
+        {offerConsume && (
+          <button
+            type="button"
+            data-testid="bag-item-consume"
+            aria-disabled={!canConsume}
+            title={canConsume ? `Consume ${si.emoji} ${si.name}` : bagConsumeRefusal(si)}
+            onClick={() => {
+              if (!canConsume || consumeSlot == null) {
+                onConsumeRefused?.(si);
+                return;
+              }
+              onConsume?.(consumeSlot);
+            }}
+            className={canConsume
+              ? 'w-full text-xs py-1.5 rounded-lg bg-primary/20 border border-primary/40 text-foreground font-semibold hover:bg-primary/30 transition-colors'
+              : 'w-full text-xs py-1.5 rounded-lg bg-black/20 border border-border/30 text-muted-foreground/40 cursor-not-allowed'}
+          >Consume</button>
+        )}
+        {offerConsume && !canConsume && (
+          <p className="text-[10px] text-center text-muted-foreground/60 leading-snug">{bagConsumeRefusal(si)}</p>
+        )}
         <button
           onClick={onClose}
           className="w-full text-xs py-1.5 rounded-lg bg-secondary/40 border border-border/50 text-muted-foreground hover:bg-secondary/60 transition-colors mt-1"
