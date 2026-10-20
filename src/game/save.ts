@@ -87,6 +87,16 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     blinkStrikeMarks:              rawStats.blinkStrikeMarks               as PlayerStats['blinkStrikeMarks'],
     blinkMeleeCdCharges:           rawStats.blinkMeleeCdCharges            as number | undefined,
     overhealDecayTick:             rawStats.overhealDecayTick             as number | undefined,
+    backdashCooldown:              rawStats.backdashCooldown              as number | undefined,
+    lungeCooldown:                 rawStats.lungeCooldown                 as number | undefined,
+    executeCooldown:               rawStats.executeCooldown               as number | undefined,
+    guardianStanceTurns:           rawStats.guardianStanceTurns           as number | undefined,
+    guardianStanceCooldown:        rawStats.guardianStanceCooldown        as number | undefined,
+    flourishCount:                 rawStats.flourishCount                 as number | undefined,
+    riposteReady:                  rawStats.riposteReady                  as boolean | undefined,
+    contractKills:                 rawStats.contractKills                 as number | undefined,
+    contractGoal:                  rawStats.contractGoal                  as number | undefined,
+    contractDone:                  rawStats.contractDone                  as boolean | undefined,
   };
 
   // ── Player ────────────────────────────────────────────────────────────────

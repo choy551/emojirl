@@ -6,6 +6,7 @@ import { moodMax } from './progression';
 import { pressureForRun } from './progression';
 import { _flashSignals, PEACEMAKERS_LOG, tryDualGunsFanfare } from './flashSignals';
 import { FINALE_FLOOR, buildFinaleFloor, waveBeginLog } from './finale';
+import { isArcaneCaster, startFloorContract } from './prestige';
 
 function stampDualGunsFanfare(state: GameState, prevEquipment: Player['equipment'], addLog: (text: string) => void): GameState {
   const fan = tryDualGunsFanfare({
@@ -121,7 +122,10 @@ export function descendFloor(state: GameState, addLog: (text: string) => void): 
     }
   }
   newPlayer.stats.moodValue = Math.min(moodMax(cls), newPlayer.stats.moodValue + 15);
-  if (cls === '🧙') newPlayer.stats.mana = newPlayer.stats.maxMana ?? 4;
+  if (isArcaneCaster(cls)) newPlayer.stats.mana = newPlayer.stats.maxMana ?? 4;
+  const contract = startFloorContract(newPlayer);
+  newPlayer = contract.player;
+  if (contract.log) addLog(contract.log);
   newState.stealthMode = false;
   newState.ninjaFreeMoves = 0;
   // Marks are floor-local. Leaving them would credit the next floor's reused ids.

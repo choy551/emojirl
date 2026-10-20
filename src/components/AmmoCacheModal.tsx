@@ -48,7 +48,7 @@ export function AmmoCacheModal({ gameState, setGameState, ammoCacheItems, setAmm
         <div className="flex flex-col gap-1.5">
           {ammoCacheItems.length === 0 && (
             <div className="text-xs text-muted-foreground text-center py-4">
-              {gameState.player.characterClass === '🤠' || gameState.player.characterClass === '🧝'
+              {['🤠', '🧝', '🕴️', '💂'].includes(gameState.player.characterClass)
                 ? 'Sold out!'
                 : 'Nothing here for your class.'}
             </div>

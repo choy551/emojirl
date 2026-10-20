@@ -85,6 +85,16 @@ export interface PlayerStats {
   /** Remaining melee attacks that reduce Blink cooldown (Flowing Strikes). */
   blinkMeleeCdCharges?: number;
   overhealDecayTick?: number;
+  backdashCooldown?: number;
+  lungeCooldown?: number;
+  executeCooldown?: number;
+  guardianStanceTurns?: number;
+  guardianStanceCooldown?: number;
+  flourishCount?: number;
+  riposteReady?: boolean;
+  contractKills?: number;
+  contractGoal?: number;
+  contractDone?: boolean;
 }
 
 export type EquipSlot = 'body' | 'mainHand' | 'offHand' | 'accessory';
@@ -187,6 +197,8 @@ export interface EmojiItem {
   isEquipment?: boolean;
   equipSlots?: EquipSlot[];
   weaponKind?: WeaponKind;
+  /** Musket/rifle guns are equippable only by Royal Guard and Levitating Hitman. */
+  gunTier?: 'musket';
   armorKind?: ArmorKind;
   specialAmmoKind?: SpecialAmmoKind;
   equipBonus?: EquipBonus;

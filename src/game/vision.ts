@@ -1,11 +1,12 @@
 import { GameState, MapGrid, Position } from './types';
 import { playerBagPassives } from './inventory';
+import { isTrailblazer } from './prestige';
 import { markEnemySeen } from './discoveries';
 
 export const VISION_RADIUS = 4;
 
 export function visionRadiusFor(characterClass: string, level: number): number {
-  return VISION_RADIUS + (characterClass === '🧝' ? Math.floor((level - 1) / 3) : 0);
+  return VISION_RADIUS + (isTrailblazer(characterClass) ? Math.floor((level - 1) / 3) : 0);
 }
 
 export function eagleEyeRange(level: number): number {

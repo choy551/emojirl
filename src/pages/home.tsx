@@ -2,20 +2,19 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CHARACTER_CLASSES, getClassDef } from "../game/classes";
+import { getClassDef } from "../game/classes";
 import { getScores, clearScores, LeaderboardEntry } from "../game/leaderboard";
 import { hasSave, clearSave } from "../game/save";
-import { acknowledgeVoidUnlock, isVoidUnlocked, voidUnlockPending } from "../game/voidMeta";
+import { acknowledgeVoidUnlock, voidUnlockPending } from "../game/voidMeta";
 import { VOID_UNLOCK_TEXT } from "../game/voidDamage";
-
-const BASE_VESSELS = ["🧙", "🥷", "🧝", "🤠"] as const;
+import { classSelectEntries, isClassUnlocked, resolveVesselChoice } from "../game/classSelect";
+import { WIZARD } from "../game/prestigeConstants";
 const VESSEL_KEY = "emojirl_vessel";
 const ANNOUNCE_DISMISS_KEY = "emojirl_announce_dismissed_2026-09-10";
 
 function loadVessel(): string {
-  const saved = localStorage.getItem(VESSEL_KEY) ?? "🧙";
-  if (saved === "👤" && !isVoidUnlocked()) return "🧙";
-  return saved;
+  const saved = localStorage.getItem(VESSEL_KEY) ?? WIZARD;
+  return isClassUnlocked(saved) ? saved : WIZARD;
 }
 
 function loadAnnounceDismissed(): boolean {
@@ -33,7 +32,8 @@ export default function Home() {
   const [savedRun, setSavedRun] = useState<boolean>(hasSave);
   const [announceDismissed, setAnnounceDismissed] = useState(loadAnnounceDismissed);
   const [voidBanner, setVoidBanner] = useState(voidUnlockPending);
-  const vessels = isVoidUnlocked() ? [...BASE_VESSELS, "👤"] : [...BASE_VESSELS];
+  const [pinnedHint, setPinnedHint] = useState<string | null>(null);
+  const vessels = classSelectEntries();
 
   useEffect(() => {
     if (voidBanner) acknowledgeVoidUnlock();
@@ -45,8 +45,14 @@ export default function Home() {
   }
 
   function select(v: string) {
-    setSelected(v);
-    localStorage.setItem(VESSEL_KEY, v);
+    const choice = resolveVesselChoice(selected, v);
+    if (choice.showHint) {
+      setPinnedHint(prev => prev === v ? null : v);
+      return;
+    }
+    setPinnedHint(null);
+    setSelected(choice.selected);
+    localStorage.setItem(VESSEL_KEY, choice.selected);
   }
 
   function handleClearScores() {
@@ -135,21 +141,48 @@ export default function Home() {
         <div className="pt-8 border-t border-border/50 text-left space-y-4">
           <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Choose your vessel</h2>
 
-          <div className="flex justify-center gap-4 text-4xl">
-            {vessels.map((v) => (
-              <button
-                key={v}
-                onClick={() => select(v)}
-                className={`p-2 rounded-lg transition-all cursor-pointer ${
-                  selected === v
-                    ? "border-2 border-primary bg-primary/10 scale-110 shadow-[0_0_12px_rgba(168,85,247,0.4)]"
-                    : "border border-border opacity-50 hover:opacity-80 hover:border-primary/50"
-                }`}
-                aria-label={`Select ${CHARACTER_CLASSES[v]?.name ?? v}`}
-              >
-                {v}
-              </button>
-            ))}
+          <div className="flex flex-wrap justify-center gap-2 text-3xl">
+            {vessels.map((v) => {
+              const hintOpen = !v.unlocked && pinnedHint === v.emoji;
+              return (
+                <button
+                  key={v.emoji}
+                  type="button"
+                  onClick={() => select(v.emoji)}
+                  aria-disabled={!v.unlocked}
+                  aria-label={v.unlocked ? `Select ${v.name}` : `${v.name} locked`}
+                  className={`group relative p-2 rounded-lg transition-all ${
+                    !v.unlocked
+                      ? "border border-border grayscale opacity-40 cursor-help"
+                      : selected === v.emoji
+                        ? "border-2 border-primary bg-primary/10 scale-110 shadow-[0_0_12px_rgba(168,85,247,0.4)] cursor-pointer"
+                        : "border border-border opacity-50 hover:opacity-80 hover:border-primary/50 cursor-pointer"
+                  }`}
+                >
+                  {v.emoji}
+                  {!v.unlocked && v.hint && (
+                    <span
+                      role="tooltip"
+                      className={`absolute left-1/2 top-full z-20 mt-2 w-44 -translate-x-1/2 rounded-md border border-border bg-popover px-2 py-1.5 text-left text-[11px] font-normal normal-case leading-snug text-popover-foreground shadow-lg ${
+                        hintOpen ? "block" : "hidden group-hover:block"
+                      }`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {v.hint}
+                      {hintOpen && (
+                        <button
+                          type="button"
+                          className="mt-1 block text-[10px] font-semibold text-primary"
+                          onClick={(e) => { e.stopPropagation(); setPinnedHint(null); }}
+                        >
+                          Dismiss
+                        </button>
+                      )}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           <div className="bg-card border border-border rounded-xl p-4 space-y-3 text-left animate-in fade-in duration-200">

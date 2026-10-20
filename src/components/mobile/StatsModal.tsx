@@ -1,5 +1,6 @@
 import { Player, GameState, BagPassiveSummary } from '../../game/types';
 import { applyEquipmentAndPassives, computeNinjaEvasion, pressureForRun } from '../../game/gameHelpers';
+import { fencerEvasion, isArcaneCaster, isFencer } from '../../game/prestige';
 import { getCowboyUnarmedBonus } from '../../game/combat';
 import { nullMomentumPercent } from '../../game/voidDamage';
 import { blinkStrikeDamagePhrase, blinkTalentById, blinkTalentProgress, critStat } from '../../game/blinkStrike';
@@ -34,7 +35,11 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
   const ironFist = (dualGuns && player.ammo <= 0) || unarmed ? getCowboyUnarmedBonus(player.stats.level) : 0;
   const atk = eff.stats.attack + ironFist;
   const crit = critStat(eff.stats.luck);
-  const dodge = player.characterClass === '🥷' ? computeNinjaEvasion(eff) : Math.min(50, eff.stats.evasion ?? 0);
+  const dodge = player.characterClass === '🥷'
+    ? computeNinjaEvasion(eff)
+    : isFencer(player.characterClass)
+      ? fencerEvasion(eff.stats.hp, eff.stats.maxHp, eff.stats.evasion ?? 0)
+      : Math.min(50, eff.stats.evasion ?? 0);
   const pressure = pressureForRun(currentFloor, gameState.deepDive);
   const voidDr = player.characterClass === '👤' ? nullMomentumPercent(player.stats.level) : 0;
   const p = bagPassiveSummary;
@@ -81,7 +86,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
               <div className="h-full rounded-full transition-all" style={{ width: `${hpPct}%`, backgroundColor: hpColor }} />
             </div>
           </div>
-          {player.characterClass === '🧙' && (
+          {isArcaneCaster(player.characterClass) && (
             <div>
               <div className="flex justify-between text-[11px] mb-0.5">
                 <span className="font-bold text-violet-400">🔵 MP</span>

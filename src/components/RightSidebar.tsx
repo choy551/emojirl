@@ -223,18 +223,18 @@ export function RightSidebar({
       </div>
 
       {/* Ammo Counter */}
-      {(player.characterClass === '🧝' || player.characterClass === '🤠') && (
+      {(player.characterClass === '🧝' || player.characterClass === '🤠' || player.characterClass === '💂' || player.characterClass === '🕴️') && (
         <div>
           <div className="flex justify-between items-baseline mb-1.5">
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Ammo</h3>
           </div>
           <div className="flex gap-1.5">
             <div
-              title={player.characterClass === '🤠' ? `${player.ammo} bullets` : `${player.ammo} arrows`}
+              title={`${player.ammo} ${player.characterClass === '🤠' || player.characterClass === '🕴️' ? 'bullets' : player.characterClass === '💂' ? 'ammo' : 'arrows'}`}
               className={`relative w-10 h-10 rounded border flex items-center justify-center text-xl shadow-sm
                 ${player.ammo > 0 ? 'bg-amber-950/30 border-amber-700/40' : 'bg-red-950/30 border-red-700/50'}`}
             >
-              <span>{player.characterClass === '🤠' ? '🪙' : '🏹'}</span>
+              <span>{player.characterClass === '🤠' || player.characterClass === '🕴️' ? '🪙' : player.characterClass === '💂' ? '🎯' : '🏹'}</span>
               <span className={`absolute bottom-0 right-0.5 text-[9px] font-bold leading-none ${player.ammo > 0 ? 'text-amber-300' : 'text-red-400'}`}>
                 ×{player.ammo}
               </span>
@@ -244,7 +244,7 @@ export function RightSidebar({
                 {player.ammo > 0 ? player.ammo : 'Empty'}
               </span>
               <span className="text-[9px] text-muted-foreground/50 leading-tight">
-                {player.characterClass === '🤠' ? 'bullets' : 'arrows'}
+                {player.characterClass === '🤠' || player.characterClass === '🕴️' ? 'bullets' : player.characterClass === '💂' ? 'ammo' : 'arrows'}
               </span>
             </div>
           </div>

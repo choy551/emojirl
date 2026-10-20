@@ -4,6 +4,11 @@ import { resolveCombat, getCowboyUnarmedBonus, isHostileCombatTarget } from '../
 import { getFoodHealItems } from '../game/emojis';
 import { rollKillDrop } from '../game/dropTable';
 import { applyFlowingStrike } from '../game/blinkStrike';
+import { resolveGenieFireball } from '../game/prestigeCast';
+import {
+  classFlies, fencerOutgoingMult, gunshotPlan, isArcaneCaster, isFencer,
+  isGenie, isHitman, isRoyalGuard, notePrestigeKill, pierceDamage, tickPrestigeTimers, tileBeyond,
+} from '../game/prestige';
 import { getMood } from '../game/moods';
 import { markEnemySeen, markEmojiSeen, markEnemyKilled } from '../game/discoveries';
 import {
@@ -86,11 +91,11 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     const _outerState = gameStateRef.current;
     if (_outerState && !_outerState.gameOver) {
       const _cls = _outerState.player.characterClass;
-      if (_cls === '🧙' && wizardTacticsRef.current.mode === 'holdfire' && _outerState.turn - blinkTurnRef.current >= BLINK_ACTIVE) {
+      if (isArcaneCaster(_cls) && wizardTacticsRef.current.mode === 'holdfire' && _outerState.turn - blinkTurnRef.current >= BLINK_ACTIVE) {
         const _reset = { mode: 'nearest' as const, manualTargetId: null };
         wizardTacticsRef.current = _reset;
         setWizardTactics(_reset);
-        addLog('✨ Blink faded — Arcane Barrage resumes');
+        addLog(isGenie(_cls) ? '✨ Blink faded — Fireball resumes' : '✨ Blink faded — Arcane Barrage resumes');
       }
       if (_cls === '🧝' && rangerModeRef.current === 'flee' && _outerState.turn - trailblazeTurnRef.current >= BLINK_ACTIVE) {
         rangerModeRef.current = 'ranged';
@@ -100,13 +105,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
       const from = _outerState.player.pos;
       const cls = _outerState.player.characterClass;
-      const cowboyDualGuns = cls === '🤠'
-        && _outerState.player.equipment.mainHand?.weaponKind === 'gun'
-        && _outerState.player.equipment.offHand?.weaponKind === 'gun'
-        && (_outerState.player.ammo ?? 0) >= 2;
+      const previewShot = gunshotPlan(_outerState.player);
       let cowboyWouldShoot = false;
-      if (cowboyDualGuns) {
-        for (let range = 2; range <= 4; range++) {
+      if (previewShot) {
+        for (let range = 2; range <= previewShot.range; range++) {
           const tx = from.x + dx * range;
           const ty = from.y + dy * range;
           const enemy = _outerState.enemies.find(e => e.pos.x === tx && e.pos.y === ty);
@@ -120,12 +122,12 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
       }
       let walkDest = { x: from.x + dx, y: from.y + dy };
-      const isBlinkActive = cls === '🧙' && wizardTacticsRef.current.mode === 'holdfire' && (_outerState.turn - blinkTurnRef.current) < BLINK_ACTIVE;
+      const isBlinkActive = isArcaneCaster(cls) && wizardTacticsRef.current.mode === 'holdfire' && (_outerState.turn - blinkTurnRef.current) < BLINK_ACTIVE;
       if (isBlinkActive) {
         const pos2 = { x: from.x + 2 * dx, y: from.y + 2 * dy };
         const destTile = _outerState.map[pos2.y]?.[pos2.x];
-        const canSwim = playerBagPassives(_outerState.player).canSwim;
-        if (destTile && (PLAYER_PASSABLE_TILES.has(destTile.type) || destTile.type === 'door-closed' || (destTile.type === 'water' && canSwim))) {
+        const canSwim = playerBagPassives(_outerState.player).canSwim || classFlies(cls);
+        if (destTile && (PLAYER_PASSABLE_TILES.has(destTile.type) || destTile.type === 'door-closed' || (destTile.type === 'water' && canSwim) || (destTile.type === 'lava' && classFlies(cls)))) {
           walkDest = pos2;
         }
       }
@@ -134,6 +136,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       const occupant = _outerState.enemies.some(e => e.pos.x === walkDest.x && e.pos.y === walkDest.y);
       if (
         !cowboyWouldShoot &&
+        !classFlies(cls) &&
         shouldConfirmLavaStep(fromType, destType) &&
         !occupant &&
         !lavaStepConfirmedRef.current
@@ -151,8 +154,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       const cls = player.characterClass;
 
       const cowboyDualGuns = cls === '🤠' && player.equipment.mainHand?.weaponKind === 'gun' && player.equipment.offHand?.weaponKind === 'gun';
-      if (cowboyDualGuns && player.ammo >= 2) {
-        for (let range = 2; range <= 4; range++) {
+      const shotPlan = gunshotPlan(player);
+      if (shotPlan) {
+        for (let range = 2; range <= shotPlan.range; range++) {
           const tx = player.pos.x + dx * range;
           const ty = player.pos.y + dy * range;
           const enemyIdx = prev.enemies.findIndex(e => e.pos.x === tx && e.pos.y === ty);
@@ -163,12 +167,12 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (enemy.tag === 'Friendly') continue;
           if (enemy.tag === 'Neutral' && !enemy.engaged) continue;
           markEnemySeen(enemy.emoji);
-          const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, true);
+          const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, cls === '🤠');
           const effectiveCowboy = applyEquipmentAndPassives(player);
           const _cowboyPassives = playerBagPassives(prev.player);
-          const cResult = resolveCombat(effectiveCowboy, enemy, addLog, { mood, cowboyMoodValue: prev.player.stats.moodValue, advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true });
+          const cResult = resolveCombat(effectiveCowboy, enemy, addLog, { mood, cowboyMoodValue: cls === '🤠' ? prev.player.stats.moodValue : undefined, advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true, damageMult: shotPlan.damageMult });
           if (cResult.fled) { const midState = { ...prev, turn: prev.turn + 1 }; return applyEnemyTurns(midState, runEnemyTurns(midState)); }
-          addLog(`🤠 Dual guns — BANG BANG!`);
+          addLog(shotPlan.label);
           const cFloats: FloatingText[] = [];
           const cDmg = enemy.hp - cResult.enemyHp;
           if (cDmg > 0) cFloats.push({ id: `hit-e-cg-${enemy.id}-${prev.turn}`, pos: { ...enemy.pos }, text: `-${cDmg}`, color: '#fbbf24', life: 2 });
@@ -176,13 +180,18 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           for (let n = 1; n <= range; n++) _cBeam.push({ x: player.pos.x + dx * n, y: player.pos.y + dy * n });
           const cBeam = { positions: _cBeam, color: '#fbbf24' };
           let cEnemies = [...prev.enemies];
-          let cPlayer: Player = { ...player, ammo: player.ammo - 2, stats: { ...player.stats, hp: cResult.playerHp } };
+          let cPlayer: Player = { ...player, ammo: player.ammo - shotPlan.ammoCost, stats: { ...player.stats, hp: cResult.playerHp } };
           let cSkip: string | undefined;
           let cKillCounts = { ...prev.killCounts };
           if (cResult.enemyDied) {
             markEnemyKilled(enemy.emoji);
             cKillCounts = { ...cKillCounts, [enemy.emoji]: (cKillCounts[enemy.emoji] ?? 0) + 1 };
             cPlayer = applyMonkeyDropOnKill(enemy, cPlayer);
+            {
+              const paid = notePrestigeKill(cPlayer, prev.currentFloor);
+              cPlayer = paid.player;
+              paid.logs.forEach(addLog);
+            }
             cEnemies.splice(enemyIdx, 1);
             cPlayer.stats.xp = cPlayer.stats.xp + (enemy.isBoss ? 25 : 5);
             cPlayer.stats.moodValue = Math.min(moodMax(cls), cPlayer.stats.moodValue + 10);
@@ -212,7 +221,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       }
 
       const voidRanged = cls === '👤' && voidAttackModeRef.current === 'ranger';
-      if ((cls === '🧝' && rangerModeRef.current === 'ranged') || voidRanged) {
+      if (((cls === '🧝' || isRoyalGuard(cls)) && rangerModeRef.current === 'ranged') || voidRanged) {
         for (let range = 2; range <= eagleEyeRange(player.stats.level); range++) {
           const tx = player.pos.x + dx * range;
           const ty = player.pos.y + dy * range;
@@ -231,7 +240,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, player.characterClass === '🤠');
           const effectiveRanger = applyEquipmentAndPassives(player);
           const _rangerPassives = playerBagPassives(prev.player);
-          const combatResult = resolveCombat(effectiveRanger, enemy, addLog, { mood, cowboyMoodValue: player.characterClass === '🤠' ? prev.player.stats.moodValue : undefined, advantage: _rangerPassives.advantageDice, execBlow: _rangerPassives.execBlow, trueAim: _rangerPassives.trueAim, shieldWall: _rangerPassives.shieldWall, firstShot: !enemy.engaged });
+          const combatResult = resolveCombat(effectiveRanger, enemy, addLog, { mood, cowboyMoodValue: player.characterClass === '🤠' ? prev.player.stats.moodValue : undefined, advantage: _rangerPassives.advantageDice, execBlow: _rangerPassives.execBlow, trueAim: _rangerPassives.trueAim, shieldWall: _rangerPassives.shieldWall, firstShot: (cls === '🧝' || voidRanged) && !enemy.engaged, isRanged: true });
 
           const offHandAmmo = player.equipment.offHand?.specialAmmoKind;
           let specialAmmoEffect: Partial<Enemy> = {};
@@ -279,10 +288,31 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
           let skipFightId: string | undefined;
           let rangerKillCounts = { ...prev.killCounts };
+          const applyShotPierce = () => {
+            if (!isRoyalGuard(cls) || rangedDmgToEnemy <= 0) return;
+            const beyond = tileBeyond(player.pos, enemy.pos);
+            const victim = newEnemies.find(e => e.hp > 0 && e.pos.x === beyond.x && e.pos.y === beyond.y && isHostileCombatTarget(e));
+            if (!victim) return;
+            const pd = pierceDamage(rangedDmgToEnemy);
+            addLog(`💂 Piercing shot hits ${victim.emoji} for ${pd}.`);
+            if (victim.hp - pd <= 0) {
+              markEnemyKilled(victim.emoji);
+              rangerKillCounts = { ...rangerKillCounts, [victim.emoji]: (rangerKillCounts[victim.emoji] ?? 0) + 1 };
+              newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, xp: newPlayer.stats.xp + (victim.isBoss ? 25 : 5) } };
+              newEnemies = newEnemies.filter(e => e.id !== victim.id);
+            } else {
+              newEnemies = newEnemies.map(e => e.id === victim.id ? { ...e, hp: e.hp - pd, engaged: true } : e);
+            }
+          };
           if (combatResult.enemyDied) {
             markEnemyKilled(enemy.emoji);
             rangerKillCounts = { ...rangerKillCounts, [enemy.emoji]: (rangerKillCounts[enemy.emoji] ?? 0) + 1 };
             newPlayer = applyMonkeyDropOnKill(enemy, newPlayer);
+            {
+              const paid = notePrestigeKill(newPlayer, prev.currentFloor);
+              newPlayer = paid.player;
+              paid.logs.forEach(addLog);
+            }
             newEnemies.splice(enemyIdx, 1);
             const xpGain = enemy.isBoss ? 25 : 5;
             const newXP = newPlayer.stats.xp + xpGain;
@@ -305,6 +335,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             });
             if (drop) {
               const newItem = { ...drop, id: `drop-${Math.random()}`, consumed: false, pos: enemy.pos };
+              applyShotPierce();
               let midState: GameState = { ...prev, killCounts: rangerKillCounts, player: newPlayer, enemies: newEnemies, items: [...prev.items, newItem], turn: prev.turn + 1, floatingTexts: rangedBaseFloats, pendingBeam: rangerBeam, difficultyTier: enemy.isBoss ? (prev.difficultyTier ?? 0) + 1 : (prev.difficultyTier ?? 0) };
               if (enemy.isBoss) midState = creditVoidBoss(midState, enemy);
               return applyEnemyTurns(midState, runEnemyTurns(midState));
@@ -314,6 +345,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             skipFightId = enemy.id;
           }
 
+          applyShotPierce();
           if (combatResult.playerDied) return { ...prev, killCounts: rangerKillCounts, player: newPlayer, enemies: newEnemies, floatingTexts: rangedBaseFloats, gameOver: true, killer: { name: enemy.name, emoji: enemy.emoji } };
           let midState: GameState = { ...prev, killCounts: rangerKillCounts, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, floatingTexts: rangedBaseFloats, pendingBeam: rangerBeam };
           if (combatResult.enemyDied && enemy.isBoss) midState = creditVoidBoss(midState, enemy);
@@ -324,13 +356,13 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       let newPos = { x: player.pos.x + dx, y: player.pos.y + dy };
 
       // ── Wizard Blink: teleport 2 tiles, ignoring intermediate tile ──────────
-      const isBlinkActive = cls === '🧙' && wizardTacticsRef.current.mode === 'holdfire' && (prev.turn - blinkTurnRef.current) < BLINK_ACTIVE;
+      const isBlinkActive = isArcaneCaster(cls) && wizardTacticsRef.current.mode === 'holdfire' && (prev.turn - blinkTurnRef.current) < BLINK_ACTIVE;
       if (isBlinkActive) {
         const pos2 = { x: player.pos.x + 2 * dx, y: player.pos.y + 2 * dy };
         if (pos2.y >= 0 && pos2.y < prev.map.length && pos2.x >= 0 && pos2.x < prev.map[0].length) {
           const destTile = prev.map[pos2.y][pos2.x];
-          const _canSwimBlink = playerBagPassives(prev.player).canSwim;
-          const destPassable = PLAYER_PASSABLE_TILES.has(destTile.type) || destTile.type === 'door-closed' || (destTile.type === 'water' && _canSwimBlink);
+          const _canSwimBlink = playerBagPassives(prev.player).canSwim || classFlies(cls);
+          const destPassable = PLAYER_PASSABLE_TILES.has(destTile.type) || destTile.type === 'door-closed' || (destTile.type === 'water' && _canSwimBlink) || (destTile.type === 'lava' && classFlies(cls));
           if (destPassable) newPos = pos2;
         }
       }
@@ -358,7 +390,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       if (tile.type === 'lava') {
         // Walkable but deadly — damage is applied in tickVolcanoAndLava at end of turn.
       } else if (tile.type === 'water') {
-        const canSwim = playerBagPassives(prev.player).canSwim;
+        const canSwim = playerBagPassives(prev.player).canSwim || classFlies(cls);
         if (!canSwim) {
           const hasEnemyThere = prev.enemies.some(e => e.pos.x === newPos.x && e.pos.y === newPos.y);
           if (hasEnemyThere) {
@@ -423,7 +455,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const tile2 = prev.map[pos2.y][pos2.x];
           const noEnemyAt2 = !prev.enemies.some(e => e.pos.x === pos2.x && e.pos.y === pos2.y);
           const tile2Passable = (PLAYER_PASSABLE_TILES.has(tile2.type) && tile2.type !== 'door-closed')
-            || (tile2.type === 'water' && playerBagPassives(prev.player).canSwim);
+            || (tile2.type === 'water' && (playerBagPassives(prev.player).canSwim || classFlies(cls)));
           if (tile2Passable && noEnemyAt2) newPos = pos2;
         }
       }
@@ -517,6 +549,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, cls === '🤠');
         const weakMelee = cls === '🧝' && player.ammo <= 0;
         const wizardMelee = cls === '🧙';
+        const fencerSwing = isFencer(cls) ? fencerOutgoingMult(player.stats) : null;
         const holdFire = isBlinkActive;
         const rangerFlee = isTrailblazeActive;
         const hasDualBlades = cls === '🥷' && player.equipment.mainHand?.weaponKind === 'blade' && player.equipment.offHand?.weaponKind === 'blade';
@@ -533,7 +566,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const ninjaEvaCombatPlayer = cls === '🥷'
           ? { ...combatPlayer, stats: { ...combatPlayer.stats, evasion: computeNinjaEvasion(combatPlayer) } }
           : combatPlayer;
-        const combatResult = resolveCombat(ninjaEvaCombatPlayer, enemy, addLog, { weakMelee, wizardMelee, pistolWhip: isPistolWhip, mood, cowboyMoodValue: cls === '🤠' ? prev.player.stats.moodValue : undefined, dualStrike: false, quadStrike: hasDualBlades, advantage: _meleePassives.advantageDice, execBlow: _meleePassives.execBlow, shieldWall: _meleePassives.shieldWall, floor: prev.currentFloor });
+        const combatResult = resolveCombat(ninjaEvaCombatPlayer, enemy, addLog, { weakMelee, wizardMelee, pistolWhip: isPistolWhip, mood, cowboyMoodValue: cls === '🤠' ? prev.player.stats.moodValue : undefined, dualStrike: false, quadStrike: hasDualBlades, advantage: _meleePassives.advantageDice, execBlow: _meleePassives.execBlow, shieldWall: _meleePassives.shieldWall, floor: prev.currentFloor, damageMult: fencerSwing?.mult ?? 1 });
 
         if (cls === '🤠' && !combatResult.fled) {
           const dmgDealt = enemy.hp - Math.max(0, combatResult.enemyHp);
@@ -558,6 +591,14 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const flow = applyFlowingStrike(newPlayer.stats);
           if (flow.log) addLog(flow.log);
           newPlayer = { ...newPlayer, stats: flow.stats };
+        }
+        if (fencerSwing && (combatResult.enemyDied || combatResult.enemyHp < enemy.hp)) {
+          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, flourishCount: fencerSwing.nextFlourish, riposteReady: false } };
+          if (fencerSwing.nextFlourish === 0 && (player.stats.flourishCount ?? 0) > 0) addLog(`🤺 Blade Flourish!`);
+        }
+        if (combatResult.parried) {
+          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, riposteReady: true } };
+          addLog(`🤺 Riposte ready.`);
         }
         if (combatResult.goldStolen && combatResult.goldStolen > 0) {
           newPlayer.stats.gold = Math.max(0, newPlayer.stats.gold - combatResult.goldStolen);
@@ -634,6 +675,11 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               addLog(`⚔️ Arcane Feedback — +${mpRestore} MP (${prevMana + mpRestore}/${maxMana})`);
             }
           }
+          {
+            const paid = notePrestigeKill(newPlayer, prev.currentFloor);
+            newPlayer = paid.player;
+            paid.logs.forEach(addLog);
+          }
 
           const drop = rollKillDrop({
             boss: !!enemy.isBoss,
@@ -652,6 +698,23 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (playerLanded && _meleePassives.burningOnHit) addLog(`🔥 ${enemy.emoji} is ignited!`);
           newEnemies[enemyIndex] = { ...enemy, hp: combatResult.enemyHp, engaged: true, ..._mBurning };
           skipFightId = enemy.id;
+        }
+        if (isRoyalGuard(cls) && playerLanded) {
+          const dealt = enemy.hp - Math.max(0, combatResult.enemyHp);
+          const beyond = tileBeyond(player.pos, enemy.pos);
+          const victim = newEnemies.find(e => e.hp > 0 && e.pos.x === beyond.x && e.pos.y === beyond.y && isHostileCombatTarget(e));
+          if (victim && dealt > 0) {
+            const pd = pierceDamage(dealt);
+            addLog(`💂 Piercing slash hits ${victim.emoji} for ${pd}.`);
+            if (victim.hp - pd <= 0) {
+              markEnemyKilled(victim.emoji);
+              updatedKillCounts[victim.emoji] = (updatedKillCounts[victim.emoji] ?? 0) + 1;
+              newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, xp: newPlayer.stats.xp + (victim.isBoss ? 25 : 5) } };
+              newEnemies = newEnemies.filter(e => e.id !== victim.id);
+            } else {
+              newEnemies = newEnemies.map(e => e.id === victim.id ? { ...e, hp: e.hp - pd, engaged: true } : e);
+            }
+          }
         }
         if (_meleePassives.lightningBolt && playerLanded) {
           const arcCandidates = newEnemies.filter(e2 =>
@@ -862,8 +925,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const shrineAmt = 2 + Math.floor((prev.currentFloor - 1) / 2);
         const oldMaxHp = newPlayer.stats.maxHp;
         const currentOverheal = Math.max(0, newPlayer.stats.hp - oldMaxHp);
-        if (cls === '🧙') {
-          // Wizard shrine gives +max MP and a plain +HP heal (no +max HP, no overheal).
+        if (isArcaneCaster(cls)) {
+          // Arcane shrine gives +max MP and a plain +HP heal (no +max HP, no overheal).
           // Heal up to maxHp, but never strip an existing overheal buffer (e.g. from the 🍺 bar).
           const healedHp = Math.max(newPlayer.stats.hp, Math.min(newPlayer.stats.maxHp, newPlayer.stats.hp + shrineAmt));
           const newMaxMana = (newPlayer.stats.maxMana ?? 4) + 1;
@@ -885,10 +948,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         );
         newState.map = newMap;
         newState.floatingTexts = [
-          { id: `shrine-${newPos.x}-${newPos.y}-${prev.turn}`, pos: { ...newPos }, text: cls === '🧙' ? `+${shrineAmt} HP / +1 MAX MP` : `+${shrineAmt} HP / +${shrineAmt} MAX`, color: '#34d399', life: 3 },
+          { id: `shrine-${newPos.x}-${newPos.y}-${prev.turn}`, pos: { ...newPos }, text: isArcaneCaster(cls) ? `+${shrineAmt} HP / +1 MAX MP` : `+${shrineAmt} HP / +${shrineAmt} MAX`, color: '#34d399', life: 3 },
           ...prev.floatingTexts,
         ];
-        addLog(cls === '🧙' ? `🛕 Arcane shrine — +${shrineAmt} HP & +1 max MP! Full mana restored!` : `🛕 The shrine pulses with light — +${shrineAmt} HP & +${shrineAmt} max HP!`);
+        addLog(isArcaneCaster(cls) ? `🛕 Arcane shrine — +${shrineAmt} HP & +1 max MP! Full mana restored!` : `🛕 The shrine pulses with light — +${shrineAmt} HP & +${shrineAmt} max HP!`);
       }
 
       if (tile.type === 'shop-item') {
@@ -899,7 +962,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             addLog(`🍺 Innkeeper: You're already overhealed — come back when it fades!`);
           } else if (newPlayer.stats.xp >= cost) {
             const overhealHp = Math.floor(newPlayer.stats.maxHp * 1.5);
-            const isWizard = newPlayer.characterClass === '🧙';
+            const isWizard = isArcaneCaster(newPlayer.characterClass);
             newPlayer.stats = {
               ...newPlayer.stats,
               hp: overhealHp,
@@ -926,8 +989,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           }
         } else if (tile.emoji === '📦') {
           const cls = newPlayer.characterClass;
-          if (cls === '🤠') addLog('📦 Ammo cache! Stock up on bullets before the boss.');
-          else if (cls === '🧝') addLog('📦 Supply crate! Grab some arrows before the boss.');
+          if (cls === '🤠' || isHitman(cls)) addLog('📦 Ammo cache! Stock up on bullets before the boss.');
+          else if (cls === '🧝' || isRoyalGuard(cls)) addLog('📦 Supply crate! Grab some arrows before the boss.');
           else addLog('📦 A supply crate — nothing here for you.');
         } else {
           addLog('🏪 Welcome to the shop! Buy & sell emojis for gold.');
@@ -944,6 +1007,33 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           return prev;
         }
         return descendFloor({ ...newState, player: newPlayer }, addLog);
+      }
+
+      if (isGenie(cls)) {
+        const volley = resolveGenieFireball({
+          player: newPlayer,
+          enemies: newState.enemies,
+          map: newState.map,
+          mode: wizardTacticsRef.current.mode,
+          manualTargetId: wizardTacticsRef.current.manualTargetId,
+          turn: newState.turn,
+          floor: prev.currentFloor,
+          addLog,
+        });
+        if (volley.cast) {
+          newPlayer = volley.player;
+          newState.enemies = volley.enemies;
+          newState.items = [...newState.items, ...volley.items];
+          newState.floatingTexts = [...volley.floats, ...(newState.floatingTexts ?? [])];
+          if (volley.beam) newState.pendingBeam = volley.beam;
+          const counts = { ...(newState.killCounts ?? {}) };
+          for (const em of volley.killCountAdds) counts[em] = (counts[em] ?? 0) + 1;
+          newState.killCounts = counts;
+          newState.difficultyTier = (newState.difficultyTier ?? 0) + volley.difficultyBump;
+          if (volley.playerDied) {
+            return { ...newState, player: newPlayer, turn: newState.turn + 1, gameOver: true, killer: volley.killer };
+          }
+        }
       }
 
       if (cls === '🧙' || (cls === '👤' && voidAttackModeRef.current === 'wizard')) {
@@ -1045,6 +1135,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       if (cls === '🥷' && (newPlayer.stats.blinkStrikeCooldown ?? 0) > 0) {
         newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, blinkStrikeCooldown: (newPlayer.stats.blinkStrikeCooldown ?? 1) - 1 } };
       }
+      newPlayer = tickPrestigeTimers(newPlayer);
 
       // Out-of-combat decay for Blink Strike instakill chain (resets 2/3 or 3/3 after 10 turns with no engaged enemies)
       newPlayer = tickBlinkChainOutOfCombat(newPlayer, prev.enemies.some(e => e.engaged), addLog);
@@ -1097,7 +1188,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       // Tick down active food buffs each turn
       Object.assign(stats, tickActiveBuffs(stats));
 
-      if (cls === '🧙') {
+      if (isArcaneCaster(cls)) {
         const seenByEnemy = prev.enemies.some(e =>
           isHostileCombatTarget(e) &&
           chebyshev(prev.player.pos, e.pos) <= VISION_RADIUS &&
@@ -1114,6 +1205,30 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       let waitKillCounts = prev.killCounts;
       const waitFloats: FloatingText[] = [];
       let waitBeam: { positions: Position[]; color: string } | undefined;
+
+      if (isGenie(cls)) {
+        const volley = resolveGenieFireball({
+          player: waitPlayer,
+          enemies: waitEnemies,
+          map: prev.map,
+          mode: wizardTacticsRef.current.mode,
+          manualTargetId: wizardTacticsRef.current.manualTargetId,
+          turn: prev.turn,
+          floor: prev.currentFloor,
+          addLog,
+        });
+        if (volley.cast) {
+          waitPlayer = volley.player;
+          waitEnemies = volley.enemies;
+          waitItems = [...waitItems, ...volley.items];
+          waitFloats.push(...volley.floats);
+          if (volley.beam) waitBeam = volley.beam;
+          for (const em of volley.killCountAdds) waitKillCounts = { ...waitKillCounts, [em]: (waitKillCounts[em] ?? 0) + 1 };
+          if (volley.playerDied) {
+            return { ...prev, player: waitPlayer, enemies: waitEnemies, items: waitItems, killCounts: waitKillCounts, floatingTexts: [...waitFloats, ...(prev.floatingTexts ?? [])], pendingBeam: waitBeam, turn: prev.turn + 1, gameOver: true, killer: volley.killer, difficultyTier: (prev.difficultyTier ?? 0) + volley.difficultyBump };
+          }
+        }
+      }
 
       if (cls === '🧙' || (cls === '👤' && voidAttackModeRef.current === 'wizard')) {
         const boltCandidates = waitEnemies.filter(e => {
@@ -1196,6 +1311,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       if (prev.player.characterClass === '🥷' && (waitPlayer.stats.blinkStrikeCooldown ?? 0) > 0) {
         waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, blinkStrikeCooldown: (waitPlayer.stats.blinkStrikeCooldown ?? 1) - 1 } };
       }
+      waitPlayer = tickPrestigeTimers(waitPlayer);
 
       // Out-of-combat decay for Blink Strike instakill chain on wait
       waitPlayer = tickBlinkChainOutOfCombat(waitPlayer, prev.enemies.some(e => e.engaged), addLog);
@@ -1287,7 +1403,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       const { state, wokeBy, turnsSlept } = simulateSleep(rested, SLEEP_TURNS);
       if (wokeBy) return withVisibility(state);
       const overhealHp = Math.floor(state.player.stats.maxHp * BED_OVERHEAL_MULT);
-      const mpMsg = state.player.characterClass === '🧙' ? ' MP full.' : '';
+      const mpMsg = isArcaneCaster(state.player.characterClass) ? ' MP full.' : '';
       const left = check.usesLeft - 1;
       const usesMsg = left <= 0 ? ' The bed is worn out.' : ` (${left} rest${left === 1 ? '' : 's'} left)`;
       return withVisibility({
@@ -1307,6 +1423,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
   const {
     applyWizardMode, handleCycleRangedTarget, applyNinjaMode,
     toggleAutoStealth, applyRangerMode, handleCowboyTactics,
+    handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance,
   } = useTacticsActions(refs, setters, addLog);
 
   const {
@@ -1335,6 +1452,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     toggleAutoStealth,
     applyRangerMode,
     handleCowboyTactics,
+    handleBackdash,
+    handleLunge,
+    handleExecuteContract,
+    handleGuardianStance,
     handlePlantBomb,
     handleFireProjectile,
     handleUseRope,

@@ -3,6 +3,7 @@ import { getRandomEmojiPower } from './emojis';
 import { markEmojiSeen } from './discoveries';
 import { addToPlayerBag, activeKindLabel } from './inventory';
 import { moodMax, hpBonusForLevel, mpBonusForLevel } from './progression';
+import { isArcaneCaster } from './prestige';
 
 /**
  * Overheal decay: while HP exceeds natural maxHp, shed 1 HP every 5 turns until
@@ -79,7 +80,7 @@ export function applyLevelUp(
   const hpIncrease = hpBonusForLevel(newLevel) - hpBonusForLevel(oldLevel);
   const newMaxHp = player.stats.maxHp + hpIncrease;
   const newEmoji = { ...getRandomEmojiPower(), id: `lvlup-${Math.random()}`, consumed: false };
-  const extraEmoji = player.characterClass === '🧙'
+  const extraEmoji = isArcaneCaster(player.characterClass)
     ? [{ ...getRandomEmojiPower(), id: `lvlup2-${Math.random()}`, consumed: false }]
     : [];
   const { inventory, bank, nonStackableBanked, duplicateActiveBanked } = addToPlayerBag(player, newEmoji, ...extraEmoji);
@@ -95,7 +96,7 @@ export function applyLevelUp(
   };
   addLog(`✨ Level ${newLevel}! Full heal! +${hpIncrease} max HP! Got ${newEmoji.emoji}!`);
 
-  if (player.characterClass === '🧙') {
+  if (isArcaneCaster(player.characterClass)) {
     const mpInc = mpBonusForLevel(newLevel) - mpBonusForLevel(oldLevel);
     if (mpInc > 0) {
       const newMaxMana = (result.stats.maxMana ?? 4) + mpInc;

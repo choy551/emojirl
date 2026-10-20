@@ -74,7 +74,7 @@ export function sneakAttackDamage(player: Player, enemy: Enemy): number {
 
 export function applyBedRest(player: Player): Player {
   const maxHp = player.stats.maxHp;
-  const isWizard = player.characterClass === '🧙';
+  const arcane = player.characterClass === '🧙' || player.characterClass === '🧞‍♀️';
   return {
     ...player,
     trailblazerCooldown: 0,
@@ -83,7 +83,12 @@ export function applyBedRest(player: Player): Player {
       hp: Math.floor(maxHp * BED_OVERHEAL_MULT),
       overhealDecayTick: 0,
       blinkStrikeCooldown: 0,
-      ...(isWizard ? { mana: player.stats.maxMana ?? 4 } : {}),
+      backdashCooldown: 0,
+      lungeCooldown: 0,
+      executeCooldown: 0,
+      guardianStanceTurns: 0,
+      guardianStanceCooldown: 0,
+      ...(arcane ? { mana: player.stats.maxMana ?? 4 } : {}),
     },
   };
 }

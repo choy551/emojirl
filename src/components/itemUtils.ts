@@ -1,4 +1,6 @@
 import { EmojiItem } from '../game/types';
+import { COWBOY, FENCER, GENIE, HITMAN, NINJA, RANGER, ROYAL_GUARD, WIZARD } from '../game/prestigeConstants';
+import { getClassDef } from '../game/classes';
 
 export const EQUIP_STAT_LABELS: Record<string, string> = {
   attack: 'ATK', defense: 'DEF', speed: 'SPD', evasion: 'EVA', luck: 'LCK', hp: 'HP', vitality: 'VIT',
@@ -20,26 +22,42 @@ export function activeKindEmoji(activeKind: string | undefined): string | null {
   return map[activeKind] ?? null;
 }
 
-export function canEquipItem(item: EmojiItem, playerClass: string): boolean {
-  if (item.specialAmmoKind) return playerClass === '🧝';
-  if (!item.weaponKind) return true;
-  return (item.equipSlots ?? []).some(slot => {
-    if (slot !== 'mainHand' && slot !== 'offHand') return true;
-    if (playerClass === '🧙' && item.weaponKind !== 'staff') return false;
-    if (playerClass === '🥷' && item.weaponKind !== 'blade') return false;
-    if (playerClass === '🧝' && slot === 'mainHand' && !['bow', 'gun'].includes(item.weaponKind!)) return false;
-    if (playerClass === '🤠' && item.weaponKind !== 'gun') return false;
+function handAllows(slot: string, kind: string, playerClass: string): boolean {
+  if (slot !== 'mainHand' && slot !== 'offHand') return true;
+  if (playerClass === WIZARD || playerClass === GENIE) return kind === 'staff';
+  if (playerClass === NINJA || playerClass === FENCER) return kind === 'blade';
+  if (playerClass === RANGER) {
+    if (slot === 'mainHand') return kind === 'bow' || kind === 'gun';
     return true;
-  });
+  }
+  if (playerClass === ROYAL_GUARD) return kind === 'bow' || kind === 'gun' || kind === 'blade';
+  if (playerClass === COWBOY || playerClass === HITMAN) return kind === 'gun';
+  return true;
+}
+
+export function canEquipItem(item: EmojiItem, playerClass: string): boolean {
+  if (item.gunTier === 'musket') return playerClass === ROYAL_GUARD || playerClass === HITMAN;
+  if (item.specialAmmoKind) return playerClass === RANGER || playerClass === ROYAL_GUARD;
+  if (!item.weaponKind) return true;
+  return (item.equipSlots ?? []).some(slot => handAllows(slot, item.weaponKind!, playerClass));
 }
 
 export function equipRestrictionReason(item: EmojiItem, playerClass: string): string {
-  const classLabels: Record<string, string> = { '🧙': 'Wizard', '🥷': 'Ninja', '🧝': 'Ranger', '🤠': 'Cowboy' };
-  const cls = classLabels[playerClass] ?? playerClass;
-  if (item.specialAmmoKind) return `${cls} cannot use special arrows — Ranger only.`;
-  if (playerClass === '🤠' && item.weaponKind && item.weaponKind !== 'gun') return `Only real Cowboys fight with their fists!`;
+  const cls = getClassDef(playerClass).name;
+  if (item.gunTier === 'musket') return `${cls} cannot equip muskets. Only the Royal Guard and the Levitating Hitman carry them.`;
+  if (item.specialAmmoKind) return `${cls} cannot use special arrows — Ranger and Royal Guard only.`;
+  if (playerClass === COWBOY && item.weaponKind && item.weaponKind !== 'gun') return `Only real Cowboys fight with their fists!`;
   const kindLabels: Record<string, string> = { staff: 'staves/wands', blade: 'blades', bow: 'bows', gun: 'guns' };
-  const classWeapons: Record<string, string> = { '🧙': 'staves/wands', '🥷': 'blades', '🧝': 'bows or guns (main) / blades (off)', '🤠': 'guns' };
+  const classWeapons: Record<string, string> = {
+    [WIZARD]: 'staves/wands',
+    [GENIE]: 'staves/wands',
+    [NINJA]: 'blades',
+    [FENCER]: 'blades',
+    [RANGER]: 'bows or guns (main) / blades (off)',
+    [ROYAL_GUARD]: 'bows, guns (including muskets), and blades',
+    [COWBOY]: 'guns',
+    [HITMAN]: 'guns, including muskets',
+  };
   const kind = kindLabels[item.weaponKind ?? ''] ?? item.weaponKind ?? 'this weapon';
   const allowed = classWeapons[playerClass] ?? 'compatible weapons';
   return `${cls} cannot equip ${kind}. ${cls} weapons: ${allowed}.`;
