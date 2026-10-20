@@ -186,7 +186,7 @@ export default function HowToPlay({
             {
               label: "🔮 MP",
               color: "text-blue-400",
-              desc: "Mana Points — Wizard 🧙 only. Spells cost MP; it regenerates by 1 every 2 turns. Running dry prevents spellcasting until it refills.",
+              desc: "Mana Points — Wizard 🧙 and Genie 🧞‍♀️. Spells cost MP. It regenerates by 1 when you Wait out of enemy sight. The Genie's fireball costs 2 MP. Running dry prevents spellcasting until it refills (Genie level 5 can Bloodcast HP instead).",
             },
           ].map(({ label, color, desc }) => (
             <div
@@ -299,7 +299,11 @@ export default function HowToPlay({
                 • <strong>Ninja 🥷</strong>: 1 enter Blink target mode / 2–3 stealth modes / 4 toggle auto-stealth<br />
                 • <strong>Ranger 🧝</strong>: 1 ranged / 2 melee / 3 flee (Trailblaze)<br />
                 • <strong>Cowboy 🤠</strong>: 1 yeehaw tactics (special flavor/ability)<br />
-                • <strong>The Void 👤</strong>: <em>t</em> cycles Melee → Ranger autos → Wizard autos (locked styles are skipped, with a progress line such as “Wizard autos: 4/10 magic emoji”). Ranger autos unlock after 10 ranged emoji (bows, arrows, guns, bullets, boomerangs). Wizard autos unlock after 10 magic emoji (potions, crystals, stars, spellbooks, wands). <em>U</em> aims Unmake.
+                • <strong>The Void 👤</strong>: <em>t</em> cycles Melee → Ranger autos → Wizard autos (locked styles are skipped, with a progress line such as “Wizard autos: 4/10 magic emoji”). Ranger autos unlock after 10 ranged emoji (bows, arrows, guns, bullets, boomerangs). Wizard autos unlock after 10 magic emoji (potions, crystals, stars, spellbooks, wands). <em>U</em> aims Unmake.<br />
+                • <strong>Genie 🧞‍♀️</strong>: same aim keys as the Wizard; 4 is Blink. Fireball replaces the bolt.<br />
+                • <strong>Fencer 🤺</strong>: 1 Backdash / 2 Lunge (X lunges)<br />
+                • <strong>Levitating Hitman 🕴️</strong>: 1 Execute Contract (X) / 2 stealth<br />
+                • <strong>Royal Guard 💂</strong>: 1 ranged / 2 melee / 4 Guardian Stance (X)
               </div>
               <div className="flex items-center gap-2">
                 <Kbd>T</Kbd>
@@ -561,7 +565,10 @@ export default function HowToPlay({
 
       {/* Classes */}
       <Section title="Classes">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground mb-3">
+          Four vessels are open from the start. Win the game at D:27 — the &quot;Win the Game&quot; choice — as a base class to unlock its prestige vessel. The unlock is kept in the meta save, so it survives the next descent. Prestige classes and 👤 The Void stay visible on the vessel screen while locked. Hover the greyed emoji (or tap it, then dismiss) to read the hint: for example &quot;Win D:27 as 🧙 Wizard to unlock&quot;, and for The Void &quot;Die to Void damage to unlock&quot;. A locked choice never starts a run.
+        </p>
+        <p className="text-xs text-muted-foreground mb-3">
           Every class except The Void takes emoji-less Void damage while no soul sits in the hotbar.
           The Void 👤 inverts that: filled hotbar slots 1–9 deal <em>floor × filled + filled</em> damage each turn.
           Bank and equipment are safe. Consume a soul emoji from the hotbar ten times to keep its bag passive as a faded ghost.
@@ -921,7 +928,7 @@ export default function HowToPlay({
                 badge: "🦅",
                 color: "bg-sky-500/15 border-sky-500/30 text-sky-300",
                 label: "Flying",
-                desc: "Paths over and stands on water and lava. Lava does not burn them.",
+                desc: "Paths over and stands on water and lava. Lava does not burn them. The Genie and the Levitating Hitman have this tag: you cross water and lava and take no lava damage.",
               },
               {
                 badge: "🐒",

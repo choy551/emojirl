@@ -2,6 +2,8 @@ import { Player, Enemy, MoodType } from './types';
 import { crowGoldSteal } from './economy';
 import { applyNullMomentum } from './voidDamage';
 import { blinkStrikeDamageMultiplier, critStat } from './blinkStrike';
+import { fencerCritBonus, fencerEvasion, isFencer, isRoyalGuard, royalDefenseBonus, royalIncomingMult, royalMeleeMultiplier } from './prestige';
+import { FENCER_PARRY_CHANCE } from './prestigeConstants';
 
 /**
  * Auto-fire / barrage should only pick real foes: not companions, not friendlies,
@@ -81,6 +83,7 @@ export interface CombatResult {
   stunned: boolean;
   dodged: boolean;
   fled: boolean;
+  parried: boolean;
   goldStolen?: number;
 }
 
@@ -94,7 +97,7 @@ export function resolveCombat(
   player: Player,
   enemy: Enemy,
   addLog: (msg: string) => void,
-  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean; floor?: number; blinkStrike?: boolean } = {}
+  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean; floor?: number; blinkStrike?: boolean; damageMult?: number; critBonus?: number; parryChance?: number; incomingMult?: number } = {}
 ): CombatResult {
   const cls = player.characterClass;
   const mods = getMoodModifiers(opts.mood ?? 'neutral', player.stats.hp, player.stats.maxHp, opts.cowboyMoodValue);
@@ -108,12 +111,17 @@ export function resolveCombat(
   // ── 1. Flee check (mood-based) ─────────────────────────────────────────────
   if (mods.fleeChance > 0 && Math.random() * 100 < mods.fleeChance) {
     addLog(`You flee from ${enemy.emoji} ${enemy.name}!`);
-    return { enemyHp: enemy.hp, playerHp: player.stats.hp, playerDied: false, enemyDied: false, stunned: false, dodged: false, fled: true, goldStolen: 0 };
+    return { enemyHp: enemy.hp, playerHp: player.stats.hp, playerDied: false, enemyDied: false, stunned: false, dodged: false, fled: true, parried: false, goldStolen: 0 };
   }
 
   // ── 2. Hit resolution ──────────────────────────────────────────────────────
   const baseHit = 85 + mods.hitChance;
-  const critChance = 5 + (player.stats.luck ?? 1) + mods.critBonus;
+  const fencer = isFencer(cls);
+  const critChance = 5 + (player.stats.luck ?? 1) + mods.critBonus + (opts.critBonus ?? 0) + (fencer ? fencerCritBonus(player.stats.hp, player.stats.maxHp) : 0);
+  const parryChance = Math.max(opts.parryChance ?? 0, fencer ? FENCER_PARRY_CHANCE : 0);
+  const defenderEvasion = fencer
+    ? fencerEvasion(player.stats.hp, player.stats.maxHp, player.stats.evasion ?? 0)
+    : (player.stats.evasion ?? 0);
   const rollCrit = (hpNow: number) => {
     const skullBonus = opts.execBlow ? skullCritBonus(hpNow, enemy.maxHp) : 0;
     return r() * 100 < critChance + skullBonus;
@@ -201,6 +209,10 @@ export function resolveCombat(
       } else if (opts.firstShot) {
         rawDamage = Math.ceil(rawDamage * 1.5);
       }
+      if (isRoyalGuard(cls) && !opts.isRanged) {
+        rawDamage = Math.max(1, Math.round(rawDamage * royalMeleeMultiplier(player)));
+      }
+      rawDamage = Math.max(1, Math.round(rawDamage * (opts.damageMult ?? 1)));
 
       const isCrit = rollCrit(newEnemyHp);
       const moodDamage = Math.round(rawDamage * mods.damageMult * (isCrit ? 2 : 1));
@@ -242,9 +254,12 @@ export function resolveCombat(
   // ── 4. Enemy counterattack ─────────────────────────────────────────────────
   let newPlayerHp = player.stats.hp;
   let dodged = false;
+  let parried = false;
   let playerDied = false;
   let goldStolen = 0;
   let goldRemaining = player.stats.gold;
+  const defense = (player.stats.defense ?? 0) + royalDefenseBonus(player);
+  const incomingScale = (opts.incomingMult ?? 1) * royalIncomingMult(player);
 
   if (newEnemyHp > 0 && !stunned) {
     const fastEnemy = enemy.speed > (player.stats.speed ?? 1);
@@ -259,11 +274,16 @@ export function resolveCombat(
     };
 
     const performAttack = (label: string) => {
+      if (parryChance >= 1 || (parryChance > 0 && r() < parryChance)) {
+        parried = true;
+        addLog(`🤺 Parry! ${label}${enemy.emoji}'s blow is turned aside.`);
+        return;
+      }
       if (opts.shieldWall && Math.random() < 0.25) {
         addLog(`🛡️ Shield wall! The blow is deflected!`);
         return;
       }
-      const dodgeChance = Math.min(95, (player.stats.evasion ?? 0) + mods.dodgeBonus);
+      const dodgeChance = Math.min(95, defenderEvasion + mods.dodgeBonus);
       if (r() * 100 < dodgeChance) {
         dodged = true;
         addLog(`${label}${enemy.emoji} swings — you dodge!`);
@@ -271,8 +291,8 @@ export function resolveCombat(
       }
       const rawEnemy = enemy.crow
         ? 1
-        : Math.max(1, enemy.attack - Math.floor((player.stats.defense ?? 0) / 2));
-      const incoming = Math.round(rawEnemy * mods.incomingMult);
+        : Math.max(1, enemy.attack - Math.floor(defense / 2));
+      const incoming = Math.round(rawEnemy * mods.incomingMult * incomingScale);
       const shieldDR = Math.min(incoming, opts.shieldWall ?? 0);
       const afterShield = incoming - shieldDR;
       const finalDmg = applyNullMomentum(afterShield, player);
@@ -302,6 +322,7 @@ export function resolveCombat(
     stunned,
     dodged,
     fled: false,
+    parried,
     goldStolen,
   };
 }

@@ -1,5 +1,7 @@
 import type { Enemy, GameState, Position } from './types';
 import { FINALE_FLOOR, BOSSRUSH_MAX_WAVE, BOSSRUSH_GRACE_TURNS } from './finaleConstants';
+import { recordPrestigeWin } from './meta';
+import { getClassDef } from './classes';
 import { pressureForRun } from './progression';
 import { generateFinaleArena, type FinaleArena } from './mapgen';
 import { makeBossrushFighter } from './spawning';
@@ -230,6 +232,11 @@ export function tickBossrush(state: GameState, rng: () => number = Math.random):
 }
 
 export function claimFinaleWin(state: GameState): GameState {
+  const unlock = recordPrestigeWin(state.player.characterClass);
+  const prestige = unlock.fresh && unlock.prestige ? getClassDef(unlock.prestige) : null;
+  const text = prestige
+    ? `🏆 You win the game on D:27! ${unlock.prestige} ${prestige.name} unlocked.`
+    : '🏆 You win the game on D:27!';
   return pushLog(
     {
       ...state,
@@ -237,6 +244,6 @@ export function claimFinaleWin(state: GameState): GameState {
       gameOver: true,
       victory: true,
     },
-    '🏆 You win the game on D:27!',
+    text,
   );
 }

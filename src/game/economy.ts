@@ -1,6 +1,7 @@
 import { EmojiItem, MapGrid, Position } from './types';
 import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, cookFood, HEAL_DROPS, COOKABLE_EMOJIS } from './emojis';
 import { addToBag, addToBagCapped } from './inventory';
+import { usesArrows, usesBullets } from './prestige';
 
 /** Gold stolen by a 🐦‍⬛ Crow on a successful hit. Scales with dungeon floor. */
 export function crowGoldSteal(floor: number, playerGold: number): number {
@@ -199,9 +200,9 @@ export function resolveSlotPrize(
     return { items: [], goldGain, label: `Junk ${face} — 🪙${goldGain}` };
   }
   if (tier === 'common') {
-    const drop = playerClass === '🤠'
+    const drop = usesBullets(playerClass ?? '') && !usesArrows(playerClass ?? '')
       ? getBulletDrop()
-      : playerClass === '🧝'
+      : usesArrows(playerClass ?? '')
         ? getAmmoDrop()
         : getRandomHealDrop();
     const item = stampSlotItem(drop, 'common');
@@ -274,12 +275,13 @@ export function grantSlotPrizeItems(
 export function generateAmmoCacheStock(floor: number, playerClass?: string): EmojiItem[] {
   const stock: EmojiItem[] = [];
   const numStacks = 2 + (Math.random() < 0.5 ? 1 : 0);
-  if (playerClass === '🤠') {
+  if (usesBullets(playerClass ?? '')) {
     for (let i = 0; i < numStacks; i++) {
       const bullets = getBulletDrop();
       stock.push({ ...bullets, id: `cache-bullets-${i}-${Math.random().toString(36).slice(2)}`, consumed: false });
     }
-  } else if (playerClass === '🧝') {
+  }
+  if (usesArrows(playerClass ?? '')) {
     for (let i = 0; i < numStacks; i++) {
       const arrows = getAmmoDrop();
       stock.push({ ...arrows, id: `cache-arrows-${i}-${Math.random().toString(36).slice(2)}`, consumed: false });
@@ -307,9 +309,13 @@ export function generateShopStock(floor: number, playerClass?: string): EmojiIte
     const eq = getRandomEquipmentDrop(floor);
     stock.push({ ...eq, id: `shop-eq-${Math.random().toString(36).slice(2)}`, consumed: false });
   }
-  if (playerClass === '🤠') {
+  if (usesBullets(playerClass ?? '')) {
     const bullets = getBulletDrop();
     stock.push({ ...bullets, id: `shop-bullets-${Math.random().toString(36).slice(2)}`, consumed: false });
+  }
+  if (usesArrows(playerClass ?? '') && playerClass !== '🧝') {
+    const arrows = getAmmoDrop();
+    stock.push({ ...arrows, id: `shop-arrows-${Math.random().toString(36).slice(2)}`, consumed: false });
   }
   return stock;
 }

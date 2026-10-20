@@ -264,11 +264,12 @@ export function entriesForRoll(ctx: DropRollContext = {}): DropEntry[] {
 export function classModFor(entry: DropEntry, ctx: DropRollContext = {}): number {
   if (ctx.boss) return 1;
   if (entry.itemId === 'ammo:quiver') {
-    return ctx.playerClass === '🧝' ? RANGER_QUIVER_WEIGHT : QUIVER_WEIGHT;
+    return ctx.playerClass === '🧝' || ctx.playerClass === '💂' ? RANGER_QUIVER_WEIGHT : QUIVER_WEIGHT;
   }
   if (entry.itemId === 'ammo:bullets') {
-    if (ctx.playerClass === '🤠' && ctx.cowboyDualGuns) return COWBOY_DUAL_BULLET_WEIGHT;
-    if (ctx.playerClass === '🤠') return COWBOY_BULLET_WEIGHT;
+    const gunner = ctx.playerClass === '🤠' || ctx.playerClass === '🕴️';
+    if (gunner && ctx.cowboyDualGuns) return COWBOY_DUAL_BULLET_WEIGHT;
+    if (gunner || ctx.playerClass === '💂') return COWBOY_BULLET_WEIGHT;
   }
   return 1;
 }

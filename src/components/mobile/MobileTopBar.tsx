@@ -1,4 +1,5 @@
 import { Player } from '../../game/types';
+import { ammoIcon, isArcaneCaster, usesArrows, usesBullets } from '../../game/prestige';
 
 interface MobileTopBarProps {
   player: Player;
@@ -39,12 +40,12 @@ export function MobileTopBar({ player, className, level, currentFloor, xpProgres
   const overheal = hp > maxHp;
   const hpPct = overheal ? Math.min(100, (hp / (maxHp * 2)) * 100) : (hp / Math.max(1, maxHp)) * 100;
   const hpColor = overheal ? '#f59e0b' : hpPct > 60 ? '#22c55e' : hpPct > 30 ? '#f59e0b' : '#ef4444';
-  const isWizard = player.characterClass === '🧙';
+  const isWizard = isArcaneCaster(player.characterClass);
   const mana = player.stats.mana ?? 0;
   const maxMana = player.stats.maxMana ?? 4;
   const mpPct = (mana / Math.max(1, maxMana)) * 100;
-  const showAmmo = (player.characterClass === '🧝' || player.characterClass === '🤠') && (player.ammo ?? 0) >= 0
-    && (player.characterClass === '🧝' || (player.equipment.mainHand?.weaponKind === 'gun' && player.equipment.offHand?.weaponKind === 'gun'));
+  const showAmmo = (usesArrows(player.characterClass) || usesBullets(player.characterClass)) && (player.ammo ?? 0) >= 0
+    && (usesArrows(player.characterClass) || player.equipment.mainHand?.weaponKind === 'gun' || player.equipment.offHand?.weaponKind === 'gun');
 
   return (
     <div
@@ -65,7 +66,7 @@ export function MobileTopBar({ player, className, level, currentFloor, xpProgres
             <span className="font-bold uppercase tracking-wide truncate">{className.slice(0, 4)} L{level}</span>
             {showAmmo && (
               <span className="font-bold tabular-nums text-amber-300/90 shrink-0">
-                {player.characterClass === '🧝' ? '🏹' : '🪙'}{player.ammo}
+                {ammoIcon(player.characterClass, player.equipment)}{player.ammo}
               </span>
             )}
             {blinkTalentCompact && (

@@ -1,6 +1,7 @@
 import { Player } from '../../game/types';
 import { applyEquipmentAndPassives } from '../../game/inventory';
 import { blinkStrikeMultiplierPercent, critStat } from '../../game/blinkStrike';
+import { isArcaneCaster, isFencer, isHitman, isRoyalGuard } from '../../game/prestige';
 
 // Mirrors the cooldown constants in useTacticsActions.ts (BLINK_ACTIVE + BLINK_CD).
 const BLINK_TOTAL_CD = 8;
@@ -36,6 +37,10 @@ export interface ClassAbilityArgs {
   beginUnmake?: () => void;
   unmakeSpent?: boolean;
   voidAttackMode?: 'melee' | 'ranger' | 'wizard';
+  handleBackdash: () => void;
+  handleLunge: () => void;
+  handleExecuteContract: () => void;
+  handleGuardianStance: () => void;
 }
 
 export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
@@ -43,7 +48,50 @@ export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
     player, turn, blinkTurn, trailblazeTurn, yeehawTurn, rangerMode, wizardMode, stealthOn,
     applyWizardMode, applyRangerMode, handleCowboyTactics, handleBlinkStrike, applyNinjaMode,
     cycleVoidAttack, beginUnmake, unmakeSpent, voidAttackMode,
+    handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance,
   } = args;
+
+  if (isArcaneCaster(player.characterClass) && player.characterClass !== '🧙') {
+    const remaining = BLINK_TOTAL_CD - (turn - blinkTurn);
+    const onCd = remaining > 0 && blinkTurn > -900;
+    return [
+      {
+        id: 'genie-blink', icon: '✨', label: 'Blink',
+        detail: onCd ? `${remaining}t` : 'Ready',
+        disabled: onCd,
+        onUse: () => applyWizardMode('holdfire'),
+      },
+      {
+        id: 'genie-aim', icon: '🔥', label: 'Aim',
+        detail: wizardMode,
+        disabled: false,
+        onUse: () => applyWizardMode(wizardMode === 'nearest' ? 'furthest' : wizardMode === 'furthest' ? 'manual' : 'nearest'),
+      },
+    ];
+  }
+  if (isFencer(player.characterClass)) {
+    const back = player.stats.backdashCooldown ?? 0;
+    const lunge = player.stats.lungeCooldown ?? 0;
+    return [
+      { id: 'fencer-back', icon: '🤺', label: 'Backdash', detail: back > 0 ? `${back}t` : 'Ready', disabled: back > 0, onUse: handleBackdash },
+      { id: 'fencer-lunge', icon: '⚔️', label: 'Lunge', detail: lunge > 0 ? `${lunge}t` : 'Ready', disabled: lunge > 0, onUse: handleLunge },
+    ];
+  }
+  if (isHitman(player.characterClass)) {
+    const cd = player.stats.executeCooldown ?? 0;
+    return [
+      { id: 'hitman-execute', icon: '🕴️', label: 'Execute', detail: cd > 0 ? `${cd}t` : 'Ready', disabled: cd > 0, onUse: handleExecuteContract },
+      { id: 'hitman-stealth', icon: stealthOn ? '🤫' : '👁️', label: 'Stealth', detail: stealthOn ? 'On' : 'Off', disabled: false, active: stealthOn, onUse: () => applyNinjaMode(!stealthOn) },
+    ];
+  }
+  if (isRoyalGuard(player.characterClass)) {
+    const up = player.stats.guardianStanceTurns ?? 0;
+    const cd = player.stats.guardianStanceCooldown ?? 0;
+    return [
+      { id: 'guard-mode', icon: rangerMode === 'ranged' ? '🏹' : '⚔️', label: rangerMode === 'ranged' ? 'Ranged' : 'Melee', detail: 'Swap', disabled: false, onUse: () => applyRangerMode(rangerMode === 'ranged' ? 'melee' : 'ranged') },
+      { id: 'guard-stance', icon: '💂', label: 'Stance', detail: up > 0 ? `${up}t` : cd > 0 ? `${cd}t` : 'Ready', disabled: up > 0 || cd > 0, onUse: handleGuardianStance },
+    ];
+  }
 
   switch (player.characterClass) {
     case '🧙': {

@@ -1,7 +1,11 @@
 import { useCallback } from 'react';
-import { chebyshev, withVisibility, runEnemyTurns, applyEnemyTurns } from '../../game/gameHelpers';
-import { isHostileCombatTarget } from '../../game/combat';
+import { chebyshev, withVisibility, runEnemyTurns, applyEnemyTurns, applyEquipmentAndPassives, hasLOSBetween } from '../../game/gameHelpers';
+import { getMood } from '../../game/moods';
+import { isHostileCombatTarget, resolveCombat } from '../../game/combat';
 import type { GameRefs, GameSetters, AddLog } from './types';
+import type { Player } from '../../game/types';
+import { isArcaneCaster, isFencer, isHitman, isRoyalGuard, activateGuardianStance, planBackdash, planLunge, nearestExecuteTarget, executeStrike, notePrestigeKill, fencerOutgoingMult } from '../../game/prestige';
+import { FENCER_BACKDASH_CD, FENCER_LUNGE_CD, FENCER_LUNGE_MULT, HITMAN_EXECUTE_BULLETS, HITMAN_EXECUTE_CD, HITMAN_EXECUTE_GOLD } from '../../game/prestigeConstants';
 
 const BLINK_ACTIVE = 3;
 const BLINK_CD = 5;
@@ -18,7 +22,7 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
 
   const applyWizardMode = useCallback((mode: 'nearest' | 'furthest' | 'manual' | 'holdfire') => {
     const state = gameStateRef.current;
-    if (!state || state.gameOver || state.player.characterClass !== '🧙') return;
+    if (!state || state.gameOver || !isArcaneCaster(state.player.characterClass)) return;
     const current = wizardTacticsRef.current;
     const LABELS = { nearest: '🎯 Nearest', furthest: '🎯 Furthest', manual: '🎯 Manual', holdfire: '✨ Blink' };
 
@@ -56,13 +60,13 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
     const { player } = state;
     const targets = state.enemies
       .filter(e => state.map[e.pos.y]?.[e.pos.x]?.visible)
-      .filter(e => player.characterClass !== '🧙' || isHostileCombatTarget(e))
+      .filter(e => !isArcaneCaster(player.characterClass) || isHostileCombatTarget(e))
       .sort((a, b) => chebyshev(player.pos, a.pos) - chebyshev(player.pos, b.pos));
     if (targets.length === 0) { addLog('No visible enemies to target.'); return; }
     const idx = targets.findIndex(e => e.id === inspectedEnemyIdRef.current);
     const next = targets[(idx + dir + targets.length) % targets.length];
     setInspectedEnemyId(next.id);
-    if (player.characterClass === '🧙' || (player.characterClass === '👤' && voidAttackModeRef.current === 'wizard')) {
+    if (isArcaneCaster(player.characterClass) || (player.characterClass === '👤' && voidAttackModeRef.current === 'wizard')) {
       const newT = { ...wizardTacticsRef.current, mode: 'manual' as const, manualTargetId: next.id };
       wizardTacticsRef.current = newT;
       setWizardTactics(newT);
@@ -72,9 +76,11 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
 
   const applyNinjaMode = useCallback((stealth: boolean) => {
     const state = gameStateRef.current;
-    if (!state || state.gameOver || state.player.characterClass !== '🥷') return;
+    if (!state || state.gameOver || (state.player.characterClass !== '🥷' && !isHitman(state.player.characterClass))) return;
     setGameState(prev => prev ? { ...prev, stealthMode: stealth } : prev);
-    addLog(stealth ? '🥷 Stealth engaged — hug walls or dark tiles' : '🥷 Stealth off — moving freely');
+    addLog(stealth
+      ? (isHitman(state.player.characterClass) ? '🕴️ Stealth engaged — you hang above the floor.' : '🥷 Stealth engaged — hug walls or dark tiles')
+      : (isHitman(state.player.characterClass) ? '🕴️ Stealth off.' : '🥷 Stealth off — moving freely'));
   }, [addLog, gameStateRef, setGameState]);
 
   const toggleAutoStealth = useCallback(() => {
@@ -102,9 +108,10 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
 
   const applyRangerMode = useCallback((mode: 'ranged' | 'melee' | 'flee') => {
     const state = gameStateRef.current;
-    if (!state || state.gameOver || state.player.characterClass !== '🧝') return;
+    if (!state || state.gameOver || (state.player.characterClass !== '🧝' && !isRoyalGuard(state.player.characterClass))) return;
 
     if (mode === 'flee') {
+      if (state.player.characterClass !== '🧝') return;
       const elapsed = state.turn - trailblazeTurnRef.current;
       if (elapsed < BLINK_ACTIVE + BLINK_CD) {
         const remaining = (BLINK_ACTIVE + BLINK_CD) - elapsed;
@@ -142,5 +149,114 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
     addLog('🤠 YEEHAW! Confidence surges!');
   }, [addLog, gameStateRef, yeehawTurnRef, setYeehawTurn, setGameState]);
 
-  return { applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, applyRangerMode, handleCowboyTactics };
+  const handleBackdash = useCallback(() => {
+    const state = gameStateRef.current;
+    if (!state || state.gameOver || !isFencer(state.player.characterClass)) return;
+    if ((state.player.stats.backdashCooldown ?? 0) > 0) {
+      addLog(`🤺 Backdash cooling down (${state.player.stats.backdashCooldown}t).`);
+      return;
+    }
+    const dest = planBackdash(state.player, state.enemies, state.map);
+    if (!dest) { addLog('🤺 No room to backdash.'); return; }
+    setGameState(prev => {
+      if (!prev || prev.gameOver) return prev;
+      const player = { ...prev.player, pos: dest, stats: { ...prev.player.stats, backdashCooldown: FENCER_BACKDASH_CD } };
+      const mid = { ...prev, player, turn: prev.turn + 1 };
+      return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
+    });
+    addLog('🤺 Backdash!');
+  }, [addLog, gameStateRef, setGameState]);
+
+  const handleLunge = useCallback(() => {
+    const state = gameStateRef.current;
+    if (!state || state.gameOver || !isFencer(state.player.characterClass)) return;
+    if ((state.player.stats.lungeCooldown ?? 0) > 0) {
+      addLog(`🤺 Lunge cooling down (${state.player.stats.lungeCooldown}t).`);
+      return;
+    }
+    const plan = planLunge(state.player, state.enemies, state.map);
+    if (!plan) { addLog('🤺 Nobody in lunge range.'); return; }
+    setGameState(prev => {
+      if (!prev || prev.gameOver) return prev;
+      const swing = fencerOutgoingMult(prev.player.stats);
+      const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
+      const attacker = applyEquipmentAndPassives({ ...prev.player, pos: plan.pos });
+      const result = resolveCombat(attacker, plan.target, addLog, { mood, damageMult: FENCER_LUNGE_MULT * swing.mult, floor: prev.currentFloor });
+      let player: Player = { ...prev.player, pos: plan.pos, stats: { ...prev.player.stats, hp: result.playerHp, lungeCooldown: FENCER_LUNGE_CD, flourishCount: swing.nextFlourish, riposteReady: result.parried } };
+      let enemies = prev.enemies.map(e => ({ ...e }));
+      const idx = enemies.findIndex(e => e.id === plan.target.id);
+      if (result.enemyDied && idx >= 0) {
+        const paid = notePrestigeKill(player, prev.currentFloor);
+        player = paid.player;
+        paid.logs.forEach(addLog);
+        player = { ...player, stats: { ...player.stats, xp: player.stats.xp + (plan.target.isBoss ? 25 : 5) } };
+        enemies.splice(idx, 1);
+      } else if (idx >= 0) {
+        enemies[idx] = { ...enemies[idx], hp: result.enemyHp, engaged: true };
+      }
+      addLog('🤺 Lunge!');
+      const mid = { ...prev, player, enemies, turn: prev.turn + 1 };
+      return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
+    });
+  }, [addLog, gameStateRef, setGameState]);
+
+  const handleExecuteContract = useCallback(() => {
+    const state = gameStateRef.current;
+    if (!state || state.gameOver || !isHitman(state.player.characterClass)) return;
+    if ((state.player.stats.executeCooldown ?? 0) > 0) {
+      addLog(`🕴️ Execute Contract cooling down (${state.player.stats.executeCooldown}t).`);
+      return;
+    }
+    const target = nearestExecuteTarget(state.player, state.enemies, (from, to) => hasLOSBetween(state.map, from, to));
+    if (!target) { addLog('🕴️ No contract in line of sight.'); return; }
+    setGameState(prev => {
+      if (!prev || prev.gameOver) return prev;
+      const geared = applyEquipmentAndPassives(prev.player);
+      const strike = executeStrike(geared.stats.attack, target.hp, target.maxHp, target.defense ?? 0);
+      let hp = target.godBlessed && strike.damage >= target.hp ? 1 : target.hp - strike.damage;
+      let player: Player = { ...prev.player, stats: { ...prev.player.stats, executeCooldown: HITMAN_EXECUTE_CD } };
+      let enemies = prev.enemies.map(e => ({ ...e }));
+      const idx = enemies.findIndex(e => e.id === target.id);
+      if (hp <= 0 && idx >= 0) {
+        if (strike.executed) {
+          player = {
+            ...player,
+            ammo: (player.ammo ?? 0) + HITMAN_EXECUTE_BULLETS,
+            stats: { ...player.stats, gold: player.stats.gold + HITMAN_EXECUTE_GOLD, xp: player.stats.xp + (target.isBoss ? 25 : 5) },
+          };
+          addLog(`🕴️ Contract executed — +${HITMAN_EXECUTE_GOLD} gold, +${HITMAN_EXECUTE_BULLETS} bullets.`);
+        } else {
+          player = { ...player, stats: { ...player.stats, xp: player.stats.xp + (target.isBoss ? 25 : 5) } };
+          addLog(`🕴️ Execute Contract — ${strike.damage} damage.`);
+        }
+        const paid = notePrestigeKill(player, prev.currentFloor);
+        player = paid.player;
+        paid.logs.forEach(addLog);
+        enemies.splice(idx, 1);
+      } else if (idx >= 0) {
+        enemies[idx] = { ...enemies[idx], hp, engaged: true };
+        addLog(strike.executed ? `🕴️ The mark survives on a thread.` : `🕴️ Execute Contract — ${strike.damage} damage.`);
+      }
+      const mid = { ...prev, player, enemies, turn: prev.turn + 1 };
+      return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
+    });
+  }, [addLog, gameStateRef, setGameState]);
+
+  const handleGuardianStance = useCallback(() => {
+    const state = gameStateRef.current;
+    if (!state || state.gameOver || !isRoyalGuard(state.player.characterClass)) return;
+    const stance = activateGuardianStance(state.player);
+    addLog(stance.log);
+    if (!stance.ok) return;
+    setGameState(prev => {
+      if (!prev || prev.gameOver) return prev;
+      const mid = { ...prev, player: stance.player, turn: prev.turn + 1 };
+      return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
+    });
+  }, [addLog, gameStateRef, setGameState]);
+
+  return {
+    applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, applyRangerMode, handleCowboyTactics,
+    handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance,
+  };
 }

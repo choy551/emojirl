@@ -454,7 +454,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
 
     const baseDetectionRadius = detectionRadius(enemy.speed);
     const _bagPassivesDetect = playerBagPassives(state.player);
-    const isStealthy = (state.stealthMode && state.player.characterClass === '🥷') || _bagPassivesDetect.stealthBonus > 0;
+    const isStealthy = (state.stealthMode && (state.player.characterClass === '🥷' || state.player.characterClass === '🕴️')) || _bagPassivesDetect.stealthBonus > 0;
     // When player lingers in the restaurant 3×3 safe zone, every mob on the map aggroes —
     // the smell of food and activity draws everything in. They lose track once the player leaves.
     const playerNearRestaurant = nearRestaurant(map, player.pos) && !isStealthy;

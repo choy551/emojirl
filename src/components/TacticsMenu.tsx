@@ -1,6 +1,7 @@
 import { GameState, Player } from '../game/types';
 import { applyEquipmentAndPassives } from '../game/inventory';
 import { blinkStrikeDamagePhrase, blinkTalentById, blinkTalentProgress } from '../game/blinkStrike';
+import { isArcaneCaster, isFencer, isHitman, isRoyalGuard } from '../game/prestige';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -23,13 +24,17 @@ interface TacticsMenuProps {
   toggleAutoStealth: () => void;
   applyRangerMode: (mode: RangerMode) => void;
   handleCowboyTactics: () => void;
+  handleBackdash: () => void;
+  handleLunge: () => void;
+  handleExecuteContract: () => void;
+  handleGuardianStance: () => void;
   onClose: () => void;
 }
 
 export function TacticsMenu({
   player, gameState, wizardTactics, blinkTurn, trailblazeTurn, yeehawTurn,
   autoStealth, rangerMode, applyWizardMode, enterBlinkTargetMode, applyNinjaMode,
-  toggleAutoStealth, applyRangerMode, handleCowboyTactics, onClose,
+  toggleAutoStealth,   applyRangerMode, handleCowboyTactics, handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance, onClose,
 }: TacticsMenuProps) {
   const hand = useMobileHand();
   const dismiss = useDismissGuard(onClose);
@@ -51,7 +56,10 @@ export function TacticsMenu({
         </div>
 
         {/* Wizard */}
-        {player.characterClass === '🧙' && (
+        {player.characterClass === '🧞‍♀️' && (
+          <div className="text-[11px] text-center text-orange-300/80 mb-2">Fireball replaces Arcane Barrage. Blink still holds fire.</div>
+        )}
+        {isArcaneCaster(player.characterClass) && (
           <div className="space-y-1.5">
             {([
               { n: 1, label: '🎯 Autofire — Nearest',  mode: 'nearest'  as const },
@@ -137,7 +145,7 @@ export function TacticsMenu({
         )}
 
         {/* Ranger */}
-        {player.characterClass === '🧝' && (
+        {(player.characterClass === '🧝' || isRoyalGuard(player.characterClass)) && (
           <div className="space-y-1.5">
             {([
               { n: 1, label: '🏹 Ranged — auto-fire bow', active: rangerMode === 'ranged', mode: 'ranged' as const },
@@ -152,7 +160,7 @@ export function TacticsMenu({
                 {active && <span className="ml-auto text-green-400">✓</span>}
               </button>
             ))}
-            {(() => {
+            {player.characterClass === '🧝' && (() => {
               const elapsed = gameState.turn - trailblazeTurn;
               const BLINK_ACTIVE = 3, BLINK_CD = 5;
               const isActive = rangerMode === 'flee' && elapsed < BLINK_ACTIVE;
@@ -171,6 +179,45 @@ export function TacticsMenu({
                 </button>
               );
             })()}
+          </div>
+        )}
+
+        {isFencer(player.characterClass) && (
+          <div className="space-y-1.5">
+            <button className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-secondary/60" onClick={() => { handleBackdash(); onClose(); }}>
+              <span className="font-mono text-muted-foreground w-4 shrink-0">1</span>
+              🤺 Backdash
+              <span className="ml-auto text-[10px] font-mono">{(player.stats.backdashCooldown ?? 0) === 0 ? 'ready' : `${player.stats.backdashCooldown}t`}</span>
+            </button>
+            <button className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-secondary/60" onClick={() => { handleLunge(); onClose(); }}>
+              <span className="font-mono text-muted-foreground w-4 shrink-0">2</span>
+              🤺 Lunge
+              <span className="ml-auto text-[10px] font-mono">{(player.stats.lungeCooldown ?? 0) === 0 ? 'ready' : `${player.stats.lungeCooldown}t`}</span>
+            </button>
+          </div>
+        )}
+
+        {isHitman(player.characterClass) && (
+          <div className="space-y-1.5">
+            <button className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-secondary/60" onClick={() => { handleExecuteContract(); onClose(); }}>
+              <span className="font-mono text-muted-foreground w-4 shrink-0">1</span>
+              🕴️ Execute Contract
+              <span className="ml-auto text-[10px] font-mono">{(player.stats.executeCooldown ?? 0) === 0 ? 'ready' : `${player.stats.executeCooldown}t`}</span>
+            </button>
+            <button className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-secondary/60" onClick={() => { applyNinjaMode(!gameState.stealthMode); onClose(); }}>
+              <span className="font-mono text-muted-foreground w-4 shrink-0">2</span>
+              {gameState.stealthMode ? '👁️ Drop stealth' : '🤫 Stealth'}
+            </button>
+          </div>
+        )}
+
+        {isRoyalGuard(player.characterClass) && (
+          <div className="space-y-1.5 mt-2">
+            <button className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm hover:bg-secondary/60" onClick={() => { handleGuardianStance(); onClose(); }}>
+              <span className="font-mono text-muted-foreground w-4 shrink-0">4</span>
+              💂 Guardian Stance
+              <span className="ml-auto text-[10px] font-mono">{(player.stats.guardianStanceTurns ?? 0) > 0 ? `${player.stats.guardianStanceTurns}t` : (player.stats.guardianStanceCooldown ?? 0) > 0 ? `${player.stats.guardianStanceCooldown}t` : 'ready'}</span>
+            </button>
           </div>
         )}
 

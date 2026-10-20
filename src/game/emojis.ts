@@ -236,6 +236,7 @@ export const EQUIPMENT_DROPS_T1: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   { emoji: '🎯', name: 'Precision Bow',    description: 'Ranger main hand: +3 ATK, +3 LCK. Better crits at range.',              isEquipment: true, equipSlots: ['mainHand'],             weaponKind: 'bow',   equipBonus: { attack: 3, luck: 3 } },
   // Guns (Cowboy / Ranger mainHand & offHand)
   { emoji: '🔫', name: 'Revolver',         description: 'Cowboy/Ranger: +4 ATK. Cowboy dual-wield = ranged auto-attack (1 🪙 per shot, 2 per dual-gun attack).',      isEquipment: true, equipSlots: ['mainHand', 'offHand'],  weaponKind: 'gun',   equipBonus: { attack: 4 } },
+  { emoji: '🔫', name: 'Musket',           description: 'Royal Guard / Levitating Hitman main hand: +8 ATK, −1 SPD. A long gun. Cowboys cannot equip it.', isEquipment: true, equipSlots: ['mainHand'], weaponKind: 'gun', gunTier: 'musket', equipBonus: { attack: 8, speed: -1 } },
   { emoji: '💥', name: 'Hand Cannon',      description: 'Cowboy/Ranger: +6 ATK, -1 SPD. Dual-gun mode: 1 🪙 per shot, 2 bullets per attack.', isEquipment: true, equipSlots: ['mainHand', 'offHand'],  weaponKind: 'gun',   equipBonus: { attack: 6, speed: -1 } },
   // Ranger offHand melee
   { emoji: '🔰', name: 'Hunting Blade',    description: 'Ranger off-hand: +3 ATK to melee. Separate from ranged damage.',        isEquipment: true, equipSlots: ['offHand'],              weaponKind: 'blade', equipBonus: { attack: 3 } },
@@ -271,6 +272,7 @@ export const EQUIPMENT_DROPS_T2: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   { emoji: '🎯', name: 'Eagle Eye Bow',    description: 'Ranger main hand: +5 ATK, +5 LCK. Pinpoint accuracy.',                 isEquipment: true, equipSlots: ['mainHand'],             weaponKind: 'bow',   equipBonus: { attack: 5, luck: 5 } },
   // Guns
   { emoji: '🔫', name: 'Six-Shooter',      description: 'Cowboy/Ranger: +7 ATK. Fast cylinder, more stopping power.',           isEquipment: true, equipSlots: ['mainHand', 'offHand'],  weaponKind: 'gun',   equipBonus: { attack: 7 } },
+  { emoji: '🔫', name: 'Rifle',            description: 'Royal Guard / Levitating Hitman main hand: +12 ATK, −1 SPD. Cowboys cannot equip it.', isEquipment: true, equipSlots: ['mainHand'], weaponKind: 'gun', gunTier: 'musket', equipBonus: { attack: 12, speed: -1 } },
   { emoji: '💥', name: 'War Cannon',       description: 'Cowboy/Ranger: +9 ATK, -1 SPD. Devastating bore.',                     isEquipment: true, equipSlots: ['mainHand', 'offHand'],  weaponKind: 'gun',   equipBonus: { attack: 9, speed: -1 } },
   // Ranger offHand melee
   { emoji: '🔰', name: 'Hunting Sword',    description: 'Ranger off-hand: +5 ATK to melee. Longer reach, harder hits.',         isEquipment: true, equipSlots: ['offHand'],              weaponKind: 'blade', equipBonus: { attack: 5 } },
@@ -306,6 +308,7 @@ export const EQUIPMENT_DROPS_T3: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   { emoji: '🎯', name: 'Perfect Aim',      description: 'Ranger main hand: +8 ATK, +8 LCK. Never misses.',                     isEquipment: true, equipSlots: ['mainHand'],             weaponKind: 'bow',   equipBonus: { attack: 8, luck: 8 } },
   // Guns
   { emoji: '🔫', name: 'Magnum',           description: 'Cowboy/Ranger: +10 ATK. One shot, one kill.',                         isEquipment: true, equipSlots: ['mainHand', 'offHand'],  weaponKind: 'gun',   equipBonus: { attack: 10 } },
+  { emoji: '🔫', name: 'Jezail',            description: 'Royal Guard / Levitating Hitman main hand: +16 ATK, −2 SPD. Cowboys cannot equip it.', isEquipment: true, equipSlots: ['mainHand'], weaponKind: 'gun', gunTier: 'musket', equipBonus: { attack: 16, speed: -2 } },
   { emoji: '💥', name: 'Siege Cannon',     description: 'Cowboy/Ranger: +14 ATK, -2 SPD. Apocalyptic stopping power.',         isEquipment: true, equipSlots: ['mainHand', 'offHand'],  weaponKind: 'gun',   equipBonus: { attack: 14, speed: -2 } },
   // Ranger offHand melee
   { emoji: '🔰', name: 'Battle Blade',     description: 'Ranger off-hand: +8 ATK to melee. Deep-dungeon forged.',              isEquipment: true, equipSlots: ['offHand'],              weaponKind: 'blade', equipBonus: { attack: 8 } },

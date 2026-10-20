@@ -17,6 +17,8 @@ import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { getMood, MOODS } from '../game/moods';
 import { getClassDef } from '../game/classes';
+import { classFlies, crownItem, fencerEvasion, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, startFloorContract } from '../game/prestige';
+import { GENIE_BASE_MP } from '../game/prestigeConstants';
 import { saveScore, leaderboardEntryFromRun } from '../game/leaderboard';
 import { readVoidModeProgress, startingVoidLoadout } from '../game/voidMeta';
 import { VOID_DEATH_TEXT, VOID_UNLOCK_TEXT, nullMomentumPercent } from '../game/voidDamage';
@@ -614,6 +616,8 @@ export default function Game() {
     const { map, startPos, rooms } = generateMap(1);
     const vessel = localStorage.getItem('emojirl_vessel') ?? '🧙';
     const cls = getClassDef(vessel);
+    const arcane = isArcaneCaster(vessel);
+    const startMp = isGenie(vessel) ? GENIE_BASE_MP : 4;
 
     const startingPowers = Array.from({ length: cls.startingEmojiSlots }, (_, i) => ({
       ...getRandomEmojiPower(),
@@ -622,7 +626,7 @@ export default function Game() {
     }));
     const voidLoad = vessel === '👤' ? startingVoidLoadout(0) : null;
 
-    const initialPlayer: Player = {
+    let initialPlayer: Player = {
       pos: startPos,
       emoji: vessel,
       characterClass: vessel,
@@ -639,16 +643,18 @@ export default function Game() {
         xp: 0,
         moodValue: 0,
         gold: 10,
-        mana: vessel === '🧙' ? 4 : 0,
-        maxMana: vessel === '🧙' ? 4 : 0,
+        mana: arcane ? startMp : 0,
+        maxMana: arcane ? startMp : 0,
       },
       inventory: startingPowers,
       bank: [],
-      equipment: {},
+      equipment: isRoyalGuard(vessel) ? { accessory: crownItem() } : {},
       ghostHotbar: voidLoad?.ghostHotbar,
       ghostBank: voidLoad?.ghostBank,
       voidBossesCleared: 0,
     };
+    const openingContract = startFloorContract(initialPlayer);
+    initialPlayer = openingContract.player;
 
     setGameState({
       schemaVersion: 1,
@@ -658,7 +664,10 @@ export default function Game() {
       enemies: spawnEnemies(1, rooms, startPos, 0, map),
       items: spawnVaultItems(rooms, vessel, 1, map),
       turn: 1,
-      logs: [{ id: 'l1', text: vessel === '🤠' ? `Welcome, Cowboy. Only real Cowboys fight with their fists! Descend and collect emojis.` : vessel === '👤' ? `Welcome, The Void. Emptiness is peace — filled souls burn.` : `Welcome, ${cls.name}. Descend and collect emojis.`, turn: 1 }],
+      logs: [
+        { id: 'l1', text: vessel === '🤠' ? `Welcome, Cowboy. Only real Cowboys fight with their fists! Descend and collect emojis.` : vessel === '👤' ? `Welcome, The Void. Emptiness is peace — filled souls burn.` : `Welcome, ${cls.name}. Descend and collect emojis.`, turn: 1 },
+        ...(openingContract.log ? [{ id: 'l1-contract', text: openingContract.log, turn: 1 }] : []),
+      ],
       floatingTexts: [],
       gameOver: false,
       victory: false,
@@ -703,6 +712,10 @@ export default function Game() {
     handleBlinkStrikeOnTarget,
     applyRangerMode,
     handleCowboyTactics,
+    handleBackdash,
+    handleLunge,
+    handleExecuteContract,
+    handleGuardianStance,
     handleFireProjectile,
     handleUseSlot,
     handleShopBuyAndUse,
@@ -861,7 +874,7 @@ export default function Game() {
         chebyshev(player.pos, e.pos) <= VISION_RADIUS + 1 &&
         enemyInEngageSight(e)
       );
-      if ((exploreCls === '🧙' || (exploreCls === '👤' && voidAttackModeRef.current === 'wizard')) && visibleHostile.length > 0) {
+      if ((isArcaneCaster(exploreCls) || (exploreCls === '👤' && voidAttackModeRef.current === 'wizard')) && visibleHostile.length > 0) {
         setAutoExplore(false);
         addLog('Autoexplore stopped: enemy in sight — auto-fire engaged!');
         return;
@@ -871,7 +884,11 @@ export default function Game() {
       const exploreCowboyDualGuns = exploreCls === '🤠' &&
         player.equipment.mainHand?.weaponKind === 'gun' &&
         player.equipment.offHand?.weaponKind === 'gun';
-      if ((exploreCls === '🧝' && rangerModeRef.current === 'ranged') || (exploreCls === '👤' && voidAttackModeRef.current === 'ranger') || exploreCowboyDualGuns) {
+      const exploreGuardRanged = isRoyalGuard(exploreCls) && rangerModeRef.current === 'ranged';
+      const exploreHitmanArmed = isHitman(exploreCls) && (
+        player.equipment.mainHand?.weaponKind === 'gun' || player.equipment.offHand?.weaponKind === 'gun'
+      );
+      if ((exploreCls === '🧝' && rangerModeRef.current === 'ranged') || exploreGuardRanged || (exploreCls === '👤' && voidAttackModeRef.current === 'ranger') || exploreCowboyDualGuns || exploreHitmanArmed) {
         if (visibleHostile.some(e =>
           chebyshev(player.pos, e.pos) <= eagleEyeRange(player.stats.level) + 1
         )) {
@@ -963,11 +980,12 @@ export default function Game() {
         return;
       }
       const explorePassives = playerBagPassives(player);
+      const canCrossWater = explorePassives.canSwim || classFlies(player.characterClass);
 
       const visibleItems = items.filter(it => state.map[it.pos.y]?.[it.pos.x]?.visible);
       if (visibleItems.length > 0) {
         const itemOccupiedSet = new Set([...autoexploreOccupiedKeys(enemies), ...barBlockedSet]);
-        const itemPassable = explorePassives.canSwim
+        const itemPassable = canCrossWater
           ? new Set([...PLAYER_PASSABLE_TILES, 'water'])
           : new Set([...PLAYER_PASSABLE_TILES]);
         const reachableItems = visibleItems.filter(it =>
@@ -986,7 +1004,7 @@ export default function Game() {
       }
 
       // Auto-rest first if HP or MP (Wizard) isn't full and no enemies are visible
-      const exploreIsWizard = player.characterClass === '🧙';
+      const exploreIsWizard = isArcaneCaster(player.characterClass);
       const exploreMpFull = !exploreIsWizard || (player.stats.mana ?? 0) >= (player.stats.maxMana ?? 4);
       if (player.stats.hp < player.stats.maxHp || !exploreMpFull) {
         const anyVisibleEnemy = hostileEnemies.some(e => enemyInEngageSight(e));
@@ -998,8 +1016,8 @@ export default function Game() {
 
       const useWallHug = player.characterClass === '🥷' && autoStealthRef.current;
       const step = useWallHug
-        ? bfsNextStepWallHug(state.map, player.pos, explorePassives.canSwim, autoBlockedSet)
-        : bfsNextStep(state.map, player.pos, explorePassives.canSwim, autoBlockedSet);
+        ? bfsNextStepWallHug(state.map, player.pos, canCrossWater, autoBlockedSet)
+        : bfsNextStep(state.map, player.pos, canCrossWater, autoBlockedSet);
       if (!step) {
         let stairsTarget: Position | null = null;
         for (let sy = 0; sy < state.map.length && !stairsTarget; sy++) {
@@ -1008,7 +1026,7 @@ export default function Game() {
           }
         }
         const occupiedSet = new Set([...autoexploreOccupiedKeys(enemies), ...barBlockedSet]);
-        const stairsPassable = explorePassives.canSwim
+        const stairsPassable = canCrossWater
           ? new Set([...PLAYER_PASSABLE_TILES, 'water', 'stairs'])
           : new Set([...PLAYER_PASSABLE_TILES, 'stairs']);
         const nextPos = stairsTarget
@@ -1084,7 +1102,7 @@ export default function Game() {
       const passives = playerBagPassives(player);
       const targetType = state.map[target.y]?.[target.x]?.type;
       const passable = new Set<string>([...PLAYER_PASSABLE_TILES]);
-      if (passives.canSwim) passable.add('water');
+      if (passives.canSwim || classFlies(player.characterClass)) passable.add('water');
       if (targetType) passable.add(targetType);
       const occupiedSet = autoexploreOccupiedKeys(enemies);
       const nextPos = bfsStepToward(state.map, player.pos, target, occupiedSet, passable);
@@ -1256,7 +1274,7 @@ export default function Game() {
         return;
       }
 
-      const isWizard = state.player.characterClass === '🧙';
+      const isWizard = isArcaneCaster(state.player.characterClass);
       const hpFull = state.player.stats.hp >= state.player.stats.maxHp;
       const mpFull = !isWizard || (state.player.stats.mana ?? 0) >= (state.player.stats.maxMana ?? 4);
       const bountyWait = autoRestNeedsBountyWait(state.companionKillTally ?? 0);
@@ -1526,19 +1544,26 @@ export default function Game() {
         const mState = gameStateRef.current;
         if (!mState || mState.gameOver) { setTacticsMenuOpen(false); return; }
         const tCls = mState.player.characterClass;
-        if (tCls === '🧙') {
+        if (tCls === '🧙' || tCls === '🧞‍♀️') {
           const WM = ['nearest', 'furthest', 'manual', 'holdfire'] as const;
           const wi = parseInt(e.key) - 1;
           if (wi >= 0 && wi < WM.length) { applyWizardMode(WM[wi]); setTacticsMenuOpen(false); }
+        } else if (tCls === '🤺') {
+          if (e.key === '1') { handleBackdash(); setTacticsMenuOpen(false); }
+          if (e.key === '2') { handleLunge(); setTacticsMenuOpen(false); }
+        } else if (tCls === '🕴️') {
+          if (e.key === '1') { handleExecuteContract(); setTacticsMenuOpen(false); }
+          if (e.key === '2') { applyNinjaMode(!mState.stealthMode); setTacticsMenuOpen(false); }
         } else if (tCls === '🥷') {
           if (e.key === '1') { enterBlinkTargetMode(); setTacticsMenuOpen(false); }
           if (e.key === '2') { applyNinjaMode(true);  setTacticsMenuOpen(false); }
           if (e.key === '3') { applyNinjaMode(false); setTacticsMenuOpen(false); }
           if (e.key === '4') { toggleAutoStealth();   setTacticsMenuOpen(false); }
-        } else if (tCls === '🧝') {
+        } else if (tCls === '🧝' || tCls === '💂') {
           if (e.key === '1') { applyRangerMode('ranged'); setTacticsMenuOpen(false); }
           if (e.key === '2') { applyRangerMode('melee');  setTacticsMenuOpen(false); }
-          if (e.key === '3') { applyRangerMode('flee');   setTacticsMenuOpen(false); }
+          if (e.key === '3' && tCls === '🧝') { applyRangerMode('flee'); setTacticsMenuOpen(false); }
+          if (e.key === '4' && tCls === '💂') { handleGuardianStance(); setTacticsMenuOpen(false); }
         } else if (tCls === '🤠') {
           if (e.key === '1') { handleCowboyTactics(); setTacticsMenuOpen(false); }
         }
@@ -1803,7 +1828,14 @@ export default function Game() {
         return;
       }
       // Ninja blink strike shortcut: x → instant strike on nearest enemy
-      if ((e.key === 'x' || e.key === 'X') && gameStateRef.current?.player.characterClass === '🥷') { e.preventDefault(); handleBlinkStrike(); return; }
+      if ((e.key === 'x' || e.key === 'X') && gameStateRef.current) {
+        const xCls = gameStateRef.current.player.characterClass;
+        if (xCls === '🥷') { e.preventDefault(); handleBlinkStrike(); return; }
+        if (xCls === '🤺') { e.preventDefault(); handleLunge(); return; }
+        if (xCls === '🕴️') { e.preventDefault(); handleExecuteContract(); return; }
+        if (xCls === '🧞‍♀️') { e.preventDefault(); applyWizardMode('holdfire'); return; }
+        if (xCls === '💂') { e.preventDefault(); handleGuardianStance(); return; }
+      }
 
 
       // ── Bag: open with B ──────────────────────────────────────────────────
@@ -1881,7 +1913,7 @@ export default function Game() {
   const engagedEnemies = gameState.enemies.filter(e => e.engaged);
   const huntedByVisible = engagedEnemies.some(e => gameState.map[e.pos.y]?.[e.pos.x]?.visible);
   // Stealth only counts if no enemies have already spotted the player
-  const isNinjaStealth = player.characterClass === '🥷' && (gameState.stealthMode || autoStealth) && engagedEnemies.length === 0;
+  const isNinjaStealth = (player.characterClass === '🥷' || isHitman(player.characterClass)) && (gameState.stealthMode || (player.characterClass === '🥷' && autoStealth)) && engagedEnemies.length === 0;
   const detectionState: 'unseen' | 'seen' | 'hunted' =
     huntedByVisible ? 'hunted' :
     engagedEnemies.length > 0 ? 'seen' :
@@ -1928,6 +1960,10 @@ export default function Game() {
     beginUnmake,
     unmakeSpent: gameState.unmakeUsedFloor === currentFloor,
     voidAttackMode: (gameState.voidAttackMode ?? 'melee') as VoidAttackMode,
+    handleBackdash,
+    handleLunge,
+    handleExecuteContract,
+    handleGuardianStance,
   });
   const mobileGeneralActions: ActionItem[] = [
     { id: 'heal', icon: '❤️', label: 'Heal', onUse: handleUseHeal },
@@ -1953,7 +1989,7 @@ export default function Game() {
   // ─── Ranged-attack targeting indicators (render-time, no state needed) ────
   const wizardAutoTarget: Enemy | null = (() => {
     const voidWizard = player.characterClass === '👤' && (gameState.voidAttackMode ?? 'melee') === 'wizard';
-    if ((player.characterClass !== '🧙' && !voidWizard) || wizardTactics.mode === 'holdfire') return null;
+    if ((!isArcaneCaster(player.characterClass) && !voidWizard) || wizardTactics.mode === 'holdfire') return null;
     const candidates = gameState.enemies.filter(e => {
       const d = chebyshev(player.pos, e.pos);
       return d > 1 && d <= VISION_RADIUS && hasLOSBetween(gameState.map, player.pos, e.pos)
@@ -2648,7 +2684,10 @@ export default function Game() {
           <div>
             <div className="text-[11px] font-bold uppercase leading-tight tracking-wide">{cls.name} · Lv {player.stats.level}</div>
             <div className="text-[9px] text-muted-foreground/60 leading-tight">
-              {player.characterClass === '🧙' && (wizardTactics.mode === 'nearest' ? '🎯 Nearest' : wizardTactics.mode === 'furthest' ? '🎯 Furthest' : wizardTactics.mode === 'manual' ? (wizardTactics.manualTargetId ? '🎯 Locked' : '🎯 Manual') : '✨ Blink')}
+              {isArcaneCaster(player.characterClass) && (wizardTactics.mode === 'nearest' ? '🎯 Nearest' : wizardTactics.mode === 'furthest' ? '🎯 Furthest' : wizardTactics.mode === 'manual' ? (wizardTactics.manualTargetId ? '🎯 Locked' : '🎯 Manual') : '✨ Blink')}
+              {isFencer(player.characterClass) && `🤺 ${(player.stats.lungeCooldown ?? 0) === 0 ? 'Lunge' : player.stats.lungeCooldown + 't'}`}
+              {isHitman(player.characterClass) && `🕴️ ${(player.stats.contractKills ?? 0)}/${player.stats.contractGoal ?? 0}${gameState.stealthMode ? ' · stealth' : ''}`}
+              {isRoyalGuard(player.characterClass) && `${rangerMode === 'ranged' ? '🏹 Ranged' : '⚔️ Melee'}${(player.stats.guardianStanceTurns ?? 0) > 0 ? ' · stance' : ''}`}
               {player.characterClass === '🥷' && (
                 <span className="flex items-center gap-1.5">
                   <span>{autoStealth ? '🧱 Auto-Stealth' : gameState.stealthMode ? '🤫 Stealthy' : '👁️ Visible'}</span>
@@ -2707,7 +2746,7 @@ export default function Game() {
               })()}
             </div>
           </div>
-          {player.characterClass === '🧙' && (
+          {isArcaneCaster(player.characterClass) && (
             <div>
               <div className="flex justify-between text-[9px] mb-0.5">
                 <span className="font-medium text-violet-400">🔵 MP</span>
@@ -2860,7 +2899,11 @@ export default function Game() {
           const displayedAtk = _effPlayer.stats.attack + hudIronFistBonus;
           const atkTitle = hudIronFistBonus > 0 ? `ATK ${_effPlayer.stats.attack} + ${hudIronFistBonus} Iron Fist` : '';
           const crit = critStat(_effPlayer.stats.luck);
-          const dodge = player.characterClass === '🥷' ? computeNinjaEvasion(_effPlayer) : Math.min(50, _effPlayer.stats.evasion ?? 0);
+          const dodge = player.characterClass === '🥷'
+            ? computeNinjaEvasion(_effPlayer)
+            : isFencer(player.characterClass)
+              ? fencerEvasion(_effPlayer.stats.hp, _effPlayer.stats.maxHp, _effPlayer.stats.evasion ?? 0)
+              : Math.min(50, _effPlayer.stats.evasion ?? 0);
           const voidDr = player.characterClass === '👤' ? nullMomentumPercent(player.stats.level) : 0;
           return (
             <div className="flex gap-1.5 shrink-0 text-[9px]" data-testid="stat-grid">
@@ -3392,6 +3435,10 @@ export default function Game() {
           toggleAutoStealth={toggleAutoStealth}
           applyRangerMode={applyRangerMode}
           handleCowboyTactics={handleCowboyTactics}
+          handleBackdash={handleBackdash}
+          handleLunge={handleLunge}
+          handleExecuteContract={handleExecuteContract}
+          handleGuardianStance={handleGuardianStance}
           onClose={() => setTacticsMenuOpen(false)}
         />
       )}

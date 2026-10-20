@@ -254,7 +254,7 @@ export function spawnVaultItems(rooms: Room[], playerClass?: string, floor = 1, 
       const count = 2 + Math.floor(Math.random() * 2);
       for (let i = 0; i < count; i++) {
         let drop: Omit<EmojiItem, 'id' | 'consumed'>;
-        if (playerClass === '🤠' && Math.random() < 0.13) {
+        if ((playerClass === '🤠' || playerClass === '🕴️') && Math.random() < 0.13) {
           drop = getBulletDrop();
         } else if (Math.random() < 0.08) {
           drop = { ...MONEY_BAG };
