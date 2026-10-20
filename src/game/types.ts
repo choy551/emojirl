@@ -152,6 +152,8 @@ export type ActiveKind = 'bomb' | 'gun' | 'boomerang' | 'rope' | 'freeze';
 
 export interface EmojiItem {
   id: string;
+  /** Stable catalog id. Distinct items that share an emoji (food 🍄 vs soul 🍄) use different itemIds. */
+  itemId?: string;
   emoji: string;
   name: string;
   description: string;

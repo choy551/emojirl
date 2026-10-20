@@ -84,6 +84,11 @@ export const COWBOY_DUAL_BULLET_WEIGHT = 24;
 export type DropKind = 'heal' | 'money' | 'ammo' | 'active' | 'soul' | 'equipment' | 'cooked';
 
 export interface DropEntry {
+  /**
+   * Stable catalog id. Each id belongs to exactly one tier.
+   * Two items may share an emoji; they do not share an itemId.
+   */
+  itemId: string;
   emoji: string;
   kind: DropKind;
   rarity: DropRarity;
@@ -92,6 +97,7 @@ export interface DropEntry {
 }
 
 export interface DropIdentity {
+  itemId?: string;
   emoji: string;
   isEquipment?: boolean;
   healAmount?: number;
@@ -111,83 +117,90 @@ export interface DropRollContext {
   rng?: () => number;
 }
 
+function entry(itemId: string, emoji: string, kind: DropKind, rarity: DropRarity, droppable = true): DropEntry {
+  return { itemId, emoji, kind, rarity, droppable };
+}
+
 /**
- * Every emoji that can drop, plus cooked food (tooltip only).
- * High tier is Legendary: 💀 💰 🍀 and the other run-defining souls.
- * Low tier is Common: 🧅 🧪 🫀 and the rest of the raw food.
+ * Every droppable catalog item, plus cooked food (tooltip only).
+ * High tier is Legendary: soul:skull, money:bag, soul:clover, and peers.
+ * Low tier is Common: heal:onion, heal:potion, heal:heart, and the rest of the raw food.
+ * Floor-scaled gear names (Longbow / War Bow / Celestial Bow) share one itemId;
+ * they are the depth scaling of one drop, not separate tiers.
+ * Shared emoji are different itemIds — see the pairs in the test.
  */
 export const DROP_TABLE: DropEntry[] = [
   // ── Common (low) ──────────────────────────────────────────────────────────
-  { emoji: '🍎', kind: 'heal', rarity: 'common', droppable: true },
-  { emoji: '🍖', kind: 'heal', rarity: 'common', droppable: true },
-  { emoji: '🧪', kind: 'heal', rarity: 'common', droppable: true },
-  { emoji: '🍇', kind: 'heal', rarity: 'common', droppable: true },
-  { emoji: '🫀', kind: 'heal', rarity: 'common', droppable: true },
-  { emoji: '🍞', kind: 'heal', rarity: 'common', droppable: true },
-  { emoji: '🧅', kind: 'heal', rarity: 'common', droppable: true },
-  { emoji: '🍄', kind: 'heal', rarity: 'common', droppable: true },
+  entry('heal:apple', '🍎', 'heal', 'common'),
+  entry('heal:meat', '🍖', 'heal', 'common'),
+  entry('heal:potion', '🧪', 'heal', 'common'),
+  entry('heal:grapes', '🍇', 'heal', 'common'),
+  entry('heal:heart', '🫀', 'heal', 'common'),
+  entry('heal:bread', '🍞', 'heal', 'common'),
+  entry('heal:onion', '🧅', 'heal', 'common'),
+  entry('heal:mushroom', '🍄', 'heal', 'common'),
 
   // ── Uncommon ──────────────────────────────────────────────────────────────
-  { emoji: '🏹', kind: 'ammo', rarity: 'uncommon', droppable: true },
-  { emoji: '🪙', kind: 'ammo', rarity: 'uncommon', droppable: true },
-  { emoji: '🪢', kind: 'active', rarity: 'uncommon', droppable: true },
-  { emoji: '❄️', kind: 'active', rarity: 'uncommon', droppable: true },
-  { emoji: '❤️', kind: 'soul', rarity: 'uncommon', droppable: true },
-  { emoji: '🍄', kind: 'soul', rarity: 'uncommon', droppable: true },
-  { emoji: '🌊', kind: 'soul', rarity: 'uncommon', droppable: true },
-  { emoji: '🧊', kind: 'soul', rarity: 'uncommon', droppable: true },
-  { emoji: '🧥', kind: 'equipment', rarity: 'uncommon', droppable: true },
-  { emoji: '🥋', kind: 'equipment', rarity: 'uncommon', droppable: true },
-  { emoji: '🔰', kind: 'equipment', rarity: 'uncommon', droppable: true },
-  { emoji: '⛑️', kind: 'equipment', rarity: 'uncommon', droppable: true },
-  { emoji: '🔥', kind: 'equipment', rarity: 'uncommon', droppable: true },
-  { emoji: '🧊', kind: 'equipment', rarity: 'uncommon', droppable: true },
-  { emoji: '🍏', kind: 'cooked', rarity: 'uncommon', droppable: false },
-  { emoji: '🥪', kind: 'cooked', rarity: 'uncommon', droppable: false },
-  { emoji: '🥩', kind: 'cooked', rarity: 'uncommon', droppable: false },
-  { emoji: '🍲', kind: 'cooked', rarity: 'uncommon', droppable: false },
-  { emoji: '🍓', kind: 'cooked', rarity: 'uncommon', droppable: false },
+  entry('ammo:quiver', '🏹', 'ammo', 'uncommon'),
+  entry('ammo:bullets', '🪙', 'ammo', 'uncommon'),
+  entry('active:rope', '🪢', 'active', 'uncommon'),
+  entry('active:freeze', '❄️', 'active', 'uncommon'),
+  entry('soul:heart', '❤️', 'soul', 'uncommon'),
+  entry('soul:mushroom', '🍄', 'soul', 'uncommon'),
+  entry('soul:wave', '🌊', 'soul', 'uncommon'),
+  entry('soul:ice', '🧊', 'soul', 'uncommon'),
+  entry('gear:cloak', '🧥', 'equipment', 'uncommon'),
+  entry('gear:gi', '🥋', 'equipment', 'uncommon'),
+  entry('gear:hunting-blade', '🔰', 'equipment', 'uncommon'),
+  entry('gear:helmet', '⛑️', 'equipment', 'uncommon'),
+  entry('gear:fire-arrows', '🔥', 'equipment', 'uncommon'),
+  entry('gear:ice-arrows', '🧊', 'equipment', 'uncommon'),
+  entry('cooked:baked-apple', '🍏', 'cooked', 'uncommon', false),
+  entry('cooked:toast', '🥪', 'cooked', 'uncommon', false),
+  entry('cooked:grilled-steak', '🥩', 'cooked', 'uncommon', false),
+  entry('cooked:mushroom-stew', '🍲', 'cooked', 'uncommon', false),
+  entry('cooked:berries', '🍓', 'cooked', 'uncommon', false),
 
   // ── Rare ──────────────────────────────────────────────────────────────────
-  { emoji: '💣', kind: 'active', rarity: 'rare', droppable: true },
-  { emoji: '🔫', kind: 'active', rarity: 'rare', droppable: true },
-  { emoji: '🪃', kind: 'active', rarity: 'rare', droppable: true },
-  { emoji: '🔥', kind: 'soul', rarity: 'rare', droppable: true },
-  { emoji: '💎', kind: 'soul', rarity: 'rare', droppable: true },
-  { emoji: '🌟', kind: 'soul', rarity: 'rare', droppable: true },
-  { emoji: '🧲', kind: 'soul', rarity: 'rare', droppable: true },
-  { emoji: '🛡️', kind: 'soul', rarity: 'rare', droppable: true },
-  { emoji: '🎯', kind: 'soul', rarity: 'rare', droppable: true },
-  { emoji: '💊', kind: 'soul', rarity: 'rare', droppable: true },
-  { emoji: '🌙', kind: 'soul', rarity: 'rare', droppable: true },
-  { emoji: '🦋', kind: 'soul', rarity: 'rare', droppable: true },
-  { emoji: '🎲', kind: 'soul', rarity: 'rare', droppable: true },
-  { emoji: '🪄', kind: 'equipment', rarity: 'rare', droppable: true },
-  { emoji: '🌂', kind: 'equipment', rarity: 'rare', droppable: true },
-  { emoji: '⚔️', kind: 'equipment', rarity: 'rare', droppable: true },
-  { emoji: '🔪', kind: 'equipment', rarity: 'rare', droppable: true },
-  { emoji: '🗡️', kind: 'equipment', rarity: 'rare', droppable: true },
-  { emoji: '🏹', kind: 'equipment', rarity: 'rare', droppable: true },
-  { emoji: '🎯', kind: 'equipment', rarity: 'rare', droppable: true },
-  { emoji: '🔫', kind: 'equipment', rarity: 'rare', droppable: true },
-  { emoji: '🦺', kind: 'equipment', rarity: 'rare', droppable: true },
-  { emoji: '🪬', kind: 'equipment', rarity: 'rare', droppable: true },
-  { emoji: '💍', kind: 'equipment', rarity: 'rare', droppable: true },
-  { emoji: '📿', kind: 'equipment', rarity: 'rare', droppable: true },
-  { emoji: '🏅', kind: 'equipment', rarity: 'rare', droppable: true },
-  { emoji: '🧿', kind: 'equipment', rarity: 'rare', droppable: true },
+  entry('active:bomb', '💣', 'active', 'rare'),
+  entry('active:gun', '🔫', 'active', 'rare'),
+  entry('active:boomerang', '🪃', 'active', 'rare'),
+  entry('soul:fire', '🔥', 'soul', 'rare'),
+  entry('soul:diamond', '💎', 'soul', 'rare'),
+  entry('soul:star', '🌟', 'soul', 'rare'),
+  entry('soul:magnet', '🧲', 'soul', 'rare'),
+  entry('soul:shield', '🛡️', 'soul', 'rare'),
+  entry('soul:target', '🎯', 'soul', 'rare'),
+  entry('soul:pill', '💊', 'soul', 'rare'),
+  entry('soul:moon', '🌙', 'soul', 'rare'),
+  entry('soul:butterfly', '🦋', 'soul', 'rare'),
+  entry('soul:die', '🎲', 'soul', 'rare'),
+  entry('gear:wand', '🪄', 'equipment', 'rare'),
+  entry('gear:parasol', '🌂', 'equipment', 'rare'),
+  entry('gear:sword', '⚔️', 'equipment', 'rare'),
+  entry('gear:knife', '🔪', 'equipment', 'rare'),
+  entry('gear:dagger', '🗡️', 'equipment', 'rare'),
+  entry('gear:bow', '🏹', 'equipment', 'rare'),
+  entry('gear:aim-bow', '🎯', 'equipment', 'rare'),
+  entry('gear:revolver', '🔫', 'equipment', 'rare'),
+  entry('gear:vest', '🦺', 'equipment', 'rare'),
+  entry('gear:ward', '🪬', 'equipment', 'rare'),
+  entry('gear:ring', '💍', 'equipment', 'rare'),
+  entry('gear:amulet', '📿', 'equipment', 'rare'),
+  entry('gear:medal', '🏅', 'equipment', 'rare'),
+  entry('gear:orb', '🧿', 'equipment', 'rare'),
 
-  // ── Legendary (high): 💀 💰 🍀 and peers ─────────────────────────────────
-  { emoji: '💀', kind: 'soul', rarity: 'legendary', droppable: true },
-  { emoji: '💰', kind: 'money', rarity: 'legendary', droppable: true },
-  { emoji: '🍀', kind: 'soul', rarity: 'legendary', droppable: true },
-  { emoji: '⚡', kind: 'soul', rarity: 'legendary', droppable: true },
-  { emoji: '👑', kind: 'soul', rarity: 'legendary', droppable: true },
-  { emoji: '⛵', kind: 'soul', rarity: 'legendary', droppable: true },
-  { emoji: '🔮', kind: 'soul', rarity: 'legendary', droppable: true },
-  { emoji: '🗡️', kind: 'soul', rarity: 'legendary', droppable: true },
-  { emoji: '🔱', kind: 'equipment', rarity: 'legendary', droppable: true },
-  { emoji: '💥', kind: 'equipment', rarity: 'legendary', droppable: true },
+  // ── Legendary (high) ──────────────────────────────────────────────────────
+  entry('soul:skull', '💀', 'soul', 'legendary'),
+  entry('money:bag', '💰', 'money', 'legendary'),
+  entry('soul:clover', '🍀', 'soul', 'legendary'),
+  entry('soul:lightning', '⚡', 'soul', 'legendary'),
+  entry('soul:crown', '👑', 'soul', 'legendary'),
+  entry('soul:boat', '⛵', 'soul', 'legendary'),
+  entry('soul:crystal-ball', '🔮', 'soul', 'legendary'),
+  entry('soul:dagger', '🗡️', 'soul', 'legendary'),
+  entry('gear:trident', '🔱', 'equipment', 'legendary'),
+  entry('gear:cannon', '💥', 'equipment', 'legendary'),
 ];
 
 export function tierIndex(rarity: DropRarity): number {
@@ -223,7 +236,12 @@ export function dropKindOf(item: DropIdentity): DropKind | undefined {
   return undefined;
 }
 
+export function dropEntryById(itemId: string): DropEntry | undefined {
+  return DROP_TABLE.find(e => e.itemId === itemId);
+}
+
 export function rarityOfItem(item: DropIdentity): DropRarity | undefined {
+  if (item.itemId) return dropEntryById(item.itemId)?.rarity;
   const kind = dropKindOf(item);
   if (!kind) return undefined;
   return DROP_TABLE.find(e => e.emoji === item.emoji && e.kind === kind)?.rarity;
@@ -245,10 +263,10 @@ export function entriesForRoll(ctx: DropRollContext = {}): DropEntry[] {
 /** Bosses ignore class ammo bias so every soul and weapon in a tier is even. */
 export function classModFor(entry: DropEntry, ctx: DropRollContext = {}): number {
   if (ctx.boss) return 1;
-  if (entry.kind === 'ammo' && entry.emoji === '🏹') {
+  if (entry.itemId === 'ammo:quiver') {
     return ctx.playerClass === '🧝' ? RANGER_QUIVER_WEIGHT : QUIVER_WEIGHT;
   }
-  if (entry.kind === 'ammo' && entry.emoji === '🪙') {
+  if (entry.itemId === 'ammo:bullets') {
     if (ctx.playerClass === '🤠' && ctx.cowboyDualGuns) return COWBOY_DUAL_BULLET_WEIGHT;
     if (ctx.playerClass === '🤠') return COWBOY_BULLET_WEIGHT;
   }
@@ -292,30 +310,34 @@ function weightedPick<T>(items: T[], weights: number[], rng: () => number): T {
 }
 
 function materialize(entry: DropEntry, floor: number, rng: () => number): Omit<EmojiItem, 'id' | 'consumed'> {
+  const stamp = (item: Omit<EmojiItem, 'id' | 'consumed'>): Omit<EmojiItem, 'id' | 'consumed'> => ({
+    ...item,
+    itemId: entry.itemId,
+  });
   switch (entry.kind) {
     case 'heal': {
       const found = HEAL_DROPS.find(e => e.emoji === entry.emoji);
-      if (!found) throw new Error(`missing heal drop ${entry.emoji}`);
-      return { ...found };
+      if (!found) throw new Error(`missing heal drop ${entry.itemId}`);
+      return stamp(found);
     }
     case 'money':
-      return { ...MONEY_BAG };
+      return stamp(MONEY_BAG);
     case 'ammo':
-      return { ...(entry.emoji === '🪙' ? BULLET_DROP : AMMO_DROP) };
+      return stamp(entry.itemId === 'ammo:bullets' ? BULLET_DROP : AMMO_DROP);
     case 'active': {
       const found = ACTIVE_DROPS.find(e => e.emoji === entry.emoji);
-      if (!found) throw new Error(`missing active drop ${entry.emoji}`);
-      return { ...found };
+      if (!found) throw new Error(`missing active drop ${entry.itemId}`);
+      return stamp(found);
     }
     case 'soul': {
       const found = EMOJI_POWERS.find(e => e.emoji === entry.emoji);
-      if (!found) throw new Error(`missing soul drop ${entry.emoji}`);
-      return { ...found };
+      if (!found) throw new Error(`missing soul drop ${entry.itemId}`);
+      return stamp(found);
     }
     case 'equipment':
-      return { ...equipmentVariantForEmoji(entry.emoji, floor, rng) };
+      return stamp(equipmentVariantForEmoji(entry.emoji, floor, rng));
     default:
-      throw new Error(`not rolled on kills: ${entry.kind} ${entry.emoji}`);
+      throw new Error(`not rolled on kills: ${entry.itemId}`);
   }
 }
 

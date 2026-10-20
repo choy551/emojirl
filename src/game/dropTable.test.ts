@@ -62,6 +62,47 @@ function expectedTierOdds(clover: number, ctx: DropRollContext): Record<DropRari
 const neutral: DropRollContext = { playerClass: '🧙' };
 
 describe('drop rarity catalog', () => {
+  it('puts no item id in more than one tier', () => {
+    const tierOf = new Map<string, string>();
+    for (const row of DROP_TABLE) {
+      const prev = tierOf.get(row.itemId);
+      expect(prev, row.itemId).toBeUndefined();
+      tierOf.set(row.itemId, row.rarity);
+    }
+    expect(tierOf.size).toBe(DROP_TABLE.length);
+    for (const row of DROP_TABLE) {
+      const tiers = new Set(DROP_TABLE.filter(e => e.itemId === row.itemId).map(e => e.rarity));
+      expect(tiers.size).toBe(1);
+      expect(tiers.has(row.rarity)).toBe(true);
+    }
+  });
+
+  it('disambiguates shared emoji by item id', () => {
+    const shared = ['🍄', '🔥', '🧊', '🏹', '🎯', '🔫', '🗡️'] as const;
+    for (const emoji of shared) {
+      const rows = DROP_TABLE.filter(e => e.emoji === emoji);
+      expect(rows.length).toBeGreaterThan(1);
+      expect(new Set(rows.map(e => e.itemId)).size).toBe(rows.length);
+      for (const row of rows) {
+        expect(DROP_TABLE.filter(e => e.itemId === row.itemId)).toHaveLength(1);
+      }
+    }
+    expect(DROP_TABLE.find(e => e.itemId === 'heal:mushroom')?.rarity).toBe('common');
+    expect(DROP_TABLE.find(e => e.itemId === 'soul:mushroom')?.rarity).toBe('uncommon');
+    expect(DROP_TABLE.find(e => e.itemId === 'gear:fire-arrows')?.rarity).toBe('uncommon');
+    expect(DROP_TABLE.find(e => e.itemId === 'soul:fire')?.rarity).toBe('rare');
+    expect(DROP_TABLE.find(e => e.itemId === 'soul:ice')?.rarity).toBe('uncommon');
+    expect(DROP_TABLE.find(e => e.itemId === 'gear:ice-arrows')?.rarity).toBe('uncommon');
+    expect(DROP_TABLE.find(e => e.itemId === 'ammo:quiver')?.rarity).toBe('uncommon');
+    expect(DROP_TABLE.find(e => e.itemId === 'gear:bow')?.rarity).toBe('rare');
+    expect(DROP_TABLE.find(e => e.itemId === 'soul:target')?.rarity).toBe('rare');
+    expect(DROP_TABLE.find(e => e.itemId === 'gear:aim-bow')?.rarity).toBe('rare');
+    expect(DROP_TABLE.find(e => e.itemId === 'active:gun')?.rarity).toBe('rare');
+    expect(DROP_TABLE.find(e => e.itemId === 'gear:revolver')?.rarity).toBe('rare');
+    expect(DROP_TABLE.find(e => e.itemId === 'gear:dagger')?.rarity).toBe('rare');
+    expect(DROP_TABLE.find(e => e.itemId === 'soul:dagger')?.rarity).toBe('legendary');
+  });
+
   it('classifies every droppable emoji exactly once', () => {
     const expected = new Set<string>();
     for (const item of HEAL_DROPS) expected.add(`heal:${item.emoji}`);
