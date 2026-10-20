@@ -401,11 +401,11 @@ export default function HowToPlay({
               desc: "Found in forest rooms. Stand nearby and press F to cook raw food into powerful cooked versions. Resting nearby heals +2 extra HP per turn.",
             },
             { icon: "📦", label: "Ammo Cache", desc: "Special shop tile (📦). Re-interact (z/Enter/Space on the tile) for class-specific ammo resupply before bosses." },
-            { icon: "🟦", label: "Water", desc: "Rivers, ponds, lakes, and vault moats. You cannot walk on water without a ⛵ Boat. Mermen lurk here. Lava that touches water cools the water into walkable ⚫ obsidian." },
+            { icon: "🟦", label: "Water", desc: "Rivers, ponds, lakes, and vault moats. You cannot walk on water without a ⛵ Boat. Mermen lurk here. Flying enemies cross and stand on water freely. Lava that touches water cools the water into walkable ⚫ obsidian." },
             { icon: "🌿", label: "Bush", desc: "Blocks movement like a wall, but you can see and shoot through it. Ranged enemies (archers, dark mages) like to hide behind these." },
             { icon: "🌋", label: "Volcano", desc: "A rare vault. Spews lava every 10–20 turns, but only near the crater — it will not flood the whole floor. Grab the high-tier loot around it before the lava eats it — and don't stand in the fire." },
             { icon: "🛏️", label: "Bed", desc: "Inside a nested room vault: a tiny 2×2 to 4×4 walled chamber with one door, tucked into a larger regular room. Interact to sleep. Resting overheals to 200% of max HP (the 🍺 bar is 150%), fully restores Wizard mana, and resets all cooldowns. 100 turns then pass — enemies still move and volcanoes still spew lava. Each bed can be used twice, then it's worn out. You cannot start sleep while a hostile is in sight. If a hostile reaches you, they land one sneak attack at 200% damage and you wake. Close the door before sleeping if you can. Autoexplore stops here." },
-            { icon: "🟧", label: "Lava", desc: "Extreme heat: each turn standing in lava deals 25% of your max HP plus a flat amount (starts at +10, +5 per floor descended). You'll get a Yes/No warning before stepping onto it from safe ground. Destroys items on the tile. Volcanoes and lava rivers both use this. Orthogonally adjacent 🟦 water cools into ⚫ obsidian." },
+            { icon: "🟧", label: "Lava", desc: "Extreme heat: each turn standing in lava deals 25% of your max HP plus a flat amount (starts at +10, +5 per floor descended). You'll get a Yes/No warning before stepping onto it from safe ground. Destroys items on the tile. Volcanoes and lava rivers both use this. Flying enemies cross it and take no damage. Orthogonally adjacent 🟦 water cools into ⚫ obsidian." },
             { icon: "⚫", label: "Obsidian", desc: "Cooled lava×water. Walkable like regular floor for you and enemies. Does not remelt." },
           ].map((t) => (
             <div
@@ -834,6 +834,12 @@ export default function HowToPlay({
                 desc: "Neutral — ignores you until you step near or onto water, then turns hostile. Avoid water tiles near Mermen.",
               },
               {
+                badge: "🦅",
+                color: "bg-sky-500/15 border-sky-500/30 text-sky-300",
+                label: "Flying",
+                desc: "Paths over and stands on water and lava. Lava does not burn them.",
+              },
+              {
                 badge: "🐒",
                 color: "bg-amber-500/15 border-amber-500/30 text-amber-300",
                 label: "Thief",
@@ -916,6 +922,7 @@ export default function HowToPlay({
                       ("waterAggro" in enemy && enemy.waterAggro) ||
                       ("monkey" in enemy && enemy.monkey) ||
                       ("crow" in enemy && enemy.crow) ||
+                      ("flying" in enemy && enemy.flying) ||
                       ("ranged" in enemy && enemy.ranged) ||
                       ("tag" in enemy && (enemy.tag === 'Neutral' || enemy.tag === 'Friendly'))) && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
@@ -1048,6 +1055,17 @@ export default function HowToPlay({
                             </span>
                             <span className="text-muted-foreground">
                               — steals gold on hit (scales with floor)
+                            </span>
+                          </span>
+                        )}
+                        {"flying" in enemy && enemy.flying && (
+                          <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/25">
+                            <span>🦅</span>
+                            <span className="font-semibold text-sky-300">
+                              Flying
+                            </span>
+                            <span className="text-muted-foreground">
+                              — crosses water and lava
                             </span>
                           </span>
                         )}

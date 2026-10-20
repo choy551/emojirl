@@ -7,6 +7,8 @@ export const ENEMY_PASSABLE_TILES = new Set(['floor', 'stairs', 'door-open', 'gr
 /** Humanoids: same as enemies + closed doors (open-on-enter). */
 export const HUMANOID_ENEMY_PASSABLE_TILES = new Set([...ENEMY_PASSABLE_TILES, 'door-closed']);
 export const MERMAN_PASSABLE_TILES = new Set(['water']);
+/** Tiles only flying creatures may enter, in addition to their normal passable set. */
+export const FLYING_TILES = new Set(['water', 'lava']);
 export const PASSABLE_TILES = PLAYER_PASSABLE_TILES;
 
 /** Tiles that stop wizard bolts, bows, guns, and enemy ranged shots. Open doors too — shoot from the doorway, not through it. Bushes do not block. */

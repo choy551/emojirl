@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { EmojiItem, GameState, MapGrid, Player, Tile } from './types';
+import type { EmojiItem, Enemy, GameState, MapGrid, Player, Tile } from './types';
 import { PLAYER_PASSABLE_TILES, ENEMY_PASSABLE_TILES } from './tiles';
 import {
   lavaFlatDamage, lavaDamageForFloor, shouldConfirmLavaStep, spreadVolcanoLava, tickVolcanoAndLava,
@@ -142,6 +142,32 @@ describe('tickVolcanoAndLava', () => {
     }));
     expect(next.player.stats.hp).toBe(5);
     expect(next.gameOver).toBe(false);
+  });
+
+  it('burns a grounded enemy in lava and leaves a flying enemy unhurt', () => {
+    const map = grid([
+      '#####',
+      '#L.L#',
+      '#####',
+    ]);
+    const grounded: Enemy = {
+      id: 'snake', pos: { x: 1, y: 1 }, emoji: '🐍', name: 'Snake',
+      hp: 20, maxHp: 20, attack: 1, defense: 0, speed: 1, engaged: false,
+    };
+    const flyer: Enemy = {
+      id: 'crow', pos: { x: 3, y: 1 }, emoji: '🐦‍⬛', name: 'Crow',
+      hp: 20, maxHp: 20, attack: 1, defense: 0, speed: 1, engaged: false, flying: true,
+    };
+    const next = tickVolcanoAndLava(baseState(map, {
+      player: playerAt(2, 1, 20, 20),
+      enemies: [grounded, flyer],
+      currentFloor: 1,
+    }));
+    expect(next.player.stats.hp).toBe(20);
+    expect(next.enemies.find(e => e.id === 'crow')?.hp).toBe(20);
+    expect(next.enemies.find(e => e.id === 'snake')?.hp).toBe(5);
+    expect(next.logs.some(l => l.text.includes('Crow'))).toBe(false);
+    expect(next.logs.some(l => l.text.includes('Snake'))).toBe(true);
   });
 
   it('does not damage a player standing on floor next to lava', () => {
