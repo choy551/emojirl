@@ -71,3 +71,26 @@ describe('enemy door pathing', () => {
   });
 });
 
+describe('flying pathing', () => {
+  function gap(blocker: Tile['type']): Tile[][] {
+    const map: Tile[][] = Array.from({ length: 3 }, (_, y) =>
+      Array.from({ length: 5 }, () =>
+        y === 1 ? tile('floor', '⬜') : tile('wall', '⬛'),
+      ),
+    );
+    map[1][2] = tile(blocker, blocker === 'water' ? '🟦' : '🟧');
+    return map;
+  }
+
+  it('grounded enemies cannot step onto water or lava', () => {
+    expect(bfsStepToward(gap('water'), { x: 1, y: 1 }, { x: 3, y: 1 }, new Set(), ENEMY_PASSABLE_TILES)).toBeNull();
+    expect(bfsStepToward(gap('lava'), { x: 1, y: 1 }, { x: 3, y: 1 }, new Set(), ENEMY_PASSABLE_TILES)).toBeNull();
+  });
+
+  it('flying enemies step across water and lava', () => {
+    const flying = new Set([...ENEMY_PASSABLE_TILES, 'water', 'lava']);
+    expect(bfsStepToward(gap('water'), { x: 1, y: 1 }, { x: 3, y: 1 }, new Set(), flying)).toEqual({ x: 2, y: 1 });
+    expect(bfsStepToward(gap('lava'), { x: 1, y: 1 }, { x: 3, y: 1 }, new Set(), flying)).toEqual({ x: 2, y: 1 });
+  });
+});
+

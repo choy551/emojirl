@@ -205,6 +205,8 @@ export interface Enemy {
   godBlessed?: boolean;
   divineBuff?: number;
   tag?: 'Hostile' | 'Neutral' | 'Friendly';
+  /** Cross and stand on water and lava; immune to lava damage. */
+  flying?: boolean;
   ghostly?: boolean;
   madScientist?: boolean;
   waterAggro?: boolean;

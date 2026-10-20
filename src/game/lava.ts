@@ -238,7 +238,7 @@ export function tickVolcanoAndLava(state: GameState): GameState {
 
   const enemies: Enemy[] = [];
   for (const e of state.enemies) {
-    if (!lavaOn(map, e.pos)) { enemies.push(e); continue; }
+    if (!lavaOn(map, e.pos) || e.flying) { enemies.push(e); continue; }
     const dmg = lavaDamageForFloor(state.currentFloor, e.maxHp);
     const hp = e.hp - dmg;
     floats.push({

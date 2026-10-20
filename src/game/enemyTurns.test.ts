@@ -108,6 +108,49 @@ describe('humanoid enemies open doors', () => {
   });
 });
 
+describe('flying movement', () => {
+  function liquidGap(kind: 'water' | 'lava'): MapGrid {
+    const map: MapGrid = Array.from({ length: 3 }, (_, y) =>
+      Array.from({ length: 6 }, (_, x) =>
+        y === 1 && x >= 1 && x <= 4 ? tile('floor', '⬜') : tile('wall', '⬛'),
+      ),
+    );
+    map[1][2] = tile(kind, kind === 'water' ? '🟦' : '🟧');
+    return map;
+  }
+
+  it('a crow crosses water and lava toward the player', () => {
+    for (const kind of ['water', 'lava'] as const) {
+      const state = {
+        ...base([foe({ emoji: '🐦‍⬛', name: 'Crow', crow: true, flying: true })]),
+        map: liquidGap(kind),
+        player: playerAt(4, 1),
+      };
+      const next = applyEnemyTurns(state, runEnemyTurns(state));
+      expect(next.enemies[0].pos).toEqual({ x: 2, y: 1 });
+    }
+  });
+
+  it('a snake stays on the near side of water and lava', () => {
+    for (const kind of ['water', 'lava'] as const) {
+      const state = {
+        ...base([foe({ emoji: '🐍', name: 'Snake' })]),
+        map: liquidGap(kind),
+        player: playerAt(4, 1),
+      };
+      const next = applyEnemyTurns(state, runEnemyTurns(state));
+      expect(next.enemies[0].pos).toEqual({ x: 1, y: 1 });
+    }
+  });
+
+  it('a ghost still opens doors', () => {
+    const state = base([foe({ emoji: '👻', name: 'Ghost', ghostly: true, flying: true })]);
+    const next = applyEnemyTurns(state, runEnemyTurns(state));
+    expect(next.map[1][2].type).toBe('door-open');
+    expect(next.enemies[0].pos).toEqual({ x: 2, y: 1 });
+  });
+});
+
 describe('companion kill XP and bounty', () => {
   function openFloor(): MapGrid {
     return Array.from({ length: 6 }, () =>

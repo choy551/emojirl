@@ -1,5 +1,5 @@
 import type { Enemy } from './types';
-import { ENEMY_PASSABLE_TILES, HUMANOID_ENEMY_PASSABLE_TILES, MERMAN_PASSABLE_TILES } from './tiles';
+import { ENEMY_PASSABLE_TILES, FLYING_TILES, HUMANOID_ENEMY_PASSABLE_TILES, MERMAN_PASSABLE_TILES } from './tiles';
 
 const ANIMAL_EMOJIS = new Set([
   '🐍', '🕷️', '🐦‍⬛', '🐺', '🦊', '🐗', '🐻', '🐒', '👁️', '🐉', '🦑',
@@ -25,9 +25,19 @@ export function enemyCanOpenDoors(e: Parameters<typeof isAnimalEnemy>[0]): boole
   return !isAnimalEnemy(e);
 }
 
-export function passableTilesForEnemy(e: Pick<Enemy, 'waterAggro'> & Parameters<typeof isAnimalEnemy>[0]): Set<string> {
+export function passableTilesForEnemy(
+  e: Pick<Enemy, 'waterAggro' | 'flying'> & Parameters<typeof isAnimalEnemy>[0],
+): Set<string> {
   if (e.waterAggro) return MERMAN_PASSABLE_TILES;
-  return enemyCanOpenDoors(e) ? HUMANOID_ENEMY_PASSABLE_TILES : ENEMY_PASSABLE_TILES;
+  const base = enemyCanOpenDoors(e) ? HUMANOID_ENEMY_PASSABLE_TILES : ENEMY_PASSABLE_TILES;
+  if (!e.flying) return base;
+  return new Set([...base, ...FLYING_TILES]);
+}
+
+/** Floor is always a spawn tile. Flying creatures may also be placed on water or lava. */
+export function enemyMaySpawnOnTile(tileType: string | undefined, flying?: boolean): boolean {
+  if (tileType === 'floor') return true;
+  return !!flying && !!tileType && FLYING_TILES.has(tileType);
 }
 
 export const ENEMY_TYPES = [
@@ -37,14 +47,14 @@ export const ENEMY_TYPES = [
   { emoji: '🕷️', name: 'Spider',        hp: 2,  attack: 1, defense: 0, speed: 6,  weight: 3, packHunter: true },
   { emoji: '💀', name: 'Skeleton',       hp: 5,  attack: 3, defense: 2, speed: 3,  weight: 2, silent: true },
   { emoji: '🧙‍♂️', name: 'Dark Mage',  hp: 8,  attack: 4, defense: 1, speed: 5,  weight: 1, godBlessed: true },
-  { emoji: '👁️', name: 'Eye',           hp: 3,  attack: 2, defense: 0, speed: 4,  weight: 2, godBlessed: true },
+  { emoji: '👁️', name: 'Eye',           hp: 3,  attack: 2, defense: 0, speed: 4,  weight: 2, godBlessed: true, flying: true },
   { emoji: '🤡', name: 'Jester',         hp: 4,  attack: 1, defense: 0, speed: 9,  weight: 1, cowardly: true },
-  { emoji: '👻', name: 'Ghost',          hp: 3,  attack: 2, defense: 0, speed: 5,  weight: 2, ghostly: true },
+  { emoji: '👻', name: 'Ghost',          hp: 3,  attack: 2, defense: 0, speed: 5,  weight: 2, ghostly: true, flying: true },
   { emoji: '🧑‍🔬', name: 'Mad Scientist', hp: 2, attack: 0, defense: 0, speed: 7, weight: 1, cowardly: true, madScientist: true, healCooldown: 0 },
   { emoji: '🧜‍♂️', name: 'Merman',     hp: 8,  attack: 4, defense: 2, speed: 6,  weight: 1, tag: 'Neutral' as const, waterAggro: true },
-  { emoji: '🧚‍♀️', name: 'Cute Fairy', hp: 1,  attack: 0, defense: 0, speed: 3,  weight: 1, tag: 'Friendly' as const },
+  { emoji: '🧚‍♀️', name: 'Cute Fairy', hp: 1,  attack: 0, defense: 0, speed: 3,  weight: 1, tag: 'Friendly' as const, flying: true },
   { emoji: '🐒', name: 'Monkey',         hp: 4,  attack: 2, defense: 0, speed: 5,  weight: 2, tag: 'Neutral' as const, monkey: true },
-  { emoji: '🐦‍⬛', name: 'Crow',          hp: 3,  attack: 1, defense: 0, speed: 8,  weight: 2, cowardly: true, crow: true },
+  { emoji: '🐦‍⬛', name: 'Crow',          hp: 3,  attack: 1, defense: 0, speed: 8,  weight: 2, cowardly: true, crow: true, flying: true },
   { emoji: '🧝‍♀️', name: 'Elf Archer',    hp: 7,  attack: 3, defense: 1, speed: 5,  weight: 2, ranged: true },
 ];
 
@@ -56,7 +66,7 @@ export const FOREST_ENEMY_TYPES = [
 ];
 
 export const BOSS_TYPES = [
-  { emoji: '🐉', name: 'Dragon',       hp: 30, attack: 8,  defense: 4, speed: 5, berserker: true, godBlessed: true },
+  { emoji: '🐉', name: 'Dragon',       hp: 30, attack: 8,  defense: 4, speed: 5, berserker: true, godBlessed: true, flying: true },
   { emoji: '👿', name: 'Arch-Demon',   hp: 28, attack: 9,  defense: 3, speed: 6, berserker: true },
   { emoji: '🧟', name: 'Lich',         hp: 25, attack: 7,  defense: 5, speed: 4, godBlessed: true },
   { emoji: '🦑', name: 'Kraken',       hp: 32, attack: 8,  defense: 4, speed: 3, packHunter: true },
@@ -108,6 +118,7 @@ export function getEchoEnemy(bossType: typeof BOSS_TYPES[number]) {
     isEcho: true as const,
     berserker: bossType.berserker,
     packHunter: bossType.packHunter,
+    ...('flying' in bossType && bossType.flying ? { flying: true as const } : {}),
   };
 }
 

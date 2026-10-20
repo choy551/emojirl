@@ -1,6 +1,6 @@
 import { Enemy, EmojiItem, MapGrid, Position } from './types';
 import type { Room } from './geo';
-import { getRandomEnemy, getForestEnemy, getBossForFloor, getEchoEnemy, getRandomAdventurer, adventurerSpawnChance, ADVENTURER_FAVORITE_EMOJIS, rollAmbushCount, getAmbushRangedType } from './enemies';
+import { getRandomEnemy, getForestEnemy, getBossForFloor, getEchoEnemy, getRandomAdventurer, adventurerSpawnChance, ADVENTURER_FAVORITE_EMOJIS, rollAmbushCount, getAmbushRangedType, enemyMaySpawnOnTile } from './enemies';
 import { getRandomEmojiPower, getBulletDrop, getRandomEquipmentDrop, getEmojiPowerByEmoji, VOLCANO_VALUABLE_EMOJIS, MONEY_BAG } from './emojis';
 import { getDungeonPressure } from './progression';
 
@@ -62,10 +62,16 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
       const n = rollAmbushCount();
       const cover: Position[] = [];
       const open: Position[] = [];
+      const air: Position[] = [];
       for (let ry = room.y + 1; ry < room.y + room.h - 1; ry++) {
         for (let rx = room.x + 1; rx < room.x + room.w - 1; rx++) {
-          if (map && map[ry][rx].type !== 'floor') continue;
           if (!map) { open.push({ x: rx, y: ry }); continue; }
+          const kind = map[ry][rx].type;
+          if (kind === 'water' || kind === 'lava') {
+            air.push({ x: rx, y: ry });
+            continue;
+          }
+          if (kind !== 'floor') continue;
           const nearBush = [-1, 0, 1].some(dy =>
             [-1, 0, 1].some(dx => (dx || dy) && map[ry + dy]?.[rx + dx]?.type === 'bush')
           );
@@ -75,10 +81,13 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
       const spots = [
         ...cover.sort(() => Math.random() - 0.5),
         ...open.sort(() => Math.random() - 0.5),
+        ...air.sort(() => Math.random() - 0.5),
       ];
-      for (let j = 0; j < n && j < spots.length; j++) {
+      let spawned = 0;
+      for (let j = 0; spawned < n && j < spots.length; j++) {
         const pos = spots[j];
         const rawType = getAmbushRangedType();
+        if (map && !enemyMaySpawnOnTile(map[pos.y]?.[pos.x]?.type, 'flying' in rawType && rawType.flying)) continue;
         const base = scaleEnemy(floorScale(rawType, floor), difficultyTier);
         const type = applySpawnPressure(base, pressure);
         enemies.push({
@@ -90,6 +99,7 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
           engaged: false,
           spawnRoomBounds: { x: room.x, y: room.y, w: room.w, h: room.h },
         });
+        spawned++;
       }
       continue;
     }
@@ -141,13 +151,15 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
         y: room.y + 1 + Math.floor(Math.random() * (room.h - 2 || 1)),
       };
       if (map) {
-        let placed = map[spawnPos.y]?.[spawnPos.x]?.type === 'floor';
+        const flying = 'flying' in type && type.flying;
+        const tileOk = (pos: Position) => enemyMaySpawnOnTile(map[pos.y]?.[pos.x]?.type, flying);
+        let placed = tileOk(spawnPos);
         for (let t = 0; t < 12 && !placed; t++) {
           spawnPos = {
             x: room.x + 1 + Math.floor(Math.random() * (room.w - 2 || 1)),
             y: room.y + 1 + Math.floor(Math.random() * (room.h - 2 || 1)),
           };
-          placed = map[spawnPos.y]?.[spawnPos.x]?.type === 'floor';
+          placed = tileOk(spawnPos);
         }
         if (!placed) continue;
       }
