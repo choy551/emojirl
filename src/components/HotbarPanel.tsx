@@ -35,7 +35,6 @@ export function HotbarPanel({
   onConsumeRefused,
 }: HotbarPanelProps) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pointerKindRef = useRef('mouse');
   const lastTapRef = useRef<{ slot: number; at: number; selectOnly: boolean } | null>(null);
 
   const clearLongPress = () => {
@@ -49,12 +48,11 @@ export function HotbarPanel({
     onContextMenu: (e: React.MouseEvent) => {
       e.preventDefault();
       if (!item) return;
-      const touch = pointerKindRef.current === 'touch' || pointerKindRef.current === 'pen';
-      onShowStatCard(item, mobileConsume && touch ? { consumeSlot: slotIndex } : undefined);
+      onShowStatCard(item, mobileConsume ? { consumeSlot: slotIndex } : undefined);
     },
     onPointerDown: (e: React.PointerEvent) => {
-      pointerKindRef.current = e.pointerType;
-      if (item && (e.pointerType === 'touch' || e.pointerType === 'pen')) {
+      const touch = e.pointerType === 'touch' || e.pointerType === 'pen';
+      if (item && (touch || (mobileConsume && e.pointerType === 'mouse'))) {
         clearLongPress();
         longPressTimerRef.current = setTimeout(() => {
           longPressTimerRef.current = null;
@@ -89,12 +87,8 @@ export function HotbarPanel({
                   return;
                 }
                 if (mobileConsume) {
-                  const pointer = pointerKindRef.current;
-                  // Keyboard activation has no pointerdown; don't inherit the last touch.
-                  pointerKindRef.current = 'mouse';
                   const decision = resolveBagSlotClick({
                     mobile: true,
-                    pointer,
                     slot: i,
                     item,
                     selectedItemId,

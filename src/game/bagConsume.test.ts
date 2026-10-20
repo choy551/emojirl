@@ -85,7 +85,6 @@ describe('mobileBagUseClosesBag', () => {
 describe('resolveBagSlotClick', () => {
   const base = {
     mobile: true,
-    pointer: 'touch',
     slot: 2,
     item: clover,
     selectedItemId: null as string | null,
@@ -159,11 +158,16 @@ describe('resolveBagSlotClick', () => {
     expect(second.last?.slot).toBe(4);
   });
 
-  it('leaves mouse and desktop clicks on the select path', () => {
-    const mouse = resolveBagSlotClick({ ...base, pointer: 'mouse' });
-    expect(mouse).toEqual({ action: 'select', last: null });
+  it('leaves desktop clicks and empty slots on the select path', () => {
     const desktop = resolveBagSlotClick({ ...base, mobile: false });
-    expect(desktop.action).toBe('select');
+    expect(desktop).toEqual({ action: 'select', last: null });
+    const again = resolveBagSlotClick({
+      ...base,
+      mobile: false,
+      now: base.now + 100,
+      last: { slot: 2, at: base.now, selectOnly: true },
+    });
+    expect(again.action).toBe('select');
     const empty = resolveBagSlotClick({ ...base, item: null });
     expect(empty.action).toBe('select');
   });

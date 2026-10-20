@@ -5,7 +5,7 @@ import { GHOST_LINGER_TEXT } from './voidDamage';
 /** Aimed actives are used from the field, not spent by the Consume button. */
 const AIMED_KINDS = new Set(['gun', 'boomerang', 'freeze', 'bomb']);
 
-export const BAG_DOUBLE_TAP_MS = 350;
+export const BAG_DOUBLE_TAP_MS = 500;
 export const BAG_LONG_PRESS_MS = 500;
 
 export interface BagTapMemory {
@@ -70,14 +70,13 @@ export function consumeButtonMode(offerConsume: boolean, item: EmojiItem): Consu
 }
 
 /**
- * Mobile bag Items tap. Mouse and non-mobile always select, so desktop
- * click / double-click behavior stays on the existing select path.
- * A second touch on the same slot consumes only when the first tap did not
- * start a drag-swap (another item was already selected).
+ * Mobile bag Items tap. Non-mobile clicks always select, so the desktop bag
+ * stays on the existing select / swap path.
+ * A second tap on the same slot consumes only when the first tap did not
+ * start a move (another item was already selected).
  */
 export function resolveBagSlotClick(args: {
   mobile: boolean;
-  pointer: string;
   slot: number;
   item: EmojiItem | null;
   selectedItemId: string | null;
@@ -85,8 +84,7 @@ export function resolveBagSlotClick(args: {
   last: BagTapMemory | null;
   thresholdMs?: number;
 }): { action: BagSlotAction; last: BagTapMemory | null } {
-  const touch = args.pointer === 'touch' || args.pointer === 'pen';
-  if (!args.mobile || !touch || !args.item) {
+  if (!args.mobile || !args.item) {
     return { action: 'select', last: null };
   }
 
