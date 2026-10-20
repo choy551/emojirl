@@ -24,6 +24,7 @@ import { ContextActionButton } from '../components/mobile/ContextActionButton';
 import { AbilityButtons } from '../components/mobile/AbilityButtons';
 import { MobileConsumableUseButtons } from '../components/mobile/MobileConsumableUseButtons';
 import { listMobileQuickUseSlots } from '../game/mobileQuickUse';
+import { bagConsumeRefusal, mobileBagUseClosesBag } from '../game/bagConsume';
 import { ActionsMenu, ActionItem } from '../components/mobile/ActionsMenu';
 import { getClassAbilities } from '../components/mobile/classAbilities';
 import { MobileTopBar } from '../components/mobile/MobileTopBar';
@@ -277,6 +278,15 @@ export default function Game() {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const selectedItemIdRef = useRef<string | null>(null);
   const [statCardItem, setStatCardItem] = useState<EmojiItem | null>(null);
+  const [statCardConsumeSlot, setStatCardConsumeSlot] = useState<number | null>(null);
+  const showStatCard = useCallback((item: EmojiItem, opts?: { consumeSlot?: number }) => {
+    setStatCardItem(item);
+    setStatCardConsumeSlot(opts?.consumeSlot ?? null);
+  }, []);
+  const closeStatCard = useCallback(() => {
+    setStatCardItem(null);
+    setStatCardConsumeSlot(null);
+  }, []);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { bankOpenRef.current = bankOpen; }, [bankOpen]);
   useEffect(() => { selectedItemIdRef.current = selectedItemId; }, [selectedItemId]);
@@ -318,7 +328,7 @@ export default function Game() {
   useAndroidBackButton(
     () => closeTopOverlay([
       { id: 'announce', isOpen: () => !!gameStateRef.current?.floorAnnouncement, close: () => setGameState(prev => prev ? { ...prev, floorAnnouncement: null } : prev) },
-      { id: 'stat-card', isOpen: () => !!statCardItem, close: () => setStatCardItem(null) },
+      { id: 'stat-card', isOpen: () => !!statCardItem, close: closeStatCard },
       { id: 'boat-warn', isOpen: () => lastBoatWarnSlot !== null, close: () => setLastBoatWarnSlot(null) },
       { id: 'drown-warn', isOpen: () => drownWarnSlot !== null, close: () => setDrownWarnSlot(null) },
       { id: 'lava-warn', isOpen: () => pendingLavaStep !== null, close: () => setPendingLavaStep(null) },
@@ -732,6 +742,14 @@ export default function Game() {
       setTrailblazeTurn,
     },
   );
+
+  const useMobileBagSlot = useCallback((slot: number) => {
+    const player = gameStateRef.current?.player;
+    const item = player ? buildHotbarSlots(player)[slot] : undefined;
+    setSelectedItemId(null);
+    if (item && !item.isVoidGhost && mobileBagUseClosesBag(item)) setBankOpen(false);
+    handleUseSlot(slot);
+  }, [gameStateRef, handleUseSlot]);
 
   // ── Blink target mode helpers ─────────────────────────────────────────────
   const exitBlinkTargetMode = useCallback(() => {
@@ -2396,10 +2414,10 @@ export default function Game() {
   const realBagSlots = sortBagSlots(player.inventory);
   const bagSlots = buildHotbarSlots(player);
   const itemInspectProps = (item: EmojiItem | null) => ({
-    onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); if (item) setStatCardItem(item); },
+    onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); if (item) showStatCard(item); },
     onPointerDown: (e: React.PointerEvent) => {
       if (item && (e.pointerType === 'touch' || e.pointerType === 'pen')) {
-        longPressTimerRef.current = setTimeout(() => setStatCardItem(item), 500);
+        longPressTimerRef.current = setTimeout(() => showStatCard(item), 500);
       }
     },
     onPointerUp:     () => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } },
@@ -3507,9 +3525,15 @@ export default function Game() {
       {statCardItem && (
         <ItemStatCard
           item={statCardItem}
-          onClose={() => setStatCardItem(null)}
+          onClose={closeStatCard}
           chefLessonCount={gameState?.chefLessonCount ?? 0}
           maxHp={gameState?.player.stats.maxHp ?? 0}
+          consumeSlot={statCardConsumeSlot}
+          onConsume={(slot) => {
+            closeStatCard();
+            useMobileBagSlot(slot);
+          }}
+          onConsumeRefused={(item) => addLog(bagConsumeRefusal(item))}
         />
       )}
 
@@ -3566,8 +3590,11 @@ export default function Game() {
                 focusedBagIdx={focusedBagIdx}
                 onSelect={setSelectedItemId}
                 onMove={handleBankMove}
-                onShowStatCard={setStatCardItem}
+                onShowStatCard={showStatCard}
                 onBanishGhost={slot => setGameState(prev => prev ? { ...prev, player: banishPlayerGhost(prev.player, slot) } : prev)}
+                mobileConsume={isMobile}
+                onUseSlot={useMobileBagSlot}
+                onConsumeRefused={(item) => addLog(bagConsumeRefusal(item))}
               />
             )}
 
@@ -3582,7 +3609,7 @@ export default function Game() {
                 onMove={handleBankMove}
                 onConsume={handleConsumeBankItem}
                 onClose={() => setBankOpen(false)}
-                onShowStatCard={setStatCardItem}
+                onShowStatCard={showStatCard}
                 chefLessonCount={gameState?.chefLessonCount ?? 0}
                 onBanishGhost={slot => setGameState(prev => prev ? { ...prev, player: banishPlayerGhost(prev.player, slot) } : prev)}
                 onManifestGhost={emoji => setGameState(prev => {
@@ -3597,7 +3624,7 @@ export default function Game() {
             )}
 
             <div className="mt-4 pt-3 border-t border-border/50 text-xs text-muted-foreground text-center space-y-0.5">
-              {bagTab === 'hotbar' && <><div>arrows/WASD/numpad navigate · Enter select · 1–9 quick-assign</div><div>select item then navigate to slot + Enter to swap</div></>}
+              {bagTab === 'hotbar' && <><div>arrows/WASD/numpad navigate · Enter select · 1–9 quick-assign</div><div>select item then navigate to slot + Enter to swap</div>{isMobile && <div>double-tap an item to consume · hold for details</div>}</>}
               {bagTab === 'equipment' && <div>arrows/WASD/numpad navigate · Enter to auto-equip selected gear</div>}
               {bagTab === 'bank' && <div>click to select · Pull to Hotbar or ✨ Consume from action panel · 1–9 to assign slot</div>}
               <CloseHintButton onClose={dismissBag} className="mt-0 pt-0 border-t-0 text-muted-foreground/50">
@@ -3769,7 +3796,7 @@ export default function Game() {
         setBankOpen={setBankOpen}
         setBagTab={setBagTab}
         setSelectedItemId={setSelectedItemId}
-        onShowStatCard={setStatCardItem}
+        onShowStatCard={showStatCard}
       />
       )}
 

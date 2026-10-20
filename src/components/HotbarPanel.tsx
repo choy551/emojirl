@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { EmojiItem } from '../game/types';
 import { getPassiveTooltipSuffix } from '../game/passives';
 import { rarityTooltipSuffix } from '../game/dropTable';
+import { BAG_LONG_PRESS_MS, resolveBagSlotClick } from '../game/bagConsume';
 import { activeKindEmoji } from './itemUtils';
 import { ActivePassivesPanel } from './ActivePassivesPanel';
 
@@ -12,8 +13,12 @@ interface HotbarPanelProps {
   focusedBagIdx: number;
   onSelect: (itemId: string | null) => void;
   onMove: (sourceId: string, dest: string | number | 'bank') => void;
-  onShowStatCard: (item: EmojiItem) => void;
+  onShowStatCard: (item: EmojiItem, opts?: { consumeSlot?: number }) => void;
   onBanishGhost?: (slot: number) => void;
+  /** Mobile bag: double-tap uses the slot; long-press offers Consume. Desktop stays select-only. */
+  mobileConsume?: boolean;
+  onUseSlot?: (slot: number) => void;
+  onConsumeRefused?: (item: EmojiItem) => void;
 }
 
 export function HotbarPanel({
@@ -25,24 +30,47 @@ export function HotbarPanel({
   onMove,
   onShowStatCard,
   onBanishGhost,
+  mobileConsume = false,
+  onUseSlot,
+  onConsumeRefused,
 }: HotbarPanelProps) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pointerKindRef = useRef('mouse');
+  const lastTapRef = useRef<{ slot: number; at: number; selectOnly: boolean } | null>(null);
 
-  const itemInspectProps = (item: EmojiItem | null) => ({
-    onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); if (item) onShowStatCard(item); },
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const itemInspectProps = (item: EmojiItem | null, slotIndex: number) => ({
+    onContextMenu: (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (!item) return;
+      const touch = pointerKindRef.current === 'touch' || pointerKindRef.current === 'pen';
+      onShowStatCard(item, mobileConsume && touch ? { consumeSlot: slotIndex } : undefined);
+    },
     onPointerDown: (e: React.PointerEvent) => {
+      pointerKindRef.current = e.pointerType;
       if (item && (e.pointerType === 'touch' || e.pointerType === 'pen')) {
-        longPressTimerRef.current = setTimeout(() => onShowStatCard(item), 500);
+        clearLongPress();
+        longPressTimerRef.current = setTimeout(() => {
+          longPressTimerRef.current = null;
+          lastTapRef.current = null;
+          onShowStatCard(item, mobileConsume ? { consumeSlot: slotIndex } : undefined);
+        }, BAG_LONG_PRESS_MS);
       }
     },
-    onPointerUp:     () => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } },
-    onPointerLeave:  () => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } },
-    onPointerCancel: () => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } },
+    onPointerUp:     () => { clearLongPress(); },
+    onPointerLeave:  () => { clearLongPress(); },
+    onPointerCancel: () => { clearLongPress(); },
   });
 
   return (
     <div className="mb-5">
-      <div className="text-xs text-muted-foreground/70 mb-2 font-medium">Hotbar <span className="opacity-50">— press 1–9 to use</span></div>
+      <div className="text-xs text-muted-foreground/70 mb-2 font-medium">Hotbar <span className="opacity-50">{mobileConsume ? '— double-tap to consume · hold for details' : '— press 1–9 to use'}</span></div>
       <div className="grid grid-cols-3 gap-1.5">
         {Array.from({ length: 9 }, (_, i) => {
           const item = bagSlots[i] ?? null;
@@ -55,7 +83,35 @@ export function HotbarPanel({
             <button
               key={i}
               onClick={() => {
-                if (item?.isVoidGhost) { onBanishGhost?.(i); return; }
+                if (item?.isVoidGhost) {
+                  lastTapRef.current = null;
+                  onBanishGhost?.(i);
+                  return;
+                }
+                if (mobileConsume) {
+                  const pointer = pointerKindRef.current;
+                  // Keyboard activation has no pointerdown; don't inherit the last touch.
+                  pointerKindRef.current = 'mouse';
+                  const decision = resolveBagSlotClick({
+                    mobile: true,
+                    pointer,
+                    slot: i,
+                    item,
+                    selectedItemId,
+                    now: Date.now(),
+                    last: lastTapRef.current,
+                  });
+                  lastTapRef.current = decision.last;
+                  if (decision.action === 'use' && onUseSlot) {
+                    onSelect(null);
+                    onUseSlot(i);
+                    return;
+                  }
+                  if (decision.action === 'refuse') {
+                    if (item) onConsumeRefused?.(item);
+                    return;
+                  }
+                }
                 if (!item) {
                   if (selectedItemId) { onMove(selectedItemId, i); onSelect(null); }
                 } else if (isSelected) {
@@ -67,7 +123,8 @@ export function HotbarPanel({
                   onSelect(item.id);
                 }
               }}
-              {...itemInspectProps(item)}
+              {...(mobileConsume ? { style: { touchAction: 'manipulation' as const } } : {})}
+              {...itemInspectProps(item, i)}
               title={item ? `[${i + 1}] ${item.name}: ${item.description.replace(/ · Bag: [^·]+$/, '')}${getPassiveTooltipSuffix(item)}${bankDupes > 0 ? ` · ${bankDupes} more in Bank` : ''}${rarityTooltipSuffix(item)}` : `Empty slot ${i + 1}`}
               className={`relative aspect-square rounded border flex items-center justify-center text-xl transition-all
                 ${focusedBagIdx === i ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-black/50' : ''}
