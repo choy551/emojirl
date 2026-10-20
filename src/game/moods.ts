@@ -17,7 +17,14 @@ export const MOODS: Record<MoodType, { emoji: string; name: string; description:
   in_love:    { emoji: '😍', name: 'Lovestruck',        description: '5% chance to not attack' },
 };
 
-export function getMood(moodValue: number, hp: number, maxHp: number, inventorySize: number, isCowboy = false): MoodType {
+export function getMood(
+  moodValue: number,
+  hp: number,
+  maxHp: number,
+  inventorySize: number,
+  isCowboy = false,
+  moodFloorBonus = 0,
+): MoodType {
   const hpRatio = maxHp > 0 ? hp / maxHp : 1;
 
   if (!isCowboy) {
@@ -38,7 +45,7 @@ export function getMood(moodValue: number, hp: number, maxHp: number, inventoryS
 
   if (isCowboy) {
     // Cowboy mood floor: never drops below Happy threshold
-    effective = Math.max(COWBOY_MOOD_FLOOR, effective);
+    effective = Math.max(COWBOY_MOOD_FLOOR + Math.max(0, moodFloorBonus), effective);
   } else {
     if (inventorySize === 0 && hpRatio < 0.5) return 'scared';
   }

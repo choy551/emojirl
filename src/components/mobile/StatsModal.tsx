@@ -142,14 +142,19 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
           );
         })()}
 
-        {/* Active food buffs */}
-        {(player.stats.activeBuffs ?? []).length > 0 && (
+        {/* Active food buffs and the current drink */}
+        {((player.stats.activeBuffs ?? []).length > 0 || (player.drinkBuff && player.drinkBuff.turnsLeft > 0)) && (
           <div className="flex flex-wrap gap-1">
             {(player.stats.activeBuffs ?? []).map((buf, i) => (
               <span key={i} className="flex items-center gap-0.5 bg-orange-950/40 border border-orange-500/40 rounded px-1.5 py-0.5 text-[10px] text-orange-300">
                 🍽️ <span className="font-bold">{buf.label}</span> <span className="text-orange-400/60">{buf.turnsLeft}t</span>
               </span>
             ))}
+            {player.drinkBuff && player.drinkBuff.turnsLeft > 0 && (
+              <span className="flex items-center gap-0.5 bg-sky-950/40 border border-sky-500/40 rounded px-1.5 py-0.5 text-[10px] text-sky-300">
+                🧃 <span className="font-bold">{player.drinkBuff.label}</span> <span className="text-sky-400/60">{player.drinkBuff.turnsLeft}t</span>
+              </span>
+            )}
           </div>
         )}
 

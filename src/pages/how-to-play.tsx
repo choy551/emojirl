@@ -5,6 +5,7 @@ import { ChevronLeft, Lock } from "lucide-react";
 import { EMOJI_POWERS } from "../game/emojis";
 import { ENEMY_TYPES } from "../game/enemies";
 import { CHARACTER_CLASSES } from "../game/classes";
+import { DRINK_DROPS, DRINK_TIER_MP, DRINK_TIER_SELL, classDrinkEffects } from "../game/drinks";
 import {
   BLINK_TALENTS,
   BLINK_TALENT_CREDITS_PER_TIER,
@@ -186,7 +187,7 @@ export default function HowToPlay({
             {
               label: "🔮 MP",
               color: "text-blue-400",
-              desc: "Mana Points — Wizard 🧙 and Genie 🧞‍♀️. Spells cost MP. It regenerates by 1 when you Wait out of enemy sight. The Genie's fireball costs 2 MP. Running dry prevents spellcasting until it refills (Genie level 5 can Bloodcast HP instead).",
+              desc: "Mana Points — Wizard 🧙 and Genie 🧞‍♀️. Spells cost MP. It regenerates by 1 when you Wait out of enemy sight. The Genie's fireball costs 2 MP. Running dry prevents spellcasting until it refills (Genie level 5 can Bloodcast HP instead). Drinks restore MP by tier and never restore HP.",
             },
           ].map(({ label, color, desc }) => (
             <div
@@ -257,9 +258,15 @@ export default function HowToPlay({
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
+                <Kbd>h</Kbd>
+                <span className="text-muted-foreground">
+                  — lowercase h — eat food or use a heal consumable (apple, potion, heart)
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
                 <Kbd>H</Kbd>
                 <span className="text-muted-foreground">
-                  — use heal consumable (apple, potion, etc.)
+                  — uppercase H — drink (🧃 🧋 🍺). Never restores HP. On mobile: Actions → Drink, and a drink button on the hotbar while you carry one.
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -560,6 +567,36 @@ export default function HowToPlay({
               from the tiers above that you have not picked yet.
             </p>
           </div>
+        </div>
+      </Section>
+
+      <Section title="Drinks">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Drinks are overflow items, like food: they do not fill the 9 hotbar slots, do not count as mood-bag souls, and do not count as Void pressure.
+          A shop often stocks one. Floors can drop them. Restaurants stay food-only. Drinking spends a turn.
+          Wizards and Genies drink the biggest when MP is low, otherwise the smallest drink that covers the gap, and refuse when MP is already full.
+          Every other class drinks the weakest one first. Prestige classes drink like their base class. Sell Junk does not include drinks.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {DRINK_DROPS.map(drink => (
+            <div key={drink.emoji + drink.name} className="flex items-start gap-2 bg-card/50 border border-border/40 rounded-lg px-3 py-2">
+              <span className="text-xl shrink-0">{drink.emoji}</span>
+              <div className="min-w-0 text-xs">
+                <div className="font-bold">{drink.name} · tier {drink.drinkTier}</div>
+                <div className="text-muted-foreground">
+                  Wizard +{drink.drinkTier ? DRINK_TIER_MP[drink.drinkTier] : 0} MP · sells for {drink.drinkTier ? DRINK_TIER_SELL[drink.drinkTier] : 0}g · no HP
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="space-y-2">
+          {classDrinkEffects().map(row => (
+            <div key={row.name} className="bg-card/50 border border-border/40 rounded-lg px-3 py-2 text-xs">
+              <div className="font-bold">{row.emoji} {row.name}</div>
+              <div className="text-muted-foreground leading-relaxed">{row.summary}</div>
+            </div>
+          ))}
         </div>
       </Section>
 

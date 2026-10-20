@@ -11,6 +11,8 @@ import { withVisibility } from './vision';
 import { runEnemyTurns, applyEnemyTurns } from './enemyTurns';
 import { _flashSignals } from './flashSignals';
 import { cookedEatHeal } from './economy';
+import { applyDrinkToPlayer } from './drinks';
+import { isArcaneCaster } from './prestige';
 
 export type ShopUseBlockReason =
   | 'Not enough gold'
@@ -18,6 +20,7 @@ export type ShopUseBlockReason =
   | 'No enemies on screen'
   | 'Equip from Buy / bag'
   | 'Already at full HP'
+  | 'Already at full MP'
   | 'Sell it at the shop';
 
 const AIMED_KINDS = new Set(['gun', 'boomerang', 'freeze', 'bomb']);
@@ -68,6 +71,10 @@ export function canBuyAndUse(
   if (item.healAmount !== undefined && state.player.stats.hp >= state.player.stats.maxHp) {
     return { ok: false, reason: 'Already at full HP' };
   }
+  if (item.drinkTier !== undefined && isArcaneCaster(state.player.characterClass)) {
+    const maxMana = state.player.stats.maxMana ?? 4;
+    if ((state.player.stats.mana ?? 0) >= maxMana) return { ok: false, reason: 'Already at full MP' };
+  }
   return { ok: true };
 }
 
@@ -89,6 +96,17 @@ export function applyInstantItemUse(
   if (item.isMoneyBag || item.emoji === '💰') {
     log("💰 It's full of coins — sell it at a shop.");
     return s;
+  }
+
+  if (item.drinkTier !== undefined) {
+    const drank = applyDrinkToPlayer(s.player, item);
+    if (!drank.ok) {
+      log(drank.log);
+      return null;
+    }
+    log(drank.log);
+    const mid = { ...s, player: drank.player, turn: s.turn + 1 };
+    return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
   }
 
   if (item.healAmount !== undefined) {

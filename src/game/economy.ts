@@ -1,5 +1,6 @@
 import { EmojiItem, MapGrid, Position } from './types';
 import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, cookFood, HEAL_DROPS, COOKABLE_EMOJIS } from './emojis';
+import { DRINK_SHOP_CHANCE, DRINK_TIER_SELL, getRandomDrinkDrop } from './drinks';
 import { addToBag, addToBagCapped } from './inventory';
 import { usesArrows, usesBullets } from './prestige';
 
@@ -26,6 +27,9 @@ export function getItemSellValue(item: EmojiItem, multiplier = 1, floor = 1): nu
     const base = Math.max(2, item.healAmount);
     const cookedMul = (item.isCooked || item.cookedBuff) ? 2 : 1;
     return Math.round(base * cookedMul * multiplier);
+  }
+  if (item.drinkTier === 1 || item.drinkTier === 2 || item.drinkTier === 3 || item.drinkTier === 4) {
+    return Math.round(DRINK_TIER_SELL[item.drinkTier] * multiplier);
   }
   if (item.emoji === '⛵') return Math.round(50 * multiplier);
   if (item.bagPassive) return Math.round(12 * multiplier);
@@ -316,6 +320,10 @@ export function generateShopStock(floor: number, playerClass?: string): EmojiIte
   if (usesArrows(playerClass ?? '') && playerClass !== '🧝') {
     const arrows = getAmmoDrop();
     stock.push({ ...arrows, id: `shop-arrows-${Math.random().toString(36).slice(2)}`, consumed: false });
+  }
+  if (Math.random() < DRINK_SHOP_CHANCE) {
+    const d = getRandomDrinkDrop();
+    stock.push({ ...d, id: `shop-drink-${Math.random().toString(36).slice(2)}`, consumed: false });
   }
   return stock;
 }

@@ -162,6 +162,29 @@ export interface VoidGhost {
   stacks: number;
 }
 
+/** Drink potency. MP and class effects scale with this, the way food healAmount scales HP. */
+export type DrinkTier = 1 | 2 | 3 | 4;
+
+/** Timed effect from the last drink. Drinks never change HP. */
+export interface DrinkBuff {
+  turnsLeft: number;
+  /** The drink turn itself does not consume a tick. */
+  justApplied?: boolean;
+  /** Cowboy: added to COWBOY_MOOD_FLOOR while the buff lasts. */
+  moodFloorBonus?: number;
+  /** Ninja: counts as stealthed without the wall-hug toggle. */
+  stealth?: boolean;
+  /** Ranger: added to the base Survivalist ammo-save chance (0–1). */
+  survivalistBonus?: number;
+  /** Ranger: chance (0–1) a spent arrow comes back. */
+  arrowReclaimChance?: number;
+  /** Void: filled hotbar slots ignored by Inverted Burden. */
+  voidSlotsIgnored?: number;
+  /** Fallback classes: temporary evasion. */
+  evasionBonus?: number;
+  label: string;
+}
+
 export interface Player {
   pos: Position;
   emoji: string;
@@ -178,6 +201,8 @@ export interface Player {
   ghostBank?: VoidGhost[];
   /** Depth bosses cleared this run (D:5/10/15…). Mirrors GameState.voidBossesCleared. */
   voidBossesCleared?: number;
+  /** Active drink. Absent when nothing is brewing. */
+  drinkBuff?: DrinkBuff;
 }
 
 export type ActiveKind = 'bomb' | 'gun' | 'boomerang' | 'rope' | 'freeze';
@@ -191,6 +216,8 @@ export interface EmojiItem {
   description: string;
   consumed: boolean;
   healAmount?: number;
+  /** Set on drinks. Drinks never restore HP. */
+  drinkTier?: DrinkTier;
   ammoAmount?: number;
   activeKind?: ActiveKind;
   charges?: number;

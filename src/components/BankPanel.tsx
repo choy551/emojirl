@@ -4,6 +4,7 @@ import { hasBagPassive, getPassiveTooltipSuffix, isStackableBagPassive, getStack
 import { soulHelpText } from '../game/emojis';
 import { isNonStackableBagPassiveDuplicate, isActiveKindDuplicate } from '../game/gameHelpers';
 import { foodHealDescription } from '../game/economy';
+import { drinkEffectForClass } from '../game/drinks';
 import { activeKindEmoji } from './itemUtils';
 import { RarityLabel } from './RarityLabel';
 import { rarityTooltipSuffix } from '../game/dropTable';
@@ -129,7 +130,7 @@ export function BankPanel({
       {/* Selected-item action panel */}
       {selectedItemId && player.bank.some(i => i.id === selectedItemId && !i.isEquipment) && (() => {
         const si = player.bank.find(i => i.id === selectedItemId)!;
-        const canConsume = !si.isEquipment && !si.activeKind && (si.healAmount !== undefined || (si as any).effect || si.bagPassive);
+        const canConsume = !si.isEquipment && !si.activeKind && (si.healAmount !== undefined || si.drinkTier !== undefined || (si as any).effect || si.bagPassive);
         const needsHotbar = !si.isEquipment && !!si.activeKind;
         const alreadyActiveNonStack = (si.bagPassive?.nonStackable ?? false) && isNonStackableBagPassiveDuplicate(si, player.inventory);
         const alreadyActiveKind = !!si.activeKind && isActiveKindDuplicate(si, player.inventory);
@@ -138,7 +139,9 @@ export function BankPanel({
           <div className="bg-black/30 rounded-lg p-2.5 text-xs space-y-1 border border-primary/30 mb-3">
             <div className="font-bold text-foreground flex items-center gap-1.5">{si.emoji} {si.name} <RarityLabel item={si} className="text-[9px]" /></div>
             <div className="text-muted-foreground/70 leading-snug">
-              {si.healAmount !== undefined
+              {si.drinkTier !== undefined
+                ? `${drinkEffectForClass(si.drinkTier, player.characterClass)}. Never restores HP.`
+                : si.healAmount !== undefined
                 ? foodHealDescription(si, chefLessonCount, player.stats.maxHp)
                 : soulHelpText(si).description}
             </div>
@@ -156,7 +159,7 @@ export function BankPanel({
               {!si.isEquipment && !wouldBeDuplicate && (
                 <button
                   onClick={() => {
-                    const bagNonHeal = player.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined);
+                    const bagNonHeal = player.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && i.drinkTier === undefined);
                     onMove(si.id, bagNonHeal.length < 9 ? bagNonHeal.length : 0);
                     onSelect(null);
                   }}

@@ -3,6 +3,7 @@ import { getItemBuyPrice, getItemSellValue, addToPlayerBag, removeAndRefillBag, 
 import { soulHelpText } from '../game/emojis';
 import { isStackableBagPassive } from '../game/passives';
 import { canBuyAndUse } from '../game/shopUse';
+import { drinkEffectForClass } from '../game/drinks';
 import { canEquipItem } from './itemUtils';
 import { RarityLabel } from './RarityLabel';
 import { useDismissGuard } from '../hooks/useDismissGuard';
@@ -58,7 +59,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
             {listing.map(item => {
               const price = getItemBuyPrice(item, gameState.currentFloor);
               const canAfford = gameState.player.stats.gold >= price;
-              const nonHealBagCount = gameState.player.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined).length;
+              const nonHealBagCount = gameState.player.inventory.filter(i => i.healAmount === undefined && i.ammoAmount === undefined && i.drinkTier === undefined).length;
               const ownsStackableInHotbar =
                 isStackableBagPassive(item) &&
                 gameState.player.inventory.some(i => i.emoji === item.emoji && isStackableBagPassive(i));
@@ -66,6 +67,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                 !item.isEquipment &&
                 item.healAmount === undefined &&
                 item.ammoAmount === undefined &&
+                item.drinkTier === undefined &&
                 nonHealBagCount >= 9 &&
                 !ownsStackableInHotbar;
               const useCheck = canBuyAndUse(item, gameState, price);
@@ -74,7 +76,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                   <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold leading-tight flex items-center gap-1.5">{item.name} <RarityLabel item={item} className="text-[9px]" /></div>
-                    <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.healAmount !== undefined ? foodHealDescription(item, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp) : soulHelpText(item).description}</div>
+                    <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.drinkTier !== undefined ? `${drinkEffectForClass(item.drinkTier, gameState.player.characterClass)}. Never restores HP.` : item.healAmount !== undefined ? foodHealDescription(item, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp) : soulHelpText(item).description}</div>
                   </div>
                   <div className="flex flex-row items-center gap-1 shrink-0">
                   <button
@@ -205,7 +207,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                     {item.name}{inBank ? ' (bank)' : ''} <RarityLabel item={item} className="text-[9px]" />
                     {item.isEquipment && !canEquipItem(item, cls) && <span className="ml-1 text-[9px] text-red-400/80 font-normal">wrong class</span>}
                   </div>
-                  <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.healAmount !== undefined ? foodHealDescription(item, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp) : soulHelpText(item).description}</div>
+                  <div className="text-[10px] text-muted-foreground leading-snug line-clamp-1 group-hover:line-clamp-none">{item.drinkTier !== undefined ? `${drinkEffectForClass(item.drinkTier, cls)}. Never restores HP.` : item.healAmount !== undefined ? foodHealDescription(item, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp) : soulHelpText(item).description}</div>
                 </div>
                 <button
                   onClick={() => {

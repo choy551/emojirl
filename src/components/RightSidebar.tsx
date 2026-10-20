@@ -6,6 +6,7 @@ import { getCowboyUnarmedBonus } from '../game/combat';
 import { MiniMap } from './MiniMap';
 import { activeKindEmoji } from './itemUtils';
 import { foodHealLabel, foodHealDescription } from '../game/economy';
+import { drinkEffectForClass } from '../game/drinks';
 
 const HEAL_DISPLAY_LIMIT = 9;
 
@@ -14,10 +15,12 @@ interface RightSidebarProps {
   gameState: Pick<GameState, 'map' | 'enemies' | 'activeProjectile' | 'chefLessonCount'>;
   bagSlots: (EmojiItem | null)[];
   healSlots: EmojiItem[];
+  drinkSlots: EmojiItem[];
   bagPassiveSummary: BagPassiveSummary;
   equippedPlayer: Player;
   handleUseSlot: (i: number) => void;
   handleUseHeal: () => void;
+  handleUseDrink: () => void;
   setBankOpen: (open: boolean) => void;
   setBagTab: (tab: 'hotbar' | 'equipment' | 'bank') => void;
   setSelectedItemId: (id: string | null) => void;
@@ -29,10 +32,12 @@ export function RightSidebar({
   gameState,
   bagSlots,
   healSlots,
+  drinkSlots,
   bagPassiveSummary,
   equippedPlayer,
   handleUseSlot,
   handleUseHeal,
+  handleUseDrink,
   setBankOpen,
   setBagTab,
   setSelectedItemId,
@@ -166,7 +171,7 @@ export function RightSidebar({
       <div>
         <div className="flex justify-between items-baseline mb-1.5">
           <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Healing</h3>
-          <span className="text-xs text-muted-foreground/50">H</span>
+          <span className="text-xs text-muted-foreground/50">h</span>
         </div>
         {healSlots.length === 0 ? (
           <p className="text-xs text-muted-foreground/40 italic">No items yet</p>
@@ -213,10 +218,47 @@ export function RightSidebar({
                         </button>
                       ))}
                     </div>
-                    <p className="text-[9px] text-muted-foreground/40 mt-1.5 italic">H key uses best for current HP</p>
+                    <p className="text-[9px] text-muted-foreground/40 mt-1.5 italic">h key uses best for current HP</p>
                   </div>
                 )}
               </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Drinks — uppercase H. Never restore HP. */}
+      <div>
+        <div className="flex justify-between items-baseline mb-1.5">
+          <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Drinks</h3>
+          <span className="text-xs text-muted-foreground/50">H</span>
+        </div>
+        {drinkSlots.length === 0 ? (
+          <p className="text-xs text-muted-foreground/40 italic">No drinks yet</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {drinkSlots.slice(0, HEAL_DISPLAY_LIMIT).map(item => (
+              <button
+                key={item.id}
+                data-testid={`drink-slot-${item.id}`}
+                onClick={handleUseDrink}
+                {...itemInspectProps(item)}
+                title={item.drinkTier
+                  ? `${item.name}: ${drinkEffectForClass(item.drinkTier, player.characterClass)}. Never restores HP.`
+                  : item.name}
+                className="relative w-9 h-9 bg-card border border-sky-500/40 rounded flex items-center justify-center text-lg hover:border-sky-400 hover:scale-105 transition-all cursor-pointer shadow-sm"
+              >
+                {item.emoji}
+              </button>
+            ))}
+            {drinkSlots.length > HEAL_DISPLAY_LIMIT && (
+              <button
+                onClick={handleUseDrink}
+                title="H drinks the next one. Drinks never restore HP."
+                className="w-9 h-9 bg-card border border-sky-500/40 rounded flex items-center justify-center text-[11px] font-bold text-sky-400 hover:border-sky-400 hover:scale-105 transition-all cursor-pointer shadow-sm leading-none"
+              >
+                +{drinkSlots.length - HEAL_DISPLAY_LIMIT}
+              </button>
             )}
           </div>
         )}

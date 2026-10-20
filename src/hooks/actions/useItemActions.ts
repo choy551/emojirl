@@ -10,6 +10,7 @@ import {
   buildHotbarSlots, grantGhostStack,
 } from '../../game/gameHelpers';
 import { applyInstantItemUse, canBuyAndUse } from '../../game/shopUse';
+import { applyDrinkToPlayer, pickDrink } from '../../game/drinks';
 import { GHOST_LINGER_TEXT, isVoidSoulSpend } from '../../game/voidDamage';
 import { recordHotbarSoulConsume } from '../../game/voidMeta';
 import { noteThemedHotbarConsume } from '../../game/voidAbilities';
@@ -225,6 +226,21 @@ export function useItemActions(
     });
   }, [addLog, setGameState]);
 
+  const handleUseDrink = useCallback(() => {
+    setGameState(prev => {
+      if (!prev || prev.gameOver) return prev;
+      const pick = pickDrink(prev.player.inventory, prev.player);
+      if (!pick) { addLog('No drinks! Search for 🧃🧋🍺.'); return prev; }
+      const drank = applyDrinkToPlayer(prev.player, pick.it);
+      if (!drank.ok) { addLog(drank.log); return prev; }
+      addLog(drank.log);
+      const consumed = prev.player.inventory.filter((_, idx) => idx !== pick.idx);
+      const { inventory, bank } = refillBagFromBank(consumed, prev.player.bank);
+      const midState = { ...prev, player: { ...drank.player, inventory, bank }, turn: prev.turn + 1 };
+      return applyEnemyTurns(midState, runEnemyTurns(midState));
+    });
+  }, [addLog, setGameState]);
+
   const handleCook = useCallback(() => {
     setGameState(prev => {
       if (!prev || prev.gameOver) return prev;
@@ -418,5 +434,5 @@ export function useItemActions(
     return succeeded;
   }, [gameStateRef, setGameState, applyMonkeyDropOnKill]);
 
-  return { handleUseHeal, handleCook, handleUseRope, handleUseSlot, handleShopBuyAndUse };
+  return { handleUseHeal, handleUseDrink, handleCook, handleUseRope, handleUseSlot, handleShopBuyAndUse };
 }

@@ -57,7 +57,8 @@ export function isVoidSoulSpend(item: EmojiItem): boolean {
     && !item.isEquipment
     && !item.activeKind
     && item.healAmount == null
-    && item.ammoAmount == null;
+    && item.ammoAmount == null
+    && item.drinkTier == null;
 }
 
 export function padGhostHotbar(slots: Player['ghostHotbar']): (import('./types').VoidGhost | null)[] {

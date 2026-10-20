@@ -4,6 +4,7 @@ import { soulHelpText } from '../game/emojis';
 import { RarityLabel } from './RarityLabel';
 import { foodHealLabel, foodHealDescription, cookedEatHeal } from '../game/economy';
 import { bagConsumeRefusal, canConsumeBagItem } from '../game/bagConsume';
+import { drinkEffectLines } from '../game/drinks';
 
 interface ItemStatCardProps {
   item: EmojiItem;
@@ -46,6 +47,7 @@ export function ItemStatCard({
     ? Object.entries(si.equipBonus ?? {}).filter(([,v]) => (v ?? 0) !== 0).map(([k, v]) => `${(v as number) > 0 ? '+' : ''}${v} ${k.toUpperCase()}`)
     : [];
   const typeLabel = si.isEquipment ? '⚔️ Equipment'
+    : si.drinkTier !== undefined ? '🥤 Drink'
     : si.healAmount !== undefined ? '💊 Heal Item'
     : si.ammoAmount !== undefined ? '🪖 Ammo'
     : si.activeKind ? `⚡ Active — ${si.activeKind}`
@@ -74,10 +76,24 @@ export function ItemStatCard({
 
         {/* Description */}
         <p className="text-xs text-muted-foreground/80 leading-relaxed">
-          {si.healAmount !== undefined
+          {si.drinkTier !== undefined
+            ? 'A drink. Never restores HP.'
+            : si.healAmount !== undefined
             ? foodHealDescription(si, chefLessonCount, maxHp, false)
             : help.description}
         </p>
+
+        {si.drinkTier !== undefined && (
+          <div className="bg-black/20 rounded-lg p-2.5 space-y-1">
+            <div className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wide">Class effect</div>
+            {drinkEffectLines(si.drinkTier).map(row => (
+              <div key={row.name} className="text-[11px] text-sky-200/90 leading-snug">
+                <span className="mr-1">{row.emoji}</span>
+                <span className="font-semibold">{row.name}:</span> {row.line}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Equipment bonuses */}
         {si.isEquipment && equipBonusLines.length > 0 && (

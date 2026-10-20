@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHARACTER_CLASSES } from './classes';
 import { canEquipItem } from '../components/itemUtils';
 import { claimFinaleWin } from './finale';
@@ -207,12 +207,14 @@ describe('prestige kits', () => {
   });
 
   it('parries when the chance is certain', () => {
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.99);
     const result = resolveCombat(
       player({ characterClass: WIZARD, stats: { hp: 10, maxHp: 10, attack: 1, defense: 0, speed: 1, evasion: 0, luck: 0, level: 1, xp: 0, moodValue: 0, gold: 0, mana: 0, maxMana: 0 } }),
       foe({ attack: 9, hp: 5, maxHp: 5 }),
       () => {},
       { parryChance: 1 },
     );
+    random.mockRestore();
     expect(result.parried).toBe(true);
     expect(result.playerHp).toBe(10);
     expect(result.enemyHp).toBe(5);

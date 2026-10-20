@@ -19,6 +19,7 @@ import { isHostileCombatTarget } from './combat';
 import { applyLevelUp } from './playerTurn';
 import { markEnemyKilled } from './discoveries';
 import { settleBlinkStrikeMarks } from './blinkStrike';
+import { applyDrinkBuffTick, effectiveVoidPressureSlots, isDrinkStealthActive, voidPressureIgnoredSlots } from './drinks';
 
 export interface EnemyTurnResult {
   enemies: Enemy[];
@@ -203,7 +204,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     log('💊 You regenerate! (+1 HP)');
   }
   if (player.characterClass === '👤') {
-    const filled = countVoidPressureSlots(player);
+    const filled = effectiveVoidPressureSlots(countVoidPressureSlots(player), voidPressureIgnoredSlots(player));
     if (filled > 0) {
       const dmg = voidClassTurnDamage(filled, state.currentFloor);
       playerHp -= dmg;
@@ -454,7 +455,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
 
     const baseDetectionRadius = detectionRadius(enemy.speed);
     const _bagPassivesDetect = playerBagPassives(state.player);
-    const isStealthy = (state.stealthMode && (state.player.characterClass === '🥷' || state.player.characterClass === '🕴️')) || _bagPassivesDetect.stealthBonus > 0;
+    const isStealthy = (state.stealthMode && (state.player.characterClass === '🥷' || state.player.characterClass === '🕴️')) || isDrinkStealthActive(state.player) || _bagPassivesDetect.stealthBonus > 0;
     // When player lingers in the restaurant 3×3 safe zone, every mob on the map aggroes —
     // the smell of food and activity draws everything in. They lose track once the player leaves.
     const playerNearRestaurant = nearRestaurant(map, player.pos) && !isStealthy;
@@ -987,7 +988,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     };
   }
 
-  const afterHazards = withVisibility(tickBossrush(tickVolcanoAndLava(next)));
+  const afterHazards = withVisibility(tickBossrush(tickVolcanoAndLava(applyDrinkBuffTick(next))));
   const settled = settleBlinkStrikeMarks(afterHazards.player, afterHazards.enemies, state.turn);
   if (settled.logs.length === 0 && settled.player === afterHazards.player) return afterHazards;
   return {
