@@ -3,9 +3,17 @@ import { isPrestigeUnlocked, isVoidUnlocked, loadMeta } from './meta';
 import {
   BASE_CLASSES,
   CLASS_SELECT_ORDER,
+  COWBOY,
+  FENCER,
+  GENIE,
+  HITMAN,
+  NINJA,
   PRESTIGE_OF,
+  RANGER,
+  ROYAL_GUARD,
   VOID,
   VOID_UNLOCK_HINT,
+  WIZARD,
 } from './prestigeConstants';
 
 const BASE = new Set<string>(BASE_CLASSES);
@@ -53,4 +61,34 @@ export function classSelectEntries(): { emoji: string; name: string; unlocked: b
     unlocked: isClassUnlocked(emoji),
     hint: isClassUnlocked(emoji) ? null : unlockHintFor(emoji),
   }));
+}
+
+export type VesselGridRow = 1 | 2 | 'both';
+
+export interface VesselGridCell {
+  emoji: string;
+  /** 1–4 are base/prestige pairs. 5 is The Void. */
+  column: 1 | 2 | 3 | 4 | 5;
+  /** `both` spans the two rows and is centered in that column. */
+  row: VesselGridRow;
+}
+
+/**
+ * Five columns: each base class sits above its prestige class.
+ * Wizard, Cowboy, Ninja, Ranger, then The Void beside both rows.
+ */
+const VESSEL_GRID: readonly VesselGridCell[] = [
+  { emoji: WIZARD, column: 1, row: 1 },
+  { emoji: GENIE, column: 1, row: 2 },
+  { emoji: COWBOY, column: 2, row: 1 },
+  { emoji: HITMAN, column: 2, row: 2 },
+  { emoji: NINJA, column: 3, row: 1 },
+  { emoji: FENCER, column: 3, row: 2 },
+  { emoji: RANGER, column: 4, row: 1 },
+  { emoji: ROYAL_GUARD, column: 4, row: 2 },
+  { emoji: VOID, column: 5, row: 'both' },
+];
+
+export function vesselGridCells(): VesselGridCell[] {
+  return VESSEL_GRID.map((cell) => ({ ...cell }));
 }

@@ -7,8 +7,30 @@ import { getScores, clearScores, LeaderboardEntry } from "../game/leaderboard";
 import { hasSave, clearSave } from "../game/save";
 import { acknowledgeVoidUnlock, voidUnlockPending } from "../game/voidMeta";
 import { VOID_UNLOCK_TEXT } from "../game/voidDamage";
-import { classSelectEntries, isClassUnlocked, resolveVesselChoice } from "../game/classSelect";
+import { classSelectEntries, isClassUnlocked, resolveVesselChoice, vesselGridCells, type VesselGridCell } from "../game/classSelect";
 import { WIZARD } from "../game/prestigeConstants";
+
+const GRID_PLACE: Record<string, string> = {
+  "1-1": "col-start-1 row-start-1",
+  "1-2": "col-start-1 row-start-2",
+  "2-1": "col-start-2 row-start-1",
+  "2-2": "col-start-2 row-start-2",
+  "3-1": "col-start-3 row-start-1",
+  "3-2": "col-start-3 row-start-2",
+  "4-1": "col-start-4 row-start-1",
+  "4-2": "col-start-4 row-start-2",
+  "5-both": "col-start-5 row-start-1 row-span-2 self-center",
+};
+
+function gridPlace(cell: VesselGridCell): string {
+  return GRID_PLACE[`${cell.column}-${cell.row}`] ?? "";
+}
+
+function tooltipSide(column: VesselGridCell["column"]): string {
+  if (column <= 2) return "left-0";
+  if (column >= 4) return "right-0";
+  return "left-1/2 -translate-x-1/2";
+}
 const VESSEL_KEY = "emojirl_vessel";
 const ANNOUNCE_DISMISS_KEY = "emojirl_announce_dismissed_2026-09-10";
 
@@ -141,8 +163,14 @@ export default function Home() {
         <div className="pt-8 border-t border-border/50 text-left space-y-4">
           <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Choose your vessel</h2>
 
-          <div className="flex flex-wrap justify-center gap-2 text-3xl">
-            {vessels.map((v) => {
+          <div
+            className="relative z-10 mx-auto grid w-full max-w-[18rem] grid-cols-5 grid-rows-2 justify-items-center gap-x-1 gap-y-1.5 sm:max-w-sm sm:gap-x-2 sm:gap-y-2"
+            role="group"
+            aria-label="Choose your vessel"
+          >
+            {vesselGridCells().map((cell) => {
+              const v = vessels.find((entry) => entry.emoji === cell.emoji);
+              if (!v) return null;
               const hintOpen = !v.unlocked && pinnedHint === v.emoji;
               return (
                 <button
@@ -151,11 +179,13 @@ export default function Home() {
                   onClick={() => select(v.emoji)}
                   aria-disabled={!v.unlocked}
                   aria-label={v.unlocked ? `Select ${v.name}` : `${v.name} locked`}
-                  className={`group relative p-2 rounded-lg transition-all ${
+                  className={`group relative flex aspect-square w-full max-w-11 items-center justify-center rounded-lg text-2xl leading-none transition-all sm:max-w-14 sm:text-3xl ${gridPlace(cell)} ${
+                    hintOpen ? "z-30" : "z-10 hover:z-30"
+                  } ${
                     !v.unlocked
                       ? "border border-border grayscale opacity-40 cursor-help"
                       : selected === v.emoji
-                        ? "border-2 border-primary bg-primary/10 scale-110 shadow-[0_0_12px_rgba(168,85,247,0.4)] cursor-pointer"
+                        ? "border-2 border-primary bg-primary/10 shadow-[0_0_12px_rgba(168,85,247,0.4)] cursor-pointer sm:scale-110"
                         : "border border-border opacity-50 hover:opacity-80 hover:border-primary/50 cursor-pointer"
                   }`}
                 >
@@ -163,7 +193,7 @@ export default function Home() {
                   {!v.unlocked && v.hint && (
                     <span
                       role="tooltip"
-                      className={`absolute left-1/2 top-full z-20 mt-2 w-44 -translate-x-1/2 rounded-md border border-border bg-popover px-2 py-1.5 text-left text-[11px] font-normal normal-case leading-snug text-popover-foreground shadow-lg ${
+                      className={`absolute top-full z-20 mt-1.5 w-max max-w-[9.5rem] rounded-md border border-border bg-popover px-2 py-1.5 text-left text-[11px] font-normal normal-case leading-snug text-popover-foreground shadow-lg ${tooltipSide(cell.column)} ${
                         hintOpen ? "block" : "hidden group-hover:block"
                       }`}
                       onClick={(e) => e.stopPropagation()}

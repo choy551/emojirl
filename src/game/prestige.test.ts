@@ -3,7 +3,7 @@ import { CHARACTER_CLASSES } from './classes';
 import { canEquipItem } from '../components/itemUtils';
 import { claimFinaleWin } from './finale';
 import { FINALE_FLOOR } from './finaleConstants';
-import { classSelectEntries, prestigeUnlockHint, resolveVesselChoice, unlockHintFor } from './classSelect';
+import { classSelectEntries, prestigeUnlockHint, resolveVesselChoice, unlockHintFor, vesselGridCells } from './classSelect';
 import { loadMeta, recordPrestigeWin, setMetaStore, type KeyValueStore } from './meta';
 import { resolveCombat } from './combat';
 import {
@@ -22,6 +22,7 @@ import {
 } from './prestige';
 import {
   CLASS_SELECT_ORDER,
+  COWBOY,
   FENCER,
   FENCER_CRIT_AT_FULL,
   FENCER_EVA_AT_EMPTY,
@@ -34,6 +35,8 @@ import {
   HITMAN_DUAL_MULT,
   HITMAN_EXECUTE_HP_PCT,
   HITMAN_SINGLE_MULT,
+  NINJA,
+  RANGER,
   ROYAL_GUARD,
   ROYAL_SWORD_MELEE_MULT,
   VOID,
@@ -98,6 +101,20 @@ describe('class select', () => {
     expect(entries.find(e => e.emoji === ROYAL_GUARD)?.hint).toBe('Win D:27 as 🧝 Ranger to unlock');
     expect(unlockHintFor(VOID)).toBe(VOID_UNLOCK_HINT);
     expect(entries.find(e => e.emoji === VOID)?.hint).toBe('Die to Void damage to unlock');
+  });
+
+  it('places each prestige class under its base, with The Void in the fifth column', () => {
+    expect(vesselGridCells()).toEqual([
+      { emoji: WIZARD, column: 1, row: 1 },
+      { emoji: GENIE, column: 1, row: 2 },
+      { emoji: COWBOY, column: 2, row: 1 },
+      { emoji: HITMAN, column: 2, row: 2 },
+      { emoji: NINJA, column: 3, row: 1 },
+      { emoji: FENCER, column: 3, row: 2 },
+      { emoji: RANGER, column: 4, row: 1 },
+      { emoji: ROYAL_GUARD, column: 4, row: 2 },
+      { emoji: VOID, column: 5, row: 'both' },
+    ]);
   });
 
   it('a locked tap does not change the vessel', () => {
