@@ -1,9 +1,6 @@
 import type { DrinkBuff, DrinkTier, EmojiItem, GameState, MoodType, Player } from './types';
 import { COWBOY_MOOD_FLOOR, getMood } from './moods';
-<<<<<<< HEAD
 import { isArcaneCaster, isFencer, isHitman, isRoyalGuard } from './prestige';
-=======
->>>>>>> 4c2af06 (fix: import MoodType from game types)
 import { moodMax } from './progression';
 
 /**
