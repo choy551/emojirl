@@ -9,7 +9,7 @@ const BLINK_CD = 5;
 export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: AddLog) {
   const {
     gameStateRef, wizardTacticsRef, blinkTurnRef, inspectedEnemyIdRef,
-    autoStealthRef, rangerModeRef, trailblazeTurnRef, yeehawTurnRef,
+    autoStealthRef, rangerModeRef, trailblazeTurnRef, yeehawTurnRef, voidAttackModeRef,
   } = refs;
   const {
     setGameState, setAutoExplore, setAutoRest, setWizardTactics, setBlinkTurn,
@@ -62,13 +62,13 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
     const idx = targets.findIndex(e => e.id === inspectedEnemyIdRef.current);
     const next = targets[(idx + dir + targets.length) % targets.length];
     setInspectedEnemyId(next.id);
-    if (player.characterClass === '🧙') {
+    if (player.characterClass === '🧙' || (player.characterClass === '👤' && voidAttackModeRef.current === 'wizard')) {
       const newT = { ...wizardTacticsRef.current, mode: 'manual' as const, manualTargetId: next.id };
       wizardTacticsRef.current = newT;
       setWizardTactics(newT);
     }
     addLog(`🎯 Targeting: ${next.emoji} ${next.name}`);
-  }, [addLog, gameStateRef, inspectedEnemyIdRef, wizardTacticsRef, setInspectedEnemyId, setWizardTactics]);
+  }, [addLog, gameStateRef, inspectedEnemyIdRef, wizardTacticsRef, voidAttackModeRef, setInspectedEnemyId, setWizardTactics]);
 
   const applyNinjaMode = useCallback((stealth: boolean) => {
     const state = gameStateRef.current;

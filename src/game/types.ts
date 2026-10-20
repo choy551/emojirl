@@ -313,6 +313,10 @@ export interface GameState {
   voidBossesCleared?: number;
   /** Already logged that the hotbar holds more ghosts than the current depth allows. */
   voidGhostOverCapLogged?: boolean;
+  /** Void 👤 attack style. Ranged modes stay locked until the meta consume counts say otherwise. */
+  voidAttackMode?: 'melee' | 'ranger' | 'wizard';
+  /** Floor number on which Unmake was already spent. Resets when this no longer matches currentFloor. */
+  unmakeUsedFloor?: number;
 }
 
 export interface BossrushState {

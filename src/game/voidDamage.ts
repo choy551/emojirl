@@ -17,6 +17,30 @@ export function voidClassTurnDamage(filledCount: number, floor: number): number 
   return voidDamageFor(filledCount, floor) + filledCount;
 }
 
+/** Null Momentum hard cap. DR = 1% + 1% per player level, never above this. */
+export const NULL_MOMENTUM_CAP = 44;
+
+/** Percent damage reduction for The Void. Level 1 → 2%. Level 43+ → 44%. */
+export function nullMomentumPercent(level: number): number {
+  const lvl = Math.max(0, Math.floor(level || 0));
+  return Math.min(NULL_MOMENTUM_CAP, 1 + lvl);
+}
+
+/**
+ * Incoming damage after Null Momentum. Other classes are unchanged.
+ * Rounded down, and a positive hit still deals at least 1.
+ * Void pressure and emoji-less ticks do not pass through here.
+ */
+export function applyNullMomentum(
+  damage: number,
+  player: { characterClass?: string; stats: { level: number } },
+): number {
+  if (player.characterClass !== '👤' || damage <= 0) return damage;
+  const pct = nullMomentumPercent(player.stats.level);
+  const reduced = Math.floor(damage * (100 - pct) / 100);
+  return Math.max(1, reduced);
+}
+
 /**
  * Active ghost slots. D:1–4 (0 depth bosses) → 1.
  * +1 after each D:5/10/15… boss, cap 9. `floor` is unused; bosses cleared is the source of truth.

@@ -10,6 +10,7 @@ import {
 } from '../../game/gameHelpers';
 import { applyLevelUp } from '../../game/playerTurn';
 import { creditVoidBoss } from '../../game/voidDamage';
+import { noteThemedHotbarConsume } from '../../game/voidAbilities';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 
 export function useCombatActions(
@@ -80,7 +81,14 @@ export function useCombatActions(
           newInv = prev.player.inventory.map(it => it.id === item.id ? { ...it, charges: newCharges } : it);
         }
       }
-      const midState = { ...prev, player: { ...prev.player, inventory: newInv, bank: newProjBank }, activeProjectile: proj, turn: prev.turn + 1 };
+      let themeLogs = prev.logs;
+      if (prev.player.characterClass === '👤') {
+        const themed = noteThemedHotbarConsume(item);
+        if (themed) {
+          themeLogs = [{ id: `void-theme-${prev.turn}-${item.id}`, text: themed.text, turn: prev.turn }, ...prev.logs].slice(0, 24);
+        }
+      }
+      const midState = { ...prev, logs: themeLogs, player: { ...prev.player, inventory: newInv, bank: newProjBank }, activeProjectile: proj, turn: prev.turn + 1 };
       return applyEnemyTurns(midState, runEnemyTurns(midState));
     });
   }, [addLog, setGameState]);

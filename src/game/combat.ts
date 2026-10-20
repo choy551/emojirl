@@ -1,5 +1,6 @@
 import { Player, Enemy, MoodType } from './types';
 import { crowGoldSteal } from './economy';
+import { applyNullMomentum } from './voidDamage';
 
 /**
  * Auto-fire / barrage should only pick real foes: not companions, not friendlies,
@@ -265,13 +266,15 @@ export function resolveCombat(
         : Math.max(1, enemy.attack - Math.floor((player.stats.defense ?? 0) / 2));
       const incoming = Math.round(rawEnemy * mods.incomingMult);
       const shieldDR = Math.min(incoming, opts.shieldWall ?? 0);
-      const finalDmg = incoming - shieldDR;
+      const afterShield = incoming - shieldDR;
+      const finalDmg = applyNullMomentum(afterShield, player);
       newPlayerHp -= finalDmg;
       const shieldNote = shieldDR > 0 ? ` (🛡️−${shieldDR})` : '';
+      const nullNote = finalDmg < afterShield ? ` (👤−${afterShield - finalDmg})` : '';
       if (finalDmg <= 0) {
         addLog(`${label}${enemy.emoji} attacks — shields absorb it all! 🛡️`);
       } else {
-        addLog(`${label}${enemy.emoji} hits you for ${finalDmg} dmg${shieldNote}!`);
+        addLog(`${label}${enemy.emoji} hits you for ${finalDmg} dmg${shieldNote}${nullNote}!`);
         tryCrowSteal();
       }
       if (newPlayerHp <= 0) playerDied = true;

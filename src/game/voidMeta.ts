@@ -4,6 +4,17 @@ import { voidGhostCapacity } from './voidDamage';
 const UNLOCK_KEY = 'emojirl_unlocked_void';
 const PENDING_KEY = 'emojirl_void_unlock_pending';
 const GHOST_KEY = 'emojirl_void_ghosts';
+const MODE_KEY = 'emojirl_void_attack_modes';
+
+/** Hotbar consumes of ranged-themed emoji required to unlock Ranger autos. */
+export const VOID_RANGER_UNLOCK_N = 10;
+/** Hotbar consumes of magic-flavored emoji required to unlock Wizard autos. */
+export const VOID_WIZARD_UNLOCK_N = 10;
+
+export interface VoidModeProgress {
+  ranger: number;
+  wizard: number;
+}
 
 export interface GhostCatalogEntry {
   unlocks: number;
@@ -88,6 +99,38 @@ export function recordHotbarSoulConsume(emoji: string): { unlocks: number; consu
   cat[emoji] = { unlocks, consumes, order };
   writeGhostCatalog(cat);
   return { unlocks, consumes, crossed };
+}
+
+export function readVoidModeProgress(): VoidModeProgress {
+  const raw = readJson<Partial<VoidModeProgress>>(MODE_KEY, {});
+  return {
+    ranger: Math.max(0, Math.floor(raw?.ranger ?? 0)),
+    wizard: Math.max(0, Math.floor(raw?.wizard ?? 0)),
+  };
+}
+
+function writeVoidModeProgress(progress: VoidModeProgress): void {
+  try { localStorage.setItem(MODE_KEY, JSON.stringify(progress)); }
+  catch { /* ignore quota */ }
+}
+
+/** Count one themed hotbar consume toward Ranger or Wizard autos. */
+export function recordVoidModeConsume(theme: 'ranger' | 'wizard' | null): {
+  progress: VoidModeProgress;
+  unlocked: boolean;
+} {
+  const progress = readVoidModeProgress();
+  if (!theme) return { progress, unlocked: false };
+  const before = progress[theme];
+  const need = theme === 'ranger' ? VOID_RANGER_UNLOCK_N : VOID_WIZARD_UNLOCK_N;
+  progress[theme] = before + 1;
+  writeVoidModeProgress(progress);
+  return { progress, unlocked: before < need && progress[theme] >= need };
+}
+
+export function voidModeUnlocked(theme: 'ranger' | 'wizard', progress = readVoidModeProgress()): boolean {
+  const need = theme === 'ranger' ? VOID_RANGER_UNLOCK_N : VOID_WIZARD_UNLOCK_N;
+  return progress[theme] >= need;
 }
 
 /** Permanent ghosts for a new Void run. Auto-fill the hotbar up to depth capacity; the rest stay banked. */

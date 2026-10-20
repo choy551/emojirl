@@ -1,5 +1,6 @@
 import { GameState, MapGrid, Position, EmojiItem, FloatingText, Enemy } from './types';
 import { chebyshev, cardinalFromTo } from './geo';
+import { applyNullMomentum } from './voidDamage';
 
 export const LAVA_EMOJI = '🟧';
 export const VOLCANO_EMOJI = '🌋';
@@ -267,7 +268,7 @@ export function tickVolcanoAndLava(state: GameState): GameState {
   let playerHp = state.player.stats.hp;
   let playerDied = false;
   if (lavaOn(map, state.player.pos)) {
-    const dmg = lavaDamageForFloor(state.currentFloor, state.player.stats.maxHp);
+    const dmg = applyNullMomentum(lavaDamageForFloor(state.currentFloor, state.player.stats.maxHp), state.player);
     playerHp = Math.max(0, playerHp - dmg);
     logs.push({
       id: `lava-player-${turn}`,

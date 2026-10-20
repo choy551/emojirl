@@ -142,6 +142,10 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     deepDive:                 raw.deepDive === true,
     voidBossesCleared:        (raw.voidBossesCleared as number) ?? (player.voidBossesCleared ?? 0),
     voidGhostOverCapLogged:   raw.voidGhostOverCapLogged === true,
+    voidAttackMode:           raw.voidAttackMode === 'ranger' || raw.voidAttackMode === 'wizard' || raw.voidAttackMode === 'melee'
+      ? raw.voidAttackMode
+      : undefined,
+    unmakeUsedFloor:          typeof raw.unmakeUsedFloor === 'number' ? raw.unmakeUsedFloor : undefined,
   };
 }
 

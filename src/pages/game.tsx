@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { getMood, MOODS } from '../game/moods';
 import { getClassDef } from '../game/classes';
 import { saveScore, leaderboardEntryFromRun } from '../game/leaderboard';
-import { startingVoidLoadout } from '../game/voidMeta';
-import { VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from '../game/voidDamage';
+import { readVoidModeProgress, startingVoidLoadout } from '../game/voidMeta';
+import { VOID_DEATH_TEXT, VOID_UNLOCK_TEXT, nullMomentumPercent } from '../game/voidDamage';
+import { nextVoidAttackMode, resolveUnmake, voidAttackModeLabel, type VoidAttackMode } from '../game/voidAbilities';
 import { saveGame, loadGame, clearSave, getRawSave } from '../game/save';
 import { isStackableBagPassive } from '../game/passives';
 import { useIsMobile } from '../hooks/use-mobile';
@@ -116,6 +117,9 @@ export default function Game() {
   const autoStealthRef = useRef(localStorage.getItem('emojirl_vessel') === '🥷');
   const [rangerMode, setRangerMode] = useState<'ranged' | 'melee' | 'flee'>('ranged');
   const rangerModeRef = useRef<'ranged' | 'melee' | 'flee'>('ranged');
+  const voidAttackModeRef = useRef<VoidAttackMode>('melee');
+  const [unmakeTargetMode, setUnmakeTargetMode] = useState(false);
+  const unmakeTargetModeRef = useRef(false);
   const [yeehawTurn, setYeehawTurn] = useState(-999);
   const yeehawTurnRef = useRef(-999);
   const lastCowboyFlavorTurnRef = useRef(-999);
@@ -185,6 +189,11 @@ export default function Game() {
   useEffect(() => { tacticsMenuOpenRef.current = tacticsMenuOpen; }, [tacticsMenuOpen]);
   useEffect(() => { gotoMenuOpenRef.current = gotoMenuOpen; }, [gotoMenuOpen]);
   useEffect(() => { dirPickModeRef.current = dirPickMode; }, [dirPickMode]);
+  useEffect(() => { unmakeTargetModeRef.current = unmakeTargetMode; }, [unmakeTargetMode]);
+  useEffect(() => {
+    const mode = gameState?.voidAttackMode;
+    if (mode === 'melee' || mode === 'ranger' || mode === 'wizard') voidAttackModeRef.current = mode;
+  }, [gameState?.voidAttackMode]);
   const [bankOpen, setBankOpen] = useState(false);
   const bankOpenRef = useRef(false);
   const [drownWarnSlot, setDrownWarnSlot] = useState<number | null>(null);
@@ -321,6 +330,7 @@ export default function Game() {
       { id: 'monkey', isOpen: () => !!pendingMonkeyInteraction, close: () => setPendingMonkeyInteraction(null) },
       { id: 'fairy', isOpen: () => !!pendingFairyId, close: () => setPendingFairyId(null) },
       { id: 'dir-pick', isOpen: () => dirPickModeRef.current !== null, close: () => { dirPickModeRef.current = null; setDirPickMode(null); } },
+      { id: 'unmake', isOpen: () => unmakeTargetModeRef.current, close: () => { unmakeTargetModeRef.current = false; setUnmakeTargetMode(false); } },
       { id: 'blink', isOpen: () => blinkTargetModeRef.current, close: () => { setBlinkTargetMode(false); blinkTargetModeRef.current = false; } },
       { id: 'goto', isOpen: () => gotoMenuOpen, close: () => setGotoMenuOpen(false) },
       { id: 'tactics', isOpen: () => tacticsMenuOpen, close: () => setTacticsMenuOpen(false) },
@@ -444,6 +454,7 @@ export default function Game() {
     pendingMonkeyInteraction ||
     pendingFairyId ||
     dirPickMode ||
+    unmakeTargetMode ||
     blinkTargetMode ||
     gotoMenuOpen ||
     tacticsMenuOpen ||
@@ -694,6 +705,7 @@ export default function Game() {
       blinkTurnRef,
       trailblazeTurnRef,
       restaurantClosedRef,
+      voidAttackModeRef,
     },
     {
       setGameState,
@@ -751,6 +763,52 @@ export default function Game() {
     addLog(`⚡ Blink targeting: ${nearest.emoji} ${nearest.name} — Tab to cycle · Enter to strike · Esc to cancel`);
   }, [addLog, gameStateRef, setInspectedEnemyId, inspectedEnemyIdRef]);
 
+  const exitUnmakeTargetMode = useCallback(() => {
+    unmakeTargetModeRef.current = false;
+    setUnmakeTargetMode(false);
+  }, []);
+
+  const cycleVoidAttack = useCallback(() => {
+    const gs = gameStateRef.current;
+    if (!gs || gs.gameOver || gs.player.characterClass !== '👤') return;
+    const progress = readVoidModeProgress();
+    const current = (gs.voidAttackMode ?? voidAttackModeRef.current) as VoidAttackMode;
+    const { mode, hints } = nextVoidAttackMode(current, progress);
+    voidAttackModeRef.current = mode;
+    if (mode === 'wizard' && wizardTacticsRef.current.mode === 'holdfire') {
+      const next = { mode: 'nearest' as const, manualTargetId: null };
+      wizardTacticsRef.current = next;
+      setWizardTactics(next);
+    }
+    setGameState(prev => prev ? { ...prev, voidAttackMode: mode } : prev);
+    if (mode !== current) addLog(`👤 Attack mode: ${voidAttackModeLabel(mode)}`);
+    for (const hint of hints) addLog(hint);
+  }, [addLog, gameStateRef, setWizardTactics]);
+
+  const beginUnmake = useCallback(() => {
+    const gs = gameStateRef.current;
+    if (!gs || gs.gameOver || gs.player.characterClass !== '👤') return;
+    if (gs.unmakeUsedFloor === gs.currentFloor) {
+      addLog('👤 Unmake is spent until you descend.');
+      return;
+    }
+    if (unmakeTargetModeRef.current) {
+      exitUnmakeTargetMode();
+      addLog('👤 Unmake cancelled.');
+      return;
+    }
+    unmakeTargetModeRef.current = true;
+    setUnmakeTargetMode(true);
+    setAutoExplore(false);
+    setAutoRest(false);
+    addLog('👤 Unmake — click a tile or enemy in line of sight · Esc to cancel');
+  }, [addLog, exitUnmakeTargetMode, gameStateRef]);
+
+  const castUnmakeAt = useCallback((x: number, y: number) => {
+    exitUnmakeTargetMode();
+    setGameState(prev => prev ? resolveUnmake(prev, x, y) : prev);
+  }, [exitUnmakeTargetMode]);
+
   // ── autoexplore interval ─────────────────────────────────────────────────
   useEffect(() => {
     if (!autoExplore) return;
@@ -772,7 +830,7 @@ export default function Game() {
         chebyshev(player.pos, e.pos) <= VISION_RADIUS + 1 &&
         enemyInEngageSight(e)
       );
-      if (exploreCls === '🧙' && visibleHostile.length > 0) {
+      if ((exploreCls === '🧙' || (exploreCls === '👤' && voidAttackModeRef.current === 'wizard')) && visibleHostile.length > 0) {
         setAutoExplore(false);
         addLog('Autoexplore stopped: enemy in sight — auto-fire engaged!');
         return;
@@ -782,7 +840,7 @@ export default function Game() {
       const exploreCowboyDualGuns = exploreCls === '🤠' &&
         player.equipment.mainHand?.weaponKind === 'gun' &&
         player.equipment.offHand?.weaponKind === 'gun';
-      if ((exploreCls === '🧝' && rangerModeRef.current === 'ranged') || exploreCowboyDualGuns) {
+      if ((exploreCls === '🧝' && rangerModeRef.current === 'ranged') || (exploreCls === '👤' && voidAttackModeRef.current === 'ranger') || exploreCowboyDualGuns) {
         if (visibleHostile.some(e =>
           chebyshev(player.pos, e.pos) <= eagleEyeRange(player.stats.level) + 1
         )) {
@@ -1058,6 +1116,12 @@ export default function Game() {
     const { player, enemies } = state;
     const dx = mapX - player.pos.x;
     const dy = mapY - player.pos.y;
+    if (unmakeTargetModeRef.current) {
+      setAutoExplore(false);
+      setAutoRest(false);
+      castUnmakeAt(mapX, mapY);
+      return;
+    }
     if (dirPickModeRef.current) {
       const adx = Math.sign(dx);
       const ady = Math.sign(dy);
@@ -1089,7 +1153,7 @@ export default function Game() {
       return;
     }
     setTravelTarget({ x: mapX, y: mapY });
-  }, [handleMove, handleWait, handleFireProjectile]);
+  }, [handleMove, handleWait, handleFireProjectile, castUnmakeAt]);
 
   // Dispatch the resolved context-sensitive action (HL-style "use" button).
   // Mobile idle fallback is Auto-Explore; keyboard Space still waits (Z / d-pad center also wait).
@@ -1516,6 +1580,11 @@ export default function Game() {
           addLog('Cancelled.');
           return;
         }
+        if (unmakeTargetModeRef.current) {
+          exitUnmakeTargetMode();
+          addLog('👤 Unmake cancelled.');
+          return;
+        }
         if (inspectedEnemyIdRef.current) {
           setInspectedEnemyId(null);
           return;
@@ -1538,6 +1607,24 @@ export default function Game() {
         }
         setPauseMenuOpen(true);
         return;
+      }
+
+      if (unmakeTargetModeRef.current) {
+        if (e.key === 'Enter' || e.code === 'NumpadEnter') {
+          e.preventDefault();
+          const gs = gameStateRef.current;
+          const targetId = inspectedEnemyIdRef.current;
+          const enemy = gs?.enemies.find(en => en.id === targetId);
+          if (enemy) castUnmakeAt(enemy.pos.x, enemy.pos.y);
+          else addLog('👤 Unmake — click a tile, or Tab to an enemy and press Enter.');
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          exitUnmakeTargetMode();
+          addLog('👤 Unmake cancelled.');
+          return;
+        }
       }
 
       // ── Direction-pick mode: intercept movement keys ──────────────────────
@@ -1628,8 +1715,18 @@ export default function Game() {
       if (e.key === 'f') { e.preventDefault(); handleCook(); return; }
       // Close adjacent door: c
       if (e.key === 'c') { e.preventDefault(); handleCloseDoor(); return; }
-      // Class tactics: t opens the tactics menu
-      if (e.key === 't') { e.preventDefault(); setTacticsMenuOpen(v => !v); return; }
+      // Class tactics: t opens the tactics menu. Void cycles attack mode instead.
+      if (e.key === 't') {
+        e.preventDefault();
+        if (gameStateRef.current?.player.characterClass === '👤') { cycleVoidAttack(); return; }
+        setTacticsMenuOpen(v => !v);
+        return;
+      }
+      if (e.key === 'u' && gameStateRef.current?.player.characterClass === '👤') {
+        e.preventDefault();
+        beginUnmake();
+        return;
+      }
       // Go to (DCSS-style): Shift+G lists known destinations on this floor
       if (e.key === 'G') {
         e.preventDefault();
@@ -1704,7 +1801,7 @@ export default function Game() {
       window.removeEventListener('keyup', handleKeyUp);
 
     };
-  }, [handleMove, handleWait, handleUseHeal, handleCook, handleCloseDoor, handleUseSlot, handleBankMove, setAutoRest, applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, handleBlinkStrike, handleBlinkStrikeOnTarget, enterBlinkTargetMode, exitBlinkTargetMode, applyRangerMode, handleCowboyTactics, handleFireProjectile, addLog, doContextAction, shopItems, ammoCacheItems]);
+  }, [handleMove, handleWait, handleUseHeal, handleCook, handleCloseDoor, handleUseSlot, handleBankMove, setAutoRest, applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, handleBlinkStrike, handleBlinkStrikeOnTarget, enterBlinkTargetMode, exitBlinkTargetMode, applyRangerMode, handleCowboyTactics, handleFireProjectile, addLog, doContextAction, shopItems, ammoCacheItems, cycleVoidAttack, beginUnmake, castUnmakeAt, exitUnmakeTargetMode]);
 
   // ── render ────────────────────────────────────────────────────────────────
   if (!gameState) return <div className="p-8 text-center text-muted-foreground">Loading depths...</div>;
@@ -1761,6 +1858,10 @@ export default function Game() {
     handleCowboyTactics,
     handleBlinkStrike,
     applyNinjaMode,
+    cycleVoidAttack,
+    beginUnmake,
+    unmakeSpent: gameState.unmakeUsedFloor === currentFloor,
+    voidAttackMode: (gameState.voidAttackMode ?? 'melee') as VoidAttackMode,
   });
   const mobileGeneralActions: ActionItem[] = [
     { id: 'heal', icon: '❤️', label: 'Heal', onUse: handleUseHeal },
@@ -1785,7 +1886,8 @@ export default function Game() {
 
   // ─── Ranged-attack targeting indicators (render-time, no state needed) ────
   const wizardAutoTarget: Enemy | null = (() => {
-    if (player.characterClass !== '🧙' || wizardTactics.mode === 'holdfire') return null;
+    const voidWizard = player.characterClass === '👤' && (gameState.voidAttackMode ?? 'melee') === 'wizard';
+    if ((player.characterClass !== '🧙' && !voidWizard) || wizardTactics.mode === 'holdfire') return null;
     const candidates = gameState.enemies.filter(e => {
       const d = chebyshev(player.pos, e.pos);
       return d > 1 && d <= VISION_RADIUS && hasLOSBetween(gameState.map, player.pos, e.pos)
@@ -1811,7 +1913,7 @@ export default function Game() {
   }
 
   const rangerTargetKeys = new Set<string>();
-  if (player.characterClass === '🧝' && rangerMode === 'ranged' && player.ammo > 0) {
+  if (((player.characterClass === '🧝' && rangerMode === 'ranged') || (player.characterClass === '👤' && (gameState.voidAttackMode ?? 'melee') === 'ranger')) && player.ammo > 0) {
     const _maxRange = eagleEyeRange(player.stats.level);
     for (const e of gameState.enemies) {
       if (e.isSpectator) continue;
@@ -2497,6 +2599,7 @@ export default function Game() {
                 </span>
               )}
               {player.characterClass === '🧝' && (rangerMode === 'ranged' ? '🏹 Ranged' : rangerMode === 'flee' ? '💨 Flee' : '⚔️ Melee')}
+              {player.characterClass === '👤' && voidAttackModeLabel((gameState.voidAttackMode ?? 'melee') as VoidAttackMode)}
               {player.characterClass === '🤠' && (gameState.turn - yeehawTurn >= 45 ? '🤠 YEEHAW!' : `🤠 ${45 - (gameState.turn - yeehawTurn)}t`)}
             </div>
           </div>
@@ -2681,6 +2784,7 @@ export default function Game() {
           const atkTitle = hudIronFistBonus > 0 ? `ATK ${_effPlayer.stats.attack} + ${hudIronFistBonus} Iron Fist` : '';
           const crit = Math.min(99, 5 + _effPlayer.stats.luck);
           const dodge = player.characterClass === '🥷' ? computeNinjaEvasion(_effPlayer) : Math.min(50, _effPlayer.stats.evasion ?? 0);
+          const voidDr = player.characterClass === '👤' ? nullMomentumPercent(player.stats.level) : 0;
           return (
             <div className="flex gap-1.5 shrink-0 text-[9px]" data-testid="stat-grid">
               {[['ATK', displayedAtk, 'text-orange-400', atkTitle], ['DEF', _effPlayer.stats.defense, 'text-blue-400', ''], ['SPD', _effPlayer.stats.speed, 'text-yellow-400', ''], ['EVA', _effPlayer.stats.evasion, 'text-emerald-400', ''], ['LCK', _effPlayer.stats.luck, 'text-pink-400', '']].map(([label, val, color, title]) => (
@@ -2697,6 +2801,12 @@ export default function Game() {
                 <span className="font-bold text-sky-300">{dodge}%</span>
                 <span className="text-muted-foreground/50">DODGE</span>
               </div>
+              {voidDr > 0 && (
+                <div title="Null Momentum — incoming damage reduction" className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
+                  <span className="font-bold text-zinc-200">{voidDr}%</span>
+                  <span className="text-muted-foreground/50">DR</span>
+                </div>
+              )}
             </div>
           );
         })()}
@@ -2986,6 +3096,12 @@ export default function Game() {
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-violet-950/90 border border-violet-500/60 rounded-lg px-3 py-1.5 text-xs font-bold text-violet-200 shadow-lg pointer-events-none">
             <span className="text-base leading-none">⚡</span>
             BLINK TARGET — Tab to cycle · Enter to strike · Esc to cancel
+          </div>
+        )}
+        {unmakeTargetMode && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-xl bg-zinc-950/95 border border-zinc-400/80 text-zinc-100 text-sm font-bold shadow-lg animate-pulse pointer-events-none select-none flex items-center gap-2">
+            <span className="text-xl">👤</span>
+            Unmake — click a tile or enemy in line of sight · Esc to cancel
           </div>
         )}
         {dirPickMode && (

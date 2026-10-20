@@ -1,7 +1,8 @@
 import { Enemy, EmojiItem, GameState, Position, FloatingText, PlacedBomb, ActiveProjectile } from './types';
 import { chebyshev } from './geo';
 import { applyEquipmentAndPassives, addToPlayerBag, playerBagPassives, parkVoidOverflow, countVoidPressureSlots } from './inventory';
-import { creditVoidBoss, occupiedGhosts, voidClassTurnDamage, voidDamageFor, voidGhostCapacity, VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from './voidDamage';
+import { applyNullMomentum, creditVoidBoss, occupiedGhosts, voidClassTurnDamage, voidDamageFor, voidGhostCapacity, VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from './voidDamage';
+import { applyEntropicTithe, type GhostKillEffect } from './voidAbilities';
 import { unlockVoidClass } from './voidMeta';
 import { stealOneSoulEmoji, applySoulThefts, stolenEmojiSummary } from './monkeyLoot';
 import { resolveProjectileFlight } from './projectiles';
@@ -41,6 +42,8 @@ export interface EnemyTurnResult {
   companionKillsThisTurn?: number;
   /** Depth bosses (floor % 5 === 0) killed during this enemy phase. */
   depthBossKills?: number;
+  /** Ghost-passive kills this phase (burn ticks). Loot stays suppressed; tithe is applied after. */
+  titheKills?: GhostKillEffect[];
 }
 
 export function runEnemyTurns(state: GameState, skipId?: string, sleeping = false): EnemyTurnResult {
@@ -55,6 +58,8 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   let playerHp = player.stats.hp;
   let playerDied = false;
   let depthBossKills = 0;
+  const titheKills: GhostKillEffect[] = [];
+  const soften = (raw: number) => applyNullMomentum(raw, player);
   let killer: { name: string; emoji: string } | undefined;
   const newLogs: Array<{ id: string; text: string; turn: number }> = [];
   const newFloatingTexts: FloatingText[] = [];
@@ -164,7 +169,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     playerInventoryAdditions.push(...shot.stolenReturns);
     if (shot.beam) enemyBeam = shot.beam;
     if (shot.playerDamage > 0) {
-      playerHp = Math.max(0, playerHp - shot.playerDamage);
+      playerHp = Math.max(0, playerHp - soften(shot.playerDamage));
     }
     if (shot.playerDied) {
       playerDied = true;
@@ -234,6 +239,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
         reclaimMonkeyLoot(enemy);
         newEnemies[i] = { ...enemy, hp: 0, burningTurns: 0 };
         log(`🔥 ${enemy.name} burns to ash!`);
+        titheKills.push('burningOnHit');
         continue;
       }
       newEnemies[i] = { ...enemy, hp: newHp, burningTurns: newBurning };
@@ -621,7 +627,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
         if (Math.random() * 100 < dodgeChance) {
           log(`The ${enemy.name} ${rangedVerb} — you dodge!`);
         } else {
-          const dmg = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+          const dmg = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
           playerHp -= dmg;
           log(`The ${enemy.name} ${rangedVerb} at you for ${dmg} damage!`);
           if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
@@ -637,7 +643,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             if (Math.random() * 100 < dodgeChance2) {
               log(`🔥 The ${enemy.name} ${rangedVerb} again — you dodge!`);
             } else {
-              const dmg2 = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+              const dmg2 = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
               playerHp -= dmg2;
               log(`🔥 The ${enemy.name} ${rangedVerb} again for ${dmg2} damage! (Berserk!)`);
               if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
@@ -667,9 +673,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
         if (Math.random() * 100 < dodgeChance) {
           log(`${enemy.emoji} ${enemy.name} attacks — you dodge!`);
         } else {
-          const dmg = enemy.crow
+          const dmg = soften(enemy.crow
             ? 1
-            : Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+            : Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
           playerHp -= dmg;
           log(`${enemy.emoji} ${enemy.name} hits you for ${dmg} dmg!`);
           if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
@@ -686,7 +692,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             if (Math.random() * 100 < dodgeChance2) {
               log(`🔥 ${enemy.emoji} ${enemy.name} attacks again — you dodge!`);
             } else {
-              const dmg2 = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+              const dmg2 = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
               playerHp -= dmg2;
               log(`🔥 ${enemy.emoji} ${enemy.name} attacks again for ${dmg2} dmg! (Berserk!)`);
               if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
@@ -719,7 +725,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             if (Math.random() * 100 < dodgeChance) {
               log(`${enemy.emoji} ${enemy.name} lunges — you dodge!`);
             } else {
-              const dmg = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+              const dmg = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
               playerHp -= dmg;
               log(`${enemy.emoji} ${enemy.name} lunges at you for ${dmg} dmg!`);
               if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
@@ -735,7 +741,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
                 if (Math.random() * 100 < dodgeChance2) {
                   log(`🔥 ${enemy.emoji} ${enemy.name} attacks again — you dodge!`);
                 } else {
-                  const dmg2 = Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2));
+                  const dmg2 = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
                   playerHp -= dmg2;
                   log(`🔥 ${enemy.emoji} ${enemy.name} attacks again for ${dmg2} dmg! (Berserk!)`);
                   if (playerHp <= 0) { playerDied = true; killer ??= { name: enemy.name, emoji: enemy.emoji }; }
@@ -838,7 +844,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     }
   }
 
-  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn, depthBossKills };
+  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn, depthBossKills, titheKills };
 }
 
 export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): GameState {
@@ -949,6 +955,9 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     };
   }
 
+  for (const effect of result.titheKills ?? []) {
+    next = applyEntropicTithe(next, effect);
+  }
   next = { ...next, player: parkVoidOverflow(next.player) };
   for (let i = 0; i < (result.depthBossKills ?? 0); i++) {
     next = creditVoidBoss(next, { isBoss: true });

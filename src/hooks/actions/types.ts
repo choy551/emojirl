@@ -16,6 +16,7 @@ export interface GameRefs {
   blinkTurnRef: MutableRefObject<number>;
   trailblazeTurnRef: MutableRefObject<number>;
   restaurantClosedRef: MutableRefObject<boolean>;
+  voidAttackModeRef: MutableRefObject<'melee' | 'ranger' | 'wizard'>;
 }
 
 export interface GameSetters {

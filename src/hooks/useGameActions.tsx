@@ -17,6 +17,7 @@ import {
 import { lightningArcDamage } from '../game/passives';
 import { canEquipItem } from '../components/itemUtils';
 import { creditVoidBoss } from '../game/voidDamage';
+import { applyEntropicTithe } from '../game/voidAbilities';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
 import { descendFloor } from '../game/descend';
 import { shouldPromptFinaleStairs, spectatorBumpText } from '../game/finale';
@@ -46,6 +47,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     blinkTurnRef, trailblazeTurnRef,
     lavaStepConfirmedRef,
     finalePromptRef,
+    voidAttackModeRef,
   } = refs;
   const {
     setGameState, setWizardTactics, setRangerMode,
@@ -202,7 +204,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
       }
 
-      if (cls === '🧝' && rangerModeRef.current === 'ranged') {
+      const voidRanged = cls === '👤' && voidAttackModeRef.current === 'ranger';
+      if ((cls === '🧝' && rangerModeRef.current === 'ranged') || voidRanged) {
         for (let range = 2; range <= eagleEyeRange(player.stats.level); range++) {
           const tx = player.pos.x + dx * range;
           const ty = player.pos.y + dy * range;
@@ -259,7 +262,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const rangerBeam = { positions: _rBeam, color: '#fb923c' };
 
           let newEnemies = [...prev.enemies];
-          const ammoSaved = Math.random() < 0.5;
+          const ammoSaved = cls === '🧝' && Math.random() < 0.5;
           if (ammoSaved) addLog(`🪶 Survivalist — ammo saved!`);
           let newPlayer: Player = {
             ...player,
@@ -667,6 +670,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                 newPlayer = applyMonkeyDropOnKill(tgt, newPlayer);
                 newEnemies.splice(idx, 1);
                 newPlayer.stats.xp += tgt.isBoss ? 25 : 5;
+                const tithed = applyEntropicTithe({ ...prev, player: newPlayer, logs: newState.logs }, 'lightningBolt');
+                newPlayer = tithed.player;
+                newState.logs = tithed.logs;
               } else {
                 newEnemies[idx] = { ...tgt, hp: newHp, engaged: true };
               }
@@ -733,6 +739,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             if (thornNewHp <= 0) {
               newEnemies.splice(thornIdx, 1);
               addLog(`💎 Thorns finish off ${enemy.emoji}!`);
+              const tithed = applyEntropicTithe({ ...prev, player: newPlayer, logs: newState.logs }, 'thorns');
+              newPlayer = tithed.player;
+              newState.logs = tithed.logs;
             } else {
               newEnemies[thornIdx] = { ...newEnemies[thornIdx], hp: thornNewHp };
               addLog(`💎 Thorns reflect ${_meleePassives.thorns} dmg to ${enemy.emoji}!`);
@@ -932,7 +941,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         return descendFloor({ ...newState, player: newPlayer }, addLog);
       }
 
-      if (cls === '🧙') {
+      if (cls === '🧙' || (cls === '👤' && voidAttackModeRef.current === 'wizard')) {
         const boltCandidates = newState.enemies.filter(e => {
           const dist = chebyshev(newPlayer.pos, e.pos);
           return dist > 1 && dist <= VISION_RADIUS && hasLOSBetween(newState.map, newPlayer.pos, e.pos)
@@ -948,9 +957,12 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                  [...boltCandidates].sort((a, b) => chebyshev(newPlayer.pos, a.pos) - chebyshev(newPlayer.pos, b.pos))[0])
               : [...boltCandidates].sort((a, b) => chebyshev(newPlayer.pos, a.pos) - chebyshev(newPlayer.pos, b.pos))[0];
 
-        if (boltTarget && (newPlayer.stats.mana ?? 0) > 0) {
+        const voidWizardShot = cls === '👤';
+        if (boltTarget && (voidWizardShot || (newPlayer.stats.mana ?? 0) > 0)) {
           markEnemySeen(boltTarget.emoji);
-          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, mana: Math.max(0, (newPlayer.stats.mana ?? 0) - 1) } };
+          if (!voidWizardShot) {
+            newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, mana: Math.max(0, (newPlayer.stats.mana ?? 0) - 1) } };
+          }
           const boltMood = getMood(newPlayer.stats.moodValue, newPlayer.stats.hp, newPlayer.stats.maxHp, newPlayer.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
           const _boltPassives = playerBagPassives(newPlayer);
           const boltResult = resolveCombat(applyEquipmentAndPassives(newPlayer), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall });
@@ -1051,7 +1063,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
       return withVisibility(applyEnemyTurns(newState, runEnemyTurns(newState)));
     });
-  }, [addLog, setGameState, rangerModeRef, wizardTacticsRef, autoStealthRef, lastCowboyFlavorTurnRef, blinkTurnRef, trailblazeTurnRef, setWizardTactics, setRangerMode, setBlinkTurn, setTrailblazeTurn, gameStateRef]);
+  }, [addLog, setGameState, rangerModeRef, wizardTacticsRef, autoStealthRef, lastCowboyFlavorTurnRef, blinkTurnRef, trailblazeTurnRef, setWizardTactics, setRangerMode, setBlinkTurn, setTrailblazeTurn, gameStateRef, voidAttackModeRef]);
 
   const handleWait = useCallback(() => {
     setGameState(prev => {
@@ -1096,7 +1108,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       const waitFloats: FloatingText[] = [];
       let waitBeam: { positions: Position[]; color: string } | undefined;
 
-      if (cls === '🧙') {
+      if (cls === '🧙' || (cls === '👤' && voidAttackModeRef.current === 'wizard')) {
         const boltCandidates = waitEnemies.filter(e => {
           const dist = chebyshev(waitPlayer.pos, e.pos);
           return dist > 1 && dist <= VISION_RADIUS && hasLOSBetween(prev.map, waitPlayer.pos, e.pos)
@@ -1112,9 +1124,12 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                  [...boltCandidates].sort((a, b) => chebyshev(waitPlayer.pos, a.pos) - chebyshev(waitPlayer.pos, b.pos))[0])
               : [...boltCandidates].sort((a, b) => chebyshev(waitPlayer.pos, a.pos) - chebyshev(waitPlayer.pos, b.pos))[0];
 
-        if (boltTarget && (waitPlayer.stats.mana ?? 0) > 0) {
+        const voidWizardShot = cls === '👤';
+        if (boltTarget && (voidWizardShot || (waitPlayer.stats.mana ?? 0) > 0)) {
           markEnemySeen(boltTarget.emoji);
-          waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, mana: Math.max(0, (waitPlayer.stats.mana ?? 0) - 1) } };
+          if (!voidWizardShot) {
+            waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, mana: Math.max(0, (waitPlayer.stats.mana ?? 0) - 1) } };
+          }
           const boltMood = getMood(waitPlayer.stats.moodValue, waitPlayer.stats.hp, waitPlayer.stats.maxHp, waitPlayer.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
           const _boltPassives = playerBagPassives(waitPlayer);
           const boltResult = resolveCombat(applyEquipmentAndPassives(waitPlayer), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall });
@@ -1208,7 +1223,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       if (waitedBoss) midState = creditVoidBoss(midState, waitedBoss);
       return withVisibility(applyEnemyTurns(midState, runEnemyTurns(midState)));
     });
-  }, [addLog, setGameState, wizardTacticsRef]);
+  }, [addLog, setGameState, wizardTacticsRef, voidAttackModeRef]);
 
   const handleCloseDoor = useCallback(() => {
     setGameState(prev => {
