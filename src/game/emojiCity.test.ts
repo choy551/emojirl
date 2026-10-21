@@ -17,9 +17,11 @@ import {
   activeDistricts,
   applyDistrictBonus,
   buildPaletteSections,
+  paletteMenuRows,
   availableTokens,
   awaySummary,
   catchUpCity,
+  cityGridIsFull,
   citizenCapacity,
   citizenCapacityOf,
   classifyEmoji,
@@ -36,6 +38,7 @@ import {
   emojiCityRulesBlurb,
   expandBlockReason,
   expandCity,
+  fullCityConsumeNotice,
   scaledBonusAmount,
   paletteEmojis,
   supplyPalette,
@@ -48,10 +51,12 @@ import {
   syncCitizens,
   tickCitizens,
   tokensForEmoji,
+  tokensGrantedForRunConsume,
   totalAvailableTokens,
 } from './emojiCity';
 import { BUILDINGS } from './cityBuildings';
-import { loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, replaceEmojiConsumes, saveCity, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
+import { DROP_RARITIES, FULL_GRID_RARITY_TOKENS } from './dropTable';
+import { loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, recordRunEmojiConsume, replaceEmojiConsumes, saveCity, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
 import { COWBOY, FENCER, GENIE, HITMAN, META_SAVE_KEY, META_SCHEMA_VERSION, NINJA, RANGER, ROYAL_GUARD, VOID, WIZARD } from './prestigeConstants';
 
 function memoryStore(): KeyValueStore {
@@ -126,6 +131,91 @@ describe('EmojiCB token math', () => {
     expect(meta.city?.tiles[0]).toBe('🍎');
     expect(meta.unlockedPrestige.length).toBe(1);
     expect(paletteEmojis(meta.emojiConsumes ?? {}, meta.city!)).toContain('🍎');
+  });
+
+  it('converts a full-grid consume by drop rarity, from 1 token to 5', () => {
+    expect(DROP_RARITIES).toEqual(['common', 'uncommon', 'rare', 'legendary']);
+    expect(FULL_GRID_RARITY_TOKENS).toEqual({
+      common: 1,
+      uncommon: 2,
+      rare: 4,
+      legendary: 5,
+    });
+    expect(cityGridIsFull(undefined)).toBe(false);
+    expect(cityGridIsFull(emptyCity())).toBe(false);
+    expect(tokensGrantedForRunConsume(undefined, 1, 5)).toBe(TOKENS_PER_CONSUME);
+
+    const unsaved = recordRunEmojiConsume('🍇', 1, { emoji: '🍇', healAmount: 2 });
+    expect(unsaved).toMatchObject({ granted: 1, notice: null, count: 1 });
+
+    const open = emptyCity();
+    open.tiles[0] = '🏠';
+    saveCity(open);
+    replaceEmojiConsumes({ '🍎': 4 });
+    const spared = recordRunEmojiConsume('🍀', 1, { emoji: '🍀', bagPassive: { bonusLoot: true } });
+    expect(spared.granted).toBe(1);
+    expect(spared.notice).toBeNull();
+    expect(loadMeta().emojiConsumes?.['🍀']).toBe(1);
+    expect(loadMeta().emojiConsumes?.['🍎']).toBe(4);
+
+    const almost = emptyCity();
+    for (let i = 0; i < almost.tiles.length - 1; i++) almost.tiles[i] = '🏠';
+    saveCity(almost);
+    const hole = recordRunEmojiConsume('🍎', 1, { emoji: '🍎', healAmount: 2 });
+    expect(cityGridIsFull(almost)).toBe(false);
+    expect(hole.granted).toBe(TOKENS_PER_CONSUME);
+    expect(hole.notice).toBeNull();
+
+    const full = emptyCity();
+    for (let i = 0; i < full.tiles.length; i++) full.tiles[i] = '🏠';
+    saveCity(full);
+    replaceEmojiConsumes({});
+
+    const common = recordRunEmojiConsume('🍎', 1, { emoji: '🍎', healAmount: 2 });
+    expect(common.granted).toBe(FULL_GRID_RARITY_TOKENS.common);
+    expect(common.notice).toBe('🏙️ City is full. 🍎 became 1 token.');
+
+    const uncommon = recordRunEmojiConsume('🪢', 1, { emoji: '🪢', activeKind: 'rope' });
+    expect(uncommon.granted).toBe(2);
+    expect(uncommon.notice).toBe(fullCityConsumeNotice('🪢', 1, 2));
+
+    const beforeRare = totalAvailableTokens(loadMeta().emojiConsumes ?? {}, loadMeta().city!);
+    const rareGear = recordRunEmojiConsume('🗡️', 1, { emoji: '🗡️', isEquipment: true });
+    expect(rareGear.granted).toBe(FULL_GRID_RARITY_TOKENS.rare);
+    expect(rareGear.notice).toBe('🏙️ City is full. 🗡️ became 4 tokens.');
+    const rareMeta = loadMeta();
+    expect(rareMeta.emojiConsumes?.['🗡️']).toBe(4);
+    expect(availableTokens(4, placedOf(rareMeta.city!, '🗡️'))).toBe(4);
+    expect(totalAvailableTokens(rareMeta.emojiConsumes ?? {}, rareMeta.city!) - beforeRare).toBe(4);
+
+    const legendarySoul = recordRunEmojiConsume('🗡️', 1, { emoji: '🗡️', bagPassive: { ninjaCombo: true } });
+    expect(legendarySoul.granted).toBe(FULL_GRID_RARITY_TOKENS.legendary);
+    expect(loadMeta().emojiConsumes?.['🗡️']).toBe(4 + 5);
+
+    const decor = emptyCity();
+    for (let i = 0; i < decor.tiles.length; i++) {
+      decor.tiles[i] = '🌲';
+      decor.decor[i] = true;
+    }
+    saveCity(decor);
+    const cosmetic = recordRunEmojiConsume('🌵');
+    expect(cityGridIsFull(decor)).toBe(true);
+    expect(cosmetic.granted).toBe(FULL_GRID_RARITY_TOKENS.common);
+    expect(cosmetic.notice).toBe('🏙️ City is full. 🌵 became 1 token.');
+
+    saveCity(full);
+    const batch = recordRunEmojiConsume('🍀', 2, { emoji: '🍀', bagPassive: { bonusLoot: true } });
+    expect(batch.granted).toBe(FULL_GRID_RARITY_TOKENS.legendary * 2);
+    expect(batch.notice).toBe('🏙️ City is full. 🍀 ×2 became 10 tokens.');
+
+    const castle = recordRunEmojiConsume('🏰', 1, { emoji: '🏰', itemId: 'structure:🏰' });
+    expect(castle.granted).toBe(FULL_GRID_RARITY_TOKENS.legendary);
+    const house = recordRunEmojiConsume('🏠', 1, { emoji: '🏠', itemId: 'structure:🏠' });
+    expect(house.granted).toBe(FULL_GRID_RARITY_TOKENS.common);
+
+    const blurb = emojiCityRulesBlurb();
+    expect(blurb).toContain('Common 1, Uncommon 2, Rare 4, Legendary 5');
+    expect(blurb).toContain('no drop rarity pays 1');
   });
 });
 
@@ -781,6 +871,21 @@ describe('EmojiCB palette sections', () => {
     const earned = buildPaletteSections({ '🌲': 1 }, emptyCity());
     expect(earned.find(section => section.id === 'grove')!.entries.find(entry => entry.emoji === '🌲')).toMatchObject({ locked: false, tokens: 1, kind: 'token' });
     expect(emojiCityRulesBlurb()).toContain('Locked emoji stay listed');
+
+    const rows = paletteMenuRows(sections);
+    expect(rows).toHaveLength(5);
+    expect(rows.slice(0, 4).map(row => row.map(section => section.id))).toEqual([
+      ['thieves'],
+      ['arcane'],
+      ['grove'],
+      ['saloon'],
+    ]);
+    expect(rows[4]!.map(section => section.id)).toEqual([
+      'void', 'neutral', 'roads', 'foliage', 'vehicles', 'shapes', 'misc',
+    ]);
+    expect(rows[4]![0]!.badge).toBe(VOID);
+    expect(rows[4]![0]!.label).toBe('Void Hollow');
+    expect(emojiCityRulesBlurb()).toContain('Void Hollow leads the fifth row');
   });
 });
 
@@ -803,18 +908,35 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('city-away');
     expect(city).toContain('data-testid="city-decor"');
     expect(city).toContain('buildPaletteSections');
-    expect(city).toContain('palette-toggle-');
+    expect(city).toContain('palette-more-');
+    expect(city).toContain('(more)');
+    expect(city).not.toContain('palette-toggle-');
+    expect(city).not.toContain('absolute inset-x-0 top-full');
+    expect(city).toContain('data-testid="raise-structure"');
     expect(city).toContain('aria-expanded');
     expect(city).toContain('PALETTE_MENU_ROWS = 5');
     expect(city).toContain('data-testid="palette-menu"');
     expect(city).toContain('overflow-x-hidden');
     expect(city).toContain("pointerType === 'mouse'");
     expect(city).toContain('placeDecor');
+    expect(city).toContain('CITY_TILE_MIN');
+    expect(city).toContain('CITY_TILE_MAX');
+    expect(city).toContain('minmax(${CITY_TILE_MIN}, ${CITY_TILE_MAX})');
+    expect(city).toContain('data-testid="city-grid-scroll"');
+    expect(city).toContain('w-fit min-w-min max-w-full');
     expect(city).toContain('edge="north"');
     expect(city).toContain('expand-${edge}');
     expect(city).toContain('expandBlockReason');
     expect(city).toContain('title={hint}');
     expect(game).toContain('noteCityTurns');
     expect(game).toContain('applyDistrictBonus');
+    const items = readFileSync(new URL('../hooks/actions/useItemActions.ts', import.meta.url), 'utf8');
+    const burden = readFileSync(new URL('../game/voidCharge.ts', import.meta.url), 'utf8');
+    expect(items).toContain('recordRunEmojiConsume');
+    expect(items).toContain('noteFullCity');
+    expect(items).not.toContain('recordEmojiConsume(');
+    expect(burden).toContain('recordRunEmojiConsume');
+    expect(burden).toContain('cityGrant.notice');
+    expect(burden).not.toContain('recordEmojiConsume(');
   });
 });

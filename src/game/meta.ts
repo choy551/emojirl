@@ -1,6 +1,15 @@
 import type { EmojiItem } from './types';
 import { normalizeEmojiKey } from './discoveries';
-import { CITY_COLS, CITY_ROWS, normalizeCity, type CityState } from './emojiCity';
+import { fullGridTokensPerConsume, type DropIdentity } from './dropTable';
+import {
+  CITY_COLS,
+  CITY_ROWS,
+  cityGridIsFull,
+  fullCityConsumeNotice,
+  normalizeCity,
+  tokensGrantedForRunConsume,
+  type CityState,
+} from './emojiCity';
 import {
   META_SAVE_KEY,
   META_SCHEMA_VERSION,
@@ -156,6 +165,36 @@ export function recordEmojiConsume(emoji: string, n = 1): number {
   counts[key] = (counts[key] ?? 0) + add;
   saveMeta({ ...meta, emojiConsumes: counts });
   return counts[key];
+}
+
+export interface RunEmojiConsume {
+  count: number;
+  granted: number;
+  /** Set when a full city converted this consume into tokens. */
+  notice: string | null;
+}
+
+/**
+ * Count a consume from a run. An open lot grants one placement token.
+ * A city with no empty tile grants that emoji's drop-rarity value instead,
+ * and `notice` is the line the run log should show.
+ */
+export function recordRunEmojiConsume(emoji: string, n = 1, item?: DropIdentity): RunEmojiConsume {
+  const copies = Math.max(0, Math.floor(n));
+  const key = normalizeEmojiKey(emoji);
+  const meta = loadMeta();
+  if (!key || copies === 0) {
+    return { count: meta.emojiConsumes?.[key] ?? 0, granted: 0, notice: null };
+  }
+  const full = cityGridIsFull(meta.city);
+  const each = fullGridTokensPerConsume(item ?? { emoji: key });
+  const granted = tokensGrantedForRunConsume(meta.city, copies, each);
+  const count = recordEmojiConsume(emoji, granted);
+  return {
+    count,
+    granted,
+    notice: full ? fullCityConsumeNotice(key, copies, granted) : null,
+  };
 }
 
 /** Replace the consume ledger. Zero and negative counts are dropped. */

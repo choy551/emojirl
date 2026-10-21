@@ -22,10 +22,18 @@ import {
   spendChargeGhostUse,
 } from '../../game/voidCharge';
 import { reclaimVoidSlotPressure, releaseVoidSlotBurden } from '../../game/voidSlotBurden';
-import { recordEmojiConsume } from '../../game/meta';
+import { recordRunEmojiConsume } from '../../game/meta';
 import { noteThemedHotbarConsume } from '../../game/voidAbilities';
 import { _flashSignals } from '../../game/flashSignals';
 import type { GameRefs, GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
+
+function noteFullCity(state: GameState, notice: string | null, id: string): GameState {
+  if (!notice) return state;
+  return {
+    ...state,
+    logs: [{ id, text: notice, turn: state.turn }, ...state.logs].slice(0, 24),
+  };
+}
 
 /** Open a rope vault. If `consumeInventoryId` is set, spend that bag rope; shop Buy & Use passes null. */
 export function applyRopeVault(
@@ -227,14 +235,14 @@ export function useItemActions(
 
       const consumed = prev.player.inventory.filter((_, idx) => idx !== healIndex);
       const { inventory: newInventory, bank: newBank } = refillBagFromBank(consumed, prev.player.bank);
-      recordEmojiConsume(item.emoji);
+      const cityGrant = recordRunEmojiConsume(item.emoji, 1, item);
       if (prev.player.characterClass === '👤') {
         const themed = noteThemedHotbarConsume(item);
         if (themed) addLog(themed.text);
       }
 
       const midState = { ...prev, player: { ...prev.player, stats, inventory: newInventory, bank: newBank }, turn: prev.turn + 1 };
-      return applyEnemyTurns(midState, runEnemyTurns(midState));
+      return noteFullCity(applyEnemyTurns(midState, runEnemyTurns(midState)), cityGrant.notice, `city-full-${prev.turn}-${item.id}`);
     });
   }, [addLog, setGameState]);
 
@@ -248,9 +256,9 @@ export function useItemActions(
       addLog(drank.log);
       const consumed = prev.player.inventory.filter((_, idx) => idx !== pick.idx);
       const { inventory, bank } = refillBagFromBank(consumed, prev.player.bank);
-      recordEmojiConsume(pick.it.emoji);
+      const cityGrant = recordRunEmojiConsume(pick.it.emoji, 1, pick.it);
       const midState = { ...prev, player: { ...drank.player, inventory, bank }, turn: prev.turn + 1 };
-      return applyEnemyTurns(midState, runEnemyTurns(midState));
+      return noteFullCity(applyEnemyTurns(midState, runEnemyTurns(midState)), cityGrant.notice, `city-full-${prev.turn}-${pick.it.id}`);
     });
   }, [addLog, setGameState]);
 
@@ -296,8 +304,8 @@ export function useItemActions(
       if (!prev || prev.gameOver) return prev;
       const ropeItem = prev.player.inventory.find(it => it.activeKind === 'rope' && !it.consumed && (it.charges ?? 0) > 0);
       if (!ropeItem) { addLog('No 🪢 Rope in inventory!'); return prev; }
-      recordEmojiConsume(ropeItem.emoji);
-      return applyRopeVault(prev, ropeItem.id, addLog);
+      const cityGrant = recordRunEmojiConsume(ropeItem.emoji, 1, ropeItem);
+      return noteFullCity(applyRopeVault(prev, ropeItem.id, addLog), cityGrant.notice, `city-full-${prev.turn}-${ropeItem.id}`);
     });
   }, [addLog, setGameState]);
 
@@ -450,7 +458,7 @@ export function useItemActions(
           nextLogs = [{ id: `void-reclaim-${applied.turn}-${slotItem.id}`, text: reclaim.log, turn: applied.turn }, ...nextLogs].slice(0, 24);
         }
       }
-      if (!echo) recordEmojiConsume(slotItem.emoji);
+      const cityGrant = echo ? null : recordRunEmojiConsume(slotItem.emoji, 1, slotItem);
       if (!echo && prev.player.characterClass === '👤' && isVoidSoulSpend(slotItem)) {
         const rec = recordHotbarSoulConsume(slotItem.emoji);
         if (rec.crossed) {
@@ -468,7 +476,7 @@ export function useItemActions(
         }
       }
 
-      return { ...applied, player: nextPlayer, logs: nextLogs };
+      return noteFullCity({ ...applied, player: nextPlayer, logs: nextLogs }, cityGrant?.notice ?? null, `city-full-${applied.turn}-${slotItem.id}`);
     });
   }, [handleUseRope, addLog, gameStateRef, setGameState, setBagTab, setBankOpen, setSelectedItemId, dirPickModeRef, setDirPickMode, setDrownWarnSlot, setLastBoatWarnSlot, boatConfirmedRef, applyMonkeyDropOnKill]);
 
@@ -495,14 +503,14 @@ export function useItemActions(
       const nextStock = prev.shopStock == null ? prev.shopStock : prev.shopStock.filter(i => i.id !== item.id);
       if (item.activeKind === 'rope' || item.emoji === '🪢') {
         succeeded = true;
-        recordEmojiConsume(item.emoji);
-        return { ...applyRopeVault(paid, null, addLog), shopStock: nextStock };
+        const cityGrant = recordRunEmojiConsume(item.emoji, 1, item);
+        return { ...noteFullCity(applyRopeVault(paid, null, addLog), cityGrant.notice, `city-full-${prev.turn}`), shopStock: nextStock };
       }
       const used = applyInstantItemUse(paid, item, { source: 'shop', addLog: () => {}, applyMonkeyDropOnKill });
       if (!used) return prev;
       succeeded = true;
-      recordEmojiConsume(item.emoji);
-      return { ...used, shopStock: nextStock };
+      const cityGrant = recordRunEmojiConsume(item.emoji, 1, item);
+      return { ...noteFullCity(used, cityGrant.notice, `city-full-${prev.turn}`), shopStock: nextStock };
     });
     return succeeded;
   }, [gameStateRef, setGameState, applyMonkeyDropOnKill]);
