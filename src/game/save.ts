@@ -1,5 +1,6 @@
 import { GameState, Player, PlayerStats, EmojiItem, Equipment } from './types';
 import { applySoulCatalogCopy } from './emojis';
+import { normalizeBounty, normalizeVanity } from './goldSinks2';
 
 const SAVE_KEY = 'emojirl_save_v1';
 
@@ -121,6 +122,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     identityRerolled: rawPlayer.identityRerolled === true,
     insurance: rawPlayer.insurance as Player['insurance'],
     houseRound: rawPlayer.houseRound as Player['houseRound'],
+    vanity: normalizeVanity(rawPlayer.vanity),
   };
 
   // ── GameState ─────────────────────────────────────────────────────────────
@@ -166,6 +168,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
       ? raw.voidAttackMode
       : undefined,
     unmakeUsedFloor:          typeof raw.unmakeUsedFloor === 'number' ? raw.unmakeUsedFloor : undefined,
+    bounty:                   normalizeBounty(raw.bounty),
   };
 }
 

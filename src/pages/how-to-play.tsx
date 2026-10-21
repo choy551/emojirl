@@ -19,6 +19,7 @@ import { softCapRulesBlurb } from "../game/softCap";
 import { farmerRulesBlurb } from "../game/farmer";
 import { foodSinkRulesBlurb } from "../game/foodSinks";
 import { goldSinkRulesBlurb } from "../game/goldSinks";
+import { goldSink2RulesBlurb } from "../game/goldSinks2";
 import {
   getSeenEmojis,
   getSeenEnemies,
@@ -459,6 +460,9 @@ export default function HowToPlay({
             { icon: "🟧", label: "Lava", desc: "Extreme heat: each turn standing in lava deals 25% of your max HP plus a flat amount (starts at +10, +5 per floor descended). You'll get a Yes/No warning before stepping onto it from safe ground. Destroys items on the tile. Volcanoes and lava rivers both use this. Flying enemies cross it and take no damage. Orthogonally adjacent 🟦 water cools into ⚫ obsidian." },
             { icon: "⚫", label: "Obsidian", desc: "Cooled lava×water. Walkable like regular floor for you and enemies. Does not remelt." },
             { icon: "🪞", label: "Identity Mirror", desc: "A rare shrine from D:4. Offers the same once-per-run Identity Reroll as a shop: swap to another unlocked class and keep your bag, hotbar, and bank. Autoexplore stops here." },
+            { icon: "📜", label: "Bounty Board", desc: "About 30% of floors. Pay a floor-scaled ante for one contract on this floor: slay a mob that is already here, stand on a 📍 mark, or survive a run of turns. Success pays a named uncommon or rare emoji. Leave the floor and an accepted bounty expires — the ante stays spent. Autoexplore stops here." },
+            { icon: "💎", label: "Vanity Flex", desc: "D:16 and deeper only, the same floors as Dungeon Pressure. Buy a trail or a title for 5,000 gold or more. Cosmetics only: no combat power. The title shows in the HUD and on the death screen, and the choice is saved with the run. Autoexplore stops here." },
+            { icon: "☠️", label: "Blood Auction", desc: "Bid floor-scaled gold for a named rare emoji shown before you bid. Gold is spent win or lose. The HP percent is a sweetener paid only if you win, and a win never drops you below 1 HP. Autoexplore stops here." },
           ].map((t) => (
             <div
               key={t.label}
@@ -486,6 +490,11 @@ export default function HowToPlay({
         <div className="mt-3 bg-card/50 border border-yellow-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
           <div className="font-bold text-yellow-200 mb-1">Gold sinks</div>
           {goldSinkRulesBlurb()}
+        </div>
+
+        <div className="mt-3 bg-card/50 border border-fuchsia-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-fuchsia-200 mb-1">More gold sinks</div>
+          {goldSink2RulesBlurb()}
         </div>
 
         <div className="mt-3 text-xs text-muted-foreground space-y-3">

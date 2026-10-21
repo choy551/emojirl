@@ -15,6 +15,10 @@ interface MobileTopBarProps {
   /** Ninja-only compact Blink talent progress, e.g. "⚡12/44". */
   blinkTalentCompact?: string;
   blinkTalentTitle?: string;
+  /** Cosmetic title. No combat effect. */
+  vanityTitle?: string;
+  /** Active bounty progress, e.g. "📜 1/2". */
+  bountyLabel?: string;
 }
 
 function MiniBar({ pct, color, label, value }: { pct: number; color: string; label: string; value: string }) {
@@ -35,7 +39,7 @@ function MiniBar({ pct, color, label, value }: { pct: number; color: string; lab
 }
 
 /** Slim always-visible stat strip for touch devices. Tapping it opens the full StatsModal. */
-export function MobileTopBar({ player, className, level, currentFloor, xpProgress, onExpand, onMenu, menuSide = 'right', blinkTalentCompact, blinkTalentTitle }: MobileTopBarProps) {
+export function MobileTopBar({ player, className, level, currentFloor, xpProgress, onExpand, onMenu, menuSide = 'right', blinkTalentCompact, blinkTalentTitle, vanityTitle, bountyLabel }: MobileTopBarProps) {
   const hp = player.stats.hp;
   const maxHp = livingMaxHp(player);
   const overheal = hp > maxHp;
@@ -65,6 +69,12 @@ export function MobileTopBar({ player, className, level, currentFloor, xpProgres
         <div className="flex-1 min-w-0 flex flex-col gap-[3px]">
           <div className="flex items-center gap-1.5 text-[9px] leading-none min-w-0">
             <span className="font-bold uppercase tracking-wide truncate">{className.slice(0, 4)} L{level}</span>
+            {vanityTitle && (
+              <span className="font-bold text-fuchsia-200 truncate max-w-[5.5rem]" data-testid="hud-vanity-title">{vanityTitle}</span>
+            )}
+            {bountyLabel && (
+              <span className="font-bold text-amber-200 shrink-0" data-testid="hud-bounty">{bountyLabel}</span>
+            )}
             {showAmmo && (
               <span className="font-bold tabular-nums text-amber-300/90 shrink-0">
                 {ammoIcon(player.characterClass, player.equipment)}{player.ammo}
