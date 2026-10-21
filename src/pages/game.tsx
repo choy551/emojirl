@@ -4347,7 +4347,7 @@ export default function Game() {
 
       {/* ── RTFM overlay (preserves game state) ─────────────────────── */}
       {showRTFM && (
-        <div className="fixed inset-0 z-50 overflow-auto bg-background">
+        <div className="fixed inset-0 z-50 overflow-auto scroll-smooth bg-background">
           <HowToPlay
             onBack={() => { setShowRTFM(false); setPauseMenuOpen(true); }}
             killCounts={gameState?.killCounts}
