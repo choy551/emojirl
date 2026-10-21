@@ -53,7 +53,8 @@ import {
   tokensGrantedForRunConsume,
   totalAvailableTokens,
 } from './emojiCity';
-import { BUILDING_EXCHANGE_COST, BUILDINGS } from './cityBuildings';
+import { BUILDINGS } from './cityBuildings';
+import { DROP_RARITIES, FULL_GRID_RARITY_TOKENS } from './dropTable';
 import { loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, recordRunEmojiConsume, replaceEmojiConsumes, saveCity, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
 import { COWBOY, FENCER, GENIE, HITMAN, META_SAVE_KEY, META_SCHEMA_VERSION, NINJA, RANGER, ROYAL_GUARD, VOID, WIZARD } from './prestigeConstants';
 
@@ -131,29 +132,35 @@ describe('EmojiCB token math', () => {
     expect(paletteEmojis(meta.emojiConsumes ?? {}, meta.city!)).toContain('🍎');
   });
 
-  it('converts a run consume into building-exchange tokens when the grid has no empty tile', () => {
-    expect(BUILDING_EXCHANGE_COST).toBe(3);
+  it('converts a full-grid consume by drop rarity, from 1 token to 5', () => {
+    expect(DROP_RARITIES).toEqual(['common', 'uncommon', 'rare', 'legendary']);
+    expect(FULL_GRID_RARITY_TOKENS).toEqual({
+      common: 1,
+      uncommon: 2,
+      rare: 4,
+      legendary: 5,
+    });
     expect(cityGridIsFull(undefined)).toBe(false);
     expect(cityGridIsFull(emptyCity())).toBe(false);
-    expect(tokensGrantedForRunConsume(undefined, 1)).toBe(TOKENS_PER_CONSUME);
+    expect(tokensGrantedForRunConsume(undefined, 1, 5)).toBe(TOKENS_PER_CONSUME);
 
-    const unsaved = recordRunEmojiConsume('🍇');
+    const unsaved = recordRunEmojiConsume('🍇', 1, { emoji: '🍇', healAmount: 2 });
     expect(unsaved).toMatchObject({ granted: 1, notice: null, count: 1 });
 
     const open = emptyCity();
     open.tiles[0] = '🏠';
     saveCity(open);
     replaceEmojiConsumes({ '🍎': 4 });
-    const spared = recordRunEmojiConsume('🍎');
+    const spared = recordRunEmojiConsume('🍀', 1, { emoji: '🍀', bagPassive: { bonusLoot: true } });
     expect(spared.granted).toBe(1);
     expect(spared.notice).toBeNull();
-    expect(loadMeta().emojiConsumes?.['🍎']).toBe(5);
+    expect(loadMeta().emojiConsumes?.['🍀']).toBe(1);
+    expect(loadMeta().emojiConsumes?.['🍎']).toBe(4);
 
     const almost = emptyCity();
     for (let i = 0; i < almost.tiles.length - 1; i++) almost.tiles[i] = '🏠';
     saveCity(almost);
-    replaceEmojiConsumes({});
-    const hole = recordRunEmojiConsume('🍎');
+    const hole = recordRunEmojiConsume('🍎', 1, { emoji: '🍎', healAmount: 2 });
     expect(cityGridIsFull(almost)).toBe(false);
     expect(hole.granted).toBe(TOKENS_PER_CONSUME);
     expect(hole.notice).toBeNull();
@@ -161,15 +168,28 @@ describe('EmojiCB token math', () => {
     const full = emptyCity();
     for (let i = 0; i < full.tiles.length; i++) full.tiles[i] = '🏠';
     saveCity(full);
-    const before = totalAvailableTokens(loadMeta().emojiConsumes ?? {}, loadMeta().city!);
-    const converted = recordRunEmojiConsume('🗡️');
-    expect(converted.granted).toBe(BUILDING_EXCHANGE_COST);
-    expect(converted.notice).toBe(fullCityConsumeNotice('🗡️', 1, BUILDING_EXCHANGE_COST));
-    expect(converted.notice).toBe('🏙️ City is full. 🗡️ became 3 tokens.');
-    const meta = loadMeta();
-    expect(meta.emojiConsumes?.['🗡️']).toBe(BUILDING_EXCHANGE_COST);
-    expect(availableTokens(meta.emojiConsumes?.['🗡️'] ?? 0, placedOf(meta.city!, '🗡️'))).toBe(BUILDING_EXCHANGE_COST);
-    expect(totalAvailableTokens(meta.emojiConsumes ?? {}, meta.city!) - before).toBe(BUILDING_EXCHANGE_COST);
+    replaceEmojiConsumes({});
+
+    const common = recordRunEmojiConsume('🍎', 1, { emoji: '🍎', healAmount: 2 });
+    expect(common.granted).toBe(FULL_GRID_RARITY_TOKENS.common);
+    expect(common.notice).toBe('🏙️ City is full. 🍎 became 1 token.');
+
+    const uncommon = recordRunEmojiConsume('🪢', 1, { emoji: '🪢', activeKind: 'rope' });
+    expect(uncommon.granted).toBe(2);
+    expect(uncommon.notice).toBe(fullCityConsumeNotice('🪢', 1, 2));
+
+    const beforeRare = totalAvailableTokens(loadMeta().emojiConsumes ?? {}, loadMeta().city!);
+    const rareGear = recordRunEmojiConsume('🗡️', 1, { emoji: '🗡️', isEquipment: true });
+    expect(rareGear.granted).toBe(FULL_GRID_RARITY_TOKENS.rare);
+    expect(rareGear.notice).toBe('🏙️ City is full. 🗡️ became 4 tokens.');
+    const rareMeta = loadMeta();
+    expect(rareMeta.emojiConsumes?.['🗡️']).toBe(4);
+    expect(availableTokens(4, placedOf(rareMeta.city!, '🗡️'))).toBe(4);
+    expect(totalAvailableTokens(rareMeta.emojiConsumes ?? {}, rareMeta.city!) - beforeRare).toBe(4);
+
+    const legendarySoul = recordRunEmojiConsume('🗡️', 1, { emoji: '🗡️', bagPassive: { ninjaCombo: true } });
+    expect(legendarySoul.granted).toBe(FULL_GRID_RARITY_TOKENS.legendary);
+    expect(loadMeta().emojiConsumes?.['🗡️']).toBe(4 + 5);
 
     const decor = emptyCity();
     for (let i = 0; i < decor.tiles.length; i++) {
@@ -179,19 +199,22 @@ describe('EmojiCB token math', () => {
     saveCity(decor);
     const cosmetic = recordRunEmojiConsume('🌵');
     expect(cityGridIsFull(decor)).toBe(true);
-    expect(cosmetic.granted).toBe(BUILDING_EXCHANGE_COST);
-    expect(cosmetic.notice).toBe('🏙️ City is full. 🌵 became 3 tokens.');
+    expect(cosmetic.granted).toBe(FULL_GRID_RARITY_TOKENS.common);
+    expect(cosmetic.notice).toBe('🏙️ City is full. 🌵 became 1 token.');
 
     saveCity(full);
-    const batch = recordRunEmojiConsume('🍞', 2);
-    expect(batch.granted).toBe(BUILDING_EXCHANGE_COST * 2);
-    expect(batch.notice).toBe('🏙️ City is full. 🍞 ×2 became 6 tokens.');
+    const batch = recordRunEmojiConsume('🍀', 2, { emoji: '🍀', bagPassive: { bonusLoot: true } });
+    expect(batch.granted).toBe(FULL_GRID_RARITY_TOKENS.legendary * 2);
+    expect(batch.notice).toBe('🏙️ City is full. 🍀 ×2 became 10 tokens.');
 
-    const structure = recordRunEmojiConsume('🏰');
-    expect(structure.granted).toBe(BUILDING_EXCHANGE_COST);
-    expect(totalAvailableTokens(loadMeta().emojiConsumes ?? {}, loadMeta().city!)).toBeGreaterThanOrEqual(BUILDING_EXCHANGE_COST);
+    const castle = recordRunEmojiConsume('🏰', 1, { emoji: '🏰', itemId: 'structure:🏰' });
+    expect(castle.granted).toBe(FULL_GRID_RARITY_TOKENS.legendary);
+    const house = recordRunEmojiConsume('🏠', 1, { emoji: '🏠', itemId: 'structure:🏠' });
+    expect(house.granted).toBe(FULL_GRID_RARITY_TOKENS.common);
 
-    expect(emojiCityRulesBlurb()).toContain(`becomes ${BUILDING_EXCHANGE_COST} tokens instead`);
+    const blurb = emojiCityRulesBlurb();
+    expect(blurb).toContain('Common 1, Uncommon 2, Rare 4, Legendary 5');
+    expect(blurb).toContain('no drop rarity pays 1');
   });
 });
 

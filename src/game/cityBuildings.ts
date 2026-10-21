@@ -122,7 +122,7 @@ export function structureSurvey(moodValue: number, moodCap: number, building: Bu
   const gained = mood - moodValue;
   return {
     moodValue: mood,
-    log: `${building.emoji} ${building.name} surveyed. +${gained} mood. EmojiCB gains 1 token.`,
+    log: `${building.emoji} ${building.name} surveyed. +${gained} mood. EmojiCB gains a token.`,
   };
 }
 

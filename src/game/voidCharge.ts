@@ -187,7 +187,7 @@ export function consumeVoidBurdenItem(player: Player, item: EmojiItem, floor: nu
     next = { ...next, stats: { ...next.stats, gold: next.stats.gold + gold } };
     logs.push(`💰 ${item.name} unmade — +${gold}g. The slot is empty.`);
     noteReclaim();
-    const bagGrant = recordRunEmojiConsume(item.emoji);
+    const bagGrant = recordRunEmojiConsume(item.emoji, 1, item);
     if (bagGrant.notice) logs.unshift(bagGrant.notice);
     return { removed: true, player: next, logs, goldGained: gold };
   }
@@ -218,7 +218,7 @@ export function consumeVoidBurdenItem(player: Player, item: EmojiItem, floor: nu
   }
   noteReclaim();
 
-  const cityGrant = recordRunEmojiConsume(item.emoji);
+  const cityGrant = recordRunEmojiConsume(item.emoji, 1, item);
   if (cityGrant.notice) logs.unshift(cityGrant.notice);
   const themed = noteThemedHotbarConsume(item);
   if (themed) logs.push(themed.text);

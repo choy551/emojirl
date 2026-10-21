@@ -176,7 +176,7 @@ describe('EmojiCB buildings', () => {
     expect(DROP_TABLE.some(row => row.itemId.startsWith('structure:'))).toBe(false);
     const surveyed = structureSurvey(0, 100, buildingOf('🛖')!);
     expect(surveyed.moodValue).toBe(8);
-    expect(surveyed.log).toContain('EmojiCB gains 1 token');
+    expect(surveyed.log).toContain('EmojiCB gains a token');
   });
 
   it('hides one blueprint on an open floor and skips boss vaults', () => {

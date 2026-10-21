@@ -1,5 +1,5 @@
 import type { EmojiItem } from './types';
-import { structureRarity } from './cityBuildings';
+import { buildingOf, structureRarity } from './cityBuildings';
 import {
   ACTIVE_DROPS,
   AMMO_DROP,
@@ -206,6 +206,50 @@ export const DROP_TABLE: DropEntry[] = [
 
 export function tierIndex(rarity: DropRarity): number {
   return DROP_RARITIES.indexOf(rarity);
+}
+
+/** Full-grid consume payout. Least tier is 1 token and the top tier is 5. */
+export const FULL_GRID_TOKEN_MIN = 1;
+export const FULL_GRID_TOKEN_MAX = 5;
+
+/**
+ * Spread the existing drop tiers across 1–5. With four tiers the ends stay
+ * pinned and the middle rounds, which leaves a gap at 3:
+ * Common 1, Uncommon 2, Rare 4, Legendary 5.
+ */
+export function tokensForDropRarity(rarity: DropRarity): number {
+  const last = DROP_RARITIES.length - 1;
+  const index = tierIndex(rarity);
+  if (last <= 0 || index < 0) return FULL_GRID_TOKEN_MIN;
+  const span = FULL_GRID_TOKEN_MAX - FULL_GRID_TOKEN_MIN;
+  return Math.round(FULL_GRID_TOKEN_MIN + (index * span) / last);
+}
+
+export const FULL_GRID_RARITY_TOKENS: Record<DropRarity, number> = {
+  common: tokensForDropRarity('common'),
+  uncommon: tokensForDropRarity('uncommon'),
+  rare: tokensForDropRarity('rare'),
+  legendary: tokensForDropRarity('legendary'),
+};
+
+function buildingDropRarity(emoji: string): DropRarity | undefined {
+  const rarity = buildingOf(emoji)?.rarity;
+  return rarity && (DROP_RARITIES as readonly string[]).includes(rarity) ? rarity : undefined;
+}
+
+/** Lowest drop tier for this glyph when the consumed item does not identify a kind. */
+function lowestDropRarity(emoji: string): DropRarity | undefined {
+  return DROP_RARITIES.find(rarity => DROP_TABLE.some(entry => entry.emoji === emoji && entry.rarity === rarity));
+}
+
+/**
+ * Tokens one consume is worth once the city grid has no empty tile.
+ * Uses the item's drop tier. Structures share those tier names.
+ * An emoji with no tier pays the least value.
+ */
+export function fullGridTokensPerConsume(item: DropIdentity): number {
+  const rarity = rarityOfItem(item) ?? buildingDropRarity(item.emoji) ?? lowestDropRarity(item.emoji);
+  return rarity ? FULL_GRID_RARITY_TOKENS[rarity] : FULL_GRID_TOKEN_MIN;
 }
 
 export function enemyDropChance(clover: number): number {
