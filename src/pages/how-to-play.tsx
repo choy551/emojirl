@@ -494,7 +494,8 @@ export default function HowToPlay({
         <p className="text-xs text-muted-foreground mb-3">
           Every class except The Void takes emoji-less Void damage while no soul sits in the hotbar.
           The Void 👤 inverts that: filled hotbar slots 1–9 deal <em>floor × filled + filled</em> damage each turn.
-          Bank and equipment are safe. Consume a soul emoji from the hotbar ten times to keep its bag passive as a faded ghost.
+          Bank and equipment are safe. Consuming the item in a filled slot reclaims half the Void pressure that slot dealt while the item was held (rounded down, and the heal stops at max HP).
+          Consume a soul emoji from the hotbar ten times to keep its bag passive as a faded ghost.
           Charge items — 🔫 Gun, 🪃 Boomerang, 🪢 Rope, 💣 Bomb, and ❄️ Freeze — and 💰 Money Bags fill those same slots, so The Void unmakes them instead of firing or selling.
           Each unmade charge item counts toward that emoji&apos;s ghost (every 10, the same as souls). The ghost keeps that item&apos;s normal charge count as uses; a Boomerang ghost is endless, and later unmakes recharge uses up to the maximum.
           Spending a ghost use does not add Void pressure. Unmaking a Money Bag grants gold equal to its sell value.

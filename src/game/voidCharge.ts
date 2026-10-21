@@ -6,6 +6,7 @@ import { recordEmojiConsume } from './meta';
 import { GHOST_LINGER_TEXT, padGhostHotbar } from './voidDamage';
 import { recordHotbarSoulConsume } from './voidMeta';
 import { noteThemedHotbarConsume } from './voidAbilities';
+import { reclaimVoidSlotPressure, releaseVoidSlotBurden } from './voidSlotBurden';
 
 const CHARGE_KINDS = new Set<ActiveKind>(['bomb', 'gun', 'boomerang', 'rope', 'freeze']);
 
@@ -172,14 +173,20 @@ export function consumeVoidBurdenItem(player: Player, item: EmojiItem, floor: nu
   if (player.characterClass !== '👤' || !isVoidBurdenActive(item)) return keep;
   if (!player.inventory.some(i => i.id === item.id)) return keep;
 
-  const { inventory, bank } = removeAndRefillBag(player.inventory, player.bank, item.id);
-  let next: Player = { ...player, inventory, bank };
+  const reclaim = reclaimVoidSlotPressure(player, item);
+  const removed = removeAndRefillBag(reclaim.player.inventory, reclaim.player.bank, item.id);
+  let next: Player = releaseVoidSlotBurden(
+    { ...reclaim.player, inventory: removed.inventory, bank: removed.bank },
+    item.id,
+  );
   const logs: string[] = [];
+  const noteReclaim = () => { if (reclaim.log) logs.push(reclaim.log); };
 
   if (isMoneyBagItem(item)) {
     const gold = getItemSellValue(item, 1, floor);
     next = { ...next, stats: { ...next.stats, gold: next.stats.gold + gold } };
     logs.push(`💰 ${item.name} unmade — +${gold}g. The slot is empty.`);
+    noteReclaim();
     recordEmojiConsume(item.emoji);
     return { removed: true, player: next, logs, goldGained: gold };
   }
@@ -208,6 +215,7 @@ export function consumeVoidBurdenItem(player: Player, item: EmojiItem, floor: nu
   } else {
     logs.push(`👤 ${item.emoji} ${item.name} unmade (${rec.consumes}/10 toward a ghost). The slot is empty.`);
   }
+  noteReclaim();
 
   recordEmojiConsume(item.emoji);
   const themed = noteThemedHotbarConsume(item);

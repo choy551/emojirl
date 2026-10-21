@@ -163,7 +163,7 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
     startingEmojiSlots: 0,
     startingAmmo: 0,
     passives: [
-      { label: 'Inverted Burden', detail: 'Each filled hotbar slot (1–9) deals Void damage every turn. Bank and equipment are safe. Empty hotbar = no Void pressure.' },
+      { label: 'Inverted Burden', detail: 'Each filled hotbar slot (1–9) deals Void damage every turn. Bank and equipment are safe. Empty hotbar = no Void pressure. Consuming the item in a slot reclaims half the pressure that slot dealt while it was held (rounded down, not above max HP).' },
       { label: 'Mnemonic Hunger', detail: 'Every 10 hotbar consumes of the same soul emoji permanently unlock its bag passive as a ghost (Void runs only). Each further 10 adds one stack. Charge items (Gun, Boomerang, Rope, Bomb, Freeze) are unmade instead of fired: each unmake counts toward that emoji\'s ghost the same way. The ghost\'s uses equal the item\'s normal charges (a Boomerang ghost is endless). Further unmakes recharge those uses up to that maximum. Spending a ghost use does not add Void pressure. A Money Bag is unmade for gold equal to its sell value and does not become a ghost.' },
       { label: 'Hollow Roster', detail: 'Active ghosts: 1 on D:1–4, +1 after each depth boss (D:5/10/15…), cap 9. Extra unlocks live in the Bank. Ghosts do not cause Inverted Burden.' },
       { label: 'Null Momentum', detail: 'Incoming damage is reduced by 1% + 1% per level, hard cap 44% (level 1 is 2%). Rounded down, and a hit still deals at least 1. Shown as DR in Stats. Does not reduce Void pressure.' },

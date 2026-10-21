@@ -21,6 +21,7 @@ import {
   locateVoidGhost,
   spendChargeGhostUse,
 } from '../../game/voidCharge';
+import { reclaimVoidSlotPressure, releaseVoidSlotBurden } from '../../game/voidSlotBurden';
 import { recordEmojiConsume } from '../../game/meta';
 import { noteThemedHotbarConsume } from '../../game/voidAbilities';
 import { _flashSignals } from '../../game/flashSignals';
@@ -437,6 +438,18 @@ export function useItemActions(
 
       let nextPlayer = { ...applied.player, inventory: newInventory, bank: newSoulBank };
       let nextLogs = applied.logs;
+      if (!echo && prev.player.characterClass === '👤') {
+        const reclaim = reclaimVoidSlotPressure(applied.player, slotItem);
+        nextPlayer = {
+          ...nextPlayer,
+          stats: reclaim.player.stats,
+          voidSlotBurden: reclaim.player.voidSlotBurden,
+        };
+        nextPlayer = releaseVoidSlotBurden(nextPlayer, slotItem.id);
+        if (reclaim.log) {
+          nextLogs = [{ id: `void-reclaim-${applied.turn}-${slotItem.id}`, text: reclaim.log, turn: applied.turn }, ...nextLogs].slice(0, 24);
+        }
+      }
       if (!echo) recordEmojiConsume(slotItem.emoji);
       if (!echo && prev.player.characterClass === '👤' && isVoidSoulSpend(slotItem)) {
         const rec = recordHotbarSoulConsume(slotItem.emoji);
