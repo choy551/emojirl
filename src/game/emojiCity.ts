@@ -48,8 +48,80 @@ export interface DecorGroup {
  * Some glyphs also exist as real token placements (🌲🌳🌵⛲); only a decor
  * flag makes that copy cosmetic.
  */
+/**
+ * Glyphs that count toward an edge-to-edge train line. Any mix is allowed.
+ * They are free Roads decor so the line can be built without placement tokens.
+ */
+export const TRAIN_EMOJI = ['🛤️', '🚆', '🚂', '🚃', '🚄', '🚅', '🚉'] as const;
+
+const TRAIN_KEYS = new Set<string>(TRAIN_EMOJI.map(emoji => decorKey(emoji)));
+
+export function isTrainEmoji(emoji: string): boolean {
+  return TRAIN_KEYS.has(decorKey(emoji));
+}
+
+export const TRAIN_LINE_HINT =
+  'Lay an unbroken line of 🛤️🚆🚂🚃🚄🚅🚉 across one full row or one full column. Growing that side of the city breaks the line until you extend it.';
+
+export function trainLineStatusLabel(unlocked: boolean): string {
+  return unlocked
+    ? 'Train line spans the city. Visit Cities is unlocked.'
+    : 'Visit Cities is locked.';
+}
+
+export interface TrainSpan {
+  axis: 'row' | 'column';
+  index: number;
+}
+
+/**
+ * True when one current row or column is train emoji from edge to edge.
+ * A gap, a shorter line, or a side that grew past the line all fail.
+ * Rows are checked first.
+ */
+export function spanningTrainLine(city: CityState): TrainSpan | null {
+  const grid = normalizeCity(city);
+  const { cols, rows, tiles } = grid;
+  const isTrain = (index: number) => {
+    const cell = tiles[index];
+    return !!cell && isTrainEmoji(cell);
+  };
+  for (let y = 0; y < rows; y++) {
+    let full = cols > 0;
+    for (let x = 0; x < cols; x++) {
+      if (!isTrain(y * cols + x)) { full = false; break; }
+    }
+    if (full) return { axis: 'row', index: y };
+  }
+  for (let x = 0; x < cols; x++) {
+    let full = rows > 0;
+    for (let y = 0; y < rows; y++) {
+      if (!isTrain(y * cols + x)) { full = false; break; }
+    }
+    if (full) return { axis: 'column', index: x };
+  }
+  return null;
+}
+
+export function trainLineSpansCity(city: CityState): boolean {
+  return spanningTrainLine(city) !== null;
+}
+
 export const DECOR_GROUPS: readonly DecorGroup[] = [
-  { id: 'roads', label: 'Roads', pieces: [{ emoji: '🛣️', name: 'Road' }] },
+  {
+    id: 'roads',
+    label: 'Roads',
+    pieces: [
+      { emoji: '🛣️', name: 'Road' },
+      { emoji: '🛤️', name: 'Track' },
+      { emoji: '🚆', name: 'Train' },
+      { emoji: '🚂', name: 'Locomotive' },
+      { emoji: '🚃', name: 'Railcar' },
+      { emoji: '🚄', name: 'Express' },
+      { emoji: '🚅', name: 'Bullet Train' },
+      { emoji: '🚉', name: 'Station' },
+    ],
+  },
   {
     id: 'foliage',
     label: 'Foliage',
@@ -1080,5 +1152,5 @@ export function awaySummary(turns: number, citizensGained: number): string {
 }
 
 export function emojiCityRulesBlurb(): string {
-  return `EmojiCB is a city on the home screen, kept in the meta save so it survives runs. Each emoji you use from the hotbar, eat, drink, or buy-and-use grants ${TOKENS_PER_CONSUME} placement token for that emoji. When the grid has no empty tile, that consume becomes tokens by its drop rarity instead: ${DROP_RARITIES.map(rarity => `${RARITY_LABEL[rarity]} ${FULL_GRID_RARITY_TOKENS[rarity]}`).join(', ')}. Structures use those same tiers. An emoji with no drop rarity pays ${FULL_GRID_RARITY_TOKENS.common}. Spell Echo does not spend the emoji, so it grants no token. Those consume counts, and the lifetime enemy kill counts, are the only ledgers — the city reads them again every visit. The grid starts at ${CITY_COLS}×${CITY_ROWS}. Each edge grows by one row or column for ${CITY_EXPAND_COST} unspent placement tokens, the Tokens count on the city HUD. North and west shift the blocks already placed. Decor is free, always available, and grouped into Roads, Foliage, Vehicles, Shapes, and Misc. Decor does not spend a token, and it does not count toward districts, bonuses, or citizen housing. A copy placed from a token still counts. Pick an emoji and tap an empty lot to build. Tap a built lot to clear it and refund the token. One citizen arrives per ${CITIZEN_TILES} lots of housing, weighted by kills. A plain emoji or an ordinary house counts as 1 lot. Most structures count as 2, 🏘️🏢🏭🏨🏟️🏬 count as 3, and 🏰 counts as 4. No kills means empty streets. Structures are not on the kill-loot table. About ${Math.round(STRUCTURE_FLOOR_CHANCE * 100)}% of floors hide one blueprint. Survey it from the hotbar for +${STRUCTURE_SURVEY_MOOD} mood and a token for that building. Selling a blueprint pays ${STRUCTURE_SELL_VALUE}g and grants no token. In the city, ${BUILDING_EXCHANGE_COST} spare tokens from non-building emoji raise 1 structure token. The structures menu gives every section its own compact row, so each label and its tiles have their own space. Slums of Thieves, Arcane Sanctum, Grove of Wilds, and Frontier Saloon come first. Void Hollow leads the fifth row, then Neutral and the Decor groups, each still on its own row. A purple … at the bottom-right opens that section in a panel beside the menu. On a narrow screen the panel is a sheet that fits the viewport. The Raise button sits above the menu. Locked emoji stay listed until a token unlocks them. Every roguelike turn is a city turn. While you are away, one unspent token builds itself every ${GROWTH_TURNS} city turns, citizens arrive to the new capacity, and they wander. A long absence is caught up in at most ${WANDER_CATCHUP_CAP} wander steps. Placed emoji form districts, and every style can be active at once: Slums of Thieves (Ninja), Arcane Sanctum (Wizard), Frontier Saloon (Cowboy), Grove of Wilds (Ranger), and Void Hollow (The Void). 🛖🏚️ are slums, ⛩️🛕 are the sanctum, ⛺🏕️🏔️ are the grove, 🏤🏦🏟️ are the saloon, and 🌋 is the hollow. 🏰🏭🏢 and ordinary houses are neutral. Prestige classes use their base class's district. A plain themed emoji weighs 1. A structure weighs its housing, so a larger building counts for more. Weight ${DISTRICT_THRESHOLD} is tier 1. The tier rises by 1 each time that weight doubles, through ${DISTRICT_THRESHOLD * 2}, ${DISTRICT_THRESHOLD * 4}, and ${DISTRICT_THRESHOLD * 8}, and ${DISTRICT_BONUS_TIER_CAP} is the cap. The run-start bonus is the tier times the base (${DISTRICTS.map(d => `${d.bonus.label} ${d.className}`).join(', ')}). The city HUD and the vessel picker show each district's placed count, weight, and current bonus. A meta save from before this rule keeps its grid, consumes, and prestige; bonuses are read from the tiles.`;
+  return `EmojiCB is a city on the home screen, kept in the meta save so it survives runs. Each emoji you use from the hotbar, eat, drink, or buy-and-use grants ${TOKENS_PER_CONSUME} placement token for that emoji. When the grid has no empty tile, that consume becomes tokens by its drop rarity instead: ${DROP_RARITIES.map(rarity => `${RARITY_LABEL[rarity]} ${FULL_GRID_RARITY_TOKENS[rarity]}`).join(', ')}. Structures use those same tiers. An emoji with no drop rarity pays ${FULL_GRID_RARITY_TOKENS.common}. Spell Echo does not spend the emoji, so it grants no token. Those consume counts, and the lifetime enemy kill counts, are the only ledgers — the city reads them again every visit. The grid starts at ${CITY_COLS}×${CITY_ROWS}. Each edge grows by one row or column for ${CITY_EXPAND_COST} unspent placement tokens, the Tokens count on the city HUD. North and west shift the blocks already placed. Decor is free, always available, and grouped into Roads, Foliage, Vehicles, Shapes, and Misc. Roads also holds the train pieces 🛤️🚆🚂🚃🚄🚅🚉. Visit Cities unlocks when one unbroken row or column of those pieces spans the current grid edge to edge, and growing that side means the line has to be extended. The city keeps a name, defaulting to Emoji City, and a local visitor name saved on this device. Visit Cities and Share stay offline until a later update. Decor does not spend a token, and it does not count toward districts, bonuses, or citizen housing. A copy placed from a token still counts. Pick an emoji and tap an empty lot to build. Tap a built lot to clear it and refund the token. One citizen arrives per ${CITIZEN_TILES} lots of housing, weighted by kills. A plain emoji or an ordinary house counts as 1 lot. Most structures count as 2, 🏘️🏢🏭🏨🏟️🏬 count as 3, and 🏰 counts as 4. No kills means empty streets. Structures are not on the kill-loot table. About ${Math.round(STRUCTURE_FLOOR_CHANCE * 100)}% of floors hide one blueprint. Survey it from the hotbar for +${STRUCTURE_SURVEY_MOOD} mood and a token for that building. Selling a blueprint pays ${STRUCTURE_SELL_VALUE}g and grants no token. In the city, ${BUILDING_EXCHANGE_COST} spare tokens from non-building emoji raise 1 structure token. The structures menu gives every section its own compact row, so each label and its tiles have their own space. Slums of Thieves, Arcane Sanctum, Grove of Wilds, and Frontier Saloon come first. Void Hollow leads the fifth row, then Neutral and the Decor groups, each still on its own row. A purple … at the bottom-right opens that section in a panel beside the menu. On a narrow screen the panel is a sheet that fits the viewport. The Raise button sits above the menu. Locked emoji stay listed until a token unlocks them. Every roguelike turn is a city turn. While you are away, one unspent token builds itself every ${GROWTH_TURNS} city turns, citizens arrive to the new capacity, and they wander. A long absence is caught up in at most ${WANDER_CATCHUP_CAP} wander steps. Placed emoji form districts, and every style can be active at once: Slums of Thieves (Ninja), Arcane Sanctum (Wizard), Frontier Saloon (Cowboy), Grove of Wilds (Ranger), and Void Hollow (The Void). 🛖🏚️ are slums, ⛩️🛕 are the sanctum, ⛺🏕️🏔️ are the grove, 🏤🏦🏟️ are the saloon, and 🌋 is the hollow. 🏰🏭🏢 and ordinary houses are neutral. Prestige classes use their base class's district. A plain themed emoji weighs 1. A structure weighs its housing, so a larger building counts for more. Weight ${DISTRICT_THRESHOLD} is tier 1. The tier rises by 1 each time that weight doubles, through ${DISTRICT_THRESHOLD * 2}, ${DISTRICT_THRESHOLD * 4}, and ${DISTRICT_THRESHOLD * 8}, and ${DISTRICT_BONUS_TIER_CAP} is the cap. The run-start bonus is the tier times the base (${DISTRICTS.map(d => `${d.bonus.label} ${d.className}`).join(', ')}). The city HUD and the vessel picker show each district's placed count, weight, and current bonus. A meta save from before this rule keeps its grid, consumes, and prestige; bonuses are read from the tiles.`;
 }

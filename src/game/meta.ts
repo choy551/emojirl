@@ -1,4 +1,5 @@
 import type { EmojiItem } from './types';
+import { CITY_NAME_DEFAULT, generateAnonymousName, isAnonymousName, normalizeCityName } from './cityIdentity';
 import { normalizeEmojiKey } from './discoveries';
 import { fullGridTokensPerConsume, type DropIdentity } from './dropTable';
 import {
@@ -30,6 +31,10 @@ export interface MetaSave {
   pendingCityTurns?: number;
   /** City turns toward the next auto-built lot, kept across visits. */
   cityGrowthRemainder?: number;
+  /** Player-facing city name. Missing until the city screen fills the default. */
+  cityName?: string;
+  /** Reddit-style visitor name, generated once on this device. */
+  anonymousName?: string;
 }
 
 export interface KeyValueStore {
@@ -96,6 +101,8 @@ function countMap(raw: unknown): Record<string, number> {
  * key is dropped. The grid, consume ledger, citizens, pending turns, insured carry,
  * and prestige unlocks are kept, and every built style now scores on its own.
  * v2 → v3: a city without cols and rows is the original 8×8. Stored dimensions are kept.
+ * City name and visitor name are optional. Invalid values are dropped and filled
+ * later by ensureCityProfile, without a schema bump.
  */
 export function migrateMetaRaw(raw: Record<string, unknown>): void {
   const version = typeof raw.schemaVersion === 'number' && Number.isFinite(raw.schemaVersion)
@@ -132,6 +139,8 @@ export function loadMeta(): MetaSave {
       city: parsed.city ? normalizeCity(parsed.city) : undefined,
       pendingCityTurns: nonNegInt(parsed.pendingCityTurns),
       cityGrowthRemainder: nonNegInt(parsed.cityGrowthRemainder),
+      cityName: readCityName(parsed.cityName),
+      anonymousName: isAnonymousName(parsed.anonymousName) ? parsed.anonymousName : undefined,
     };
   } catch {
     return emptyMeta();
@@ -203,6 +212,36 @@ export function replaceEmojiConsumes(counts: Record<string, number>): Record<str
   const emojiConsumes = countMap(counts);
   saveMeta({ ...meta, emojiConsumes });
   return emojiConsumes;
+}
+
+function readCityName(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const parsed = normalizeCityName(raw);
+  return parsed.ok ? parsed.name : undefined;
+}
+
+/**
+ * Fill a missing city name with the default and generate a visitor name once.
+ * Both stay in the meta save (localStorage). A second call keeps the same visitor name.
+ */
+export function ensureCityProfile(rng: () => number = Math.random): { cityName: string; anonymousName: string } {
+  const meta = loadMeta();
+  const cityName = meta.cityName ?? CITY_NAME_DEFAULT;
+  let anonymousName = meta.anonymousName;
+  if (!anonymousName) anonymousName = generateAnonymousName(rng);
+  if (meta.cityName !== cityName || meta.anonymousName !== anonymousName) {
+    saveMeta({ ...meta, cityName, anonymousName });
+  }
+  return { cityName, anonymousName };
+}
+
+/** Persist a city name. An empty field saves the default. Invalid text is refused. */
+export function saveCityName(raw: string): { ok: true; name: string } | { ok: false; reason: string } {
+  const parsed = normalizeCityName(raw);
+  if (!parsed.ok) return parsed;
+  const meta = loadMeta();
+  saveMeta({ ...meta, cityName: parsed.name });
+  return { ok: true, name: parsed.name };
 }
 
 export function saveCity(city: CityState): void {

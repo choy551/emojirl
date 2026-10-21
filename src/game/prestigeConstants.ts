@@ -31,6 +31,7 @@ export const META_SAVE_KEY = 'emojirl_meta_v1';
  * Meta save schema. v1 stored the city grid and derived a single leading district.
  * v2 keeps that same grid and scores every district from the tiles.
  * v3 stores the grid's cols and rows. Older cities omit them and load as 8×8.
+ * The city name and the anonymous visitor name are optional fields on this version.
  * The storage key stays `emojirl_meta_v1` so existing browsers keep their file.
  */
 export const META_SCHEMA_VERSION = 3;

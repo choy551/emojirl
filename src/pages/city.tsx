@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { Link, useLocation } from 'wouter';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { CITY_NAME_MAX } from '../game/cityIdentity';
 import { getEnemyKillCounts } from '../game/discoveries';
 import {
   BUILDING_EXCHANGE_COST,
@@ -33,6 +35,9 @@ import {
   removeAt,
   tickCitizens,
   totalAvailableTokens,
+  TRAIN_LINE_HINT,
+  trainLineSpansCity,
+  trainLineStatusLabel,
   type CityEdge,
   type CityState,
   type PaletteEntry,
@@ -45,7 +50,7 @@ type PalettePick = { kind: 'token' | 'decor'; emoji: string };
 const CITY_TILE_MAX = '2.75rem';
 /** Smallest lot. Narrow screens shrink toward this before a horizontal scrollbar appears. */
 const CITY_TILE_MIN = '2rem';
-import { loadMeta, replaceEmojiConsumes, saveCity, settleCityCatchUp } from '../game/meta';
+import { ensureCityProfile, loadMeta, replaceEmojiConsumes, saveCity, saveCityName, settleCityCatchUp } from '../game/meta';
 
 export default function CityPage() {
   const [, setLocation] = useLocation();
@@ -54,9 +59,15 @@ export default function CityPage() {
   const [selected, setSelected] = useState<PalettePick | null>(null);
   const [note, setNote] = useState('Pick an emoji, then tap an empty lot.');
   const [away, setAway] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [visitor, setVisitor] = useState('');
   const killsRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
+    const profile = ensureCityProfile();
+    setNameDraft(profile.cityName);
+    setVisitor(profile.anonymousName);
     const meta = loadMeta();
     const kills = getEnemyKillCounts();
     killsRef.current = kills;
@@ -156,6 +167,16 @@ export default function CityPage() {
     setNote(`Placed ${selected.emoji}.`);
   };
 
+  const commitName = () => {
+    const result = saveCityName(nameDraft);
+    if (!result.ok) {
+      setNameError(result.reason);
+      return;
+    }
+    setNameError(null);
+    setNameDraft(result.name);
+  };
+
   const placed = city ? placedCount(city) : 0;
   const cap = city ? citizenCapacityOf(city) : 0;
   const citizens = city?.citizens.length ?? 0;
@@ -171,11 +192,71 @@ export default function CityPage() {
             <ChevronLeft className="w-6 h-6" />
           </Button>
         </Link>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-xl font-black tracking-tight text-primary">🏙️ EmojiCB</h1>
-          <p className="text-[11px] text-muted-foreground leading-snug">Emoji City Builder</p>
+          <label className="mt-1 block" htmlFor="city-name">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">City name</span>
+            <Input
+              id="city-name"
+              data-testid="city-name"
+              aria-label="City name"
+              value={nameDraft}
+              maxLength={CITY_NAME_MAX}
+              spellCheck={false}
+              autoComplete="off"
+              className="mt-0.5 min-h-11 text-base font-semibold"
+              onChange={event => {
+                setNameDraft(event.target.value);
+                if (nameError) setNameError(null);
+              }}
+              onBlur={commitName}
+              onKeyDown={event => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+              }}
+            />
+          </label>
+          {nameError && (
+            <p role="alert" data-testid="city-name-error" className="mt-1 text-[11px] font-semibold text-destructive">
+              {nameError}
+            </p>
+          )}
         </div>
       </div>
+
+      <section data-testid="city-share" className="space-y-2 rounded-lg border border-border bg-card px-3 py-2">
+        <p className="text-xs text-muted-foreground" data-testid="city-visitor">
+          Visitor <span className="font-semibold text-foreground">{visitor}</span>
+        </p>
+        <p className="text-xs font-semibold" data-testid="city-train-status">
+          {trainLineStatusLabel(city ? trainLineSpansCity(city) : false)}
+        </p>
+        <p className="text-[11px] leading-snug text-muted-foreground" data-testid="city-train-hint">
+          {TRAIN_LINE_HINT}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            className="min-h-11 flex-1 text-xs"
+            disabled
+            aria-disabled="true"
+            title="Coming soon. This build stays on this device."
+            data-testid="visit-cities"
+          >
+            Visit Cities (coming soon)
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 flex-1 text-xs"
+            disabled
+            aria-disabled="true"
+            title="Coming soon. This build stays on this device."
+            data-testid="share-city"
+          >
+            Share
+          </Button>
+        </div>
+      </section>
 
       <div
         data-testid="city-hud"
