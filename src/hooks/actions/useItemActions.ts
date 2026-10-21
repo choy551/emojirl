@@ -13,6 +13,7 @@ import { applyInstantItemUse, canBuyAndUse } from '../../game/shopUse';
 import { applyDrinkToPlayer, pickDrink } from '../../game/drinks';
 import { GHOST_LINGER_TEXT, isVoidSoulSpend } from '../../game/voidDamage';
 import { recordHotbarSoulConsume } from '../../game/voidMeta';
+import { recordEmojiConsume } from '../../game/meta';
 import { noteThemedHotbarConsume } from '../../game/voidAbilities';
 import { _flashSignals } from '../../game/flashSignals';
 import type { GameRefs, GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
@@ -217,6 +218,7 @@ export function useItemActions(
 
       const consumed = prev.player.inventory.filter((_, idx) => idx !== healIndex);
       const { inventory: newInventory, bank: newBank } = refillBagFromBank(consumed, prev.player.bank);
+      recordEmojiConsume(item.emoji);
       if (prev.player.characterClass === '👤') {
         const themed = noteThemedHotbarConsume(item);
         if (themed) addLog(themed.text);
@@ -237,6 +239,7 @@ export function useItemActions(
       addLog(drank.log);
       const consumed = prev.player.inventory.filter((_, idx) => idx !== pick.idx);
       const { inventory, bank } = refillBagFromBank(consumed, prev.player.bank);
+      recordEmojiConsume(pick.it.emoji);
       const midState = { ...prev, player: { ...drank.player, inventory, bank }, turn: prev.turn + 1 };
       return applyEnemyTurns(midState, runEnemyTurns(midState));
     });
@@ -284,6 +287,7 @@ export function useItemActions(
       if (!prev || prev.gameOver) return prev;
       const ropeItem = prev.player.inventory.find(it => it.activeKind === 'rope' && !it.consumed && (it.charges ?? 0) > 0);
       if (!ropeItem) { addLog('No 🪢 Rope in inventory!'); return prev; }
+      recordEmojiConsume(ropeItem.emoji);
       return applyRopeVault(prev, ropeItem.id, addLog);
     });
   }, [addLog, setGameState]);
@@ -381,6 +385,7 @@ export function useItemActions(
 
       let nextPlayer = { ...applied.player, inventory: newInventory, bank: newSoulBank };
       let nextLogs = applied.logs;
+      if (!echo) recordEmojiConsume(slotItem.emoji);
       if (!echo && prev.player.characterClass === '👤' && isVoidSoulSpend(slotItem)) {
         const rec = recordHotbarSoulConsume(slotItem.emoji);
         if (rec.crossed) {
@@ -425,11 +430,13 @@ export function useItemActions(
       const nextStock = prev.shopStock == null ? prev.shopStock : prev.shopStock.filter(i => i.id !== item.id);
       if (item.activeKind === 'rope' || item.emoji === '🪢') {
         succeeded = true;
+        recordEmojiConsume(item.emoji);
         return { ...applyRopeVault(paid, null, addLog), shopStock: nextStock };
       }
       const used = applyInstantItemUse(paid, item, { source: 'shop', addLog: () => {}, applyMonkeyDropOnKill });
       if (!used) return prev;
       succeeded = true;
+      recordEmojiConsume(item.emoji);
       return { ...used, shopStock: nextStock };
     });
     return succeeded;

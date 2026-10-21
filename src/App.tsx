@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Game from "@/pages/game";
 import HowToPlay from "@/pages/how-to-play";
+import CityPage from "@/pages/city";
 import Privacy from "@/pages/privacy";
 
 const queryClient = new QueryClient();
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/game" component={Game} />
       <Route path="/how-to-play">{() => <HowToPlay />}</Route>
+      <Route path="/city" component={CityPage} />
       <Route path="/privacy" component={Privacy} />
       <Route component={NotFound} />
     </Switch>

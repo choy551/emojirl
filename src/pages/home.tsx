@@ -153,6 +153,11 @@ export default function Home() {
               {savedRun ? "New Descent" : "Start Descent"}
             </Button>
           </Link>
+          <Link href="/city">
+            <Button variant="outline" size="lg" className="w-full text-lg h-14 border-primary/40 text-primary hover:bg-primary/10" data-testid="open-emojicb">
+              🏙️ EmojiCB
+            </Button>
+          </Link>
           <Link href="/how-to-play">
             <Button variant="outline" size="lg" className="w-full text-lg h-14 border-secondary/50 text-secondary hover:bg-secondary/10">
               How to Play
