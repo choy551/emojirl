@@ -79,6 +79,22 @@ function countMap(raw: unknown): Record<string, number> {
   return out;
 }
 
+/**
+ * Versions this build knows how to read. A newer file still loads the known fields
+ * instead of wiping prestige or the city. A missing version is treated as v1.
+ *
+ * v1 → v2: the single-lead district was never stored. Any leftover `activeDistrict`
+ * key is dropped. The grid, consume ledger, citizens, pending turns, insured carry,
+ * and prestige unlocks are kept, and every built style now scores on its own.
+ */
+export function migrateMetaRaw(raw: Record<string, unknown>): void {
+  const version = typeof raw.schemaVersion === 'number' && Number.isFinite(raw.schemaVersion)
+    ? Math.floor(raw.schemaVersion)
+    : 1;
+  if (version < 2) delete raw.activeDistrict;
+  raw.schemaVersion = META_SCHEMA_VERSION;
+}
+
 export function emptyMeta(): MetaSave {
   return { schemaVersion: META_SCHEMA_VERSION, unlockedPrestige: [], insuredCarry: [], emojiConsumes: {} };
 }
@@ -87,7 +103,9 @@ export function loadMeta(): MetaSave {
   try {
     const raw = store.getItem(META_SAVE_KEY);
     if (!raw) return emptyMeta();
-    const parsed = JSON.parse(raw) as Partial<MetaSave>;
+    const parsed = JSON.parse(raw) as Partial<MetaSave> & Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object') return emptyMeta();
+    migrateMetaRaw(parsed);
     const unlocked = Array.isArray(parsed.unlockedPrestige)
       ? parsed.unlockedPrestige.filter((e): e is string => typeof e === 'string')
       : [];

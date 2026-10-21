@@ -15,8 +15,13 @@ export const CITY_TICK_MS = 1000;
 export const GROWTH_TURNS = 10;
 /** Catch-up wanders at most this many steps. A longer absence scatters citizens instead of simulating every step. */
 export const WANDER_CATCHUP_CAP = 200;
-/** A style must have at least this many placed tiles, and strictly more than every other style. */
+/** Minimum district weight for the first bonus tier. */
 export const DISTRICT_THRESHOLD = 4;
+/**
+ * Bonus tier rises by one each time district weight doubles past the threshold,
+ * and stops here. Threshold 4 means tiers at weights 4, 8, 16, and 32.
+ */
+export const DISTRICT_BONUS_TIER_CAP = 4;
 
 export const CITY_SIZE = CITY_COLS * CITY_ROWS;
 
@@ -273,8 +278,23 @@ export type DistrictId = 'thieves' | 'arcane' | 'saloon' | 'grove' | 'void';
 
 export interface DistrictBonus {
   stat: 'attack' | 'defense' | 'speed' | 'evasion' | 'luck' | 'maxHp' | 'maxMana';
+  /** Bonus granted at tier 1. Higher tiers multiply this. */
   amount: number;
   label: string;
+}
+
+const BONUS_STAT_LABEL: Record<DistrictBonus['stat'], string> = {
+  attack: 'ATK',
+  defense: 'DEF',
+  speed: 'SPD',
+  evasion: 'EVA',
+  luck: 'LCK',
+  maxHp: 'max HP',
+  maxMana: 'max MP',
+};
+
+export function formatDistrictBonus(stat: DistrictBonus['stat'], amount: number): string {
+  return `+${Math.max(0, Math.floor(amount))} ${BONUS_STAT_LABEL[stat]}`;
 }
 
 export interface DistrictStyle {
@@ -294,7 +314,7 @@ export const DISTRICTS: readonly DistrictStyle[] = [
     classEmoji: NINJA,
     className: 'Ninja',
     emoji: ['🗡️', '🔪', '⚔️', '🌙', '🥷', '🎭', '💀', '🥋', '🪙', '💰'],
-    bonus: { stat: 'speed', amount: 1, label: '+1 SPD' },
+    bonus: { stat: 'speed', amount: 1, label: formatDistrictBonus('speed', 1) },
   },
   {
     id: 'arcane',
@@ -302,7 +322,7 @@ export const DISTRICTS: readonly DistrictStyle[] = [
     classEmoji: WIZARD,
     className: 'Wizard',
     emoji: ['🔮', '🪄', '🧪', '💊', '⚡', '❄️', '🧿', '✨', '📜', '💎', '🔱', '🌂', '🪬'],
-    bonus: { stat: 'maxMana', amount: 2, label: '+2 max MP' },
+    bonus: { stat: 'maxMana', amount: 2, label: formatDistrictBonus('maxMana', 2) },
   },
   {
     id: 'saloon',
@@ -310,7 +330,7 @@ export const DISTRICTS: readonly DistrictStyle[] = [
     classEmoji: COWBOY,
     className: 'Cowboy',
     emoji: ['🤠', '🔫', '💥', '🍺', '🥃', '🍻', '🎰', '🐴', '🌵', '👢', '🎩'],
-    bonus: { stat: 'attack', amount: 1, label: '+1 ATK' },
+    bonus: { stat: 'attack', amount: 1, label: formatDistrictBonus('attack', 1) },
   },
   {
     id: 'grove',
@@ -318,7 +338,7 @@ export const DISTRICTS: readonly DistrictStyle[] = [
     classEmoji: RANGER,
     className: 'Ranger',
     emoji: ['🏹', '🌲', '🌳', '🌿', '🍀', '🍄', '🦅', '🎯', '🍃', '🌾', '🌱', '🦋', '🪵', '🌽', '🪴'],
-    bonus: { stat: 'evasion', amount: 1, label: '+1 EVA' },
+    bonus: { stat: 'evasion', amount: 1, label: formatDistrictBonus('evasion', 1) },
   },
   {
     id: 'void',
@@ -326,7 +346,7 @@ export const DISTRICTS: readonly DistrictStyle[] = [
     classEmoji: VOID,
     className: 'The Void',
     emoji: ['👤', '🌑', '🕳️', '👻', '🖤', '🌀'],
-    bonus: { stat: 'maxHp', amount: 2, label: '+2 max HP' },
+    bonus: { stat: 'maxHp', amount: 2, label: formatDistrictBonus('maxHp', 2) },
   },
 ];
 
@@ -356,42 +376,127 @@ export function classifyEmoji(emoji: string): DistrictStyle | null {
   return DISTRICT_BY_EMOJI.get(normalizeEmojiKey(emoji)) ?? null;
 }
 
+export interface DistrictStanding {
+  id: DistrictId;
+  name: string;
+  classEmoji: string;
+  className: string;
+  stat: DistrictBonus['stat'];
+  /** Placed tiles of this style, including plain emoji and structures. */
+  count: number;
+  /** Housing-weighted score. A plain themed emoji is 1. A structure uses its housing. */
+  weight: number;
+  tier: number;
+  /** Scaled run-start bonus. 0 below the threshold. */
+  amount: number;
+  label: string;
+}
+
+export interface DistrictPickerEntry {
+  id: DistrictId;
+  yours: boolean;
+  text: string;
+}
+
+/**
+ * Several districts may be active together. Each one scores only its own tiles.
+ *
+ *   tile weight = structure housing, or 1 for a plain themed emoji
+ *   weight      = sum of tile weights in that district
+ *   tier        = 0 when weight < 4
+ *               = 1 at weight 4, then +1 each time weight doubles (8, 16, 32)
+ *               = at most DISTRICT_BONUS_TIER_CAP
+ *   bonus       = base amount × tier
+ *
+ * Bases: Slums +1 SPD, Sanctum +2 max MP, Saloon +1 ATK, Grove +1 EVA, Hollow +2 max HP.
+ */
+export function districtBonusTier(weight: number): number {
+  const w = Math.max(0, Math.floor(weight));
+  if (!Number.isFinite(w) || w < DISTRICT_THRESHOLD) return 0;
+  let tier = 1;
+  let band = DISTRICT_THRESHOLD;
+  while (tier < DISTRICT_BONUS_TIER_CAP && w >= band * 2) {
+    band *= 2;
+    tier += 1;
+  }
+  return tier;
+}
+
+export function scaledBonusAmount(base: number, weight: number): number {
+  return Math.max(0, Math.floor(base)) * districtBonusTier(weight);
+}
+
+/** Weight of one placed tile toward its district. Neutral tiles and food weigh 0. */
+export function districtTileWeight(emoji: string): number {
+  if (!classifyEmoji(emoji)) return 0;
+  return buildingOf(emoji)?.housing ?? 1;
+}
+
 export function districtCounts(city: CityState): Record<DistrictId, number> {
   const counts: Record<DistrictId, number> = { thieves: 0, arcane: 0, saloon: 0, grove: 0, void: 0 };
-  for (const cell of city.tiles) {
-    if (!cell) continue;
-    const style = classifyEmoji(cell);
-    if (style) counts[style.id] += 1;
-  }
+  for (const row of districtStandings(city)) counts[row.id] = row.count;
   return counts;
 }
 
-/** The leading style, when it clears the threshold and is not tied. */
-export function dominantDistrict(city: CityState): DistrictStyle | null {
-  let best: DistrictStyle | null = null;
-  let bestN = 0;
-  let second = 0;
-  for (const style of DISTRICTS) {
-    const n = districtCounts(city)[style.id];
-    if (n > bestN) {
-      second = bestN;
-      bestN = n;
-      best = style;
-    } else if (n > second) {
-      second = n;
-    }
+export function districtStandings(city: CityState): DistrictStanding[] {
+  const counts: Record<DistrictId, number> = { thieves: 0, arcane: 0, saloon: 0, grove: 0, void: 0 };
+  const weights: Record<DistrictId, number> = { thieves: 0, arcane: 0, saloon: 0, grove: 0, void: 0 };
+  for (const cell of city.tiles) {
+    if (!cell) continue;
+    const style = classifyEmoji(cell);
+    if (!style) continue;
+    counts[style.id] += 1;
+    weights[style.id] += buildingOf(cell)?.housing ?? 1;
   }
-  if (!best || bestN < DISTRICT_THRESHOLD || bestN <= second) return null;
-  return best;
+  return DISTRICTS.map(style => {
+    const count = counts[style.id];
+    const weight = weights[style.id];
+    const tier = districtBonusTier(weight);
+    const amount = scaledBonusAmount(style.bonus.amount, weight);
+    return {
+      id: style.id,
+      name: style.name,
+      classEmoji: style.classEmoji,
+      className: style.className,
+      stat: style.bonus.stat,
+      count,
+      weight,
+      tier,
+      amount,
+      label: formatDistrictBonus(style.bonus.stat, amount),
+    };
+  });
+}
+
+/** Every style whose weight has reached tier 1. Order follows DISTRICTS. */
+export function activeDistricts(city: CityState): DistrictStanding[] {
+  return districtStandings(city).filter(row => row.tier > 0);
+}
+
+export function districtHudLine(row: DistrictStanding): string {
+  return `${row.name}: ${row.count} placed, weight ${row.weight}, ${row.label}`;
+}
+
+/**
+ * Lines for the vessel card and its tooltip.
+ * An empty city returns nothing. Otherwise every built district is listed,
+ * and the viewed class's own district is included even at zero so its bonus is visible.
+ */
+export function districtPickerEntries(classEmoji: string, city: CityState): DistrictPickerEntry[] {
+  const rows = districtStandings(city);
+  if (rows.every(row => row.count === 0)) return [];
+  const base = districtBaseClass(classEmoji);
+  return rows.filter(row => row.count > 0 || row.classEmoji === base).map(row => {
+    const yours = row.classEmoji === base;
+    const who = yours ? 'at run start' : `for ${row.className}`;
+    return { id: row.id, yours, text: `${districtHudLine(row)} ${who}` };
+  });
 }
 
 export function districtPickerLine(classEmoji: string, city: CityState): string | null {
-  const style = dominantDistrict(city);
-  if (!style) return null;
-  if (districtBaseClass(classEmoji) === style.classEmoji) {
-    return `${style.name}: ${style.bonus.label} at run start`;
-  }
-  return `${style.name} favors ${style.className} (${style.bonus.label})`;
+  const entries = districtPickerEntries(classEmoji, city);
+  if (entries.length === 0) return null;
+  return entries.map(entry => entry.text).join(' · ');
 }
 
 type BonusStats = {
@@ -406,15 +511,16 @@ type BonusStats = {
   maxMana?: number;
 };
 
-/** Bake the dominant district into a new run's starting stats. Other classes are unchanged. */
+/** Bake this class's district into a new run. Other districts do not change this class. */
 export function applyDistrictBonus<P extends { characterClass: string; stats: BonusStats }>(
   player: P,
   city: CityState,
 ): { player: P; log?: string } {
-  const style = dominantDistrict(city);
-  if (!style || districtBaseClass(player.characterClass) !== style.classEmoji) return { player };
+  const base = districtBaseClass(player.characterClass);
+  const standing = districtStandings(city).find(row => row.classEmoji === base);
+  if (!standing || standing.amount <= 0) return { player };
   const stats = { ...player.stats };
-  const { stat, amount, label } = style.bonus;
+  const { stat, amount, label } = standing;
   if (stat === 'maxHp') {
     stats.maxHp += amount;
     stats.hp += amount;
@@ -426,7 +532,7 @@ export function applyDistrictBonus<P extends { characterClass: string; stats: Bo
   }
   return {
     player: { ...player, stats },
-    log: `🏙️ ${style.name} — ${style.className} starts with ${label}.`,
+    log: `🏙️ ${standing.name} — ${standing.className} starts with ${label} (${standing.count} placed, weight ${standing.weight}).`,
   };
 }
 
@@ -522,5 +628,5 @@ export function awaySummary(turns: number, citizensGained: number): string {
 }
 
 export function emojiCityRulesBlurb(): string {
-  return `EmojiCB is a city on the home screen, kept in the meta save so it survives runs. Each emoji you use from the hotbar, eat, drink, or buy-and-use grants ${TOKENS_PER_CONSUME} placement token for that emoji. Spell Echo does not spend the emoji, so it grants no token. Those consume counts, and the lifetime enemy kill counts, are the only ledgers — the city reads them again every visit. The grid is ${CITY_COLS}×${CITY_ROWS}. Pick an emoji and tap an empty lot to build. Tap a built lot to clear it and refund the token. One citizen arrives per ${CITIZEN_TILES} lots of housing, weighted by kills. A plain emoji or an ordinary house counts as 1 lot. Most structures count as 2, 🏘️🏢🏭🏨🏟️🏬 count as 3, and 🏰 counts as 4. No kills means empty streets. Structures are not on the kill-loot table. About ${Math.round(STRUCTURE_FLOOR_CHANCE * 100)}% of floors hide one blueprint. Survey it from the hotbar for +${STRUCTURE_SURVEY_MOOD} mood and 1 token for that building. Selling a blueprint pays ${STRUCTURE_SELL_VALUE}g and grants no token. In the city, ${BUILDING_EXCHANGE_COST} spare tokens from non-building emoji raise 1 structure token. The structures row is separate from the supply palette. Every roguelike turn is a city turn. While you are away, one unspent token builds itself every ${GROWTH_TURNS} city turns, citizens arrive to the new capacity, and they wander. A long absence is caught up in at most ${WANDER_CATCHUP_CAP} wander steps. Placed emoji form districts: Slums of Thieves (Ninja), Arcane Sanctum (Wizard), Frontier Saloon (Cowboy), Grove of Wilds (Ranger), and Void Hollow (The Void). 🛖🏚️ are slums, ⛩️🛕 are the sanctum, ⛺🏕️🏔️ are the grove, 🏤🏦🏟️ are the saloon, and 🌋 is the hollow. 🏰🏭🏢 and ordinary houses are neutral. Prestige classes use their base class's district. A style with at least ${DISTRICT_THRESHOLD} tiles and a strict lead grants a small run-start bonus to that class: ${DISTRICTS.map(d => `${d.bonus.label} ${d.className}`).join(', ')}. The vessel picker and the city HUD show the current lead.`;
+  return `EmojiCB is a city on the home screen, kept in the meta save so it survives runs. Each emoji you use from the hotbar, eat, drink, or buy-and-use grants ${TOKENS_PER_CONSUME} placement token for that emoji. Spell Echo does not spend the emoji, so it grants no token. Those consume counts, and the lifetime enemy kill counts, are the only ledgers — the city reads them again every visit. The grid is ${CITY_COLS}×${CITY_ROWS}. Pick an emoji and tap an empty lot to build. Tap a built lot to clear it and refund the token. One citizen arrives per ${CITIZEN_TILES} lots of housing, weighted by kills. A plain emoji or an ordinary house counts as 1 lot. Most structures count as 2, 🏘️🏢🏭🏨🏟️🏬 count as 3, and 🏰 counts as 4. No kills means empty streets. Structures are not on the kill-loot table. About ${Math.round(STRUCTURE_FLOOR_CHANCE * 100)}% of floors hide one blueprint. Survey it from the hotbar for +${STRUCTURE_SURVEY_MOOD} mood and 1 token for that building. Selling a blueprint pays ${STRUCTURE_SELL_VALUE}g and grants no token. In the city, ${BUILDING_EXCHANGE_COST} spare tokens from non-building emoji raise 1 structure token. The structures row is separate from the supply palette. Every roguelike turn is a city turn. While you are away, one unspent token builds itself every ${GROWTH_TURNS} city turns, citizens arrive to the new capacity, and they wander. A long absence is caught up in at most ${WANDER_CATCHUP_CAP} wander steps. Placed emoji form districts, and every style can be active at once: Slums of Thieves (Ninja), Arcane Sanctum (Wizard), Frontier Saloon (Cowboy), Grove of Wilds (Ranger), and Void Hollow (The Void). 🛖🏚️ are slums, ⛩️🛕 are the sanctum, ⛺🏕️🏔️ are the grove, 🏤🏦🏟️ are the saloon, and 🌋 is the hollow. 🏰🏭🏢 and ordinary houses are neutral. Prestige classes use their base class's district. A plain themed emoji weighs 1. A structure weighs its housing, so a larger building counts for more. Weight ${DISTRICT_THRESHOLD} is tier 1. The tier rises by 1 each time that weight doubles, through ${DISTRICT_THRESHOLD * 2}, ${DISTRICT_THRESHOLD * 4}, and ${DISTRICT_THRESHOLD * 8}, and ${DISTRICT_BONUS_TIER_CAP} is the cap. The run-start bonus is the tier times the base (${DISTRICTS.map(d => `${d.bonus.label} ${d.className}`).join(', ')}). The city HUD and the vessel picker show each district's placed count, weight, and current bonus. A meta save from before this rule keeps its grid, consumes, and prestige; bonuses are read from the tiles.`;
 }

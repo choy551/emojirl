@@ -5,20 +5,28 @@ import {
   CITY_COLS,
   CITY_ROWS,
   CITY_SIZE,
+  DISTRICT_BONUS_TIER_CAP,
   DISTRICT_THRESHOLD,
   DISTRICTS,
   GROWTH_TURNS,
   TOKENS_PER_CONSUME,
   WANDER_CATCHUP_CAP,
+  activeDistricts,
   applyDistrictBonus,
   availableTokens,
   awaySummary,
   catchUpCity,
   citizenCapacity,
   classifyEmoji,
+  districtBonusTier,
+  districtHudLine,
+  districtPickerEntries,
   districtPickerLine,
-  dominantDistrict,
+  districtStandings,
+  districtTileWeight,
   emptyCity,
+  emojiCityRulesBlurb,
+  scaledBonusAmount,
   paletteEmojis,
   pickWeightedCitizen,
   placeAt,
@@ -30,8 +38,8 @@ import {
   tokensForEmoji,
   totalAvailableTokens,
 } from './emojiCity';
-import { loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, saveCity, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
-import { COWBOY, FENCER, GENIE, NINJA, RANGER, VOID, WIZARD } from './prestigeConstants';
+import { loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, saveCity, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
+import { COWBOY, FENCER, GENIE, HITMAN, META_SAVE_KEY, META_SCHEMA_VERSION, NINJA, RANGER, ROYAL_GUARD, VOID, WIZARD } from './prestigeConstants';
 
 function memoryStore(): KeyValueStore {
   const mem = new Map<string, string>();
@@ -177,9 +185,19 @@ function vessel(characterClass: string, stats: { hp?: number; maxHp?: number; at
   };
 }
 
+function paint(pairs: ReadonlyArray<readonly [string, number]>): ReturnType<typeof emptyCity> {
+  const city = emptyCity();
+  let index = 0;
+  for (const [emoji, n] of pairs) {
+    for (let i = 0; i < n; i++) city.tiles[index++] = emoji;
+  }
+  return city;
+}
+
 describe('EmojiCB districts', () => {
   it('classifies themed emoji and leaves food unclassified', () => {
     expect(DISTRICT_THRESHOLD).toBe(4);
+    expect(DISTRICT_BONUS_TIER_CAP).toBe(4);
     expect(classifyEmoji('🗡️')?.id).toBe('thieves');
     expect(classifyEmoji('🧪')?.id).toBe('arcane');
     expect(classifyEmoji('🔫')?.id).toBe('saloon');
@@ -197,50 +215,176 @@ describe('EmojiCB districts', () => {
     }
   });
 
-  it('needs four tiles and a strict lead before a style dominates', () => {
-    expect(dominantDistrict(fill(3, '🗡️'))).toBeNull();
-    expect(dominantDistrict(fill(4, '🗡️'))?.name).toBe('Slums of Thieves');
-    const tied = fill(4, '🗡️');
-    for (let i = 4; i < 8; i++) tied.tiles[i] = '🧪';
-    expect(dominantDistrict(tied)).toBeNull();
-    tied.tiles[8] = '🗡️';
-    expect(dominantDistrict(tied)?.id).toBe('thieves');
-    const apples = fill(6, '🍎');
-    expect(dominantDistrict(apples)).toBeNull();
-    expect(districtPickerLine(NINJA, apples)).toBeNull();
-    expect(districtPickerLine(NINJA, fill(4, '🗡️'))).toBe('Slums of Thieves: +1 SPD at run start');
-    expect(districtPickerLine(WIZARD, fill(4, '🗡️'))).toBe('Slums of Thieves favors Ninja (+1 SPD)');
+  it('raises the bonus tier when weight doubles and then caps it', () => {
+    expect(districtTileWeight('🗡️')).toBe(1);
+    expect(districtTileWeight('🛖')).toBe(2);
+    expect(districtTileWeight('🏟️')).toBe(3);
+    expect(districtTileWeight('🏰')).toBe(0);
+    expect(districtTileWeight('🍎')).toBe(0);
+
+    const tiers: Array<[number, number]> = [
+      [0, 0], [3, 0], [4, 1], [7, 1], [8, 2], [15, 2], [16, 3], [31, 3], [32, 4], [64, 4], [100, 4],
+    ];
+    for (const [weight, tier] of tiers) {
+      expect(districtBonusTier(weight), `weight ${weight}`).toBe(tier);
+      expect(scaledBonusAmount(1, weight)).toBe(tier);
+      expect(scaledBonusAmount(2, weight)).toBe(tier * 2);
+    }
   });
 
-  it('grants the run-start bonus to the matching class and its prestige', () => {
-    const thieves = fill(4, '🗡️');
-    const ninja = applyDistrictBonus(vessel(NINJA, { speed: 3 }), thieves);
-    expect(ninja.player.stats.speed).toBe(4);
-    expect(ninja.log).toContain('+1 SPD');
-    const fencer = applyDistrictBonus(vessel(FENCER, { speed: 2 }), thieves);
-    expect(fencer.player.stats.speed).toBe(3);
-    const wizardIgnored = applyDistrictBonus(vessel(WIZARD, { speed: 1, mana: 4, maxMana: 4 }), thieves);
-    expect(wizardIgnored.player.stats.speed).toBe(1);
-    expect(wizardIgnored.player.stats.maxMana).toBe(4);
-    expect(wizardIgnored.log).toBeUndefined();
+  it('keeps every built district active and scales larger buildings', () => {
+    expect(activeDistricts(fill(3, '🗡️'))).toEqual([]);
+    expect(activeDistricts(fill(4, '🗡️')).map(row => row.name)).toEqual(['Slums of Thieves']);
+    const tied = paint([['🗡️', 4], ['🧪', 4]]);
+    expect(activeDistricts(tied).map(row => row.id)).toEqual(['thieves', 'arcane']);
+    expect(activeDistricts(fill(6, '🍎'))).toEqual([]);
+    expect(activeDistricts(fill(6, '🏰'))).toEqual([]);
+    expect(districtPickerLine(NINJA, fill(6, '🍎'))).toBeNull();
 
-    const sanctum = fill(4, '🧪');
-    const wizard = applyDistrictBonus(vessel(WIZARD, { mana: 4, maxMana: 4 }), sanctum);
+    const huts = fill(4, '🛖');
+    const slums = districtStandings(huts).find(row => row.id === 'thieves');
+    expect(slums).toMatchObject({ count: 4, weight: 8, tier: 2, amount: 2, label: '+2 SPD' });
+    expect(districtHudLine(slums!)).toBe('Slums of Thieves: 4 placed, weight 8, +2 SPD');
+    expect(districtStandings(paint([['🛖', 2]])).find(row => row.id === 'thieves')).toMatchObject({
+      count: 2, weight: 4, tier: 1, amount: 1,
+    });
+    expect(districtStandings(paint([['🏟️', 4]])).find(row => row.id === 'saloon')).toMatchObject({
+      count: 4, weight: 12, tier: 2, amount: 2, label: '+2 ATK',
+    });
+
+    const ninjaLine = districtPickerLine(NINJA, fill(4, '🗡️'));
+    expect(ninjaLine).toBe('Slums of Thieves: 4 placed, weight 4, +1 SPD at run start');
+    const wizardView = districtPickerEntries(WIZARD, fill(4, '🗡️'));
+    expect(wizardView.map(entry => entry.text)).toEqual([
+      'Slums of Thieves: 4 placed, weight 4, +1 SPD for Ninja',
+      'Arcane Sanctum: 0 placed, weight 0, +0 max MP at run start',
+    ]);
+  });
+
+  it('grants each matching class its own scaled bonus at once', () => {
+    const city = paint([
+      ['🗡️', 4],
+      ['🧪', 4],
+      ['🔫', 4],
+      ['🌳', 4],
+      ['🌑', 4],
+    ]);
+    expect(activeDistricts(city).map(row => row.id)).toEqual(['thieves', 'arcane', 'saloon', 'grove', 'void']);
+    const lines = districtPickerEntries(NINJA, city);
+    expect(lines).toHaveLength(5);
+    expect(lines.find(entry => entry.id === 'thieves')?.text).toContain('4 placed, weight 4, +1 SPD at run start');
+    expect(lines.find(entry => entry.id === 'arcane')?.text).toContain('4 placed, weight 4, +2 max MP for Wizard');
+    expect(lines.find(entry => entry.id === 'void')?.text).toContain('+2 max HP for The Void');
+
+    const ninja = applyDistrictBonus(vessel(NINJA, { speed: 3, mana: 4, maxMana: 4 }), city);
+    expect(ninja.player.stats.speed).toBe(4);
+    expect(ninja.player.stats.maxMana).toBe(4);
+    expect(ninja.log).toContain('+1 SPD');
+    expect(ninja.log).toContain('4 placed, weight 4');
+    const fencer = applyDistrictBonus(vessel(FENCER, { speed: 2 }), city);
+    expect(fencer.player.stats.speed).toBe(3);
+
+    const wizard = applyDistrictBonus(vessel(WIZARD, { speed: 1, mana: 4, maxMana: 4 }), city);
+    expect(wizard.player.stats.speed).toBe(1);
     expect(wizard.player.stats.mana).toBe(6);
     expect(wizard.player.stats.maxMana).toBe(6);
-    const genie = applyDistrictBonus(vessel(GENIE, { mana: 6, maxMana: 6 }), sanctum);
+    const genie = applyDistrictBonus(vessel(GENIE, { mana: 6, maxMana: 6 }), city);
     expect(genie.player.stats.maxMana).toBe(8);
-    expect(genie.player.stats.mana).toBe(8);
 
-    const saloon = fill(4, '🔫');
-    expect(applyDistrictBonus(vessel(COWBOY, { attack: 4 }), saloon).player.stats.attack).toBe(5);
-    const grove = fill(4, '🌳');
-    expect(applyDistrictBonus(vessel(RANGER, { evasion: 10 }), grove).player.stats.evasion).toBe(11);
-    const hollow = fill(4, '🌑');
-    const voided = applyDistrictBonus(vessel(VOID, { hp: 6, maxHp: 6 }), hollow);
+    expect(applyDistrictBonus(vessel(COWBOY, { attack: 4 }), city).player.stats.attack).toBe(5);
+    expect(applyDistrictBonus(vessel(HITMAN, { attack: 4 }), city).player.stats.attack).toBe(5);
+    expect(applyDistrictBonus(vessel(RANGER, { evasion: 10 }), city).player.stats.evasion).toBe(11);
+    expect(applyDistrictBonus(vessel(ROYAL_GUARD, { evasion: 10 }), city).player.stats.evasion).toBe(11);
+    const voided = applyDistrictBonus(vessel(VOID, { hp: 6, maxHp: 6 }), city);
     expect(voided.player.stats.hp).toBe(8);
     expect(voided.player.stats.maxHp).toBe(8);
+
+    const grown = paint([['🧪', 16], ['🗡️', 3], ['🌋', 1], ['🌑', 2]]);
+    const sanctum = applyDistrictBonus(vessel(WIZARD, { mana: 4, maxMana: 4 }), grown);
+    expect(sanctum.player.stats.maxMana).toBe(10);
+    expect(sanctum.log).toContain('+6 max MP');
+    expect(sanctum.log).toContain('weight 16');
+    expect(applyDistrictBonus(vessel(NINJA, { speed: 3 }), grown).log).toBeUndefined();
+    const hollow = districtStandings(grown).find(row => row.id === 'void');
+    expect(hollow).toMatchObject({ count: 3, weight: 4, amount: 2, label: '+2 max HP' });
+    expect(applyDistrictBonus(vessel(VOID, { hp: 6, maxHp: 6 }), grown).player.stats.maxHp).toBe(8);
+
+    const capped = applyDistrictBonus(vessel(NINJA, { speed: 1 }), fill(40, '🗡️'));
+    expect(capped.player.stats.speed).toBe(5);
+    expect(capped.log).toContain('+4 SPD');
     expect(applyDistrictBonus(vessel(WIZARD), fill(6, '🍎')).log).toBeUndefined();
+  });
+
+  it('migrates a v1 meta save and scores every district on the old grid', () => {
+    expect(META_SCHEMA_VERSION).toBe(2);
+    const store = memoryStore();
+    setMetaStore(store);
+    const tiles = Array.from({ length: 10 }, (_, i) => (i < 4 ? '🗡️' : i < 8 ? '⛩️' : '🏰'));
+    store.setItem(META_SAVE_KEY, JSON.stringify({
+      schemaVersion: 1,
+      unlockedPrestige: [GENIE, GENIE],
+      insuredCarry: [{ id: 'a', emoji: '🍎', name: 'Apple' }],
+      emojiConsumes: { '🗡️': 4, '⛩️': 4 },
+      activeDistrict: 'thieves',
+      pendingCityTurns: 3,
+      cityGrowthRemainder: 2,
+      city: {
+        tiles,
+        citizens: [
+          { id: 'c-1', emoji: '🧟', x: 1, y: 1 },
+          { id: 'bad', emoji: '🦇', x: 99, y: 0 },
+        ],
+        nextId: 4,
+      },
+    }));
+
+    const meta = loadMeta();
+    expect(meta.schemaVersion).toBe(2);
+    expect(meta.unlockedPrestige).toEqual([GENIE]);
+    expect(meta.insuredCarry?.map(item => item.id)).toEqual(['a']);
+    expect(meta.emojiConsumes).toEqual({ '🗡️': 4, '⛩️': 4 });
+    expect(meta.pendingCityTurns).toBe(3);
+    expect(meta.cityGrowthRemainder).toBe(2);
+    expect(meta.city?.tiles.slice(0, 10)).toEqual(tiles);
+    expect(meta.city?.tiles).toHaveLength(CITY_SIZE);
+    expect(meta.city?.citizens).toEqual([{ id: 'c-1', emoji: '🧟', x: 1, y: 1 }]);
+    expect(meta.city?.nextId).toBe(4);
+
+    const standings = districtStandings(meta.city!);
+    expect(standings.find(row => row.id === 'thieves')).toMatchObject({ count: 4, weight: 4, amount: 1 });
+    expect(standings.find(row => row.id === 'arcane')).toMatchObject({ count: 4, weight: 8, amount: 4, label: '+4 max MP' });
+    expect(activeDistricts(meta.city!).map(row => row.id)).toEqual(['thieves', 'arcane']);
+    const ninja = applyDistrictBonus(vessel(NINJA, { speed: 1 }), meta.city!);
+    const wizard = applyDistrictBonus(vessel(WIZARD, { mana: 4, maxMana: 4 }), meta.city!);
+    expect(ninja.player.stats.speed).toBe(2);
+    expect(wizard.player.stats.maxMana).toBe(8);
+
+    saveMeta(meta);
+    const raw = JSON.parse(store.getItem(META_SAVE_KEY) ?? '{}') as Record<string, unknown>;
+    expect(raw.schemaVersion).toBe(2);
+    expect(raw.activeDistrict).toBeUndefined();
+    expect(raw.unlockedPrestige).toEqual([GENIE]);
+    expect((raw.city as { tiles: string[] }).tiles.slice(0, 4)).toEqual(['🗡️', '🗡️', '🗡️', '🗡️']);
+
+    store.setItem(META_SAVE_KEY, '{');
+    expect(loadMeta().unlockedPrestige).toEqual([]);
+    expect(loadMeta().schemaVersion).toBe(2);
+
+    store.setItem(META_SAVE_KEY, JSON.stringify({
+      schemaVersion: 99,
+      unlockedPrestige: [FENCER],
+      city: { tiles: ['🌑', '🌑', '🌑', '🌑'], citizens: [], nextId: 1 },
+      pendingCityTurns: 1,
+    }));
+    const future = loadMeta();
+    expect(future.unlockedPrestige).toEqual([FENCER]);
+    expect(future.pendingCityTurns).toBe(1);
+    expect(activeDistricts(future.city!).map(row => row.id)).toEqual(['void']);
+
+    const blurb = emojiCityRulesBlurb();
+    expect(blurb).toContain('every style can be active at once');
+    expect(blurb).toContain('larger building counts for more');
+    expect(blurb).toContain('placed count, weight, and current bonus');
   });
 });
 
@@ -356,6 +500,9 @@ describe('EmojiCB surfaces', () => {
     expect(home).toContain('href="/city"');
     expect(home).toContain('EmojiCB');
     expect(home).toContain('vessel-district');
+    expect(home).toContain('districtPickerEntries');
+    expect(city).toContain('districtStandings');
+    expect(city).toContain('city-district-');
     expect(manual).toContain('emojiCityRulesBlurb');
     expect(app).toContain('path="/city"');
     expect(city).toContain('catchUpCity');

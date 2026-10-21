@@ -27,7 +27,12 @@ export const VOID_UNLOCK_HINT = 'Die to Void damage to unlock';
 /** Same flag written by the Void class slice. */
 export const VOID_UNLOCK_KEY = 'emojirl_unlocked_void';
 export const META_SAVE_KEY = 'emojirl_meta_v1';
-export const META_SCHEMA_VERSION = 1;
+/**
+ * Meta save schema. v1 stored the city grid and derived a single leading district.
+ * v2 keeps that same grid and scores every district from the tiles. The storage key
+ * stays `emojirl_meta_v1` so existing browsers keep their file.
+ */
+export const META_SCHEMA_VERSION = 2;
 
 // ── Genie (ranged, 3 passives + Blink) ──────────────────────────────────────
 export const GENIE_BASE_MP = 6;

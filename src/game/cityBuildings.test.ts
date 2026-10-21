@@ -15,10 +15,11 @@ import {
 import { DROP_TABLE, rarityOfItem } from './dropTable';
 import { getItemSellValue } from './economy';
 import {
+  activeDistricts,
   applyDistrictBonus,
   citizenCapacityOf,
   classifyEmoji,
-  dominantDistrict,
+  districtStandings,
   emptyCity,
   exchangeForBuilding,
   lotHousing,
@@ -88,14 +89,17 @@ describe('EmojiCB buildings', () => {
     expect(classifyEmoji('🏢')).toBeNull();
     expect(classifyEmoji('🏠')).toBeNull();
 
-    expect(dominantDistrict(fill('⛩️', 4))?.name).toBe('Arcane Sanctum');
-    expect(dominantDistrict(fill('🛖', 4))?.id).toBe('thieves');
-    expect(dominantDistrict(fill('🏰', 6))).toBeNull();
+    expect(activeDistricts(fill('⛩️', 4)).map(row => row.name)).toEqual(['Arcane Sanctum']);
+    expect(activeDistricts(fill('🛖', 4)).map(row => row.id)).toEqual(['thieves']);
+    expect(activeDistricts(fill('🏰', 6))).toEqual([]);
+    expect(districtStandings(fill('⛩️', 4)).find(row => row.id === 'arcane')).toMatchObject({
+      count: 4, weight: 8, tier: 2, amount: 4, label: '+4 max MP',
+    });
     const wizard = applyDistrictBonus(
       { characterClass: WIZARD, stats: { hp: 8, maxHp: 8, attack: 3, defense: 0, speed: 1, evasion: 5, luck: 0, mana: 4, maxMana: 4 } },
       fill('⛩️', 4),
     );
-    expect(wizard.player.stats.maxMana).toBe(6);
+    expect(wizard.player.stats.maxMana).toBe(8);
   });
 
   it('gives larger buildings more citizen housing', () => {

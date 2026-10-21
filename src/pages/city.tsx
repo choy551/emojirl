@@ -16,7 +16,9 @@ import {
   awaySummary,
   catchUpCity,
   citizenCapacityOf,
-  dominantDistrict,
+  DISTRICT_BONUS_TIER_CAP,
+  DISTRICT_THRESHOLD,
+  districtStandings,
   emojiCityRulesBlurb,
   exchangeForBuilding,
   normalizeCity,
@@ -123,7 +125,7 @@ export default function CityPage() {
   const cap = city ? citizenCapacityOf(city) : 0;
   const citizens = city?.citizens.length ?? 0;
   const tokens = city ? totalAvailableTokens(consumes, city) : 0;
-  const district = city ? dominantDistrict(city) : null;
+  const standings = city ? districtStandings(city) : [];
 
   return (
     <div className="min-h-screen w-full max-w-lg mx-auto flex flex-col px-3 py-3 gap-3">
@@ -167,9 +169,31 @@ export default function CityPage() {
         </p>
       )}
 
-      <p data-testid="city-district" className="text-center text-xs font-semibold text-foreground">
-        {district ? `${district.name} — ${district.className} ${district.bonus.label}` : 'No district yet — need 4 of one style'}
-      </p>
+      {city && (
+        <div className="space-y-1.5" data-testid="city-district">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground" data-testid="city-district-rule">
+            Districts stack. Weight {DISTRICT_THRESHOLD} is tier 1. Each doubling raises the bonus, through tier {DISTRICT_BONUS_TIER_CAP}.
+          </p>
+          <ul className="space-y-1" aria-label="Districts">
+            {standings.map(row => (
+              <li
+                key={row.id}
+                data-testid={`city-district-${row.id}`}
+                className={`flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 rounded-lg border px-2 py-1.5 text-xs ${row.tier > 0 ? 'border-primary/40 bg-primary/10 text-foreground' : 'border-border bg-card text-muted-foreground'}`}
+              >
+                <span className="min-w-0 font-semibold leading-snug">{row.name}</span>
+                <span className="text-right tabular-nums leading-snug">
+                  <span data-testid={`city-district-${row.id}-count`}>{row.count} placed</span>
+                  <span className="text-muted-foreground"> · </span>
+                  <span data-testid={`city-district-${row.id}-weight`}>weight {row.weight}</span>
+                  <span className="text-muted-foreground"> · </span>
+                  <span className="font-semibold" data-testid={`city-district-${row.id}-bonus`}>{row.label}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <p className="text-[11px] text-muted-foreground leading-snug min-h-8" data-testid="city-note">{note}</p>
 
