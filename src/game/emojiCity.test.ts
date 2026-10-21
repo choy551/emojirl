@@ -7,6 +7,7 @@ import {
   CITY_SIZE,
   CITY_DIM_MAX,
   CITY_EXPAND_COST,
+  DECOR,
   DISTRICT_BONUS_TIER_CAP,
   DISTRICT_THRESHOLD,
   DISTRICTS,
@@ -19,6 +20,7 @@ import {
   awaySummary,
   catchUpCity,
   citizenCapacity,
+  citizenCapacityOf,
   classifyEmoji,
   districtBonusTier,
   districtHudLine,
@@ -27,14 +29,18 @@ import {
   districtStandings,
   districtTileWeight,
   emptyCity,
+  isDecorEmoji,
+  isDecorLot,
   normalizeCity,
   emojiCityRulesBlurb,
   expandBlockReason,
   expandCity,
   scaledBonusAmount,
   paletteEmojis,
+  supplyPalette,
   pickWeightedCitizen,
   placeAt,
+  placeDecor,
   placedCount,
   placedOf,
   removeAt,
@@ -624,6 +630,82 @@ describe('EmojiCB expansion', () => {
   });
 });
 
+describe('EmojiCB decor', () => {
+  const required = [
+    '🛣️', '🌲', '🌳', '🌴', '🌵',
+    '🚗', '🚓', '🚕', '🛺',
+    '🟢', '🟠', '🟥', '🟧', '◽', '◾', '🔷', '🔶', '🔳', '🔲',
+    '🌷', '🌻', '🪨', '🟦', '🟩', '🟨', '⬜', '⬛', '⛲',
+  ];
+
+  it('lists free decor and leaves gameplay emoji out', () => {
+    expect(new Set(DECOR).size).toBe(DECOR.length);
+    for (const emoji of required) expect(isDecorEmoji(emoji), emoji).toBe(true);
+    expect(isDecorEmoji('🗡️')).toBe(false);
+    expect(isDecorEmoji('🍎')).toBe(false);
+    expect(classifyEmoji('🌲')?.id).toBe('grove');
+    expect(classifyEmoji('🌵')?.id).toBe('saloon');
+  });
+
+  it('places and removes decor without tokens, districts, or housing', () => {
+    const consumes = { '🍎': 3, '🌲': 1 };
+    const road = placeDecor(emptyCity(), 0, '🛣️');
+    expect(road.ok).toBe(true);
+    expect(consumes).toEqual({ '🍎': 3, '🌲': 1 });
+    expect(isDecorLot(road.city, 0)).toBe(true);
+    expect(placedOf(road.city, '🛣️')).toBe(0);
+    expect(totalAvailableTokens(consumes, road.city)).toBe(4);
+    expect(supplyPalette(consumes, road.city)).toEqual(['🍎', '🌲']);
+
+    let cosmetic = road.city;
+    for (let i = 1; i <= 4; i++) cosmetic = placeDecor(cosmetic, i, '🌲').city;
+    expect(placeDecor(cosmetic, 0, '🌴').ok).toBe(false);
+    expect(placeDecor(cosmetic, 5, '🗡️').ok).toBe(false);
+    expect(districtStandings(cosmetic).find(row => row.id === 'grove')).toMatchObject({ count: 0, weight: 0, amount: 0 });
+    expect(citizenCapacityOf(cosmetic)).toBe(0);
+    expect(syncCitizens(cosmetic, { '🧟': 4 }, () => 0).citizens).toHaveLength(0);
+    expect(applyDistrictBonus(vessel(RANGER, { evasion: 10 }), cosmetic).log).toBeUndefined();
+
+    const tokenTree = placeAt(cosmetic, 5, '🌲', consumes, {}, () => 0);
+    expect(tokenTree.ok).toBe(true);
+    expect(placedOf(tokenTree.city, '🌲')).toBe(1);
+    expect(isDecorLot(tokenTree.city, 5)).toBe(false);
+    expect(districtStandings(tokenTree.city).find(row => row.id === 'grove')).toMatchObject({ count: 1, weight: 1, amount: 0 });
+
+    const fountain = placeDecor(emptyCity(), 1, '⛲');
+    expect(citizenCapacityOf(fountain.city)).toBe(0);
+    expect(districtStandings(fountain.city).find(row => row.id === 'saloon')).toMatchObject({ count: 0, weight: 0 });
+    const realFountain = placeAt(emptyCity(), 1, '⛲', { '⛲': 1 }, {}, () => 0);
+    expect(districtStandings(realFountain.city).find(row => row.id === 'saloon')?.weight).toBe(2);
+
+    const cleared = removeAt(road.city, 0, {}, () => 0);
+    expect(cleared.city.tiles[0]).toBeNull();
+    expect(cleared.city.decor[0]).toBe(false);
+    expect(totalAvailableTokens(consumes, cleared.city)).toBe(4);
+  });
+
+  it('shifts decor with the grid and keeps old trees as real placements', () => {
+    const road = placeDecor(emptyCity(), 0, '🚗');
+    const grown = expandCity(road.city, 'north', { '🍎': 10 });
+    expect(grown.ok).toBe(true);
+    expect(isDecorLot(grown.city, 0)).toBe(false);
+    expect(isDecorLot(grown.city, CITY_COLS)).toBe(true);
+    expect(grown.city.tiles[CITY_COLS]).toBe(road.city.tiles[0]);
+
+    const tiles = Array.from({ length: CITY_SIZE }, () => null as string | null);
+    for (let i = 0; i < 4; i++) tiles[i] = '🌲';
+    const legacy = normalizeCity({ tiles, citizens: [], nextId: 1 });
+    expect(legacy.decor.every(flag => flag === false)).toBe(true);
+    expect(districtStandings(legacy).find(row => row.id === 'grove')).toMatchObject({ count: 4, weight: 4, amount: 1 });
+    expect(applyDistrictBonus(vessel(RANGER, { evasion: 10 }), legacy).player.stats.evasion).toBe(11);
+
+    saveCity(grown.city);
+    const loaded = loadMeta().city;
+    expect(loaded && isDecorLot(loaded, CITY_COLS)).toBe(true);
+    expect(emojiCityRulesBlurb()).toContain('Decor does not spend a token');
+  });
+});
+
 describe('EmojiCB surfaces', () => {
   it('is linked from home and described in the manual', () => {
     const home = readFileSync(new URL('../pages/home.tsx', import.meta.url), 'utf8');
@@ -641,6 +723,8 @@ describe('EmojiCB surfaces', () => {
     expect(app).toContain('path="/city"');
     expect(city).toContain('catchUpCity');
     expect(city).toContain('city-away');
+    expect(city).toContain('data-testid="city-decor"');
+    expect(city).toContain('placeDecor');
     expect(city).toContain('edge="north"');
     expect(city).toContain('expand-${edge}');
     expect(city).toContain('expandBlockReason');

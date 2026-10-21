@@ -17,6 +17,7 @@ import {
   awaySummary,
   catchUpCity,
   citizenCapacityOf,
+  DECOR,
   DISTRICT_BONUS_TIER_CAP,
   DISTRICT_THRESHOLD,
   districtStandings,
@@ -24,8 +25,10 @@ import {
   exchangeForBuilding,
   expandBlockReason,
   expandCity,
+  isDecorLot,
   normalizeCity,
   placeAt,
+  placeDecor,
   placedCount,
   placedOf,
   removeAt,
@@ -35,13 +38,15 @@ import {
   type CityEdge,
   type CityState,
 } from '../game/emojiCity';
+
+type PalettePick = { kind: 'token' | 'decor'; emoji: string };
 import { loadMeta, replaceEmojiConsumes, saveCity, settleCityCatchUp } from '../game/meta';
 
 export default function CityPage() {
   const [, setLocation] = useLocation();
   const [consumes, setConsumes] = useState<Record<string, number>>({});
   const [city, setCity] = useState<CityState | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<PalettePick | null>(null);
   const [note, setNote] = useState('Pick an emoji, then tap an empty lot.');
   const [away, setAway] = useState<string | null>(null);
   const killsRef = useRef<Record<string, number>>({});
@@ -63,8 +68,10 @@ export default function CityPage() {
     setCity(caught.city);
     if (caught.turns > 0) setAway(awaySummary(caught.turns, caught.citizensGained));
     const palette = supplyPalette(counts, caught.city);
+    const owned = palette.find(emoji => availableTokens(counts[emoji] ?? 0, placedOf(caught.city, emoji)) > 0);
     const ownedBuilding = BUILDINGS.find(building => availableTokens(counts[building.emoji] ?? 0, placedOf(caught.city, building.emoji)) > 0);
-    setSelected(palette.find(emoji => availableTokens(counts[emoji] ?? 0, placedOf(caught.city, emoji)) > 0) ?? ownedBuilding?.emoji ?? palette[0] ?? null);
+    const first = owned ?? ownedBuilding?.emoji ?? palette[0] ?? null;
+    setSelected(first ? { kind: 'token', emoji: first } : null);
   }, []);
 
   useEffect(() => {
@@ -94,7 +101,7 @@ export default function CityPage() {
     () => (city ? supplyPalette(consumes, city) : []),
     [consumes, city],
   );
-  const selectedBuilding = selected ? buildingOf(selected) : undefined;
+  const selectedBuilding = selected?.kind === 'token' ? buildingOf(selected.emoji) : undefined;
 
   const raiseStructure = () => {
     if (!city || !selectedBuilding) return;
@@ -121,19 +128,28 @@ export default function CityPage() {
     if (!city) return;
     const built = city.tiles[index];
     if (built) {
+      const decor = isDecorLot(city, index);
       const result = removeAt(city, index, killsRef.current, Math.random);
       if (!result.ok) { setNote(result.reason ?? 'Cannot clear that lot.'); return; }
       setCity(result.city);
       saveCity(result.city);
-      setNote(`Refunded ${built}.`);
+      setNote(decor ? `Cleared ${built}.` : `Refunded ${built}.`);
       return;
     }
     if (!selected) { setNote('Pick an emoji first.'); return; }
-    const result = placeAt(city, index, selected, consumes, killsRef.current, Math.random);
+    if (selected.kind === 'decor') {
+      const result = placeDecor(city, index, selected.emoji);
+      if (!result.ok) { setNote(result.reason ?? 'Cannot place decor.'); return; }
+      setCity(result.city);
+      saveCity(result.city);
+      setNote(`Placed ${selected.emoji}. Decor is free.`);
+      return;
+    }
+    const result = placeAt(city, index, selected.emoji, consumes, killsRef.current, Math.random);
     if (!result.ok) { setNote(result.reason ?? 'Cannot place.'); return; }
     setCity(result.city);
     saveCity(result.city);
-    setNote(`Placed ${selected}.`);
+    setNote(`Placed ${selected.emoji}.`);
   };
 
   const placed = city ? placedCount(city) : 0;
@@ -218,14 +234,14 @@ export default function CityPage() {
         )}
         {palette.map(emoji => {
           const left = availableTokens(consumes[emoji] ?? 0, city ? placedOf(city, emoji) : 0);
-          const on = selected === emoji;
+          const on = selected?.kind === 'token' && selected.emoji === emoji;
           return (
             <button
               key={emoji}
               type="button"
               data-testid={`palette-${emoji}`}
               aria-pressed={on}
-              onClick={() => { setSelected(emoji); setNote(`${emoji} selected. ${left} token${left === 1 ? '' : 's'} left.`); }}
+              onClick={() => { setSelected({ kind: 'token', emoji }); setNote(`${emoji} selected. ${left} token${left === 1 ? '' : 's'} left.`); }}
               className={`shrink-0 min-h-11 min-w-11 rounded-lg border text-xl leading-none ${on ? 'border-primary bg-primary/15' : 'border-border bg-card'} ${left <= 0 ? 'opacity-50' : ''}`}
             >
               <span className="block">{emoji}</span>
@@ -240,7 +256,7 @@ export default function CityPage() {
         <div className="flex gap-1.5 overflow-x-auto pb-1" data-testid="city-structures" aria-label="Structure palette">
           {BUILDINGS.map(building => {
             const left = availableTokens(consumes[building.emoji] ?? 0, city ? placedOf(city, building.emoji) : 0);
-            const on = selected === building.emoji;
+            const on = selected?.kind === 'token' && selected.emoji === building.emoji;
             return (
               <button
                 key={building.emoji}
@@ -249,7 +265,7 @@ export default function CityPage() {
                 aria-pressed={on}
                 title={`${building.name} · ${buildingDistrictName(building)} · counts as ${building.housing}`}
                 onClick={() => {
-                  setSelected(building.emoji);
+                  setSelected({ kind: 'token', emoji: building.emoji });
                   setNote(`${building.name}. ${left} token${left === 1 ? '' : 's'}. Counts as ${building.housing}. Raise costs ${BUILDING_EXCHANGE_COST} spare tokens.`);
                 }}
                 className={`shrink-0 min-h-11 min-w-11 rounded-lg border text-xl leading-none ${on ? 'border-primary bg-primary/15' : 'border-border bg-card'} ${left <= 0 ? 'opacity-60' : ''}`}
@@ -271,6 +287,28 @@ export default function CityPage() {
             Raise {selectedBuilding.emoji} · {BUILDING_EXCHANGE_COST} tokens
           </Button>
         )}
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Decor</p>
+        <div className="flex gap-1.5 overflow-x-auto pb-1" data-testid="city-decor" aria-label="Decor palette">
+          {DECOR.map(emoji => {
+            const on = selected?.kind === 'decor' && selected.emoji === emoji;
+            return (
+              <button
+                key={emoji}
+                type="button"
+                data-testid={`decor-${emoji}`}
+                aria-pressed={on}
+                title="Free decor. Does not count for districts or citizens."
+                onClick={() => { setSelected({ kind: 'decor', emoji }); setNote(`${emoji} decor. Free, and it does not count.`); }}
+                className={`shrink-0 min-h-11 min-w-11 rounded-lg border text-xl leading-none ${on ? 'border-primary bg-primary/15' : 'border-border bg-card'}`}
+              >
+                {emoji}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {city && (
