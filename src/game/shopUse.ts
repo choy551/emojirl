@@ -13,6 +13,7 @@ import { cookedEatHeal } from './economy';
 import { goldWithLuck } from './softCap';
 import { applyDrinkToPlayer } from './drinks';
 import { isArcaneCaster } from './prestige';
+import { buildingOf, structureSurvey } from './cityBuildings';
 
 export type ShopUseBlockReason =
   | 'Not enough gold'
@@ -96,6 +97,22 @@ export function applyInstantItemUse(
   if (item.isMoneyBag || item.emoji === '💰') {
     log("💰 It's full of coins — sell it at a shop.");
     return s;
+  }
+
+  if (item.isStructure) {
+    const plan = buildingOf(item.emoji);
+    if (!plan) {
+      log(`${item.emoji} The plan is blank.`);
+      return null;
+    }
+    const surveyed = structureSurvey(s.player.stats.moodValue, moodMax(cls), plan);
+    log(surveyed.log);
+    const mid = {
+      ...s,
+      player: { ...s.player, stats: { ...s.player.stats, moodValue: surveyed.moodValue } },
+      turn: s.turn + 1,
+    };
+    return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
   }
 
   if (item.drinkTier !== undefined) {

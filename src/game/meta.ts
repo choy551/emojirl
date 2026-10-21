@@ -134,6 +134,14 @@ export function recordEmojiConsume(emoji: string, n = 1): number {
   return counts[key];
 }
 
+/** Replace the consume ledger. Zero and negative counts are dropped. */
+export function replaceEmojiConsumes(counts: Record<string, number>): Record<string, number> {
+  const meta = loadMeta();
+  const emojiConsumes = countMap(counts);
+  saveMeta({ ...meta, emojiConsumes });
+  return emojiConsumes;
+}
+
 export function saveCity(city: CityState): void {
   const meta = loadMeta();
   saveMeta({ ...meta, city: normalizeCity(city) });

@@ -4,25 +4,32 @@ import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getEnemyKillCounts } from '../game/discoveries';
 import {
+  BUILDING_EXCHANGE_COST,
+  BUILDINGS,
+  buildingDistrictName,
+  buildingOf,
+} from '../game/cityBuildings';
+import {
   CITY_COLS,
   CITY_TICK_MS,
   availableTokens,
   awaySummary,
   catchUpCity,
-  citizenCapacity,
+  citizenCapacityOf,
   dominantDistrict,
   emojiCityRulesBlurb,
+  exchangeForBuilding,
   normalizeCity,
-  paletteEmojis,
   placeAt,
   placedCount,
   placedOf,
   removeAt,
+  supplyPalette,
   tickCitizens,
   totalAvailableTokens,
   type CityState,
 } from '../game/emojiCity';
-import { loadMeta, saveCity, settleCityCatchUp } from '../game/meta';
+import { loadMeta, replaceEmojiConsumes, saveCity, settleCityCatchUp } from '../game/meta';
 
 export default function CityPage() {
   const [, setLocation] = useLocation();
@@ -49,8 +56,9 @@ export default function CityPage() {
     setConsumes(counts);
     setCity(caught.city);
     if (caught.turns > 0) setAway(awaySummary(caught.turns, caught.citizensGained));
-    const palette = paletteEmojis(counts, caught.city);
-    setSelected(palette.find(emoji => availableTokens(counts[emoji] ?? 0, placedOf(caught.city, emoji)) > 0) ?? palette[0] ?? null);
+    const palette = supplyPalette(counts, caught.city);
+    const ownedBuilding = BUILDINGS.find(building => availableTokens(counts[building.emoji] ?? 0, placedOf(caught.city, building.emoji)) > 0);
+    setSelected(palette.find(emoji => availableTokens(counts[emoji] ?? 0, placedOf(caught.city, emoji)) > 0) ?? ownedBuilding?.emoji ?? palette[0] ?? null);
   }, []);
 
   useEffect(() => {
@@ -77,9 +85,20 @@ export default function CityPage() {
   }, [setLocation]);
 
   const palette = useMemo(
-    () => (city ? paletteEmojis(consumes, city) : []),
+    () => (city ? supplyPalette(consumes, city) : []),
     [consumes, city],
   );
+  const selectedBuilding = selected ? buildingOf(selected) : undefined;
+
+  const raiseStructure = () => {
+    if (!city || !selectedBuilding) return;
+    const result = exchangeForBuilding(consumes, city, selectedBuilding.emoji);
+    if (!result.ok) { setNote(result.reason ?? 'Cannot raise that structure.'); return; }
+    const saved = replaceEmojiConsumes(result.consumes);
+    setConsumes(saved);
+    const left = availableTokens(saved[selectedBuilding.emoji] ?? 0, placedOf(city, selectedBuilding.emoji));
+    setNote(`Raised ${selectedBuilding.emoji} ${selectedBuilding.name}. ${left} token${left === 1 ? '' : 's'} ready to place.`);
+  };
 
   const onLot = (index: number) => {
     if (!city) return;
@@ -101,7 +120,7 @@ export default function CityPage() {
   };
 
   const placed = city ? placedCount(city) : 0;
-  const cap = citizenCapacity(placed);
+  const cap = city ? citizenCapacityOf(city) : 0;
   const citizens = city?.citizens.length ?? 0;
   const tokens = city ? totalAvailableTokens(consumes, city) : 0;
   const district = city ? dominantDistrict(city) : null;
@@ -154,7 +173,7 @@ export default function CityPage() {
 
       <p className="text-[11px] text-muted-foreground leading-snug min-h-8" data-testid="city-note">{note}</p>
 
-      <div className="flex gap-1.5 overflow-x-auto pb-1" data-testid="city-palette" aria-label="Emoji palette">
+      <div className="flex gap-1.5 overflow-x-auto pb-1" data-testid="city-palette" aria-label="Supply palette">
         {palette.length === 0 && (
           <p className="text-xs text-muted-foreground">Consume emoji on a descent to earn tokens.</p>
         )}
@@ -175,6 +194,44 @@ export default function CityPage() {
             </button>
           );
         })}
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Structures</p>
+        <div className="flex gap-1.5 overflow-x-auto pb-1" data-testid="city-structures" aria-label="Structure palette">
+          {BUILDINGS.map(building => {
+            const left = availableTokens(consumes[building.emoji] ?? 0, city ? placedOf(city, building.emoji) : 0);
+            const on = selected === building.emoji;
+            return (
+              <button
+                key={building.emoji}
+                type="button"
+                data-testid={`structure-${building.emoji}`}
+                aria-pressed={on}
+                title={`${building.name} · ${buildingDistrictName(building)} · counts as ${building.housing}`}
+                onClick={() => {
+                  setSelected(building.emoji);
+                  setNote(`${building.name}. ${left} token${left === 1 ? '' : 's'}. Counts as ${building.housing}. Raise costs ${BUILDING_EXCHANGE_COST} spare tokens.`);
+                }}
+                className={`shrink-0 min-h-11 min-w-11 rounded-lg border text-xl leading-none ${on ? 'border-primary bg-primary/15' : 'border-border bg-card'} ${left <= 0 ? 'opacity-60' : ''}`}
+              >
+                <span className="block">{building.emoji}</span>
+                <span className="block text-[10px] font-bold tabular-nums">{left}</span>
+              </button>
+            );
+          })}
+        </div>
+        {selectedBuilding && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full min-h-11"
+            data-testid="raise-structure"
+            onClick={raiseStructure}
+          >
+            Raise {selectedBuilding.emoji} · {BUILDING_EXCHANGE_COST} tokens
+          </Button>
+        )}
       </div>
 
       <div className="overflow-auto">

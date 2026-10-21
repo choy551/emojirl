@@ -1,4 +1,5 @@
 import type { EmojiItem } from './types';
+import { structureRarity } from './cityBuildings';
 import {
   ACTIVE_DROPS,
   AMMO_DROP,
@@ -241,7 +242,11 @@ export function dropEntryById(itemId: string): DropEntry | undefined {
 }
 
 export function rarityOfItem(item: DropIdentity): DropRarity | undefined {
-  if (item.itemId) return dropEntryById(item.itemId)?.rarity;
+  if (item.itemId) {
+    const structure = structureRarity(item.itemId);
+    if (structure) return structure;
+    return dropEntryById(item.itemId)?.rarity;
+  }
   const kind = dropKindOf(item);
   if (!kind) return undefined;
   return DROP_TABLE.find(e => e.emoji === item.emoji && e.kind === kind)?.rarity;
