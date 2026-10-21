@@ -97,10 +97,10 @@ function state(p: Player, floor = 1): GameState {
 }
 
 describe('identity reroll', () => {
-  it('prices 1500 on D:1 and 3000 from D:26', () => {
+  it('prices 750 on D:1 and 1500 from D:26', () => {
     expect(rerollCost(1)).toBe(REROLL_COST_MIN);
-    expect(rerollCost(1)).toBe(1500);
-    expect(rerollCost(26)).toBe(3000);
+    expect(rerollCost(1)).toBe(750);
+    expect(rerollCost(26)).toBe(1500);
     expect(rerollCost(40)).toBe(REROLL_COST_MAX);
   });
 
@@ -118,7 +118,7 @@ describe('identity reroll', () => {
     expect(result.player?.bank.some(item => item.id === 'banked')).toBe(true);
     expect(result.player?.bank.some(item => item.id === 'wand')).toBe(true);
     expect(result.player?.equipment.mainHand).toBeUndefined();
-    expect(result.player?.stats.gold).toBe(6000 - 1500);
+    expect(result.player?.stats.gold).toBe(6000 - 750);
     expect(result.player?.stats.maxHp).toBe(20);
     expect(result.player?.stats.evasion).toBe(20);
     expect(result.player?.identityRerolled).toBe(true);
@@ -137,12 +137,12 @@ describe('identity reroll', () => {
 });
 
 describe('vault insurance', () => {
-  it('scales from 1000 to 5000 with floor and slots', () => {
-    expect(insuranceCost(1, 1)).toBe(1000);
-    expect(insuranceCost(1, 2)).toBe(1700);
-    expect(insuranceCost(1, 3)).toBe(2400);
-    expect(insuranceCost(26, 1)).toBe(2200);
-    expect(insuranceCost(26, 3)).toBe(5000);
+  it('scales from 500 to 2500 with floor and slots', () => {
+    expect(insuranceCost(1, 1)).toBe(500);
+    expect(insuranceCost(1, 2)).toBe(850);
+    expect(insuranceCost(1, 3)).toBe(1200);
+    expect(insuranceCost(26, 1)).toBe(1100);
+    expect(insuranceCost(26, 3)).toBe(2500);
     expect(insuranceCost(40, 3)).toBe(INSURE_BILL_CAP);
   });
 
@@ -155,7 +155,7 @@ describe('vault insurance', () => {
 
     const bought = executeInsurance(hero, 26, ['a', 'b', 'c']);
     expect(bought.ok).toBe(true);
-    expect(bought.player?.stats.gold).toBe(6000 - 5000);
+    expect(bought.player?.stats.gold).toBe(6000 - 2500);
     expect(bought.player?.insurance?.items.map(item => item.id)).toEqual(['a', 'b', 'c']);
     hero.inventory[0].name = 'changed';
     expect(bought.player?.insurance?.items[0].name).toBe('a');
@@ -177,16 +177,16 @@ describe('round for the house', () => {
     expect(RESTAURANT_COOKED_SELL_LIMIT).toBe(5);
   });
 
-  it('charges 500–2000 and resets the kitchen sell count without raising the cap', () => {
-    expect(roundCost(1)).toBe(500);
-    expect(roundCost(26)).toBe(2000);
-    expect(roundCost(40)).toBe(2000);
+  it('charges 250–1000 and resets the kitchen sell count without raising the cap', () => {
+    expect(roundCost(1)).toBe(250);
+    expect(roundCost(26)).toBe(1000);
+    expect(roundCost(40)).toBe(1000);
     expect(roundPlan(1)).toEqual({ floor: 16, turns: 8 });
     expect(roundPlan(26)).toEqual({ floor: 24, turns: 11 });
     const bought = executeHouseRound(player(), 1);
     expect(bought.ok).toBe(true);
     expect(bought.soldCount).toBe(0);
-    expect(bought.player?.stats.gold).toBe(5500);
+    expect(bought.player?.stats.gold).toBe(5750);
     expect(bought.player?.houseRound).toEqual({ floor: 16, turnsLeft: 8 });
     expect(RESTAURANT_COOKED_SELL_LIMIT).toBe(5);
 
@@ -227,7 +227,7 @@ describe('mirror shrine and screens', () => {
       <IdentityRerollModal gameState={gs} setGameState={() => {}} addLog={() => {}} onClose={() => {}} />,
     );
     expect(reroll).toContain('Identity Reroll');
-    expect(reroll).toContain('1500g');
+    expect(reroll).toContain('750g');
     expect(reroll).toContain('Ninja');
     expect(reroll).toContain('min-h-11');
     expect(reroll).toContain('disabled');
@@ -252,15 +252,16 @@ describe('mirror shrine and screens', () => {
       />,
     );
     expect(restaurant).toContain('Round for the House');
-    expect(restaurant).toContain('500g');
+    expect(restaurant).toContain('250g');
     expect(restaurant).toContain('stays 5');
   });
 
   it('documents the sinks in the rules blurb used by RTFM', () => {
     const text = goldSinkRulesBlurb();
+    expect(text).toContain('750');
     expect(text).toContain('1500');
-    expect(text).toContain('3000');
-    expect(text).toContain('5000');
+    expect(text).toContain('2500');
+    expect(text).toContain('100 gold on D:1');
     expect(text).toContain('cap stays 5');
     const rtfm = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
     expect(rtfm).toContain('goldSinkRulesBlurb');

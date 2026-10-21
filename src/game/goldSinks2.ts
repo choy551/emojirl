@@ -3,10 +3,10 @@ import { getEmojiPowerByEmoji } from './emojis';
 import { chebyshev } from './geo';
 import { addToPlayerBag } from './inventory';
 
-/** Ante for a floor contract. D:1 is the floor. D:26 reaches the cap. */
-export const BOUNTY_ANTE_BASE = 100;
-export const BOUNTY_ANTE_PER_FLOOR = 32;
-export const BOUNTY_ANTE_CAP = 900;
+/** Ante for a floor contract. D:1 is the floor. D:26 reaches the cap. Halved from 100 / +32 / 900. Rewards stay emoji souls. */
+export const BOUNTY_ANTE_BASE = 50;
+export const BOUNTY_ANTE_PER_FLOOR = 16;
+export const BOUNTY_ANTE_CAP = 450;
 export const BOUNTY_MIN_FLOOR = 1;
 export const BOUNTY_CHANCE = 0.30;
 
@@ -27,9 +27,10 @@ export const RARE_CHANCE_CAP = 0.70;
 export const VANITY_MIN_FLOOR = 16;
 export const VANITY_CHANCE = 0.40;
 
-export const AUCTION_GOLD_BASE = 1000;
-export const AUCTION_GOLD_PER_FLOOR = 120;
-export const AUCTION_GOLD_CAP = 4000;
+/** Gold bid, win or lose. Halved from 1000 / +120 / 4000. HP sweetener percents are unchanged. */
+export const AUCTION_GOLD_BASE = 500;
+export const AUCTION_GOLD_PER_FLOOR = 60;
+export const AUCTION_GOLD_CAP = 2000;
 export const AUCTION_MIN_FLOOR = 1;
 export const AUCTION_CHANCE = 0.22;
 
@@ -60,15 +61,15 @@ export const RARE_REWARDS: BountyReward[] = [
 ];
 
 export const VANITY_TRAILS: { id: VanityTrailId; emoji: string; name: string; price: number }[] = [
-  { id: 'glitter', emoji: '✨', name: 'Glitter', price: 5000 },
-  { id: 'petals', emoji: '🌸', name: 'Petals', price: 7500 },
-  { id: 'prisms', emoji: '💠', name: 'Prisms', price: 10000 },
+  { id: 'glitter', emoji: '✨', name: 'Glitter', price: 2500 },
+  { id: 'petals', emoji: '🌸', name: 'Petals', price: 3750 },
+  { id: 'prisms', emoji: '💠', name: 'Prisms', price: 5000 },
 ];
 
 export const VANITY_TITLES: { id: VanityTitleId; name: string; price: number }[] = [
-  { id: 'gaudy', name: 'the Gaudy', price: 5000 },
-  { id: 'pilgrim', name: 'Pressure Pilgrim', price: 8000 },
-  { id: 'receipt', name: 'the Unbroken Receipt', price: 12000 },
+  { id: 'gaudy', name: 'the Gaudy', price: 2500 },
+  { id: 'pilgrim', name: 'Pressure Pilgrim', price: 4000 },
+  { id: 'receipt', name: 'the Unbroken Receipt', price: 6000 },
 ];
 
 const TRAIL_IDS = new Set<string>(VANITY_TRAILS.map(t => t.id));

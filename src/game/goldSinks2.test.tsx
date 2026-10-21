@@ -88,11 +88,11 @@ function state(over: Partial<GameState> = {}): GameState {
 }
 
 describe('bounty board', () => {
-  it('prices the ante from 100 to 900', () => {
-    expect(bountyAnte(1)).toBe(100);
-    expect(bountyAnte(16)).toBe(580);
-    expect(bountyAnte(26)).toBe(900);
-    expect(bountyAnte(40)).toBe(900);
+  it('prices the ante from 50 to 450', () => {
+    expect(bountyAnte(1)).toBe(50);
+    expect(bountyAnte(16)).toBe(290);
+    expect(bountyAnte(26)).toBe(450);
+    expect(bountyAnte(40)).toBe(450);
     expect(killNeedForFloor(1)).toBe(2);
     expect(killNeedForFloor(25)).toBe(5);
     expect(surviveTurnsForFloor(1)).toBe(6);
@@ -107,11 +107,11 @@ describe('bounty board', () => {
     expect(offer.targetEmoji).toBe('🧟');
     expect(offer.need).toBe(2);
     expect(offer.reward).toEqual(RARE_REWARDS[0]);
-    expect(offer.ante).toBe(100);
+    expect(offer.ante).toBe(50);
 
     const accepted = acceptBounty({ ...state(), bounty: offer });
     expect(accepted.ok).toBe(true);
-    expect(accepted.state?.player.stats.gold).toBe(7900);
+    expect(accepted.state?.player.stats.gold).toBe(7950);
     expect(accepted.state?.bounty?.status).toBe('active');
 
     const hunting = accepted.state!;
@@ -160,10 +160,10 @@ describe('bounty board', () => {
     const expired = expireBountyOnDescend(accepted);
     expect(expired.log).toContain('ante stays spent');
     expect(expired.state.bounty).toBeUndefined();
-    expect(expired.state.player.stats.gold).toBe(7900);
+    expect(expired.state.player.stats.gold).toBe(7950);
     const next = descendFloor(accepted, () => {});
     expect(next.bounty).toBeUndefined();
-    expect(next.player.stats.gold).toBe(7900);
+    expect(next.player.stats.gold).toBe(7950);
     expect(next.currentFloor).toBe(2);
   });
 });
@@ -177,7 +177,7 @@ describe('vanity flex', () => {
     expect(shouldPlaceVanity(16, 0.4)).toBe(false);
     const bought = buyVanity(player({ stats: { ...player().stats, gold: 20000 } }), 'title', 'gaudy');
     expect(bought.ok).toBe(true);
-    expect(bought.player?.stats.gold).toBe(15000);
+    expect(bought.player?.stats.gold).toBe(17500);
     expect(bought.player?.stats.attack).toBe(6);
     expect(bought.player?.stats.defense).toBe(1);
     expect(bought.player?.stats.hp).toBe(20);
@@ -188,19 +188,19 @@ describe('vanity flex', () => {
     const again = buyVanity(bought.player!, 'title', 'gaudy');
     expect(again.ok).toBe(false);
     const trail = buyVanity(bought.player!, 'trail', 'prisms');
-    expect(trail.player?.stats.gold).toBe(5000);
+    expect(trail.player?.stats.gold).toBe(12500);
     expect(trail.player?.vanity).toEqual({ title: 'gaudy', trail: 'prisms' });
     expect(trail.player?.stats.attack).toBe(6);
-    expect(buyVanity(player({ stats: { ...player().stats, gold: 4999 } }), 'trail', 'glitter').ok).toBe(false);
+    expect(buyVanity(player({ stats: { ...player().stats, gold: 2499 } }), 'trail', 'glitter').ok).toBe(false);
   });
 });
 
 describe('blood auction', () => {
   it('spends gold on a failed bid and HP only when the rare lot is won', () => {
-    expect(auctionGold(1)).toBe(1000);
-    expect(auctionGold(16)).toBe(2800);
-    expect(auctionGold(26)).toBe(4000);
-    expect(auctionGold(40)).toBe(4000);
+    expect(auctionGold(1)).toBe(500);
+    expect(auctionGold(16)).toBe(1400);
+    expect(auctionGold(26)).toBe(2000);
+    expect(auctionGold(40)).toBe(2000);
     expect(shouldPlaceAuction(1, 0.21)).toBe(true);
     expect(shouldPlaceBounty(1, 0.29)).toBe(true);
     expect(auctionHpCost(10, 30)).toBe(3);
@@ -210,13 +210,13 @@ describe('blood auction', () => {
     const lot = RARE_REWARDS[0];
     const failed = executeBloodAuction(player(), 1, 30, lot, () => 0.99);
     expect(failed.won).toBe(false);
-    expect(failed.player?.stats.gold).toBe(7000);
+    expect(failed.player?.stats.gold).toBe(7500);
     expect(failed.player?.stats.hp).toBe(20);
     expect(failed.player?.inventory).toHaveLength(0);
 
     const won = executeBloodAuction(player(), 1, 10, lot, () => 0);
     expect(won.won).toBe(true);
-    expect(won.player?.stats.gold).toBe(7000);
+    expect(won.player?.stats.gold).toBe(7500);
     expect(won.player?.stats.hp).toBe(18);
     expect(won.player?.inventory.map(item => item.name)).toContain('Crown');
     expect(won.player?.stats.attack).toBe(6);
@@ -245,14 +245,14 @@ describe('boards on the map', () => {
     );
     expect(board).toContain('Bounty board');
     expect(board).toContain('Crown');
-    expect(board).toContain('Accept for 100g');
+    expect(board).toContain('Accept for 50g');
     expect(board).toContain('min-h-11');
 
     const flex = renderToStaticMarkup(
       <VanityFlexModal gameState={state()} setGameState={() => {}} addLog={() => {}} onClose={() => {}} />,
     );
     expect(flex).toContain('Glitter');
-    expect(flex).toContain('5000g');
+    expect(flex).toContain('2500g');
     expect(flex).toContain('the Gaudy');
     expect(flex).toContain('Zero attack');
 
@@ -260,7 +260,7 @@ describe('boards on the map', () => {
       <BloodAuctionModal gameState={state()} setGameState={() => {}} addLog={() => {}} onClose={() => {}} lot={RARE_REWARDS[2]} />,
     );
     expect(auction).toContain('Dagger');
-    expect(auction).toContain('Bid 1000g');
+    expect(auction).toContain('Bid 500g');
     expect(auction).toContain('only if you win');
     expect(auction).toContain('min-h-11');
 

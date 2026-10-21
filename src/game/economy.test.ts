@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { moneyBagSellValue, getItemSellValue, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, chefLessonPrice, chefLessonPriceLabel, chefLessonTooltip, cookedHealBonus, cookedSellBonus, MAX_CHEF_LESSONS, restaurantCookedSellPrice, cookedEatHeal, foodHealLabel, foodHealDescription, slotShrineCost, slotTierFromRoll, rollSlotTier, resolveSlotPrize, grantSlotPrizeItems } from './economy';
+import { readFileSync } from 'node:fs';
+import { moneyBagSellValue, getItemSellValue, getItemBuyPrice, MERCHANT_BUY_PRICE_TEXT, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, pickBestDishesToSell, restaurantCookedPrice, CHEF_LESSON_COST_TEXT, chefLessonCost, chefLessonPrice, chefLessonPriceLabel, chefLessonTooltip, cookedHealBonus, cookedSellBonus, MAX_CHEF_LESSONS, restaurantCookedSellPrice, cookedEatHeal, foodHealLabel, foodHealDescription, slotShrineCost, slotTierFromRoll, rollSlotTier, resolveSlotPrize, grantSlotPrizeItems } from './economy';
 import { MONEY_BAG } from './emojis';
 import type { EmojiItem } from './types';
 
@@ -103,11 +104,13 @@ describe('pickBestDishesToSell', () => {
 
 describe("Chef's Lesson", () => {
   it('uses locked floor costs', () => {
-    expect(chefLessonCost(1)).toBe(1000);
-    expect(chefLessonCost(10)).toBe(3500);
-    expect(chefLessonCost(13)).toBe(4550);
-    expect(chefLessonCost(27)).toBe(9450);
-    expect(chefLessonCost(32)).toBe(11200);
+    expect(chefLessonCost(1)).toBe(500);
+    expect(chefLessonCost(7)).toBe(1250);
+    expect(chefLessonCost(8)).toBe(1400);
+    expect(chefLessonCost(10)).toBe(1750);
+    expect(chefLessonCost(13)).toBe(2275);
+    expect(chefLessonCost(27)).toBe(4725);
+    expect(chefLessonCost(32)).toBe(5600);
     expect(MAX_CHEF_LESSONS).toBe(5);
   });
 
@@ -117,8 +120,8 @@ describe("Chef's Lesson", () => {
     expect(chefLessonPriceLabel(0, 13)).toBe('Free');
     expect(chefLessonPrice(1, 1)).toBe(chefLessonCost(1));
     expect(chefLessonPrice(1, 27)).toBe(chefLessonCost(27));
-    expect(chefLessonPriceLabel(1, 1)).toBe('1000g');
-    expect(chefLessonPrice(4, 13)).toBe(4550);
+    expect(chefLessonPriceLabel(1, 1)).toBe('500g');
+    expect(chefLessonPrice(4, 13)).toBe(2275);
     expect(chefLessonPriceLabel(5, 1)).toBe('');
   });
 
@@ -126,6 +129,11 @@ describe("Chef's Lesson", () => {
     const fresh = chefLessonTooltip(0, 100);
     expect(fresh.summary).toMatch(/cooked dish/i);
     expect(fresh.summary).toMatch(/first lesson is free/i);
+    expect(fresh.summary).toContain(CHEF_LESSON_COST_TEXT);
+    expect(CHEF_LESSON_COST_TEXT).toContain('500 + (floor-1)×125');
+    expect(CHEF_LESSON_COST_TEXT).toContain('floor×175');
+    const manual = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
+    expect(manual).toContain('CHEF_LESSON_COST_TEXT');
     expect(fresh.current.lessons).toBe(0);
     expect(fresh.current.eatBonusHp).toBe(0);
     expect(fresh.current.sellFlatGold).toBe(0);
@@ -190,14 +198,33 @@ describe("Chef's Lesson", () => {
   });
 });
 
+describe('merchant buy price', () => {
+  it('halves the whole buy price and leaves the sell value', () => {
+    const gear: EmojiItem = {
+      id: 'eq', emoji: '🗡️', name: 'Dagger', description: 'eq', consumed: false, isEquipment: true,
+    };
+    expect(getItemSellValue(gear)).toBe(15);
+    expect(getItemBuyPrice(gear, 1)).toBe(15);
+    expect(getItemBuyPrice(gear, 10)).toBe(17);
+    const apple: EmojiItem = {
+      id: 'apple', emoji: '🍎', name: 'Apple', description: 'heal', consumed: false, healAmount: 4,
+    };
+    expect(getItemSellValue(apple)).toBe(4);
+    expect(getItemBuyPrice(apple, 1)).toBe(4);
+    const manual = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
+    expect(manual).toContain('MERCHANT_BUY_PRICE_TEXT');
+    expect(MERCHANT_BUY_PRICE_TEXT).toContain('half of (sell value × 2');
+  });
+});
+
 describe('Slot Shrine', () => {
   it('uses the locked floor cost curve', () => {
-    expect(slotShrineCost(1)).toBe(200);
-    expect(slotShrineCost(10)).toBe(800);
-    expect(slotShrineCost(16)).toBe(2480);
-    expect(slotShrineCost(20)).toBe(3600);
-    expect(slotShrineCost(25)).toBe(5000);
-    expect(slotShrineCost(32)).toBe(5000);
+    expect(slotShrineCost(1)).toBe(100);
+    expect(slotShrineCost(10)).toBe(400);
+    expect(slotShrineCost(16)).toBe(1240);
+    expect(slotShrineCost(20)).toBe(1800);
+    expect(slotShrineCost(25)).toBe(2500);
+    expect(slotShrineCost(32)).toBe(2500);
   });
 
   it('maps 1..100 onto the locked weights', () => {
@@ -244,9 +271,11 @@ describe('Slot Shrine', () => {
     const rare = resolveSlotPrize('rare', 6, 800, '🧙', () => 0);
     expect(rare.items[0].isEquipment).toBe(true);
 
-    const jackpot = resolveSlotPrize('godtier', 10, 800, '🧙', () => 0.9);
+    const spin = slotShrineCost(10);
+    const jackpot = resolveSlotPrize('godtier', 10, spin, '🧙', () => 0.9);
     expect(jackpot.items).toHaveLength(0);
     expect(jackpot.goldGain).toBe(Math.round(800 * 2.5));
+    expect(jackpot.goldGain).toBe(Math.round(spin * 5));
     expect(jackpot.label).toContain('JACKPOT');
 
     const pair = resolveSlotPrize('godtier', 10, 800, '🧙', () => 0.5);

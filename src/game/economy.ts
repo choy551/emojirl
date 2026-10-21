@@ -69,10 +69,19 @@ export function restaurantCookedPrice(i: EmojiItem, lessons = 0): number {
 
 export const MAX_CHEF_LESSONS = 5;
 
+/**
+ * Paid Chef's Lesson price.
+ * Was max(1000 + (floor-1)×250, floor×350). Both terms are halved.
+ * From D:8 the floor×175 term is the higher one.
+ */
 export function chefLessonCost(floor: number): number {
   const f = Math.max(1, floor);
-  return Math.max(1000 + (f - 1) * 250, f * 350);
+  return Math.max(500 + (f - 1) * 125, f * 175);
 }
+
+/** Shown on the lesson tooltip and in the manual. The first lesson stays free. */
+export const CHEF_LESSON_COST_TEXT =
+  'The first lesson is free. Later lessons cost the higher of 500 + (floor-1)×125 and floor×175 gold.';
 
 /** Gold charged for the next lesson. The first lesson of a run is free. */
 export function chefLessonPrice(lessonsOwned: number, floor: number): number {
@@ -120,7 +129,7 @@ export function chefLessonTooltip(lessons: number, maxHp: number): ChefLessonToo
   const current = chefLessonBonus(lessons, maxHp);
   const next = current.lessons >= MAX_CHEF_LESSONS ? null : chefLessonBonus(current.lessons + 1, maxHp);
   return {
-    summary: "A Chef's Lesson improves every cooked dish for the rest of this run. Cooked food heals more when eaten, and cooked dishes sell for more. Raw food is unchanged. The first lesson is free; later lessons cost gold. Up to 5 lessons.",
+    summary: `A Chef's Lesson improves every cooked dish for the rest of this run. Cooked food heals more when eaten, and cooked dishes sell for more. Raw food is unchanged. ${CHEF_LESSON_COST_TEXT} Up to 5 lessons.`,
     current,
     next,
     nextEatDelta: next ? next.eatBonusHp - current.eatBonusHp : 0,
@@ -198,16 +207,25 @@ export function pickBestDishesToSell(items: EmojiItem[], soldCount: number): Emo
   return cookedOwned.slice(0, sellCount);
 }
 
+/**
+ * Player buy price at shops, restaurants, and ammo caches.
+ * Was sell value × 2 + ⌊floor / 2⌋. The whole price is halved, rounded down.
+ * Sell value is unchanged.
+ */
 export function getItemBuyPrice(item: EmojiItem, floor: number): number {
-  return getItemSellValue(item) * 2 + Math.floor(floor / 2);
+  return Math.floor((getItemSellValue(item) * 2 + Math.floor(floor / 2)) / 2);
 }
 
-/** Slot Shrine spin cost. D1=200, D10=800, D25+=5000. */
+/** Shown in the manual. Shop buttons use getItemBuyPrice directly. */
+export const MERCHANT_BUY_PRICE_TEXT =
+  'Buy price is half of (sell value × 2 + ⌊floor ÷ 2⌋), rounded down. Sell prices are unchanged.';
+
+/** Slot Shrine spin cost. Was D1=200, D10=800, D25+=5000. Both ramps and the cap are halved. */
 export function slotShrineCost(floor: number): number {
   const f = Math.max(1, floor);
-  if (f <= 10) return Math.round(200 + (800 - 200) * (f - 1) / 9);
-  if (f >= 25) return 5000;
-  return Math.round(800 + (5000 - 800) * (f - 10) / 15);
+  if (f <= 10) return Math.round(100 + (400 - 100) * (f - 1) / 9);
+  if (f >= 25) return 2500;
+  return Math.round(400 + (2500 - 400) * (f - 10) / 15);
 }
 
 export type SlotTier = 'junk' | 'common' | 'uncommon' | 'rare' | 'godtier';
@@ -294,7 +312,8 @@ export function resolveSlotPrize(
       label: `Godtier ${face} — ${power.emoji} ${power.name} and ${active.emoji} ${active.name}`,
     };
   }
-  const goldGain = Math.round(cost * 2.5);
+  // Jackpot gold stays 2.5× the pre-halve spin cost. `cost` is the halved price, so ×5.
+  const goldGain = Math.round(cost * 5);
   return { items: [], goldGain, label: `Godtier ${face} — JACKPOT 🪙${goldGain}` };
 }
 
