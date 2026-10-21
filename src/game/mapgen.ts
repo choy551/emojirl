@@ -1,6 +1,7 @@
 import { MapGrid, Position, RoomTheme } from './types';
 import { placePrairie, prairieAppearsOnFloor } from './farmer';
 import { mapHasCampfire, shouldPlaceLoneCampfire } from './foodSinks';
+import { shouldPlaceMirror } from './goldSinks';
 import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, coolLavaWaterContacts } from './lava';
 import { BED_EMOJI, BED_MAX_USES } from './tiles';
 import { FINALE_FLOOR } from './finaleConstants';
@@ -364,6 +365,23 @@ function placeCampfire(map: MapGrid, room: Room) {
   placeLoneCampfire(map, room);
 }
 
+/** A rare identity mirror. Only paints an open floor tile. */
+export function placeMirror(map: MapGrid, room: Room): boolean {
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  const offsets: [number, number][] = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [0, 2]];
+  for (const [dx, dy] of offsets) {
+    const ax = cx + dx;
+    const ay = cy + dy;
+    if (ay < room.y || ay >= room.y + room.h || ax < room.x || ax >= room.x + room.w) continue;
+    const tile = map[ay]?.[ax];
+    if (!tile || tile.type !== 'floor') continue;
+    map[ay][ax] = { type: 'mirror', emoji: '🪞', seen: false, visible: false };
+    return true;
+  }
+  return false;
+}
+
 function placeShrine(map: MapGrid, room: Room) {
   const cx = room.x + Math.floor(room.w / 2);
   const cy = room.y + Math.floor(room.h / 2);
@@ -668,7 +686,7 @@ function ensureStairsReachable(map: MapGrid, start: Position, stairs: Position):
     'floor', 'stairs', 'boss-floor', 'grass',
     'door-open', 'door-closed',
     'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'slot-shrine', 'bed',
-    'campfire', 'obsidian',
+    'campfire', 'obsidian', 'mirror',
   ]);
   if (reach(map, start, stairs, DRY)) return;
 
@@ -959,6 +977,13 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
     else if (room.theme === 'room-vault')     placeRoomVault(map, room);
     else if (room.theme === 'prairie')        placePrairie(map, room);
     // monster-den: no tile treatment — enemy packing is handled in spawning.ts
+  }
+
+  if (shouldPlaceMirror(floor, Math.random())) {
+    const mirrors = rooms.filter((room, index) =>
+      index > 0 && index < rooms.length - 1 && (room.theme === 'normal' || room.theme === 'shrine'),
+    );
+    if (mirrors.length > 0) placeMirror(map, mirrors[Math.floor(Math.random() * mirrors.length)]);
   }
 
   // Floors with no forest fire sometimes grow a lone campfire for banquets.

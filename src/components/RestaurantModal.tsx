@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
 import { getItemBuyPrice, getItemSellValue, addToPlayerBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonPrice, chefLessonPriceLabel, chefLessonTooltip, MAX_CHEF_LESSONS, cookedHealBonus, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG, playerSoftCap } from '../game/gameHelpers';
+import { RESTAURANT_COOKED_SELL_LIMIT } from '../game/economy';
+import { executeHouseRound, roundCost, roundPlan } from '../game/goldSinks';
 import { goldWithLuck } from '../game/softCap';
 import { canEquipItem } from './itemUtils';
 import { RarityLabel } from './RarityLabel';
@@ -368,6 +370,46 @@ export function RestaurantModal({
             );
           })()}
         </div>
+
+        {(() => {
+          const cost = roundCost(gameState.currentFloor);
+          const plan = roundPlan(gameState.currentFloor);
+          const canPay = gameState.player.stats.gold >= cost;
+          const buyRound = () => {
+            let message = '';
+            let ok = false;
+            setGameState(prev => {
+              if (!prev) return prev;
+              const result = executeHouseRound(prev.player, prev.currentFloor);
+              message = result.ok ? (result.log ?? 'Round bought.') : (result.reason ?? 'The house declines.');
+              if (!result.ok || !result.player) return prev;
+              ok = true;
+              return {
+                ...prev,
+                restaurantSoldCount: 0,
+                player: result.player,
+                logs: [{ id: `round-${prev.turn}`, text: message, turn: prev.turn }, ...prev.logs].slice(0, 24),
+              };
+            });
+            if (message) addLog(message);
+            if (ok) setRestaurantSoldCount(0);
+          };
+          return (
+            <div className="mt-4 pt-3 border-t border-border/40">
+              <button
+                type="button"
+                disabled={!canPay}
+                onClick={buyRound}
+                className="min-h-11 w-full rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 text-left text-xs font-bold text-amber-100 disabled:opacity-40"
+              >
+                🍻 Round for the House — {cost}g
+                <span className="block text-[10px] font-normal text-muted-foreground">
+                  Mood floor {plan.floor} for {plan.turns} turns. Reopens the kitchen. Sell cap stays {RESTAURANT_COOKED_SELL_LIMIT}.
+                </span>
+              </button>
+            </div>
+          );
+        })()}
 
         <CloseHintButton onClose={dismiss} />
       </div>

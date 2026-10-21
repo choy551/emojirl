@@ -118,6 +118,9 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     drinkBuff: rawPlayer.drinkBuff as Player['drinkBuff'],
     banquet: rawPlayer.banquet as Player['banquet'],
     shrineOffering: rawPlayer.shrineOffering as Player['shrineOffering'],
+    identityRerolled: rawPlayer.identityRerolled === true,
+    insurance: rawPlayer.insurance as Player['insurance'],
+    houseRound: rawPlayer.houseRound as Player['houseRound'],
   };
 
   // ── GameState ─────────────────────────────────────────────────────────────

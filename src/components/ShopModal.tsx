@@ -4,6 +4,7 @@ import { goldWithLuck } from '../game/softCap';
 import { soulHelpText } from '../game/emojis';
 import { isStackableBagPassive } from '../game/passives';
 import { canBuyAndUse } from '../game/shopUse';
+import { insuranceCost, rerollCost } from '../game/goldSinks';
 import { drinkEffectForClass } from '../game/drinks';
 import { canEquipItem } from './itemUtils';
 import { RarityLabel } from './RarityLabel';
@@ -19,9 +20,11 @@ interface ShopModalProps {
   addLog: (text: string) => void;
   onBuyAndUse: (item: EmojiItem) => boolean;
   onClose: () => void;
+  onReroll?: () => void;
+  onInsure?: () => void;
 }
 
-export function ShopModal({ gameState, setGameState, shopItems, setShopItems, addLog, onBuyAndUse, onClose }: ShopModalProps) {
+export function ShopModal({ gameState, setGameState, shopItems, setShopItems, addLog, onBuyAndUse, onClose, onReroll, onInsure }: ShopModalProps) {
   const dismiss = useDismissGuard(onClose);
   const hand = useMobileHand();
   const sellLuck = playerSoftCap(gameState.player).raw.luck;
@@ -303,6 +306,34 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
             </div>
           );
         })()}
+
+        {(onReroll || onInsure) && (
+          <div className="mt-4 pt-3 border-t border-border/40">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Gold services</div>
+            <div className="flex flex-col gap-1.5">
+              {onReroll && (
+                <button
+                  type="button"
+                  onClick={onReroll}
+                  className="min-h-11 w-full rounded-lg border border-sky-400/40 bg-sky-500/10 px-3 text-left text-xs font-bold text-sky-100"
+                >
+                  🪞 Identity Reroll — {rerollCost(gameState.currentFloor)}g
+                  <span className="block text-[10px] font-normal text-muted-foreground">Once per run. Keeps bag, hotbar, and bank.</span>
+                </button>
+              )}
+              {onInsure && (
+                <button
+                  type="button"
+                  onClick={onInsure}
+                  className="min-h-11 w-full rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 text-left text-xs font-bold text-emerald-100"
+                >
+                  🏦 Insure hotbar — from {insuranceCost(gameState.currentFloor, 1)}g
+                  <span className="block text-[10px] font-normal text-muted-foreground">1–3 emojis. They return once if you die.</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         <CloseHintButton onClose={dismiss} />
       </div>

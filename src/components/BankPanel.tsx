@@ -23,6 +23,7 @@ interface BankPanelProps {
   chefLessonCount?: number;
   onBanishGhost?: (slot: number) => void;
   onManifestGhost?: (emoji: string) => void;
+  onInsure?: () => void;
 }
 
 export function BankPanel({
@@ -37,6 +38,7 @@ export function BankPanel({
   chefLessonCount = 0,
   onBanishGhost,
   onManifestGhost,
+  onInsure,
 }: BankPanelProps) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -121,6 +123,17 @@ export function BankPanel({
             ))}
           </div>
         </div>
+      )}
+
+      {onInsure && (
+        <button
+          type="button"
+          onClick={onInsure}
+          className="min-h-11 w-full mb-3 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 text-left text-xs font-bold text-emerald-100"
+        >
+          🏦 Insure hotbar
+          <span className="block text-[10px] font-normal text-muted-foreground">Pay the vault tax on 1–3 hotbar emojis.</span>
+        </button>
       )}
 
       <div className="text-xs text-muted-foreground/70 mb-2 font-medium">

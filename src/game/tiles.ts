@@ -3,7 +3,7 @@ export const BED_EMOJI = '🛏️';
 export const BED_MAX_USES = 2;
 
 /** Crops (🌱🪴🌽🌾) are omitted on purpose: they block movement, not sight or shots. */
-export const PLAYER_PASSABLE_TILES = new Set(['floor', 'stairs', 'door-open', 'door-closed', 'grass', 'shrine', 'shrine-used', 'slot-shrine', 'safe-floor', 'shop-item', 'restaurant', 'boss-floor', 'campfire', 'bed', 'obsidian']);
+export const PLAYER_PASSABLE_TILES = new Set(['floor', 'stairs', 'door-open', 'door-closed', 'grass', 'shrine', 'shrine-used', 'slot-shrine', 'safe-floor', 'shop-item', 'restaurant', 'boss-floor', 'campfire', 'bed', 'obsidian', 'mirror']);
 export const ENEMY_PASSABLE_TILES = new Set(['floor', 'stairs', 'door-open', 'grass', 'boss-floor', 'obsidian']);
 /** Humanoids: same as enemies + closed doors (open-on-enter). */
 export const HUMANOID_ENEMY_PASSABLE_TILES = new Set([...ENEMY_PASSABLE_TILES, 'door-closed']);
