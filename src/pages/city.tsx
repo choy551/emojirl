@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getEnemyKillCounts } from '../game/discoveries';
 import {
   BUILDING_EXCHANGE_COST,
@@ -10,7 +11,7 @@ import {
   buildingOf,
 } from '../game/cityBuildings';
 import {
-  CITY_COLS,
+  CITY_EXPAND_COST,
   CITY_TICK_MS,
   availableTokens,
   awaySummary,
@@ -21,6 +22,8 @@ import {
   districtStandings,
   emojiCityRulesBlurb,
   exchangeForBuilding,
+  expandBlockReason,
+  expandCity,
   normalizeCity,
   placeAt,
   placedCount,
@@ -29,6 +32,7 @@ import {
   supplyPalette,
   tickCitizens,
   totalAvailableTokens,
+  type CityEdge,
   type CityState,
 } from '../game/emojiCity';
 import { loadMeta, replaceEmojiConsumes, saveCity, settleCityCatchUp } from '../game/meta';
@@ -100,6 +104,17 @@ export default function CityPage() {
     setConsumes(saved);
     const left = availableTokens(saved[selectedBuilding.emoji] ?? 0, placedOf(city, selectedBuilding.emoji));
     setNote(`Raised ${selectedBuilding.emoji} ${selectedBuilding.name}. ${left} token${left === 1 ? '' : 's'} ready to place.`);
+  };
+
+  const onExpand = (edge: CityEdge) => {
+    if (!city) return;
+    const result = expandCity(city, edge, consumes);
+    if (!result.ok) { setNote(result.reason ?? 'Cannot expand.'); return; }
+    const saved = replaceEmojiConsumes(result.consumes);
+    setConsumes(saved);
+    setCity(result.city);
+    saveCity(result.city);
+    setNote(`Expanded ${edge}. The grid is ${result.city.cols}×${result.city.rows}.`);
   };
 
   const onLot = (index: number) => {
@@ -258,14 +273,21 @@ export default function CityPage() {
         )}
       </div>
 
-      <div className="overflow-auto">
+      {city && (
+        <div className="flex w-full flex-col gap-1" data-testid="city-expand">
+          <div className="flex justify-center">
+            <ExpandEdge edge="north" city={city} tokens={tokens} onExpand={onExpand} />
+          </div>
+          <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1">
+            <ExpandEdge edge="west" city={city} tokens={tokens} onExpand={onExpand} />
+            <div className="min-w-0 overflow-x-auto">
         <div
           data-testid="city-grid"
-          className="grid gap-1"
-          style={{ gridTemplateColumns: `repeat(${CITY_COLS}, minmax(2.75rem, 1fr))` }}
+          className="grid w-max gap-1"
+          style={{ gridTemplateColumns: `repeat(${city.cols}, minmax(2.75rem, 1fr))` }}
         >
-          {city?.tiles.map((cell, index) => {
-            const here = city.citizens.filter(c => c.y * CITY_COLS + c.x === index);
+          {city.tiles.map((cell, index) => {
+            const here = city.citizens.filter(c => c.y * city.cols + c.x === index);
             return (
               <button
                 key={index}
@@ -289,9 +311,60 @@ export default function CityPage() {
             );
           })}
         </div>
-      </div>
+            </div>
+            <ExpandEdge edge="east" city={city} tokens={tokens} onExpand={onExpand} />
+          </div>
+          <div className="flex justify-center">
+            <ExpandEdge edge="south" city={city} tokens={tokens} onExpand={onExpand} />
+          </div>
+        </div>
+      )}
 
       <p className="text-[11px] text-muted-foreground leading-relaxed pb-4">{emojiCityRulesBlurb()}</p>
     </div>
+  );
+}
+
+const EDGE_ICON = {
+  north: ChevronUp,
+  south: ChevronDown,
+  east: ChevronRight,
+  west: ChevronLeft,
+} as const;
+
+function ExpandEdge({
+  edge,
+  city,
+  tokens,
+  onExpand,
+}: {
+  edge: CityEdge;
+  city: CityState;
+  tokens: number;
+  onExpand: (edge: CityEdge) => void;
+}) {
+  const blocked = expandBlockReason(city, edge, tokens);
+  const hint = blocked ?? `Expand ${edge} for ${CITY_EXPAND_COST} tokens`;
+  const Icon = EDGE_ICON[edge];
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span title={hint} className="inline-flex shrink-0" data-testid={`expand-${edge}-wrap`}>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 min-w-11 px-2"
+            disabled={blocked !== null}
+            data-testid={`expand-${edge}`}
+            aria-label={hint}
+            onClick={() => onExpand(edge)}
+          >
+            <Icon className="h-4 w-4" aria-hidden="true" />
+            <span className="text-[10px] font-bold tabular-nums">{CITY_EXPAND_COST}</span>
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{hint}</TooltipContent>
+    </Tooltip>
   );
 }

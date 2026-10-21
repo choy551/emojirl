@@ -1,6 +1,6 @@
 import type { EmojiItem } from './types';
 import { normalizeEmojiKey } from './discoveries';
-import { normalizeCity, type CityState } from './emojiCity';
+import { CITY_COLS, CITY_ROWS, normalizeCity, type CityState } from './emojiCity';
 import {
   META_SAVE_KEY,
   META_SCHEMA_VERSION,
@@ -86,12 +86,18 @@ function countMap(raw: unknown): Record<string, number> {
  * v1 → v2: the single-lead district was never stored. Any leftover `activeDistrict`
  * key is dropped. The grid, consume ledger, citizens, pending turns, insured carry,
  * and prestige unlocks are kept, and every built style now scores on its own.
+ * v2 → v3: a city without cols and rows is the original 8×8. Stored dimensions are kept.
  */
 export function migrateMetaRaw(raw: Record<string, unknown>): void {
   const version = typeof raw.schemaVersion === 'number' && Number.isFinite(raw.schemaVersion)
     ? Math.floor(raw.schemaVersion)
     : 1;
   if (version < 2) delete raw.activeDistrict;
+  if (version < 3 && raw.city && typeof raw.city === 'object') {
+    const city = raw.city as Record<string, unknown>;
+    if (typeof city.cols !== 'number') city.cols = CITY_COLS;
+    if (typeof city.rows !== 'number') city.rows = CITY_ROWS;
+  }
   raw.schemaVersion = META_SCHEMA_VERSION;
 }
 

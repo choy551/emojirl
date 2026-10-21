@@ -4,9 +4,13 @@ import { COWBOY, FENCER, GENIE, HITMAN, NINJA, RANGER, ROYAL_GUARD, VOID, WIZARD
 
 /** One placement token per lifetime consume of that emoji. */
 export const TOKENS_PER_CONSUME = 1;
-/** Fixed lot grid. 8 columns fit a phone without pinching. */
+/** Starting lot grid. 8 columns fit a phone without pinching. Edges grow from here. */
 export const CITY_COLS = 8;
 export const CITY_ROWS = 8;
+/** Unspent placement tokens charged to add one row or one column. */
+export const CITY_EXPAND_COST = 10;
+/** Largest side length a save or an expansion may reach. */
+export const CITY_DIM_MAX = 32;
 /** One wandering citizen per this many placed tiles. */
 export const CITIZEN_TILES = 5;
 /** Citizens attempt one step on this interval while the city screen is open. */
@@ -32,10 +36,16 @@ export interface CityCitizen {
   y: number;
 }
 
+export type CityEdge = 'north' | 'south' | 'east' | 'west';
+
 export interface CityState {
   tiles: (string | null)[];
   citizens: CityCitizen[];
   nextId: number;
+  /** Row-major width. Missing on saves from before the grid could grow. */
+  cols: number;
+  /** Row-major height. Missing on saves from before the grid could grow. */
+  rows: number;
 }
 
 export interface CityEdit {
@@ -52,16 +62,42 @@ const STEPS = [
 ];
 
 export function emptyCity(): CityState {
-  return { tiles: Array.from({ length: CITY_SIZE }, () => null), citizens: [], nextId: 1 };
+  return {
+    tiles: Array.from({ length: CITY_SIZE }, () => null),
+    citizens: [],
+    nextId: 1,
+    cols: CITY_COLS,
+    rows: CITY_ROWS,
+  };
 }
 
+function storedDim(raw: unknown): number | null {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
+  return Math.min(CITY_DIM_MAX, Math.max(CITY_COLS, Math.floor(raw)));
+}
+
+function gridOf(city: CityState): { cols: number; rows: number; size: number } {
+  const cols = storedDim(city.cols) ?? CITY_COLS;
+  const rows = storedDim(city.rows) ?? CITY_ROWS;
+  return { cols, rows, size: cols * rows };
+}
+
+/**
+ * Saves from before expansion omit cols and rows. Those grids are the original
+ * 8×8 in row-major order, so existing lots keep their indexes. A stored side is
+ * kept, clamped to the starting size and CITY_DIM_MAX.
+ */
 export function normalizeCity(raw: unknown): CityState {
-  const tiles = Array.from({ length: CITY_SIZE }, () => null as string | null);
   const blank = emptyCity();
   if (!raw || typeof raw !== 'object') return blank;
   const src = raw as Partial<CityState>;
+  const cols = storedDim(src.cols) ?? CITY_COLS;
+  const rows = storedDim(src.rows) ?? CITY_ROWS;
+  const size = cols * rows;
+  const tiles = Array.from({ length: size }, () => null as string | null);
   if (Array.isArray(src.tiles)) {
-    for (let i = 0; i < CITY_SIZE && i < src.tiles.length; i++) {
+    const limit = Math.min(size, src.tiles.length);
+    for (let i = 0; i < limit; i++) {
       const cell = src.tiles[i];
       tiles[i] = typeof cell === 'string' && cell.length > 0 ? normalizeEmojiKey(cell) : null;
     }
@@ -74,7 +110,7 @@ export function normalizeCity(raw: unknown): CityState {
       if (typeof row.emoji !== 'string' || typeof row.x !== 'number' || typeof row.y !== 'number') continue;
       const x = Math.floor(row.x);
       const y = Math.floor(row.y);
-      if (x < 0 || y < 0 || x >= CITY_COLS || y >= CITY_ROWS) continue;
+      if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
       citizens.push({
         id: typeof row.id === 'string' && row.id ? row.id : `c-${citizens.length + 1}`,
         emoji: normalizeEmojiKey(row.emoji),
@@ -84,7 +120,7 @@ export function normalizeCity(raw: unknown): CityState {
     }
   }
   const nextId = typeof src.nextId === 'number' && src.nextId > 0 ? Math.floor(src.nextId) : citizens.length + 1;
-  return { tiles, citizens, nextId };
+  return { tiles, citizens, nextId, cols, rows };
 }
 
 export function tokensForEmoji(consumes: number): number {
@@ -191,33 +227,34 @@ export function pickWeightedCitizen(kills: Record<string, number>, rng: () => nu
   return normalizeEmojiKey(entries[entries.length - 1][0]);
 }
 
-function cellIndex(x: number, y: number): number {
-  return y * CITY_COLS + x;
+function cellIndex(cols: number, x: number, y: number): number {
+  return y * cols + x;
 }
 
 /** Keep citizens up to capacity. Newcomers are weighted by lifetime kills and stand on open lots. */
 export function syncCitizens(city: CityState, kills: Record<string, number>, rng: () => number = Math.random): CityState {
+  const { cols, rows, size } = gridOf(city);
   const cap = citizenCapacityOf(city);
   const citizens = city.citizens.slice(0, cap);
-  const occupied = new Set(citizens.map(c => cellIndex(c.x, c.y)));
+  const occupied = new Set(citizens.map(c => cellIndex(cols, c.x, c.y)));
   let nextId = city.nextId;
   while (citizens.length < cap) {
     const emoji = pickWeightedCitizen(kills, rng);
     if (!emoji) break;
     const open: number[] = [];
-    for (let i = 0; i < CITY_SIZE; i++) if (!occupied.has(i)) open.push(i);
+    for (let i = 0; i < size; i++) if (!occupied.has(i)) open.push(i);
     if (open.length === 0) break;
     const index = open[Math.min(open.length - 1, Math.floor(rng() * open.length))]!;
     occupied.add(index);
     citizens.push({
       id: `c-${nextId}`,
       emoji,
-      x: index % CITY_COLS,
-      y: Math.floor(index / CITY_COLS),
+      x: index % cols,
+      y: Math.floor(index / cols),
     });
     nextId += 1;
   }
-  return { ...city, citizens, nextId };
+  return { ...city, cols, rows, citizens, nextId };
 }
 
 export function placeAt(
@@ -228,7 +265,8 @@ export function placeAt(
   kills: Record<string, number>,
   rng: () => number = Math.random,
 ): CityEdit {
-  if (!Number.isInteger(index) || index < 0 || index >= CITY_SIZE) {
+  const { size } = gridOf(city);
+  if (!Number.isInteger(index) || index < 0 || index >= size) {
     return { ok: false, city, reason: 'That lot is outside the city.' };
   }
   if (city.tiles[index]) return { ok: false, city, reason: 'That lot is already built.' };
@@ -247,7 +285,8 @@ export function removeAt(
   kills: Record<string, number>,
   rng: () => number = Math.random,
 ): CityEdit {
-  if (!Number.isInteger(index) || index < 0 || index >= CITY_SIZE) {
+  const { size } = gridOf(city);
+  if (!Number.isInteger(index) || index < 0 || index >= size) {
     return { ok: false, city, reason: 'That lot is outside the city.' };
   }
   if (!city.tiles[index]) return { ok: false, city, reason: 'That lot is empty.' };
@@ -258,14 +297,15 @@ export function removeAt(
 
 /** One orthogonal step per citizen. They stay put at the map edge or on another citizen. */
 export function tickCitizens(city: CityState, rng: () => number = Math.random): CityState {
-  const occupied = new Set(city.citizens.map(c => cellIndex(c.x, c.y)));
+  const { cols, rows } = gridOf(city);
+  const occupied = new Set(city.citizens.map(c => cellIndex(cols, c.x, c.y)));
   const citizens = city.citizens.map(citizen => {
     const step = STEPS[Math.min(STEPS.length - 1, Math.floor(rng() * STEPS.length))]!;
     const x = citizen.x + step.x;
     const y = citizen.y + step.y;
-    if (x < 0 || y < 0 || x >= CITY_COLS || y >= CITY_ROWS) return citizen;
-    const next = cellIndex(x, y);
-    const here = cellIndex(citizen.x, citizen.y);
+    if (x < 0 || y < 0 || x >= cols || y >= rows) return citizen;
+    const next = cellIndex(cols, x, y);
+    const here = cellIndex(cols, citizen.x, citizen.y);
     if (occupied.has(next)) return citizen;
     occupied.delete(here);
     occupied.add(next);
@@ -557,8 +597,9 @@ function tokenWeights(consumes: Record<string, number>, city: CityState): Record
 function growOne(city: CityState, consumes: Record<string, number>, rng: () => number): CityState | null {
   const emoji = pickWeightedCitizen(tokenWeights(consumes, city), rng);
   if (!emoji) return null;
+  const { size } = gridOf(city);
   const open: number[] = [];
-  for (let i = 0; i < CITY_SIZE; i++) if (!city.tiles[i]) open.push(i);
+  for (let i = 0; i < size; i++) if (!city.tiles[i]) open.push(i);
   if (open.length === 0) return null;
   const index = open[Math.min(open.length - 1, Math.floor(rng() * open.length))]!;
   const tiles = city.tiles.slice();
@@ -567,14 +608,15 @@ function growOne(city: CityState, consumes: Record<string, number>, rng: () => n
 }
 
 function scatterCitizens(city: CityState, rng: () => number): CityState {
+  const { cols, size } = gridOf(city);
   const occupied = new Set<number>();
   const citizens = city.citizens.map(citizen => {
     const open: number[] = [];
-    for (let i = 0; i < CITY_SIZE; i++) if (!occupied.has(i)) open.push(i);
+    for (let i = 0; i < size; i++) if (!occupied.has(i)) open.push(i);
     if (open.length === 0) return citizen;
     const index = open[Math.min(open.length - 1, Math.floor(rng() * open.length))]!;
     occupied.add(index);
-    return { ...citizen, x: index % CITY_COLS, y: Math.floor(index / CITY_COLS) };
+    return { ...citizen, x: index % cols, y: Math.floor(index / cols) };
   });
   return { ...city, citizens };
 }
@@ -603,7 +645,7 @@ export function catchUpCity(input: {
   const room = Math.min(
     wanted,
     totalAvailableTokens(input.consumes, next),
-    CITY_SIZE - beforePlaced,
+    gridOf(next).size - beforePlaced,
   );
   for (let i = 0; i < room; i++) {
     const grown = growOne(next, input.consumes, rng);
@@ -623,10 +665,99 @@ export function catchUpCity(input: {
   };
 }
 
+/** Why an edge button is disabled, or null when that expansion can be paid. */
+export function expandBlockReason(city: CityState, edge: CityEdge, tokens: number): string | null {
+  const { cols, rows } = gridOf(city);
+  if ((edge === 'north' || edge === 'south') && rows >= CITY_DIM_MAX) return 'This edge cannot grow further.';
+  if ((edge === 'east' || edge === 'west') && cols >= CITY_DIM_MAX) return 'This edge cannot grow further.';
+  if (Math.floor(tokens) < CITY_EXPAND_COST) return `Need ${CITY_EXPAND_COST} tokens`;
+  return null;
+}
+
+function spendSpareTokens(
+  consumes: Record<string, number>,
+  city: CityState,
+  cost: number,
+): { ok: boolean; consumes: Record<string, number> } {
+  const next: Record<string, number> = { ...consumes };
+  const sources = Object.keys(next)
+    .map(emoji => ({ emoji, spare: availableTokens(next[emoji] ?? 0, placedOf(city, emoji)) }))
+    .filter(row => row.spare > 0)
+    .sort((a, b) => b.spare - a.spare || a.emoji.localeCompare(b.emoji));
+  let left = cost;
+  for (const row of sources) {
+    const take = Math.min(left, row.spare);
+    const updated = (next[row.emoji] ?? 0) - take;
+    if (updated > 0) next[row.emoji] = updated;
+    else delete next[row.emoji];
+    left -= take;
+    if (left === 0) break;
+  }
+  if (left > 0) return { ok: false, consumes };
+  return { ok: true, consumes: next };
+}
+
+/** North and west insert a strip at the origin, so lots and citizens move the other way. */
+function shiftGrid(city: CityState, edge: CityEdge): CityState {
+  const { cols, rows } = gridOf(city);
+  if (edge === 'north' || edge === 'south') {
+    const nextRows = rows + 1;
+    const nextTiles: (string | null)[] = Array.from({ length: cols * nextRows }, () => null);
+    const yOffset = edge === 'north' ? 1 : 0;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) nextTiles[(y + yOffset) * cols + x] = city.tiles[y * cols + x] ?? null;
+    }
+    return {
+      ...city,
+      cols,
+      rows: nextRows,
+      tiles: nextTiles,
+      citizens: city.citizens.map(citizen => ({ ...citizen, y: citizen.y + yOffset })),
+    };
+  }
+  const nextCols = cols + 1;
+  const nextTiles: (string | null)[] = Array.from({ length: nextCols * rows }, () => null);
+  const xOffset = edge === 'west' ? 1 : 0;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) nextTiles[y * nextCols + x + xOffset] = city.tiles[y * cols + x] ?? null;
+  }
+  return {
+    ...city,
+    cols: nextCols,
+    rows,
+    tiles: nextTiles,
+    citizens: city.citizens.map(citizen => ({ ...citizen, x: citizen.x + xOffset })),
+  };
+}
+
+/**
+ * Add one row or column. Pays CITY_EXPAND_COST unspent placement tokens, the same
+ * pool the city HUD labels Tokens. Placed lots are not removed. The input maps
+ * are left unchanged.
+ */
+export function expandCity(
+  city: CityState,
+  edge: CityEdge,
+  consumes: Record<string, number>,
+): { ok: boolean; city: CityState; consumes: Record<string, number>; reason?: string } {
+  if (edge !== 'north' && edge !== 'south' && edge !== 'east' && edge !== 'west') {
+    return { ok: false, city, consumes, reason: 'That edge is not on the city.' };
+  }
+  const normalized = normalizeCity(city);
+  const blocked = expandBlockReason(normalized, edge, totalAvailableTokens(consumes, normalized));
+  if (blocked) return { ok: false, city, consumes, reason: blocked };
+  if (normalized.tiles.length !== normalized.cols * normalized.rows) {
+    return { ok: false, city, consumes, reason: 'That city grid is the wrong size.' };
+  }
+  const paid = spendSpareTokens(consumes, normalized, CITY_EXPAND_COST);
+  if (!paid.ok) return { ok: false, city, consumes, reason: `Need ${CITY_EXPAND_COST} tokens` };
+  return { ok: true, city: shiftGrid(normalized, edge), consumes: paid.consumes };
+}
+
 export function awaySummary(turns: number, citizensGained: number): string {
   return `While you were away: +${turns} turns, +${citizensGained} citizens`;
 }
 
 export function emojiCityRulesBlurb(): string {
-  return `EmojiCB is a city on the home screen, kept in the meta save so it survives runs. Each emoji you use from the hotbar, eat, drink, or buy-and-use grants ${TOKENS_PER_CONSUME} placement token for that emoji. Spell Echo does not spend the emoji, so it grants no token. Those consume counts, and the lifetime enemy kill counts, are the only ledgers — the city reads them again every visit. The grid is ${CITY_COLS}×${CITY_ROWS}. Pick an emoji and tap an empty lot to build. Tap a built lot to clear it and refund the token. One citizen arrives per ${CITIZEN_TILES} lots of housing, weighted by kills. A plain emoji or an ordinary house counts as 1 lot. Most structures count as 2, 🏘️🏢🏭🏨🏟️🏬 count as 3, and 🏰 counts as 4. No kills means empty streets. Structures are not on the kill-loot table. About ${Math.round(STRUCTURE_FLOOR_CHANCE * 100)}% of floors hide one blueprint. Survey it from the hotbar for +${STRUCTURE_SURVEY_MOOD} mood and 1 token for that building. Selling a blueprint pays ${STRUCTURE_SELL_VALUE}g and grants no token. In the city, ${BUILDING_EXCHANGE_COST} spare tokens from non-building emoji raise 1 structure token. The structures row is separate from the supply palette. Every roguelike turn is a city turn. While you are away, one unspent token builds itself every ${GROWTH_TURNS} city turns, citizens arrive to the new capacity, and they wander. A long absence is caught up in at most ${WANDER_CATCHUP_CAP} wander steps. Placed emoji form districts, and every style can be active at once: Slums of Thieves (Ninja), Arcane Sanctum (Wizard), Frontier Saloon (Cowboy), Grove of Wilds (Ranger), and Void Hollow (The Void). 🛖🏚️ are slums, ⛩️🛕 are the sanctum, ⛺🏕️🏔️ are the grove, 🏤🏦🏟️ are the saloon, and 🌋 is the hollow. 🏰🏭🏢 and ordinary houses are neutral. Prestige classes use their base class's district. A plain themed emoji weighs 1. A structure weighs its housing, so a larger building counts for more. Weight ${DISTRICT_THRESHOLD} is tier 1. The tier rises by 1 each time that weight doubles, through ${DISTRICT_THRESHOLD * 2}, ${DISTRICT_THRESHOLD * 4}, and ${DISTRICT_THRESHOLD * 8}, and ${DISTRICT_BONUS_TIER_CAP} is the cap. The run-start bonus is the tier times the base (${DISTRICTS.map(d => `${d.bonus.label} ${d.className}`).join(', ')}). The city HUD and the vessel picker show each district's placed count, weight, and current bonus. A meta save from before this rule keeps its grid, consumes, and prestige; bonuses are read from the tiles.`;
+  return `EmojiCB is a city on the home screen, kept in the meta save so it survives runs. Each emoji you use from the hotbar, eat, drink, or buy-and-use grants ${TOKENS_PER_CONSUME} placement token for that emoji. Spell Echo does not spend the emoji, so it grants no token. Those consume counts, and the lifetime enemy kill counts, are the only ledgers — the city reads them again every visit. The grid starts at ${CITY_COLS}×${CITY_ROWS}. Each edge grows by one row or column for ${CITY_EXPAND_COST} unspent placement tokens, the Tokens count on the city HUD. North and west shift the blocks already placed. Pick an emoji and tap an empty lot to build. Tap a built lot to clear it and refund the token. One citizen arrives per ${CITIZEN_TILES} lots of housing, weighted by kills. A plain emoji or an ordinary house counts as 1 lot. Most structures count as 2, 🏘️🏢🏭🏨🏟️🏬 count as 3, and 🏰 counts as 4. No kills means empty streets. Structures are not on the kill-loot table. About ${Math.round(STRUCTURE_FLOOR_CHANCE * 100)}% of floors hide one blueprint. Survey it from the hotbar for +${STRUCTURE_SURVEY_MOOD} mood and 1 token for that building. Selling a blueprint pays ${STRUCTURE_SELL_VALUE}g and grants no token. In the city, ${BUILDING_EXCHANGE_COST} spare tokens from non-building emoji raise 1 structure token. The structures row is separate from the supply palette. Every roguelike turn is a city turn. While you are away, one unspent token builds itself every ${GROWTH_TURNS} city turns, citizens arrive to the new capacity, and they wander. A long absence is caught up in at most ${WANDER_CATCHUP_CAP} wander steps. Placed emoji form districts, and every style can be active at once: Slums of Thieves (Ninja), Arcane Sanctum (Wizard), Frontier Saloon (Cowboy), Grove of Wilds (Ranger), and Void Hollow (The Void). 🛖🏚️ are slums, ⛩️🛕 are the sanctum, ⛺🏕️🏔️ are the grove, 🏤🏦🏟️ are the saloon, and 🌋 is the hollow. 🏰🏭🏢 and ordinary houses are neutral. Prestige classes use their base class's district. A plain themed emoji weighs 1. A structure weighs its housing, so a larger building counts for more. Weight ${DISTRICT_THRESHOLD} is tier 1. The tier rises by 1 each time that weight doubles, through ${DISTRICT_THRESHOLD * 2}, ${DISTRICT_THRESHOLD * 4}, and ${DISTRICT_THRESHOLD * 8}, and ${DISTRICT_BONUS_TIER_CAP} is the cap. The run-start bonus is the tier times the base (${DISTRICTS.map(d => `${d.bonus.label} ${d.className}`).join(', ')}). The city HUD and the vessel picker show each district's placed count, weight, and current bonus. A meta save from before this rule keeps its grid, consumes, and prestige; bonuses are read from the tiles.`;
 }

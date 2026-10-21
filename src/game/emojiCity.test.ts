@@ -5,6 +5,8 @@ import {
   CITY_COLS,
   CITY_ROWS,
   CITY_SIZE,
+  CITY_DIM_MAX,
+  CITY_EXPAND_COST,
   DISTRICT_BONUS_TIER_CAP,
   DISTRICT_THRESHOLD,
   DISTRICTS,
@@ -25,7 +27,10 @@ import {
   districtStandings,
   districtTileWeight,
   emptyCity,
+  normalizeCity,
   emojiCityRulesBlurb,
+  expandBlockReason,
+  expandCity,
   scaledBonusAmount,
   paletteEmojis,
   pickWeightedCitizen,
@@ -38,7 +43,7 @@ import {
   tokensForEmoji,
   totalAvailableTokens,
 } from './emojiCity';
-import { loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, saveCity, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
+import { loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, replaceEmojiConsumes, saveCity, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
 import { COWBOY, FENCER, GENIE, HITMAN, META_SAVE_KEY, META_SCHEMA_VERSION, NINJA, RANGER, ROYAL_GUARD, VOID, WIZARD } from './prestigeConstants';
 
 function memoryStore(): KeyValueStore {
@@ -316,7 +321,7 @@ describe('EmojiCB districts', () => {
   });
 
   it('migrates a v1 meta save and scores every district on the old grid', () => {
-    expect(META_SCHEMA_VERSION).toBe(2);
+    expect(META_SCHEMA_VERSION).toBe(3);
     const store = memoryStore();
     setMetaStore(store);
     const tiles = Array.from({ length: 10 }, (_, i) => (i < 4 ? '🗡️' : i < 8 ? '⛩️' : '🏰'));
@@ -339,7 +344,7 @@ describe('EmojiCB districts', () => {
     }));
 
     const meta = loadMeta();
-    expect(meta.schemaVersion).toBe(2);
+    expect(meta.schemaVersion).toBe(3);
     expect(meta.unlockedPrestige).toEqual([GENIE]);
     expect(meta.insuredCarry?.map(item => item.id)).toEqual(['a']);
     expect(meta.emojiConsumes).toEqual({ '🗡️': 4, '⛩️': 4 });
@@ -347,6 +352,8 @@ describe('EmojiCB districts', () => {
     expect(meta.cityGrowthRemainder).toBe(2);
     expect(meta.city?.tiles.slice(0, 10)).toEqual(tiles);
     expect(meta.city?.tiles).toHaveLength(CITY_SIZE);
+    expect(meta.city?.cols).toBe(CITY_COLS);
+    expect(meta.city?.rows).toBe(CITY_ROWS);
     expect(meta.city?.citizens).toEqual([{ id: 'c-1', emoji: '🧟', x: 1, y: 1 }]);
     expect(meta.city?.nextId).toBe(4);
 
@@ -361,14 +368,16 @@ describe('EmojiCB districts', () => {
 
     saveMeta(meta);
     const raw = JSON.parse(store.getItem(META_SAVE_KEY) ?? '{}') as Record<string, unknown>;
-    expect(raw.schemaVersion).toBe(2);
+    expect(raw.schemaVersion).toBe(3);
+    expect((raw.city as { cols: number; rows: number }).cols).toBe(CITY_COLS);
+    expect((raw.city as { cols: number; rows: number }).rows).toBe(CITY_ROWS);
     expect(raw.activeDistrict).toBeUndefined();
     expect(raw.unlockedPrestige).toEqual([GENIE]);
     expect((raw.city as { tiles: string[] }).tiles.slice(0, 4)).toEqual(['🗡️', '🗡️', '🗡️', '🗡️']);
 
     store.setItem(META_SAVE_KEY, '{');
     expect(loadMeta().unlockedPrestige).toEqual([]);
-    expect(loadMeta().schemaVersion).toBe(2);
+    expect(loadMeta().schemaVersion).toBe(3);
 
     store.setItem(META_SAVE_KEY, JSON.stringify({
       schemaVersion: 99,
@@ -490,6 +499,131 @@ describe('EmojiCB catch-up', () => {
   });
 });
 
+describe('EmojiCB expansion', () => {
+  it('shifts existing lots and citizens when growing north or west', () => {
+    expect(CITY_EXPAND_COST).toBe(10);
+    const city = emptyCity();
+    city.tiles[0] = '🗡️';
+    city.tiles[1] = '🧪';
+    city.tiles[8] = '🌳';
+    city.citizens = [{ id: 'c-1', emoji: '🧟', x: 1, y: 0 }];
+    const consumes = { '🍎': 40, '🗡️': 1, '🧪': 1, '🌳': 1 };
+
+    const north = expandCity(city, 'north', consumes);
+    expect(north.ok).toBe(true);
+    expect(consumes['🍎']).toBe(40);
+    expect(city.tiles[0]).toBe('🗡️');
+    expect(city.rows).toBe(CITY_ROWS);
+    expect(north.city.cols).toBe(CITY_COLS);
+    expect(north.city.rows).toBe(CITY_ROWS + 1);
+    expect(north.city.tiles).toHaveLength(CITY_COLS * (CITY_ROWS + 1));
+    expect(north.city.tiles[0]).toBeNull();
+    expect(north.city.tiles[8]).toBe('🗡️');
+    expect(north.city.tiles[9]).toBe('🧪');
+    expect(north.city.tiles[16]).toBe('🌳');
+    expect(north.city.citizens[0]).toMatchObject({ x: 1, y: 1 });
+    expect(north.consumes['🍎']).toBe(30);
+    expect(north.consumes['🗡️']).toBe(1);
+
+    const west = expandCity(north.city, 'west', north.consumes);
+    expect(west.ok).toBe(true);
+    expect(west.city.cols).toBe(CITY_COLS + 1);
+    expect(west.city.rows).toBe(CITY_ROWS + 1);
+    expect(west.city.tiles[0]).toBeNull();
+    expect(west.city.tiles[1 * (CITY_COLS + 1) + 1]).toBe('🗡️');
+    expect(west.city.tiles[1 * (CITY_COLS + 1) + 2]).toBe('🧪');
+    expect(west.city.tiles[2 * (CITY_COLS + 1) + 1]).toBe('🌳');
+    expect(west.city.citizens[0]).toMatchObject({ x: 2, y: 1 });
+    expect(west.consumes['🍎']).toBe(20);
+  });
+
+  it('grows south and east without moving lots, and refuses a short purse', () => {
+    const city = emptyCity();
+    city.tiles[0] = '🗡️';
+    city.tiles[8] = '🌳';
+    city.tiles[63] = '🏰';
+    city.citizens = [{ id: 'c-1', emoji: '🧟', x: 7, y: 0 }];
+    const south = expandCity(city, 'south', { '🔥': 9, '🍎': 3 });
+    expect(south.ok).toBe(true);
+    expect(south.consumes).toEqual({ '🍎': 2 });
+    expect(south.city.tiles[0]).toBe('🗡️');
+    expect(south.city.tiles[63]).toBe('🏰');
+    expect(south.city.tiles[64]).toBeNull();
+    expect(south.city.rows).toBe(CITY_ROWS + 1);
+    expect(south.city.citizens[0]).toMatchObject({ x: 7, y: 0 });
+
+    const east = expandCity(south.city, 'east', { '🏠': 10 });
+    expect(east.ok).toBe(true);
+    expect(east.consumes['🏠']).toBeUndefined();
+    expect(east.city.cols).toBe(CITY_COLS + 1);
+    expect(east.city.tiles[0]).toBe('🗡️');
+    expect(east.city.tiles[9]).toBe('🌳');
+    expect(east.city.citizens[0]).toMatchObject({ x: 7, y: 0 });
+    const stepped = tickCitizens(east.city, () => 0);
+    expect(stepped.citizens[0]).toMatchObject({ x: 8, y: 0 });
+
+    const broke = expandCity(emptyCity(), 'west', { '🍎': 9 });
+    expect(broke.ok).toBe(false);
+    expect(broke.reason).toBe('Need 10 tokens');
+    expect(broke.city.cols).toBe(CITY_COLS);
+    expect(broke.consumes).toEqual({ '🍎': 9 });
+    expect(expandBlockReason(emptyCity(), 'north', 9)).toBe('Need 10 tokens');
+    expect(expandBlockReason(emptyCity(), 'north', 10)).toBeNull();
+
+    const capped = emptyCity();
+    capped.rows = CITY_DIM_MAX;
+    capped.tiles = Array.from({ length: capped.cols * capped.rows }, () => null);
+    const blocked = expandCity(capped, 'south', { '🍎': 10 });
+    expect(blocked.ok).toBe(false);
+    expect(blocked.reason).toBe('This edge cannot grow further.');
+    expect(blocked.consumes).toEqual({ '🍎': 10 });
+  });
+
+  it('keeps an older 8×8 grid and reloads a grown one', () => {
+    const store = memoryStore();
+    setMetaStore(store);
+    const tiles = Array.from({ length: CITY_SIZE }, () => null as string | null);
+    tiles[9] = '🗼';
+    store.setItem(META_SAVE_KEY, JSON.stringify({
+      schemaVersion: 2,
+      unlockedPrestige: [],
+      emojiConsumes: { '🗼': 1, '🍎': 10 },
+      city: { tiles, citizens: [{ id: 'c-1', emoji: '🧟', x: 1, y: 1 }], nextId: 2 },
+    }));
+    const loaded = loadMeta();
+    expect(loaded.schemaVersion).toBe(3);
+    expect(loaded.city?.cols).toBe(8);
+    expect(loaded.city?.rows).toBe(8);
+    expect(loaded.city?.tiles[9]).toBe('🗼');
+    expect(loaded.city?.citizens[0]).toMatchObject({ x: 1, y: 1 });
+
+    const grown = expandCity(loaded.city ?? emptyCity(), 'west', loaded.emojiConsumes ?? {});
+    expect(grown.ok).toBe(true);
+    expect(grown.city.tiles[11]).toBe('🗼');
+    expect(grown.city.citizens[0]).toMatchObject({ x: 2, y: 1 });
+    replaceEmojiConsumes(grown.consumes);
+    saveCity(grown.city);
+    const again = loadMeta();
+    expect(again.city?.cols).toBe(9);
+    expect(again.city?.rows).toBe(8);
+    expect(again.city?.tiles).toHaveLength(72);
+    expect(again.city?.tiles[11]).toBe('🗼');
+    expect(again.emojiConsumes?.['🍎']).toBeUndefined();
+    expect(again.emojiConsumes?.['🗼']).toBe(1);
+    const raw = JSON.parse(store.getItem(META_SAVE_KEY) ?? '{}') as { schemaVersion: number; city: { cols: number; rows: number } };
+    expect(raw.schemaVersion).toBe(3);
+    expect(raw.city.cols).toBe(9);
+    expect(raw.city.rows).toBe(8);
+
+    const huge = normalizeCity({ cols: 10000, rows: 4, tiles: ['🗡️'], citizens: [], nextId: 1 });
+    expect(huge.cols).toBe(CITY_DIM_MAX);
+    expect(huge.rows).toBe(CITY_ROWS);
+    expect(huge.tiles).toHaveLength(CITY_DIM_MAX * CITY_ROWS);
+    expect(huge.tiles[0]).toBe('🗡️');
+    expect(emojiCityRulesBlurb()).toContain(`${CITY_EXPAND_COST} unspent placement tokens`);
+  });
+});
+
 describe('EmojiCB surfaces', () => {
   it('is linked from home and described in the manual', () => {
     const home = readFileSync(new URL('../pages/home.tsx', import.meta.url), 'utf8');
@@ -507,6 +641,10 @@ describe('EmojiCB surfaces', () => {
     expect(app).toContain('path="/city"');
     expect(city).toContain('catchUpCity');
     expect(city).toContain('city-away');
+    expect(city).toContain('edge="north"');
+    expect(city).toContain('expand-${edge}');
+    expect(city).toContain('expandBlockReason');
+    expect(city).toContain('title={hint}');
     expect(game).toContain('noteCityTurns');
     expect(game).toContain('applyDistrictBonus');
   });
