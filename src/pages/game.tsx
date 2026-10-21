@@ -56,8 +56,12 @@ import { CampfireBanquetModal } from '../components/CampfireBanquetModal';
 import { ShrineOfferingModal } from '../components/ShrineOfferingModal';
 import { IdentityRerollModal } from '../components/IdentityRerollModal';
 import { InsuranceModal } from '../components/InsuranceModal';
+import { BountyBoardModal } from '../components/BountyBoardModal';
+import { VanityFlexModal } from '../components/VanityFlexModal';
+import { BloodAuctionModal } from '../components/BloodAuctionModal';
 import { BANQUET_MIN_DISHES, cookedDishCount, nearCampfire, nearShrineOffer } from '../game/foodSinks';
 import { stashInsuranceOnDeath, takeInsuredStartItems } from '../game/goldSinks';
+import { bountyProgress, grantBounty, rollBountyOffer, vanityTitleName, vanityTrailById } from '../game/goldSinks2';
 import { AmmoCacheModal } from '../components/AmmoCacheModal';
 import { RestaurantModal } from '../components/RestaurantModal';
 import { SlotShrineModal } from '../components/SlotShrineModal';
@@ -366,6 +370,9 @@ export default function Game() {
       { id: 'offer', isOpen: () => shrineOfferOpen, close: () => setShrineOfferOpen(false) },
       { id: 'reroll', isOpen: () => rerollOpen, close: () => setRerollOpen(false) },
       { id: 'insure', isOpen: () => insureOpen, close: () => setInsureOpen(false) },
+      { id: 'bounty', isOpen: () => bountyOpen, close: () => setBountyOpen(false) },
+      { id: 'vanity', isOpen: () => vanityOpen, close: () => setVanityOpen(false) },
+      { id: 'auction', isOpen: () => auctionOpen, close: () => setAuctionOpen(false) },
       { id: 'dir-pick', isOpen: () => dirPickModeRef.current !== null, close: () => { dirPickModeRef.current = null; setDirPickMode(null); } },
       { id: 'unmake', isOpen: () => unmakeTargetModeRef.current, close: () => { unmakeTargetModeRef.current = false; setUnmakeTargetMode(false); } },
       { id: 'blink', isOpen: () => blinkTargetModeRef.current, close: () => { setBlinkTargetMode(false); blinkTargetModeRef.current = false; } },
@@ -424,6 +431,9 @@ export default function Game() {
     }
     if (tile?.type === 'bed') setBedRestOpen(true);
     if (tile?.type === 'mirror' && !rerollOpenRef.current) setRerollOpen(true);
+    if (tile?.type === 'bounty' && !bountyOpenRef.current) openBountyBoard();
+    if (tile?.type === 'vanity' && !vanityOpenRef.current) setVanityOpen(true);
+    if (tile?.type === 'auction' && !auctionOpenRef.current) setAuctionOpen(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.player.pos.x, gameState?.player.pos.y]);
 
@@ -482,6 +492,47 @@ export default function Game() {
   const [insureOpen, setInsureOpen] = useState(false);
   const insureOpenRef = useRef(false);
   useEffect(() => { insureOpenRef.current = insureOpen; }, [insureOpen]);
+  const [bountyOpen, setBountyOpen] = useState(false);
+  const bountyOpenRef = useRef(false);
+  useEffect(() => { bountyOpenRef.current = bountyOpen; }, [bountyOpen]);
+  const [vanityOpen, setVanityOpen] = useState(false);
+  const vanityOpenRef = useRef(false);
+  useEffect(() => { vanityOpenRef.current = vanityOpen; }, [vanityOpen]);
+  const [auctionOpen, setAuctionOpen] = useState(false);
+  const auctionOpenRef = useRef(false);
+  useEffect(() => { auctionOpenRef.current = auctionOpen; }, [auctionOpen]);
+  const openBountyBoard = useCallback(() => {
+    setGameState(prev => {
+      if (!prev) return prev;
+      if (prev.bounty && prev.bounty.floor === prev.currentFloor) return prev;
+      return { ...prev, bounty: rollBountyOffer(prev, Math.random) };
+    });
+    setBountyOpen(true);
+  }, []);
+  useEffect(() => {
+    if (!gameState || gameState.gameOver || gameState.bounty?.status !== 'active') return;
+    if (!bountyProgress(gameState).done) return;
+    setGameState(prev => {
+      if (!prev || prev.gameOver || prev.bounty?.status !== 'active') return prev;
+      if (!bountyProgress(prev).done) return prev;
+      return grantBounty(prev);
+    });
+  }, [gameState]);
+  const [vanityTrail, setVanityTrail] = useState<{ floor: number; cells: Position[] }>({ floor: -1, cells: [] });
+  useEffect(() => {
+    if (!gameState?.player.vanity?.trail) {
+      setVanityTrail(prev => prev.cells.length === 0 ? prev : { floor: gameState?.currentFloor ?? -1, cells: [] });
+      return;
+    }
+    const pos = gameState.player.pos;
+    const floor = gameState.currentFloor;
+    setVanityTrail(prev => {
+      if (prev.floor !== floor) return { floor, cells: [pos] };
+      const last = prev.cells[prev.cells.length - 1];
+      if (last && last.x === pos.x && last.y === pos.y) return prev;
+      return { floor, cells: [...prev.cells, pos].slice(-4) };
+    });
+  }, [gameState?.currentFloor, gameState?.player.vanity?.trail, gameState?.player.pos.x, gameState?.player.pos.y]);
   const [pendingMonkeyInteraction, setPendingMonkeyInteraction] = useState<{ id: string; wants: string } | null>(null);
   const [pendingAdventurerInteraction, setPendingAdventurerInteraction] = useState<string | null>(null);
   const [pendingBearInteraction, setPendingBearInteraction] = useState<{ id: string; stage: 'neutral' | 'friendly'; offerId: string | null } | null>(null);
@@ -511,6 +562,9 @@ export default function Game() {
     shrineOfferOpen ||
     rerollOpen ||
     insureOpen ||
+    bountyOpen ||
+    vanityOpen ||
+    auctionOpen ||
     dirPickMode ||
     unmakeTargetMode ||
     blinkTargetMode ||
@@ -1002,6 +1056,21 @@ export default function Game() {
         addLog('Autoexplore stopped: 🪞 Identity mirror.');
         return;
       }
+      if (exploreTile?.type === 'bounty') {
+        setAutoExplore(false);
+        addLog('Autoexplore stopped: 📜 Bounty board.');
+        return;
+      }
+      if (exploreTile?.type === 'vanity') {
+        setAutoExplore(false);
+        addLog('Autoexplore stopped: 💎 Vanity flex.');
+        return;
+      }
+      if (exploreTile?.type === 'auction') {
+        setAutoExplore(false);
+        addLog('Autoexplore stopped: ☠️ Blood auction.');
+        return;
+      }
       // Stop when adjacent to a visible bar tile. BFS already routes around bars so
       // the player never steps on one, but without this stop the player could end up
       // right next to a bar with no feedback. This lets them decide whether to visit.
@@ -1276,6 +1345,9 @@ export default function Game() {
       case 'banquet': setTravelTarget(null); setBanquetOpen(true); break;
       case 'offer': setTravelTarget(null); setShrineOfferOpen(true); break;
       case 'open-mirror': setTravelTarget(null); setRerollOpen(true); break;
+      case 'open-bounty': setTravelTarget(null); openBountyBoard(); break;
+      case 'open-vanity': setTravelTarget(null); setVanityOpen(true); break;
+      case 'open-auction': setTravelTarget(null); setAuctionOpen(true); break;
       case 'talk': {
         const gs = gameStateRef.current;
         if (gs && action.dir) {
@@ -1473,6 +1545,21 @@ export default function Game() {
       if (insureOpenRef.current) {
         e.preventDefault();
         if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setInsureOpen(false); return; }
+        return;
+      }
+      if (bountyOpenRef.current) {
+        e.preventDefault();
+        if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setBountyOpen(false); return; }
+        return;
+      }
+      if (vanityOpenRef.current) {
+        e.preventDefault();
+        if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setVanityOpen(false); return; }
+        return;
+      }
+      if (auctionOpenRef.current) {
+        e.preventDefault();
+        if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setAuctionOpen(false); return; }
         return;
       }
 
@@ -2152,7 +2239,7 @@ export default function Game() {
               onClick={clickToMove ? () => handleTileTap(mapX, mapY) : undefined}
               title={clickToMove ? 'Walk here' : undefined}
             >
-              {tileData.emoji}
+              {gameState.bounty?.status === 'active' && gameState.bounty.kind === 'reach' && gameState.bounty.x === mapX && gameState.bounty.y === mapY ? '📍' : tileData.emoji}
               {isTravelDest && <span className="absolute inset-0 rounded border-2 border-cyan-400/80 pointer-events-none" />}
             </div>
           );
@@ -2164,6 +2251,12 @@ export default function Game() {
           if (enemy) displayChar = enemy.emoji;
           const isPlayer = player.pos.x === mapX && player.pos.y === mapY;
           if (isPlayer) displayChar = player.emoji;
+          const reachMark = gameState.bounty?.status === 'active' && gameState.bounty.kind === 'reach'
+            && gameState.bounty.x === mapX && gameState.bounty.y === mapY;
+          if (reachMark && !groundItem && !enemy && !isPlayer) displayChar = '📍';
+          const trailEmoji = vanityTrailById(player.vanity?.trail)?.emoji;
+          const trailHere = !!trailEmoji && vanityTrail.floor === currentFloor
+            && vanityTrail.cells.some((cell, index) => index < vanityTrail.cells.length - 1 && cell.x === mapX && cell.y === mapY);
           // Active bomb display (countdown shown as overlay)
           const bomb = gameState.placedBombs.find(b => b.pos.x === mapX && b.pos.y === mapY);
           if (bomb && !isPlayer) displayChar = '💣';
@@ -2198,6 +2291,9 @@ export default function Game() {
           else if (tileData.type === 'grass') tileBg = 'rgba(40,140,50,0.28)';
           else if (tileData.type === 'crop') tileBg = 'rgba(70,130,30,0.4)';
           else if (tileData.type === 'water') tileBg = 'rgba(30,80,160,0.28)';
+          else if (tileData.type === 'bounty') tileBg = 'rgba(180,140,40,0.28)';
+          else if (tileData.type === 'vanity') tileBg = 'rgba(180,60,160,0.28)';
+          else if (tileData.type === 'auction') tileBg = 'rgba(140,20,40,0.32)';
 
           row.push(
             <div
@@ -2215,6 +2311,12 @@ export default function Game() {
               data-testid={isPlayer ? 'player-tile' : (enemy && !isPlayer ? `enemy-tile-${enemy.id}` : undefined)}
             >
               {displayChar}
+              {trailHere && (
+                <span data-testid="vanity-trail" style={{ position: 'absolute', left: 0, bottom: 0, fontSize: 11, lineHeight: 1, pointerEvents: 'none', zIndex: 4 }}>{trailEmoji}</span>
+              )}
+              {isPlayer && trailEmoji && (
+                <span data-testid="vanity-trail-player" style={{ position: 'absolute', left: 0, bottom: 0, fontSize: 11, lineHeight: 1, pointerEvents: 'none', zIndex: 6 }}>{trailEmoji}</span>
+              )}
               {/* Restaurant fire overlay */}
               {tileData.type === 'restaurant' && !isPlayer && !enemy && (
                 <span style={{ position: 'absolute', top: -1, right: 0, fontSize: 10, lineHeight: 1, pointerEvents: 'none', zIndex: 5 }}>🔥</span>
@@ -2761,6 +2863,8 @@ export default function Game() {
             menuSide={oneHanded ? thumbSide : 'right'}
             blinkTalentCompact={ninjaBlink ? `${ninjaBlink.progress.compactLabel}${ninjaBlink.progress.nextTier ? ` ${ninjaBlink.progress.nextTier}` : ''}` : undefined}
             blinkTalentTitle={ninjaBlink ? `${ninjaBlink.progress.hudLabel} · ${ninjaBlink.progress.nextLabel}` : undefined}
+            vanityTitle={vanityTitleName(player)}
+            bountyLabel={gameState.bounty?.status === 'active' ? `📜 ${bountyProgress(gameState).label}` : undefined}
           />
           <MobileBagStrip
             bagSlots={bagSlots}
@@ -2783,7 +2887,12 @@ export default function Game() {
         <div className="flex items-center gap-2 shrink-0">
           <div className="text-2xl">{player.emoji}</div>
           <div>
-            <div className="text-[11px] font-bold uppercase leading-tight tracking-wide">{cls.name} · Lv {player.stats.level}</div>
+            <div className="text-[11px] font-bold uppercase leading-tight tracking-wide">
+              {cls.name} · Lv {player.stats.level}
+              {vanityTitleName(player) && (
+                <span className="normal-case text-fuchsia-200" data-testid="hud-vanity-title-desktop"> · {vanityTitleName(player)}</span>
+              )}
+            </div>
             <div className="text-[9px] text-muted-foreground/60 leading-tight">
               {isArcaneCaster(player.characterClass) && (wizardTactics.mode === 'nearest' ? '🎯 Nearest' : wizardTactics.mode === 'furthest' ? '🎯 Furthest' : wizardTactics.mode === 'manual' ? (wizardTactics.manualTargetId ? '🎯 Locked' : '🎯 Manual') : '✨ Blink')}
               {isFencer(player.characterClass) && `🤺 ${(player.stats.lungeCooldown ?? 0) === 0 ? 'Lunge' : player.stats.lungeCooldown + 't'}`}
@@ -3105,6 +3214,9 @@ export default function Game() {
 
         {/* Spacer + Floor + Quit */}
         <div className="ml-auto flex items-center gap-3 shrink-0">
+          {gameState.bounty?.status === 'active' && (
+            <span className="text-[10px] font-bold text-amber-200" data-testid="hud-bounty-desktop">📜 {bountyProgress(gameState).label}</span>
+          )}
           <span className="text-xs text-muted-foreground">Floor {currentFloor}</span>
           <Button
             data-testid="button-quit"
@@ -3164,6 +3276,16 @@ export default function Game() {
               <p className="text-sm mb-2 text-violet-300/90 text-center px-6">{VOID_UNLOCK_TEXT}</p>
             )}
             <p className="text-muted-foreground mb-1">Final mood: {moodData.emoji} {moodData.name}</p>
+            {vanityTitleName(player) && (
+              <p className="text-lg mb-1 text-fuchsia-200" data-testid="death-vanity-title">
+                {player.emoji} {cls.name}, {vanityTitleName(player)}
+              </p>
+            )}
+            {vanityTrailById(player.vanity?.trail) && (
+              <p className="text-sm mb-1 text-fuchsia-300/80">
+                {vanityTrailById(player.vanity?.trail)?.emoji} {vanityTrailById(player.vanity?.trail)?.name} trail
+              </p>
+            )}
             <p className="text-lg mb-1">Floor {currentFloor} · Level {player.stats.level} · {player.stats.xp} XP</p>
             {(() => {
               const pressure = pressureForRun(currentFloor, gameState.deepDive);
@@ -3758,6 +3880,33 @@ export default function Game() {
           setGameState={setGameState}
           addLog={addLog}
           onClose={() => setInsureOpen(false)}
+        />
+      )}
+
+      {bountyOpen && gameState && (
+        <BountyBoardModal
+          gameState={gameState}
+          setGameState={setGameState}
+          addLog={addLog}
+          onClose={() => setBountyOpen(false)}
+        />
+      )}
+
+      {vanityOpen && gameState && (
+        <VanityFlexModal
+          gameState={gameState}
+          setGameState={setGameState}
+          addLog={addLog}
+          onClose={() => setVanityOpen(false)}
+        />
+      )}
+
+      {auctionOpen && gameState && (
+        <BloodAuctionModal
+          gameState={gameState}
+          setGameState={setGameState}
+          addLog={addLog}
+          onClose={() => setAuctionOpen(false)}
         />
       )}
 

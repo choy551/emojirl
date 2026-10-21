@@ -1,7 +1,8 @@
-import { MapGrid, Position, RoomTheme } from './types';
+import { MapGrid, Position, RoomTheme, TileType } from './types';
 import { placePrairie, prairieAppearsOnFloor } from './farmer';
 import { mapHasCampfire, shouldPlaceLoneCampfire } from './foodSinks';
 import { shouldPlaceMirror } from './goldSinks';
+import { shouldPlaceAuction, shouldPlaceBounty, shouldPlaceVanity } from './goldSinks2';
 import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, coolLavaWaterContacts } from './lava';
 import { BED_EMOJI, BED_MAX_USES } from './tiles';
 import { FINALE_FLOOR } from './finaleConstants';
@@ -365,6 +366,23 @@ function placeCampfire(map: MapGrid, room: Room) {
   placeLoneCampfire(map, room);
 }
 
+/** Paint one service tile on an open floor cell, center first. */
+export function placeFloorService(map: MapGrid, room: Room, type: TileType, emoji: string): boolean {
+  const cx = room.x + Math.floor(room.w / 2);
+  const cy = room.y + Math.floor(room.h / 2);
+  const offsets: [number, number][] = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [0, 2]];
+  for (const [dx, dy] of offsets) {
+    const ax = cx + dx;
+    const ay = cy + dy;
+    if (ay < room.y || ay >= room.y + room.h || ax < room.x || ax >= room.x + room.w) continue;
+    const tile = map[ay]?.[ax];
+    if (!tile || tile.type !== 'floor') continue;
+    map[ay][ax] = { type, emoji, seen: false, visible: false };
+    return true;
+  }
+  return false;
+}
+
 /** A rare identity mirror. Only paints an open floor tile. */
 export function placeMirror(map: MapGrid, room: Room): boolean {
   const cx = room.x + Math.floor(room.w / 2);
@@ -686,7 +704,7 @@ function ensureStairsReachable(map: MapGrid, start: Position, stairs: Position):
     'floor', 'stairs', 'boss-floor', 'grass',
     'door-open', 'door-closed',
     'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'slot-shrine', 'bed',
-    'campfire', 'obsidian', 'mirror',
+    'campfire', 'obsidian', 'mirror', 'bounty', 'vanity', 'auction',
   ]);
   if (reach(map, start, stairs, DRY)) return;
 
@@ -985,6 +1003,17 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
     );
     if (mirrors.length > 0) placeMirror(map, mirrors[Math.floor(Math.random() * mirrors.length)]);
   }
+
+  const serviceRooms = rooms.filter((room, index) =>
+    index > 0 && index < rooms.length - 1 && (room.theme === 'normal' || room.theme === 'shrine'),
+  );
+  const placeService = (ok: boolean, type: TileType, emoji: string) => {
+    if (!ok || serviceRooms.length === 0) return;
+    placeFloorService(map, serviceRooms[Math.floor(Math.random() * serviceRooms.length)], type, emoji);
+  };
+  placeService(shouldPlaceBounty(floor, Math.random()), 'bounty', '📜');
+  placeService(shouldPlaceVanity(floor, Math.random()), 'vanity', '💎');
+  placeService(shouldPlaceAuction(floor, Math.random()), 'auction', '☠️');
 
   // Floors with no forest fire sometimes grow a lone campfire for banquets.
   if (shouldPlaceLoneCampfire(mapHasCampfire(map), Math.random())) {

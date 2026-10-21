@@ -8,6 +8,7 @@ import { _flashSignals, PEACEMAKERS_LOG, tryDualGunsFanfare } from './flashSigna
 import { FINALE_FLOOR, buildFinaleFloor, waveBeginLog } from './finale';
 import { isArcaneCaster, startFloorContract } from './prestige';
 import { clearShrineOffering } from './foodSinks';
+import { expireBountyOnDescend } from './goldSinks2';
 
 function stampDualGunsFanfare(state: GameState, prevEquipment: Player['equipment'], addLog: (text: string) => void): GameState {
   const fan = tryDualGunsFanfare({
@@ -136,7 +137,9 @@ export function descendFloor(state: GameState, addLog: (text: string) => void): 
     delete stats.blinkStrikeMarks;
     newPlayer = { ...newPlayer, stats };
   }
-  newState.player = newPlayer;
+  const expired = expireBountyOnDescend({ ...newState, player: newPlayer });
+  if (expired.log) addLog(expired.log);
+  newState = { ...expired.state, player: newPlayer };
   newState = stampDualGunsFanfare(newState, prev.player.equipment, addLog);
   newState.turn++;
   return newState;

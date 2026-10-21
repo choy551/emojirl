@@ -8,6 +8,7 @@ export type ContextActionKind =
   | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear' | 'talk' | 'trade'
   | 'cook' | 'banquet' | 'close-door' | 'rest'
   | 'open-shop' | 'open-cache' | 'open-restaurant' | 'open-slots' | 'open-mirror'
+  | 'open-bounty' | 'open-vanity' | 'open-auction'
   | 'descend' | 'shrine' | 'offer' | 'pickup' | 'wait' | 'explore';
 
 export interface ContextActionDescriptor {
@@ -39,6 +40,9 @@ export function resolveContextAction(
   if (here?.type === 'restaurant') return { kind: 'open-restaurant', label: 'Eat', icon: '🍽️' };
   if (here?.type === 'bed') return { kind: 'rest', label: 'Rest', icon: '🛏️' };
   if (here?.type === 'mirror') return { kind: 'open-mirror', label: 'Reroll', icon: '🪞' };
+  if (here?.type === 'bounty') return { kind: 'open-bounty', label: 'Board', icon: '📜' };
+  if (here?.type === 'vanity') return { kind: 'open-vanity', label: 'Flex', icon: '💎' };
+  if (here?.type === 'auction') return { kind: 'open-auction', label: 'Bid', icon: '☠️' };
 
   const neighbours: { dx: number; dy: number }[] = [];
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) neighbours.push({ dx, dy });
@@ -112,6 +116,13 @@ export function resolveContextAction(
 
   const mirrorDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'mirror');
   if (mirrorDir) return { kind: 'open-mirror', label: 'Reroll', icon: '🪞', dir: mirrorDir };
+
+  const bountyDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'bounty');
+  if (bountyDir) return { kind: 'open-bounty', label: 'Board', icon: '📜', dir: bountyDir };
+  const vanityDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'vanity');
+  if (vanityDir) return { kind: 'open-vanity', label: 'Flex', icon: '💎', dir: vanityDir };
+  const auctionDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'auction');
+  if (auctionDir) return { kind: 'open-auction', label: 'Bid', icon: '☠️', dir: auctionDir };
 
   const stairDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'stairs');
   if (stairDir) {

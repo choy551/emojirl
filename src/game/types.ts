@@ -26,7 +26,10 @@ export type TileType =
   | 'boss-floor'
   | 'campfire'
   | 'bed'
-  | 'mirror';
+  | 'mirror'
+  | 'bounty'
+  | 'vanity'
+  | 'auction';
 
 export interface Tile {
   type: TileType;
@@ -215,6 +218,42 @@ export interface Player {
   insurance?: { items: EmojiItem[] };
   /** Round for the House. Same shape as a banquet mood floor. */
   houseRound?: BanquetBuff;
+  /** Cosmetic trail and title. No combat stats. */
+  vanity?: VanityLoadout;
+}
+
+export type VanityTrailId = 'glitter' | 'petals' | 'prisms';
+export type VanityTitleId = 'gaudy' | 'pilgrim' | 'receipt';
+
+export interface VanityLoadout {
+  trail?: VanityTrailId;
+  title?: VanityTitleId;
+}
+
+export type BountyKind = 'kill' | 'reach' | 'survive';
+export type BountyStatus = 'offered' | 'active' | 'done';
+
+export interface BountyReward {
+  emoji: string;
+  name: string;
+  tier: 'uncommon' | 'rare';
+}
+
+/** One mini-quest for the current floor. The ante is spent on accept. */
+export interface BountyQuest {
+  id: string;
+  kind: BountyKind;
+  floor: number;
+  ante: number;
+  status: BountyStatus;
+  need: number;
+  targetEmoji?: string;
+  targetName?: string;
+  baselineKills?: number;
+  x?: number;
+  y?: number;
+  startTurn?: number;
+  reward: BountyReward;
 }
 
 export interface BanquetBuff {
@@ -425,6 +464,8 @@ export interface GameState {
   voidAttackMode?: 'melee' | 'ranger' | 'wizard';
   /** Floor number on which Unmake was already spent. Resets when this no longer matches currentFloor. */
   unmakeUsedFloor?: number;
+  /** Bounty board contract for this floor. Cleared on descend. */
+  bounty?: BountyQuest;
 }
 
 export interface BossrushState {

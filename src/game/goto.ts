@@ -10,7 +10,10 @@ export type GotoKind =
   | 'cache'
   | 'campfire'
   | 'bed'
-  | 'mirror';
+  | 'mirror'
+  | 'bounty'
+  | 'vanity'
+  | 'auction';
 
 export interface GotoDestination {
   key: string;
@@ -40,6 +43,9 @@ const KIND_META: Record<GotoKind, { icon: string; label: string }> = {
   bed: { icon: '🛏️', label: 'Bed' },
   stairs: { icon: '🕳️', label: 'Downstairs' },
   mirror: { icon: '🪞', label: 'Mirror' },
+  bounty: { icon: '📜', label: 'Bounty board' },
+  vanity: { icon: '💎', label: 'Vanity flex' },
+  auction: { icon: '☠️', label: 'Blood auction' },
 };
 
 function classifyTile(
@@ -52,6 +58,9 @@ function classifyTile(
   if (type === 'restaurant') return 'restaurant';
   if (type === 'campfire') return 'campfire';
   if (type === 'mirror') return 'mirror';
+  if (type === 'bounty') return 'bounty';
+  if (type === 'vanity') return 'vanity';
+  if (type === 'auction') return 'auction';
   if (type === 'bed') return 'bed';
   if (type === 'shop-item' && emoji === '🏪') return opts.shopSoldOut ? null : 'shop';
   if (type === 'shop-item' && emoji === '🍺') return 'bar';
