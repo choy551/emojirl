@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Link, useLocation } from 'wouter';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -303,9 +303,8 @@ export default function CityPage() {
   );
 }
 
-function sectionStartsOpen(section: PaletteSection): boolean {
-  return section.entries.some(entry => entry.kind === 'token' && !entry.locked);
-}
+/** Visible tile rows when the structures menu is open. Tiles wrap inside it. */
+const PALETTE_MENU_ROWS = 5;
 
 function BuildPalette({
   sections,
@@ -316,68 +315,102 @@ function BuildPalette({
   selected: PalettePick | null;
   onSelect: (entry: PaletteEntry) => void;
 }) {
-  const [forced, setForced] = useState<Record<string, boolean>>({});
+  const rootRef = useRef<HTMLDivElement>(null);
+  const pointerRef = useRef('');
+  const [pinned, setPinned] = useState(false);
+  const [hover, setHover] = useState(false);
+  const open = pinned || hover;
+  const ready = sections.reduce((sum, section) => sum + section.entries.filter(entry => !entry.locked).length, 0);
   const decor = sections.filter(section => section.entries[0]?.kind === 'decor');
   const build = sections.filter(section => section.entries[0]?.kind !== 'decor');
-  const fold = (section: PaletteSection) => (
-    <PaletteFold
-      key={section.id}
-      section={section}
-      open={section.id in forced ? forced[section.id]! : sectionStartsOpen(section)}
-      onToggle={next => setForced(prev => ({ ...prev, [section.id]: next }))}
-      selected={selected}
-      onSelect={onSelect}
-    />
-  );
+
+  useEffect(() => {
+    if (!pinned) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setPinned(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [pinned]);
+
+  const togglePinned = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    const fineHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    if (event.detail !== 0 && fineHover && pointerRef.current === 'mouse') return;
+    setPinned(value => !value);
+  };
+
   return (
-    <div className="space-y-1.5" data-testid="city-palette" aria-label="Build palette">
-      {build.map(fold)}
-      <div className="space-y-1.5" data-testid="city-decor" aria-label="Decor palette">
-        {decor.map(fold)}
-      </div>
+    <div
+      ref={rootRef}
+      className="relative"
+      data-testid="city-palette"
+      aria-label="Structures"
+      onPointerEnter={event => { if (event.pointerType === 'mouse') setHover(true); }}
+      onPointerLeave={event => { if (event.pointerType === 'mouse') setHover(false); }}
+    >
+      <button
+        type="button"
+        className="flex w-full min-h-11 items-center gap-2 overflow-hidden rounded-lg border border-border bg-card px-2 text-left"
+        aria-expanded={open}
+        aria-controls="palette-menu"
+        data-testid="palette-toggle-structures"
+        onPointerDown={event => { pointerRef.current = event.pointerType; }}
+        onClick={togglePinned}
+      >
+        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden="true" />
+        <span className="shrink-0 text-xs font-semibold">Structures</span>
+        <span className="flex min-w-0 gap-1 overflow-hidden" aria-hidden="true">
+          {build.map(section => section.badge && (
+            <span key={section.id} className="text-base leading-none">{section.badge}</span>
+          ))}
+        </span>
+        {selected && <span className="ml-auto shrink-0 text-lg leading-none">{selected.emoji}</span>}
+        <span className={`shrink-0 text-[10px] tabular-nums text-muted-foreground ${selected ? '' : 'ml-auto'}`}>{ready} ready</span>
+      </button>
+      {open && (
+        <div className="absolute inset-x-0 top-full z-30 pt-1">
+          <div
+            id="palette-menu"
+            data-testid="palette-menu"
+            data-rows={PALETTE_MENU_ROWS}
+            className="overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover p-1.5 shadow-md"
+            style={{ maxHeight: `calc(${PALETTE_MENU_ROWS} * 2.75rem + ${PALETTE_MENU_ROWS - 1} * 0.375rem + 0.75rem)` }}
+          >
+            {build.map(section => (
+              <PaletteGroup key={section.id} section={section} selected={selected} onSelect={onSelect} />
+            ))}
+            <div data-testid="city-decor" aria-label="Decor palette">
+              {decor.map(section => (
+                <PaletteGroup key={section.id} section={section} selected={selected} onSelect={onSelect} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function PaletteFold({
+function PaletteGroup({
   section,
-  open,
-  onToggle,
   selected,
   onSelect,
 }: {
   section: PaletteSection;
-  open: boolean;
-  onToggle: (open: boolean) => void;
   selected: PalettePick | null;
   onSelect: (entry: PaletteEntry) => void;
 }) {
-  const ready = section.entries.filter(entry => !entry.locked).length;
-  const tally = section.entries.some(entry => entry.kind === 'token')
-    ? `${ready}/${section.entries.length}`
-    : `${section.entries.length}`;
   return (
-    <section className="rounded-lg border border-border bg-card/40" data-testid={`palette-section-${section.id}`}>
-      <button
-        type="button"
-        className="flex w-full min-h-11 items-center gap-2 px-2 text-left"
-        aria-expanded={open}
-        aria-controls={`palette-panel-${section.id}`}
-        data-testid={`palette-toggle-${section.id}`}
-        onClick={() => onToggle(!open)}
-      >
-        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden="true" />
-        {section.badge && <span className="shrink-0 text-lg leading-none" aria-hidden="true">{section.badge}</span>}
-        <span className="min-w-0 truncate text-xs font-semibold">{section.label}</span>
-        <span className="ml-auto shrink-0 text-[10px] tabular-nums text-muted-foreground">{tally}</span>
-      </button>
-      {open && (
-        <div id={`palette-panel-${section.id}`} className="flex flex-wrap gap-1.5 px-2 pb-2">
-          {section.entries.map(entry => (
-            <PaletteChoice key={`${entry.kind}-${entry.emoji}`} entry={entry} selected={selected} onSelect={onSelect} />
-          ))}
-        </div>
-      )}
+    <section className="mb-1.5 last:mb-0" data-testid={`palette-section-${section.id}`}>
+      <div className="sticky top-0 z-10 flex items-center gap-1 bg-popover py-0.5 text-[10px] font-semibold">
+        {section.badge && <span className="text-sm leading-none" aria-hidden="true">{section.badge}</span>}
+        <span className="truncate">{section.label}</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {section.entries.map(entry => (
+          <PaletteChoice key={`${entry.kind}-${entry.emoji}`} entry={entry} selected={selected} onSelect={onSelect} />
+        ))}
+      </div>
     </section>
   );
 }

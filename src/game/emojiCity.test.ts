@@ -805,6 +805,10 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('buildPaletteSections');
     expect(city).toContain('palette-toggle-');
     expect(city).toContain('aria-expanded');
+    expect(city).toContain('PALETTE_MENU_ROWS = 5');
+    expect(city).toContain('data-testid="palette-menu"');
+    expect(city).toContain('overflow-x-hidden');
+    expect(city).toContain("pointerType === 'mouse'");
     expect(city).toContain('placeDecor');
     expect(city).toContain('edge="north"');
     expect(city).toContain('expand-${edge}');
