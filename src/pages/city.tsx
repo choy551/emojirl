@@ -7,7 +7,10 @@ import {
   CITY_COLS,
   CITY_TICK_MS,
   availableTokens,
+  awaySummary,
+  catchUpCity,
   citizenCapacity,
+  dominantDistrict,
   emojiCityRulesBlurb,
   normalizeCity,
   paletteEmojis,
@@ -15,12 +18,11 @@ import {
   placedCount,
   placedOf,
   removeAt,
-  syncCitizens,
   tickCitizens,
   totalAvailableTokens,
   type CityState,
 } from '../game/emojiCity';
-import { loadMeta, saveCity } from '../game/meta';
+import { loadMeta, saveCity, settleCityCatchUp } from '../game/meta';
 
 export default function CityPage() {
   const [, setLocation] = useLocation();
@@ -28,6 +30,7 @@ export default function CityPage() {
   const [city, setCity] = useState<CityState | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [note, setNote] = useState('Pick an emoji, then tap an empty lot.');
+  const [away, setAway] = useState<string | null>(null);
   const killsRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
@@ -35,12 +38,19 @@ export default function CityPage() {
     const kills = getEnemyKillCounts();
     killsRef.current = kills;
     const counts = meta.emojiConsumes ?? {};
-    const synced = syncCitizens(normalizeCity(meta.city), kills, Math.random);
+    const caught = catchUpCity({
+      city: normalizeCity(meta.city),
+      consumes: counts,
+      kills,
+      pendingTurns: meta.pendingCityTurns ?? 0,
+      growthRemainder: meta.cityGrowthRemainder ?? 0,
+    });
+    settleCityCatchUp(caught.city, caught.growthRemainder);
     setConsumes(counts);
-    setCity(synced);
-    saveCity(synced);
-    const palette = paletteEmojis(counts, synced);
-    setSelected(palette.find(emoji => availableTokens(counts[emoji] ?? 0, placedOf(synced, emoji)) > 0) ?? palette[0] ?? null);
+    setCity(caught.city);
+    if (caught.turns > 0) setAway(awaySummary(caught.turns, caught.citizensGained));
+    const palette = paletteEmojis(counts, caught.city);
+    setSelected(palette.find(emoji => availableTokens(counts[emoji] ?? 0, placedOf(caught.city, emoji)) > 0) ?? palette[0] ?? null);
   }, []);
 
   useEffect(() => {
@@ -94,6 +104,7 @@ export default function CityPage() {
   const cap = citizenCapacity(placed);
   const citizens = city?.citizens.length ?? 0;
   const tokens = city ? totalAvailableTokens(consumes, city) : 0;
+  const district = city ? dominantDistrict(city) : null;
 
   return (
     <div className="min-h-screen w-full max-w-lg mx-auto flex flex-col px-3 py-3 gap-3">
@@ -126,6 +137,20 @@ export default function CityPage() {
           <div className="font-bold tabular-nums" data-testid="city-tokens">{tokens}</div>
         </div>
       </div>
+
+      {away && (
+        <p
+          role="status"
+          data-testid="city-away"
+          className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-center text-xs font-semibold text-primary"
+        >
+          {away}
+        </p>
+      )}
+
+      <p data-testid="city-district" className="text-center text-xs font-semibold text-foreground">
+        {district ? `${district.name} — ${district.className} ${district.bonus.label}` : 'No district yet — need 4 of one style'}
+      </p>
 
       <p className="text-[11px] text-muted-foreground leading-snug min-h-8" data-testid="city-note">{note}</p>
 

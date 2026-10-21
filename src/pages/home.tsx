@@ -8,6 +8,8 @@ import { hasSave, clearSave } from "../game/save";
 import { acknowledgeVoidUnlock, voidUnlockPending } from "../game/voidMeta";
 import { VOID_UNLOCK_TEXT } from "../game/voidDamage";
 import { classSelectEntries, isClassUnlocked, resolveVesselChoice, vesselGridCells, type VesselGridCell } from "../game/classSelect";
+import { districtPickerLine, normalizeCity } from "../game/emojiCity";
+import { loadMeta } from "../game/meta";
 import { WIZARD } from "../game/prestigeConstants";
 
 const GRID_PLACE: Record<string, string> = {
@@ -83,6 +85,8 @@ export default function Home() {
   }
 
   const cls = getClassDef(selected);
+  const cityForDistricts = normalizeCity(loadMeta().city);
+  const districtLine = districtPickerLine(selected, cityForDistricts);
 
   return (
     <div className="min-h-screen w-full flex flex-col">
@@ -184,6 +188,7 @@ export default function Home() {
                   onClick={() => select(v.emoji)}
                   aria-disabled={!v.unlocked}
                   aria-label={v.unlocked ? `Select ${v.name}` : `${v.name} locked`}
+                  title={districtPickerLine(v.emoji, cityForDistricts) ?? undefined}
                   className={`group relative flex aspect-square w-full max-w-11 items-center justify-center rounded-lg text-2xl leading-none transition-all sm:max-w-14 sm:text-3xl ${gridPlace(cell)} ${
                     hintOpen ? "z-30" : "z-10 hover:z-30"
                   } ${
@@ -250,6 +255,12 @@ export default function Home() {
                 </div>
               )}
             </div>
+
+            {districtLine && (
+              <div className="text-xs text-primary border-t border-border/50 pt-2" data-testid="vessel-district">
+                🏙️ {districtLine}
+              </div>
+            )}
 
             {cls.startingAmmo > 0 && (
               <div className="text-xs text-amber-400/80 border-t border-border/50 pt-2">

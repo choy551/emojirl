@@ -5,9 +5,19 @@ import {
   CITY_COLS,
   CITY_ROWS,
   CITY_SIZE,
+  DISTRICT_THRESHOLD,
+  DISTRICTS,
+  GROWTH_TURNS,
   TOKENS_PER_CONSUME,
+  WANDER_CATCHUP_CAP,
+  applyDistrictBonus,
   availableTokens,
+  awaySummary,
+  catchUpCity,
   citizenCapacity,
+  classifyEmoji,
+  districtPickerLine,
+  dominantDistrict,
   emptyCity,
   paletteEmojis,
   pickWeightedCitizen,
@@ -20,8 +30,8 @@ import {
   tokensForEmoji,
   totalAvailableTokens,
 } from './emojiCity';
-import { loadMeta, recordEmojiConsume, recordPrestigeWin, saveCity, setMetaStore, type KeyValueStore } from './meta';
-import { WIZARD } from './prestigeConstants';
+import { loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, saveCity, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
+import { COWBOY, FENCER, GENIE, NINJA, RANGER, VOID, WIZARD } from './prestigeConstants';
 
 function memoryStore(): KeyValueStore {
   const mem = new Map<string, string>();
@@ -150,14 +160,207 @@ describe('EmojiCB citizens', () => {
   });
 });
 
+function vessel(characterClass: string, stats: { hp?: number; maxHp?: number; attack?: number; speed?: number; evasion?: number; mana?: number; maxMana?: number } = {}) {
+  return {
+    characterClass,
+    stats: {
+      hp: stats.hp ?? 8,
+      maxHp: stats.maxHp ?? 8,
+      attack: stats.attack ?? 3,
+      defense: 1,
+      speed: stats.speed ?? 1,
+      evasion: stats.evasion ?? 5,
+      luck: 0,
+      mana: stats.mana ?? 0,
+      maxMana: stats.maxMana ?? 0,
+    },
+  };
+}
+
+describe('EmojiCB districts', () => {
+  it('classifies themed emoji and leaves food unclassified', () => {
+    expect(DISTRICT_THRESHOLD).toBe(4);
+    expect(classifyEmoji('🗡️')?.id).toBe('thieves');
+    expect(classifyEmoji('🧪')?.id).toBe('arcane');
+    expect(classifyEmoji('🔫')?.id).toBe('saloon');
+    expect(classifyEmoji('🌳')?.id).toBe('grove');
+    expect(classifyEmoji('🌑')?.id).toBe('void');
+    expect(classifyEmoji('🍎')).toBeNull();
+
+    const seen = new Map<string, string>();
+    for (const style of DISTRICTS) {
+      for (const emoji of style.emoji) {
+        expect(seen.has(emoji), `${emoji} is in ${seen.get(emoji)} and ${style.id}`).toBe(false);
+        seen.set(emoji, style.id);
+        expect(classifyEmoji(emoji)?.id).toBe(style.id);
+      }
+    }
+  });
+
+  it('needs four tiles and a strict lead before a style dominates', () => {
+    expect(dominantDistrict(fill(3, '🗡️'))).toBeNull();
+    expect(dominantDistrict(fill(4, '🗡️'))?.name).toBe('Slums of Thieves');
+    const tied = fill(4, '🗡️');
+    for (let i = 4; i < 8; i++) tied.tiles[i] = '🧪';
+    expect(dominantDistrict(tied)).toBeNull();
+    tied.tiles[8] = '🗡️';
+    expect(dominantDistrict(tied)?.id).toBe('thieves');
+    const apples = fill(6, '🍎');
+    expect(dominantDistrict(apples)).toBeNull();
+    expect(districtPickerLine(NINJA, apples)).toBeNull();
+    expect(districtPickerLine(NINJA, fill(4, '🗡️'))).toBe('Slums of Thieves: +1 SPD at run start');
+    expect(districtPickerLine(WIZARD, fill(4, '🗡️'))).toBe('Slums of Thieves favors Ninja (+1 SPD)');
+  });
+
+  it('grants the run-start bonus to the matching class and its prestige', () => {
+    const thieves = fill(4, '🗡️');
+    const ninja = applyDistrictBonus(vessel(NINJA, { speed: 3 }), thieves);
+    expect(ninja.player.stats.speed).toBe(4);
+    expect(ninja.log).toContain('+1 SPD');
+    const fencer = applyDistrictBonus(vessel(FENCER, { speed: 2 }), thieves);
+    expect(fencer.player.stats.speed).toBe(3);
+    const wizardIgnored = applyDistrictBonus(vessel(WIZARD, { speed: 1, mana: 4, maxMana: 4 }), thieves);
+    expect(wizardIgnored.player.stats.speed).toBe(1);
+    expect(wizardIgnored.player.stats.maxMana).toBe(4);
+    expect(wizardIgnored.log).toBeUndefined();
+
+    const sanctum = fill(4, '🧪');
+    const wizard = applyDistrictBonus(vessel(WIZARD, { mana: 4, maxMana: 4 }), sanctum);
+    expect(wizard.player.stats.mana).toBe(6);
+    expect(wizard.player.stats.maxMana).toBe(6);
+    const genie = applyDistrictBonus(vessel(GENIE, { mana: 6, maxMana: 6 }), sanctum);
+    expect(genie.player.stats.maxMana).toBe(8);
+    expect(genie.player.stats.mana).toBe(8);
+
+    const saloon = fill(4, '🔫');
+    expect(applyDistrictBonus(vessel(COWBOY, { attack: 4 }), saloon).player.stats.attack).toBe(5);
+    const grove = fill(4, '🌳');
+    expect(applyDistrictBonus(vessel(RANGER, { evasion: 10 }), grove).player.stats.evasion).toBe(11);
+    const hollow = fill(4, '🌑');
+    const voided = applyDistrictBonus(vessel(VOID, { hp: 6, maxHp: 6 }), hollow);
+    expect(voided.player.stats.hp).toBe(8);
+    expect(voided.player.stats.maxHp).toBe(8);
+    expect(applyDistrictBonus(vessel(WIZARD), fill(6, '🍎')).log).toBeUndefined();
+  });
+});
+
+describe('EmojiCB catch-up', () => {
+  it('builds one lot per ten turns and keeps the leftover turns', () => {
+    expect(GROWTH_TURNS).toBe(10);
+    expect(WANDER_CATCHUP_CAP).toBe(200);
+    const idle = catchUpCity({ city: emptyCity(), consumes: { '🔫': 4 }, kills: {}, pendingTurns: 0, rng: () => 0 });
+    expect(idle.buildingsGained).toBe(0);
+    expect(idle.turns).toBe(0);
+
+    const consumes = { '🔫': 9, '🍺': 9 };
+    const first = catchUpCity({ city: emptyCity(), consumes, kills: {}, pendingTurns: 10, rng: () => 0 });
+    expect(first.buildingsGained).toBe(1);
+    expect(first.growthRemainder).toBe(0);
+    expect(consumes['🔫']).toBe(9);
+
+    const second = catchUpCity({ city: first.city, consumes, kills: {}, pendingTurns: 25, rng: () => 0 });
+    expect(second.buildingsGained).toBe(2);
+    expect(second.growthRemainder).toBe(5);
+    const third = catchUpCity({
+      city: second.city,
+      consumes,
+      kills: {},
+      pendingTurns: 7,
+      growthRemainder: second.growthRemainder,
+      rng: () => 0,
+    });
+    expect(third.buildingsGained).toBe(1);
+    expect(third.growthRemainder).toBe(2);
+  });
+
+  it('fills citizens from the kill ledger without copying or spending consumes', () => {
+    const consumes = { '🗡️': 5 };
+    const caught = catchUpCity({
+      city: emptyCity(),
+      consumes,
+      kills: { '🧟': 3 },
+      pendingTurns: 50,
+      rng: () => 0,
+    });
+    expect(caught.buildingsGained).toBe(5);
+    expect(placedCount(caught.city)).toBe(5);
+    expect(caught.citizensGained).toBe(1);
+    expect(caught.city.citizens[0]?.emoji).toBe('🧟');
+    expect(consumes).toEqual({ '🗡️': 5 });
+
+    const quiet = catchUpCity({
+      city: emptyCity(),
+      consumes: { '🗡️': 5 },
+      kills: {},
+      pendingTurns: 50,
+      rng: () => 0,
+    });
+    expect(quiet.buildingsGained).toBe(5);
+    expect(quiet.citizensGained).toBe(0);
+
+    const waiting = fill(5, '🏠');
+    const arrived = catchUpCity({ city: waiting, consumes: { '🏠': 5 }, kills: { '🧟': 2 }, pendingTurns: 0, rng: () => 0 });
+    expect(arrived.citizensGained).toBe(1);
+    expect(arrived.buildingsGained).toBe(0);
+  });
+
+  it('caps wander steps on a long absence', () => {
+    const city = fill(5, '🌳');
+    city.citizens = [{ id: 'c-1', emoji: '🧟', x: 1, y: 1 }];
+    let calls = 0;
+    const caught = catchUpCity({
+      city,
+      consumes: { '🌳': 5 },
+      kills: { '🧟': 1 },
+      pendingTurns: 5000,
+      rng: () => { calls += 1; return 0; },
+    });
+    expect(caught.buildingsGained).toBe(0);
+    expect(caught.turns).toBe(5000);
+    expect(calls).toBeLessThan(1000);
+    expect(awaySummary(12, 3)).toBe('While you were away: +12 turns, +3 citizens');
+  });
+
+  it('stores pending turns in the meta save and clears them on catch-up', () => {
+    expect(noteCityTurns(3)).toBe(3);
+    expect(noteCityTurns(2)).toBe(5);
+    recordEmojiConsume('🍎');
+    saveCity(emptyCity());
+    recordPrestigeWin(WIZARD);
+    expect(loadMeta().pendingCityTurns).toBe(5);
+    const caught = catchUpCity({
+      city: loadMeta().city ?? emptyCity(),
+      consumes: loadMeta().emojiConsumes ?? {},
+      kills: {},
+      pendingTurns: loadMeta().pendingCityTurns ?? 0,
+      growthRemainder: loadMeta().cityGrowthRemainder ?? 0,
+      rng: () => 0,
+    });
+    settleCityCatchUp(caught.city, caught.growthRemainder);
+    const meta = loadMeta();
+    expect(meta.pendingCityTurns).toBe(0);
+    expect(meta.cityGrowthRemainder).toBe(5);
+    expect(meta.emojiConsumes?.['🍎']).toBe(1);
+    expect(meta.unlockedPrestige).toHaveLength(1);
+    expect(meta.city?.tiles.some(Boolean)).toBe(false);
+  });
+});
+
 describe('EmojiCB surfaces', () => {
   it('is linked from home and described in the manual', () => {
     const home = readFileSync(new URL('../pages/home.tsx', import.meta.url), 'utf8');
     const manual = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
     const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
+    const city = readFileSync(new URL('../pages/city.tsx', import.meta.url), 'utf8');
+    const game = readFileSync(new URL('../pages/game.tsx', import.meta.url), 'utf8');
     expect(home).toContain('href="/city"');
     expect(home).toContain('EmojiCB');
+    expect(home).toContain('vessel-district');
     expect(manual).toContain('emojiCityRulesBlurb');
     expect(app).toContain('path="/city"');
+    expect(city).toContain('catchUpCity');
+    expect(city).toContain('city-away');
+    expect(game).toContain('noteCityTurns');
+    expect(game).toContain('applyDistrictBonus');
   });
 });

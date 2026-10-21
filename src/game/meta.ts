@@ -17,6 +17,10 @@ export interface MetaSave {
   emojiConsumes?: Record<string, number>;
   /** EmojiCB grid. Absent until the player opens the city. */
   city?: CityState;
+  /** Roguelike turns waiting to be simulated the next time EmojiCB opens. */
+  pendingCityTurns?: number;
+  /** City turns toward the next auto-built lot, kept across visits. */
+  cityGrowthRemainder?: number;
 }
 
 export interface KeyValueStore {
@@ -58,6 +62,12 @@ function carryItems(raw: unknown): EmojiItem[] {
   });
 }
 
+function nonNegInt(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.floor(n);
+}
+
 function countMap(raw: unknown): Record<string, number> {
   if (!raw || typeof raw !== 'object') return {};
   const out: Record<string, number> = {};
@@ -87,6 +97,8 @@ export function loadMeta(): MetaSave {
       insuredCarry: carryItems(parsed.insuredCarry),
       emojiConsumes: countMap(parsed.emojiConsumes),
       city: parsed.city ? normalizeCity(parsed.city) : undefined,
+      pendingCityTurns: nonNegInt(parsed.pendingCityTurns),
+      cityGrowthRemainder: nonNegInt(parsed.cityGrowthRemainder),
     };
   } catch {
     return emptyMeta();
@@ -125,6 +137,28 @@ export function recordEmojiConsume(emoji: string, n = 1): number {
 export function saveCity(city: CityState): void {
   const meta = loadMeta();
   saveMeta({ ...meta, city: normalizeCity(city) });
+}
+
+/** Add roguelike turns that should advance the city the next time it opens. */
+export function noteCityTurns(turns: number): number {
+  const add = Math.max(0, Math.floor(turns));
+  const meta = loadMeta();
+  const pending = meta.pendingCityTurns ?? 0;
+  if (add === 0) return pending;
+  const next = pending + add;
+  saveMeta({ ...meta, pendingCityTurns: next });
+  return next;
+}
+
+/** Store the caught-up city and clear the pending turn queue. */
+export function settleCityCatchUp(city: CityState, growthRemainder: number): void {
+  const meta = loadMeta();
+  saveMeta({
+    ...meta,
+    city: normalizeCity(city),
+    pendingCityTurns: 0,
+    cityGrowthRemainder: nonNegInt(growthRemainder),
+  });
 }
 
 /**
