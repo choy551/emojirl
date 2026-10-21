@@ -8,7 +8,7 @@ import { hasSave, clearSave } from "../game/save";
 import { acknowledgeVoidUnlock, voidUnlockPending } from "../game/voidMeta";
 import { VOID_UNLOCK_TEXT } from "../game/voidDamage";
 import { classSelectEntries, isClassUnlocked, resolveVesselChoice, vesselGridCells, type VesselGridCell } from "../game/classSelect";
-import { districtPickerLine, normalizeCity } from "../game/emojiCity";
+import { districtPickerEntries, districtPickerLine, normalizeCity } from "../game/emojiCity";
 import { loadMeta } from "../game/meta";
 import { WIZARD } from "../game/prestigeConstants";
 
@@ -86,7 +86,7 @@ export default function Home() {
 
   const cls = getClassDef(selected);
   const cityForDistricts = normalizeCity(loadMeta().city);
-  const districtLine = districtPickerLine(selected, cityForDistricts);
+  const districtEntries = districtPickerEntries(selected, cityForDistricts);
 
   return (
     <div className="min-h-screen w-full flex flex-col">
@@ -256,9 +256,13 @@ export default function Home() {
               )}
             </div>
 
-            {districtLine && (
-              <div className="text-xs text-primary border-t border-border/50 pt-2" data-testid="vessel-district">
-                🏙️ {districtLine}
+            {districtEntries.length > 0 && (
+              <div className="text-xs text-primary border-t border-border/50 pt-2 space-y-1" data-testid="vessel-district">
+                {districtEntries.map(entry => (
+                  <div key={entry.id} data-testid={`vessel-district-${entry.id}`} className={entry.yours ? "font-semibold" : "text-primary/80"}>
+                    🏙️ {entry.text}
+                  </div>
+                ))}
               </div>
             )}
 
