@@ -18,6 +18,7 @@ import {
   GENIE,
   GENIE_BASE_MP,
   GENIE_BLOODCAST_HP_PER_MP,
+  GENIE_BLOODCAST_MIN_HP_FRACTION,
   GENIE_FIREBALL_MP,
   GENIE_OVERCHANNEL_EXTRA_MP,
   GENIE_OVERCHANNEL_LEVEL,
@@ -188,8 +189,25 @@ export interface CastPayment {
   mpSpent: number;
   hpSpent: number;
   damageMult: number;
-  /** overchannel | bloodcast | fireball | none */
+  /** overchannel | bloodcast | fireball | none. Overchannel may also spend HP. */
   kind: 'overchannel' | 'bloodcast' | 'fireball' | 'none';
+  /** Set when a bloodcast was refused. The fireball resolver logs it. */
+  blockReason?: string;
+}
+
+/** MP the spell still needs. Zero when current MP covers the spell. */
+export function missingSpellMp(spellMp: number, mp: number): number {
+  return Math.max(0, spellMp - Math.max(0, mp));
+}
+
+/** 2 HP per missing MP. Attack is not an input. */
+export function bloodcastHpCost(spellMp: number, mp: number): number {
+  return missingSpellMp(spellMp, mp) * GENIE_BLOODCAST_HP_PER_MP;
+}
+
+export function bloodcastHpAllowed(hp: number, maxHp: number): boolean {
+  if (maxHp <= 0) return false;
+  return hp / maxHp >= GENIE_BLOODCAST_MIN_HP_FRACTION;
 }
 
 export function planGenieCast(player: Player): CastPayment {
@@ -197,25 +215,51 @@ export function planGenieCast(player: Player): CastPayment {
   const hp = player.stats.hp;
   const level = player.stats.level;
   const none: CastPayment = { canCast: false, mpSpent: 0, hpSpent: 0, damageMult: 1, kind: 'none' };
-  if (level >= GENIE_OVERCHANNEL_LEVEL && mp >= GENIE_FIREBALL_MP + GENIE_OVERCHANNEL_EXTRA_MP) {
+  const overSpell = GENIE_FIREBALL_MP + GENIE_OVERCHANNEL_EXTRA_MP;
+  const baseSpell = GENIE_FIREBALL_MP;
+  if (level >= GENIE_OVERCHANNEL_LEVEL && mp >= overSpell) {
     return {
       canCast: true,
-      mpSpent: GENIE_FIREBALL_MP + GENIE_OVERCHANNEL_EXTRA_MP,
+      mpSpent: overSpell,
       hpSpent: 0,
       damageMult: GENIE_OVERCHANNEL_MULT,
       kind: 'overchannel',
     };
   }
-  if (mp >= GENIE_FIREBALL_MP) {
-    return { canCast: true, mpSpent: GENIE_FIREBALL_MP, hpSpent: 0, damageMult: 1, kind: 'fireball' };
+  if (mp >= baseSpell) {
+    return { canCast: true, mpSpent: baseSpell, hpSpent: 0, damageMult: 1, kind: 'fireball' };
   }
-  if (level >= GENIE_OVERCHANNEL_LEVEL) {
-    const missing = GENIE_FIREBALL_MP - Math.max(0, mp);
-    const hpSpent = missing * GENIE_BLOODCAST_HP_PER_MP;
-    if (hp - hpSpent <= 0) return none;
-    return { canCast: true, mpSpent: Math.max(0, mp), hpSpent, damageMult: 1, kind: 'bloodcast' };
+  if (level < GENIE_OVERCHANNEL_LEVEL) return none;
+
+  if (!bloodcastHpAllowed(hp, player.stats.maxHp)) {
+    return {
+      ...none,
+      blockReason: `🧞‍♀️ Bloodcast unavailable — HP is below ${Math.round(GENIE_BLOODCAST_MIN_HP_FRACTION * 100)}%.`,
+    };
   }
-  return none;
+
+  const attempts: { spell: number; mult: number; kind: CastPayment['kind'] }[] = [
+    { spell: overSpell, mult: GENIE_OVERCHANNEL_MULT, kind: 'overchannel' },
+    { spell: baseSpell, mult: 1, kind: 'bloodcast' },
+  ];
+  let lethalCost = 0;
+  for (const attempt of attempts) {
+    const hpSpent = bloodcastHpCost(attempt.spell, mp);
+    if (hp - hpSpent > 0) {
+      return {
+        canCast: true,
+        mpSpent: Math.max(0, mp),
+        hpSpent,
+        damageMult: attempt.mult,
+        kind: attempt.kind,
+      };
+    }
+    lethalCost = hpSpent;
+  }
+  return {
+    ...none,
+    blockReason: `🧞‍♀️ Bloodcast stopped — ${lethalCost} HP would drop you to 0.`,
+  };
 }
 
 export function fireballBlastDamage(attack: number, defense: number, mult: number): number {

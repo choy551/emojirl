@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHARACTER_CLASSES } from './classes';
 import { canEquipItem } from '../components/itemUtils';
@@ -12,6 +13,7 @@ import {
   executeStrike,
   fencerCritBonus,
   fencerEvasion,
+  bloodcastHpCost,
   fireballBlastDamage,
   gunshotPlan,
   planGenieCast,
@@ -27,8 +29,11 @@ import {
   FENCER_CRIT_AT_FULL,
   FENCER_EVA_AT_EMPTY,
   GENIE,
+  GENIE_BLOODCAST_HP_PER_MP,
   GENIE_FIREBALL_MP,
+  GENIE_OVERCHANNEL_EXTRA_MP,
   GENIE_OVERCHANNEL_LEVEL,
+  GENIE_OVERCHANNEL_MULT,
   GENIE_SELF_SPLASH,
   HITMAN,
   HITMAN_CONTRACT_KILLS,
@@ -182,8 +187,9 @@ describe('prestige kits', () => {
     expect(over.kind).toBe('overchannel');
     expect(over.damageMult).toBeGreaterThan(1);
     const blood = planGenieCast(player({ characterClass: GENIE, stats: { mana: 0, level: GENIE_OVERCHANNEL_LEVEL, hp: 20, maxHp: 20, attack: 4, defense: 0, speed: 1, evasion: 0, luck: 0, xp: 0, moodValue: 0, gold: 0 } }));
-    expect(blood.kind).toBe('bloodcast');
-    expect(blood.hpSpent).toBeGreaterThan(0);
+    expect(blood.kind).toBe('overchannel');
+    expect(blood.hpSpent).toBe((GENIE_FIREBALL_MP + GENIE_OVERCHANNEL_EXTRA_MP) * GENIE_BLOODCAST_HP_PER_MP);
+    expect(blood.damageMult).toBe(GENIE_OVERCHANNEL_MULT);
     expect(tilesInRadius({ x: 3, y: 3 }, 1)).toHaveLength(9);
     const blast = fireballBlastDamage(8, 0, 1);
     expect(selfSplashDamage(blast)).toBe(Math.max(1, Math.round(blast * GENIE_SELF_SPLASH)));
@@ -213,6 +219,92 @@ describe('prestige kits', () => {
     expect(volley.enemies.find(e => e.id === 'side')!.hp).toBeLessThan(30);
     expect(volley.enemies.find(e => e.id === 'far')!.hp).toBe(30);
     expect(logs.some(l => l.includes('Fireball'))).toBe(true);
+    expect(logs.some(l => l.includes('Bloodcast'))).toBe(false);
+    const splash = selfSplashDamage(fireballBlastDamage(8, 0, 1));
+    expect(volley.player.stats.hp).toBe(20 - splash);
+  });
+
+  it('bloodcasts only missing MP, ignores attack, and refuses low or lethal HP', () => {
+    expect(bloodcastHpCost(GENIE_FIREBALL_MP, 0)).toBe(4);
+    expect(bloodcastHpCost(GENIE_FIREBALL_MP + GENIE_OVERCHANNEL_EXTRA_MP, 0)).toBe(6);
+    expect(bloodcastHpCost(GENIE_FIREBALL_MP, 1)).toBe(2);
+    expect(bloodcastHpCost(GENIE_FIREBALL_MP, GENIE_FIREBALL_MP)).toBe(0);
+    expect(bloodcastHpCost(GENIE_FIREBALL_MP + GENIE_OVERCHANNEL_EXTRA_MP, 6)).toBe(0);
+
+    const stats = { mana: 6, maxMana: 6, hp: 20, maxHp: 20, defense: 0, speed: 1, evasion: 0, luck: 0, level: GENIE_OVERCHANNEL_LEVEL, xp: 0, moodValue: 0, gold: 0 };
+    const covered = planGenieCast(player({ characterClass: GENIE, stats: { ...stats, attack: 99 } }));
+    expect(covered).toMatchObject({ canCast: true, hpSpent: 0, kind: 'overchannel', mpSpent: GENIE_FIREBALL_MP + GENIE_OVERCHANNEL_EXTRA_MP });
+    const baseCovered = planGenieCast(player({ characterClass: GENIE, stats: { ...stats, mana: GENIE_FIREBALL_MP, attack: 99 } }));
+    expect(baseCovered).toMatchObject({ canCast: true, hpSpent: 0, kind: 'fireball', mpSpent: GENIE_FIREBALL_MP });
+
+    const heavy = planGenieCast(player({ characterClass: GENIE, stats: { ...stats, mana: 0, attack: 99 } }));
+    const light = planGenieCast(player({ characterClass: GENIE, stats: { ...stats, mana: 0, attack: 1 } }));
+    expect(heavy.hpSpent).toBe(6);
+    expect(light.hpSpent).toBe(heavy.hpSpent);
+    expect(heavy.damageMult).toBe(GENIE_OVERCHANNEL_MULT);
+
+    const partial = planGenieCast(player({ characterClass: GENIE, stats: { ...stats, mana: 1, hp: 3, maxHp: 12, attack: 40 } }));
+    expect(partial).toMatchObject({ canCast: true, hpSpent: 2, kind: 'bloodcast', damageMult: 1, mpSpent: 1 });
+
+    const standard = planGenieCast(player({ characterClass: GENIE, stats: { ...stats, mana: 0, hp: 5, maxHp: 20, attack: 40 } }));
+    expect(standard).toMatchObject({ canCast: true, hpSpent: 4, kind: 'bloodcast', damageMult: 1 });
+
+    const low = planGenieCast(player({ characterClass: GENIE, stats: { ...stats, mana: 0, hp: 8, maxHp: 40, attack: 4 } }));
+    expect(low.canCast).toBe(false);
+    expect(low.blockReason).toContain('below 25%');
+
+    const lethal = planGenieCast(player({ characterClass: GENIE, stats: { ...stats, mana: 0, hp: 3, maxHp: 12, attack: 4 } }));
+    expect(lethal.canCast).toBe(false);
+    expect(lethal.blockReason).toContain('4 HP would drop you to 0');
+
+    const early = planGenieCast(player({ characterClass: GENIE, stats: { ...stats, mana: 0, level: 1, hp: 20, attack: 4 } }));
+    expect(early.canCast).toBe(false);
+    expect(early.blockReason).toBeUndefined();
+
+    const map = floorMap();
+    const target = foe({ id: 'mid', pos: { x: 4, y: 0 }, hp: 40, maxHp: 40 });
+    const blockedLogs: string[] = [];
+    const blocked = resolveGenieFireball({
+      player: player({ characterClass: GENIE, pos: { x: 1, y: 0 }, stats: { ...stats, mana: 0, hp: 3, maxHp: 12, attack: 30 } }),
+      enemies: [target],
+      map,
+      mode: 'nearest',
+      manualTargetId: null,
+      turn: 2,
+      floor: 1,
+      addLog: (t) => blockedLogs.push(t),
+    });
+    expect(blocked.cast).toBe(false);
+    expect(blocked.player.stats.hp).toBe(3);
+    expect(blocked.enemies[0].hp).toBe(40);
+    expect(blockedLogs.some(l => l.includes('would drop you to 0'))).toBe(true);
+
+    const paidLogs: string[] = [];
+    const paid = resolveGenieFireball({
+      player: player({ characterClass: GENIE, pos: { x: 1, y: 0 }, stats: { ...stats, mana: 0, hp: 20, maxHp: 20, attack: 30 } }),
+      enemies: [foe({ id: 'mid', pos: { x: 4, y: 0 }, hp: 80, maxHp: 80 })],
+      map,
+      mode: 'nearest',
+      manualTargetId: null,
+      turn: 3,
+      floor: 1,
+      addLog: (t) => paidLogs.push(t),
+    });
+    const paidSplash = selfSplashDamage(fireballBlastDamage(30, 0, GENIE_OVERCHANNEL_MULT));
+    expect(paid.cast).toBe(true);
+    expect(paid.player.stats.hp).toBe(20 - 6 - paidSplash);
+    expect(paidLogs.some(l => l.includes('6 HP'))).toBe(true);
+    expect(paid.floats.some(f => f.text === '-6')).toBe(true);
+
+    const detail = CHARACTER_CLASSES[GENIE].passives.find(p => p.label === 'Overchannel / Bloodcast')?.detail ?? '';
+    expect(detail).toContain('2 HP per missing MP');
+    expect(detail).toContain('HP cost is 0');
+    expect(detail).toContain('4 HP');
+    expect(detail).toContain('6 HP');
+    expect(detail).toContain('25%');
+    const manual = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
+    expect(manual).toContain('GENIE_BLOODCAST_HP_PER_MP');
+    expect(manual).toContain('charges nothing when MP covers the spell');
   });
 
   it('scales fencer crit up with HP and evasion up as HP falls', () => {

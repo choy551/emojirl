@@ -19,6 +19,7 @@ import { softCapRulesBlurb } from "../game/softCap";
 import { farmerRulesBlurb } from "../game/farmer";
 import { foodSinkRulesBlurb } from "../game/foodSinks";
 import { CHEF_LESSON_COST_TEXT, MERCHANT_BUY_PRICE_TEXT, slotShrineCost } from "../game/economy";
+import { GENIE_BLOODCAST_HP_PER_MP, GENIE_BLOODCAST_MIN_HP_FRACTION, GENIE_FIREBALL_MP, GENIE_OVERCHANNEL_LEVEL } from "../game/prestigeConstants";
 import { goldSinkRulesBlurb } from "../game/goldSinks";
 import { goldSink2RulesBlurb } from "../game/goldSinks2";
 import { voidExtrasRulesBlurb } from "../game/hollowMarket";
@@ -663,7 +664,7 @@ export default function HowToPlay({
             {
               label: "🔮 MP",
               color: "text-blue-400",
-              desc: "Mana Points — Wizard 🧙 and Genie 🧞‍♀️. Spells cost MP. It regenerates by 1 when you Wait out of enemy sight. The Genie's fireball costs 2 MP. Running dry prevents spellcasting until it refills (Genie level 5 can Bloodcast HP instead). Drinks restore MP by tier and never restore HP.",
+              desc: `Mana Points — Wizard 🧙 and Genie 🧞‍♀️. Spells cost MP. It regenerates by 1 when you Wait out of enemy sight. The Genie's fireball costs ${GENIE_FIREBALL_MP} MP. From level ${GENIE_OVERCHANNEL_LEVEL}, Bloodcast pays ${GENIE_BLOODCAST_HP_PER_MP} HP per missing MP and charges nothing when MP covers the spell. It is unavailable below ${Math.round(GENIE_BLOODCAST_MIN_HP_FRACTION * 100)}% HP and will not cast if the HP cost would drop you to 0. Drinks restore MP by tier and never restore HP.`,
             },
           ].map(({ label, color, desc }) => (
             <div

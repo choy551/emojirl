@@ -57,7 +57,7 @@ function pickTarget(
 
 /**
  * Genie Fireball: 2 MP, 3×3 around the aimed hostile, 25% of the blast splashes on the caster.
- * Overchannel spends 1 extra MP for more damage at LV5. Bloodcast pays HP when MP is short.
+ * Overchannel spends 1 extra MP for more damage at LV5. Bloodcast pays 2 HP per missing MP only.
  */
 export function resolveGenieFireball(args: {
   player: Player;
@@ -82,7 +82,10 @@ export function resolveGenieFireball(args: {
   const target = pickTarget(args.player, args.enemies, args.map, args.mode, args.manualTargetId);
   if (!target) return idle;
   const pay = planGenieCast(args.player);
-  if (!pay.canCast) return idle;
+  if (!pay.canCast) {
+    if (pay.blockReason) args.addLog(pay.blockReason);
+    return idle;
+  }
 
   const geared = applyEquipmentAndPassives(args.player);
   const blast = fireballBlastDamage(geared.stats.attack, 0, pay.damageMult);
