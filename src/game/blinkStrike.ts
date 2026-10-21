@@ -5,7 +5,8 @@ import type { BlinkStrikeMark, BlinkTalentId, Player } from './types';
  *
  * Damage (before defense):
  *   effectiveCrit = clamp(5 + LCK, 0, CRIT_STAT_SOFT_CAP)
- *   M             = min(4, 2 + 0.02 × effectiveCrit)     // 200% at 0 CRIT, +2% per CRIT, cap 400%
+ *   percent       = 200 + round(200 × effectiveCrit / 99) // 200% at 0 CRIT, 400% at 99 CRIT
+ *   M             = percent / 100
  *   raw           = round(ATK × M)
  *   if the target is unaware, raw = round(raw × 1.6)     // existing Shadow Strike
  *   hit           = max(1, round(raw × moodMult × (crit ? 2 : 1)) − DEF)
@@ -25,6 +26,7 @@ export const CRIT_STAT_SOFT_CAP = 99;
 
 export const BLINK_MULTIPLIER_MIN_PERCENT = 200;
 export const BLINK_MULTIPLIER_MAX_PERCENT = 400;
+/** Approximate slope. The exact line is 200 points across the 0–99 CRIT cap, so a step is 2 or 3. */
 export const BLINK_MULTIPLIER_PER_CRIT = 2;
 
 export const BLINK_BASE_COOLDOWN = 8;
@@ -113,10 +115,11 @@ export function effectiveCritForBlink(crit: number): number {
   return Math.min(CRIT_STAT_SOFT_CAP, Math.max(0, crit));
 }
 
-/** Blink Strike damage percent. 200 at 0 CRIT, +2 per CRIT, never above 400, and never above the soft-capped CRIT. */
+/** Blink Strike damage percent. 200 at 0 CRIT, 400 at 99 CRIT, on the same straight line. */
 export function blinkStrikeMultiplierPercent(crit: number): number {
   const effective = effectiveCritForBlink(crit);
-  const scaled = BLINK_MULTIPLIER_MIN_PERCENT + BLINK_MULTIPLIER_PER_CRIT * effective;
+  const span = BLINK_MULTIPLIER_MAX_PERCENT - BLINK_MULTIPLIER_MIN_PERCENT;
+  const scaled = BLINK_MULTIPLIER_MIN_PERCENT + Math.round((span * effective) / CRIT_STAT_SOFT_CAP);
   return Math.min(BLINK_MULTIPLIER_MAX_PERCENT, Math.max(BLINK_MULTIPLIER_MIN_PERCENT, scaled));
 }
 
@@ -384,7 +387,6 @@ export function settleBlinkStrikeMarks(
 }
 
 export function blinkStrikeRulesBlurb(luck?: number): string {
-  const capPct = blinkStrikeMultiplierPercent(CRIT_STAT_SOFT_CAP);
   const live = luck == null ? '' : `Currently ${blinkStrikeDamagePhrase(luck)}. `;
-  return `${live}Damage is ${BLINK_MULTIPLIER_MIN_PERCENT}% at 0 CRIT, +${BLINK_MULTIPLIER_PER_CRIT}% per CRIT, capped at ${BLINK_MULTIPLIER_MAX_PERCENT}% (CRIT is soft-capped at ${CRIT_STAT_SOFT_CAP}, so the strike tops out at ${capPct}%). Critical hits use normal crit chance and double that damage.`;
+  return `${live}Damage is ${BLINK_MULTIPLIER_MIN_PERCENT}% at 0 CRIT and ${BLINK_MULTIPLIER_MAX_PERCENT}% at ${CRIT_STAT_SOFT_CAP} CRIT, rising in a straight line (about +${BLINK_MULTIPLIER_PER_CRIT}% per CRIT). Critical hits use normal crit chance and double that damage.`;
 }

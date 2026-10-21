@@ -76,15 +76,16 @@ describe('Blink Strike damage', () => {
     expect(logs.some(l => l.includes('CRITICAL'))).toBe(true);
   });
 
-  it('is 200% at 0 CRIT and stops at the CRIT soft cap instead of 400%', () => {
+  it('is 200% at 0 CRIT and 400% at the 99 CRIT soft cap', () => {
     expect(blinkStrikeMultiplierPercent(0)).toBe(200);
-    expect(blinkStrikeMultiplierPercent(100)).toBe(398);
+    expect(blinkStrikeMultiplierPercent(99)).toBe(400);
+    expect(blinkStrikeMultiplierPercent(100)).toBe(400);
     expect(critStat(200)).toBe(99);
     scriptedRandom([0, 0.99, 0.99]);
     const capped = resolveCombat(ninja({ attack: 51, luck: 94 }), rat(), () => {}, { blinkStrike: true, mood: 'neutral' });
-    const base = Math.round(51 * 398 / 100);
+    const base = Math.round(51 * 400 / 100);
     expect(400 - capped.enemyHp).toBe(base);
-    expect(base).not.toBe(51 * 4);
+    expect(base).toBe(51 * 4);
     scriptedRandom([0, 0, 0.99]);
     const crit = resolveCombat(ninja({ attack: 51, luck: 94 }), rat(), () => {}, { blinkStrike: true, mood: 'neutral' });
     expect(400 - crit.enemyHp).toBe(base * 2);
