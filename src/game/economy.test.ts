@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { moneyBagSellValue, getItemSellValue, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, cookedHealBonus, cookedSellBonus, MAX_CHEF_LESSONS, restaurantCookedSellPrice, cookedEatHeal, foodHealLabel, foodHealDescription, slotShrineCost, slotTierFromRoll, rollSlotTier, resolveSlotPrize, grantSlotPrizeItems } from './economy';
+import { moneyBagSellValue, getItemSellValue, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, chefLessonPrice, chefLessonPriceLabel, chefLessonTooltip, cookedHealBonus, cookedSellBonus, MAX_CHEF_LESSONS, restaurantCookedSellPrice, cookedEatHeal, foodHealLabel, foodHealDescription, slotShrineCost, slotTierFromRoll, rollSlotTier, resolveSlotPrize, grantSlotPrizeItems } from './economy';
 import { MONEY_BAG } from './emojis';
 import type { EmojiItem } from './types';
 
@@ -109,6 +109,44 @@ describe("Chef's Lesson", () => {
     expect(chefLessonCost(27)).toBe(9450);
     expect(chefLessonCost(32)).toBe(11200);
     expect(MAX_CHEF_LESSONS).toBe(5);
+  });
+
+  it('makes only the first lesson free', () => {
+    expect(chefLessonPrice(0, 1)).toBe(0);
+    expect(chefLessonPrice(0, 27)).toBe(0);
+    expect(chefLessonPriceLabel(0, 13)).toBe('Free');
+    expect(chefLessonPrice(1, 1)).toBe(chefLessonCost(1));
+    expect(chefLessonPrice(1, 27)).toBe(chefLessonCost(27));
+    expect(chefLessonPriceLabel(1, 1)).toBe('1000g');
+    expect(chefLessonPrice(4, 13)).toBe(4550);
+    expect(chefLessonPriceLabel(5, 1)).toBe('');
+  });
+
+  it('describes current bonuses and what the next lesson adds', () => {
+    const fresh = chefLessonTooltip(0, 100);
+    expect(fresh.summary).toMatch(/cooked dish/i);
+    expect(fresh.summary).toMatch(/first lesson is free/i);
+    expect(fresh.current.lessons).toBe(0);
+    expect(fresh.current.eatBonusHp).toBe(0);
+    expect(fresh.current.sellFlatGold).toBe(0);
+    expect(fresh.current.sellPercent).toBe(0);
+    expect(fresh.next?.lessons).toBe(1);
+    expect(fresh.nextEatDelta).toBe(cookedHealBonus(1, 100));
+    expect(fresh.nextSellFlat).toBe(10);
+    expect(fresh.nextSellPercent).toBe(10);
+
+    const learned = chefLessonTooltip(2, 80);
+    expect(learned.current.eatBonusHp).toBe(cookedHealBonus(2, 80));
+    expect(learned.current.sellFlatGold).toBe(20);
+    expect(learned.current.sellPercent).toBe(20);
+    expect(learned.nextEatDelta).toBe(cookedHealBonus(3, 80) - cookedHealBonus(2, 80));
+
+    const master = chefLessonTooltip(5, 100);
+    expect(master.next).toBeNull();
+    expect(master.nextEatDelta).toBe(0);
+    expect(master.current.eatBonusHp).toBe(40);
+    expect(master.current.sellFlatGold).toBe(50);
+    expect(master.current.sellPercent).toBe(50);
   });
 
   it('heal and sell bonuses at 5 lessons', () => {

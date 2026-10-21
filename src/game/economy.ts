@@ -72,6 +72,61 @@ export function chefLessonCost(floor: number): number {
   return Math.max(1000 + (f - 1) * 250, f * 350);
 }
 
+/** Gold charged for the next lesson. The first lesson of a run is free. */
+export function chefLessonPrice(lessonsOwned: number, floor: number): number {
+  if (lessonsOwned <= 0) return 0;
+  return chefLessonCost(floor);
+}
+
+/** Button price. Empty once every lesson is learned. */
+export function chefLessonPriceLabel(lessonsOwned: number, floor: number): string {
+  if (lessonsOwned >= MAX_CHEF_LESSONS) return '';
+  const price = chefLessonPrice(lessonsOwned, floor);
+  return price === 0 ? 'Free' : `${price}g`;
+}
+
+export interface ChefLessonBonus {
+  lessons: number;
+  maxLessons: number;
+  eatBonusHp: number;
+  sellFlatGold: number;
+  sellPercent: number;
+}
+
+export function chefLessonBonus(lessons: number, maxHp: number): ChefLessonBonus {
+  const n = Math.max(0, Math.min(MAX_CHEF_LESSONS, lessons));
+  return {
+    lessons: n,
+    maxLessons: MAX_CHEF_LESSONS,
+    eatBonusHp: cookedHealBonus(n, maxHp),
+    sellFlatGold: 10 * n,
+    sellPercent: 10 * n,
+  };
+}
+
+export interface ChefLessonTooltip {
+  summary: string;
+  current: ChefLessonBonus;
+  next: ChefLessonBonus | null;
+  nextEatDelta: number;
+  nextSellFlat: number;
+  nextSellPercent: number;
+}
+
+/** Copy for the Chef's Lesson hover / tap tooltip. Numbers follow the live bonus formulas. */
+export function chefLessonTooltip(lessons: number, maxHp: number): ChefLessonTooltip {
+  const current = chefLessonBonus(lessons, maxHp);
+  const next = current.lessons >= MAX_CHEF_LESSONS ? null : chefLessonBonus(current.lessons + 1, maxHp);
+  return {
+    summary: "A Chef's Lesson improves every cooked dish for the rest of this run. Cooked food heals more when eaten, and cooked dishes sell for more. Raw food is unchanged. The first lesson is free; later lessons cost gold. Up to 5 lessons.",
+    current,
+    next,
+    nextEatDelta: next ? next.eatBonusHp - current.eatBonusHp : 0,
+    nextSellFlat: next ? next.sellFlatGold - current.sellFlatGold : 0,
+    nextSellPercent: next ? next.sellPercent - current.sellPercent : 0,
+  };
+}
+
 export function cookedHealBonus(n: number, maxHp: number): number {
   if (n <= 0) return 0;
   return Math.floor(maxHp * 0.05 * n) + 3 * n;
