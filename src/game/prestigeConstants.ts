@@ -44,7 +44,10 @@ export const GENIE_SELF_SPLASH = 0.25;
 export const GENIE_OVERCHANNEL_LEVEL = 5;
 export const GENIE_OVERCHANNEL_EXTRA_MP = 1;
 export const GENIE_OVERCHANNEL_MULT = 1.5;
-export const GENIE_BLOODCAST_HP_PER_MP = 4;
+/** HP paid per MP the spell still needs. Attack does not change this. */
+export const GENIE_BLOODCAST_HP_PER_MP = 2;
+/** Bloodcast is refused while current HP is under this fraction of max HP. */
+export const GENIE_BLOODCAST_MIN_HP_FRACTION = 0.25;
 export const GENIE_TRANSMUTE_MP = 2;
 
 // ── Levitating Hitman (ranged, 3 passives + Execute Contract) ───────────────
