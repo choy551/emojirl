@@ -3,6 +3,7 @@ import type { Room } from './geo';
 import { getRandomEnemy, getForestEnemy, getBossForFloor, getEchoEnemy, getRandomAdventurer, adventurerSpawnChance, ADVENTURER_FAVORITE_EMOJIS, rollAmbushCount, getAmbushRangedType, enemyMaySpawnOnTile, BOSS_TYPES } from './enemies';
 import { getRandomEmojiPower, getBulletDrop, getRandomEquipmentDrop, getEmojiPowerByEmoji, VOLCANO_VALUABLE_EMOJIS, MONEY_BAG } from './emojis';
 import { pressureForRun } from './progression';
+import { spawnPrairieDenizens } from './farmer';
 
 function floorScale<T extends { hp: number; attack: number; defense: number }>(type: T, floor: number): T {
   if (floor <= 1) return type;
@@ -76,6 +77,10 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
     const room = rooms[i];
     if (room.theme === 'shop' || room.theme === 'market' || room.theme === 'restaurant') continue;
     if (room.theme === 'treasure-vault' || room.theme === 'volcano') continue;
+    if (room.theme === 'prairie') {
+      enemies.push(...spawnPrairieDenizens(room, map));
+      continue;
+    }
     if (room.theme === 'bush-ambush') {
       const n = rollAmbushCount();
       const cover: Position[] = [];

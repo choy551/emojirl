@@ -1,4 +1,5 @@
 import { MapGrid, Position, RoomTheme } from './types';
+import { placePrairie, prairieAppearsOnFloor } from './farmer';
 import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, coolLavaWaterContacts } from './lava';
 import { BED_EMOJI, BED_MAX_USES } from './tiles';
 import { FINALE_FLOOR } from './finaleConstants';
@@ -416,7 +417,7 @@ function placeAmmoCache(map: MapGrid, room: Room) {
 
 const FLOODABLE_TYPES = new Set(['wall', 'floor', 'grass']);
 const FEATURE_PROTECTED_THEMES = new Set([
-  'shop', 'market', 'restaurant', 'treasure-vault', 'volcano', 'boss', 'room-vault',
+  'shop', 'market', 'restaurant', 'treasure-vault', 'volcano', 'boss', 'room-vault', 'prairie',
 ]);
 
 function inRoom(r: Room, x: number, y: number): boolean {
@@ -864,6 +865,19 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
     }
   }
 
+  // One grassland per floor, only on D:3–26, about 18% of those floors.
+  if (prairieAppearsOnFloor(floor, Math.random())) {
+    const eligible = rooms
+      .map((r, i) => ({ r, i }))
+      .filter(({ r, i }) => i > 0 && i < rooms.length - 1 && r.theme === 'normal' && r.w >= 4 && r.h >= 3);
+    const roomy = eligible.filter(({ r }) => r.w >= 5 && r.h >= 4);
+    const pool = roomy.length > 0 ? roomy : eligible;
+    if (pool.length > 0) {
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      rooms[pick.i] = { ...pick.r, theme: 'prairie' };
+    }
+  }
+
   for (const idx of shuffled) {
     const r = rooms[idx];
     if (r.theme !== 'normal') continue;
@@ -937,6 +951,7 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
     else if (room.theme === 'bush-ambush')    placeBushAmbush(map, room);
     else if (room.theme === 'volcano')        placeVolcanoVault(map, room);
     else if (room.theme === 'room-vault')     placeRoomVault(map, room);
+    else if (room.theme === 'prairie')        placePrairie(map, room);
     // monster-den: no tile treatment — enemy packing is handled in spawning.ts
   }
 

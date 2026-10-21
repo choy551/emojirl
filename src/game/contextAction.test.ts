@@ -56,6 +56,23 @@ describe('resolveContextAction idle fallback', () => {
     expect(d.icon).toBe('🔭');
   });
 
+  it('trades with an adjacent farmer and does not attack livestock', () => {
+    const npc = {
+      id: 'n', pos: { x: 2, y: 1 }, emoji: '🧑‍🌾', name: 'Farmer',
+      hp: 10, maxHp: 10, attack: 1, defense: 0, speed: 3, engaged: false,
+    };
+    const farmer = resolveContextAction(stubState({
+      enemies: [{ ...npc, tag: 'Friendly' as const, isFarmer: true }],
+    }));
+    expect(farmer.kind).toBe('trade');
+    expect(farmer.label).toBe('Trade');
+    const dog = resolveContextAction(stubState({
+      enemies: [{ ...npc, emoji: '🐕', name: 'Farm Dog', tag: 'Friendly' as const, isFarmAnimal: true }],
+    }));
+    expect(dog.kind).not.toBe('attack');
+    expect(dog.kind).not.toBe('fairy');
+  });
+
   it('still prefers a nearby relevant action over explore', () => {
     const shrine = { type: 'shrine' as const, emoji: '🛕', seen: true, visible: true };
     const state = stubState({

@@ -4,7 +4,7 @@ import { chebyshev } from './geo';
 import { FINALE_FLOOR } from './finaleConstants';
 
 export type ContextActionKind =
-  | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear' | 'talk'
+  | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear' | 'talk' | 'trade'
   | 'cook' | 'close-door' | 'rest'
   | 'open-shop' | 'open-cache' | 'open-restaurant' | 'open-slots'
   | 'descend' | 'shrine' | 'pickup' | 'wait' | 'explore';
@@ -62,6 +62,8 @@ export function resolveContextAction(
   // Adjacent hostile -> attack. (Excludes recruitable/neutral NPCs handled below.)
   const hostile = adjEnemy(e =>
     !e.isSpectator &&
+    !e.isFarmer &&
+    !e.isFarmAnimal &&
     e.tag !== 'Friendly' &&
     !(e.isAdventurer && !e.isRecruited && !e.engaged) &&
     !(e.monkey && !e.engaged) &&
@@ -72,7 +74,10 @@ export function resolveContextAction(
   const adv = adjEnemy(e => !!e.isAdventurer && !e.isRecruited && !e.engaged);
   if (adv) return { kind: 'recruit', label: 'Recruit', icon: '🤝', dir: dirTo(adv) };
 
-  const fairy = adjEnemy(e => e.tag === 'Friendly' && !e.isAdventurer && !e.monkey && !e.bear && !e.isRecruited);
+  const farmer = adjEnemy(e => !!e.isFarmer && e.hp > 0);
+  if (farmer) return { kind: 'trade', label: 'Trade', icon: '🧑‍🌾', dir: dirTo(farmer) };
+
+  const fairy = adjEnemy(e => e.tag === 'Friendly' && !e.isAdventurer && !e.monkey && !e.bear && !e.isRecruited && !e.isFarmer && !e.isFarmAnimal);
   if (fairy) return { kind: 'fairy', label: 'Wish', icon: '🧚', dir: dirTo(fairy) };
 
   const monkey = adjEnemy(e => !!e.monkey && !e.engaged);

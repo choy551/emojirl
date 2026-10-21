@@ -28,6 +28,10 @@ describe('isAutoexploreThreat', () => {
 
   it('does not treat unrecruited friendlies as threats', () => {
     expect(isAutoexploreThreat(fairy)).toBe(false);
+    const farmerNpc = { tag: 'Friendly' as const, isFarmer: true };
+    const herdNpc = { tag: 'Friendly' as const, isFarmAnimal: true };
+    expect(isAutoexploreThreat(farmerNpc)).toBe(false);
+    expect(isAutoexploreThreat(herdNpc)).toBe(false);
   });
 
   it('does not treat unrecruited neutrals (adventurers, etc.) as threats', () => {

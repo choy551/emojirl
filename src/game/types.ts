@@ -13,6 +13,7 @@ export type TileType =
   | 'grass'
   | 'tree'
   | 'bush'
+  | 'crop'
   | 'lava'
   | 'obsidian'
   | 'volcano'
@@ -37,7 +38,7 @@ export interface Tile {
 
 export type MapGrid = Tile[][];
 
-export type RoomTheme = 'normal' | 'shrine' | 'shop' | 'restaurant' | 'forest' | 'boss' | 'market' | 'monster-den' | 'treasure-vault' | 'bush-ambush' | 'volcano' | 'room-vault';
+export type RoomTheme = 'normal' | 'shrine' | 'shop' | 'restaurant' | 'forest' | 'boss' | 'market' | 'monster-den' | 'treasure-vault' | 'bush-ambush' | 'volcano' | 'room-vault' | 'prairie';
 
 export type MoodType = 
   | 'happy' | 'very_happy' | 'sad' | 'crying' 
@@ -311,6 +312,14 @@ export interface Enemy {
   companionBehavior?: 'close' | 'far' | 'flee' | 'aggressive';
   /** One soul emoji gifted by the player — grants its bagPassive benefit in combat. */
   companionSoulEmoji?: EmojiItem;
+  /** Prairie trader. Bump to barter food for emoji stock. Does not fight. */
+  isFarmer?: boolean;
+  /** Friendly livestock that attacks hostiles near its farmer. */
+  isFarmAnimal?: boolean;
+  /** Farmer this animal defends. */
+  guardsFarmerId?: string;
+  /** Emoji goods the farmer will trade for food. Empty means sold out. */
+  tradeStock?: EmojiItem[];
 }
 
 export interface FloatingText {
