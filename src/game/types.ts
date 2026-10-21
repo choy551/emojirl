@@ -166,6 +166,13 @@ export interface Equipment {
 export interface VoidGhost {
   emoji: string;
   stacks: number;
+  /**
+   * Remaining uses on a charge-item ghost (Gun, Bomb, Rope, Freeze, Boomerang).
+   * -1 is endless. Soul ghosts omit this.
+   */
+  uses?: number;
+  /** Charge cap for `uses`. -1 is endless. */
+  maxUses?: number;
 }
 
 /** Drink potency. MP and class effects scale with this, the way food healAmount scales HP. */
@@ -207,6 +214,11 @@ export interface Player {
   ghostBank?: VoidGhost[];
   /** Depth bosses cleared this run (D:5/10/15…). Mirrors GameState.voidBossesCleared. */
   voidBossesCleared?: number;
+  /**
+   * Void only. Index matches hotbar slot 0–8.
+   * `dealt` is Void pressure that slot has dealt since `itemId` entered. Reset when that item leaves.
+   */
+  voidSlotBurden?: { itemId: string | null; dealt: number }[];
   /** Active drink. Absent when nothing is brewing. */
   drinkBuff?: DrinkBuff;
   /** Campfire banquet mood floor. Ticks down each turn. */

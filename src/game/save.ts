@@ -35,6 +35,21 @@ function refreshEquipmentCopy(eq: Equipment): Equipment {
   return next;
 }
 
+function normalizeVoidSlotBurden(raw: unknown): Player['voidSlotBurden'] {
+  if (!Array.isArray(raw)) return undefined;
+  const rows = raw.slice(0, 9).map(row => {
+    if (!row || typeof row !== 'object') return { itemId: null, dealt: 0 };
+    const rec = row as { itemId?: unknown; dealt?: unknown };
+    const dealt = Number(rec.dealt);
+    return {
+      itemId: typeof rec.itemId === 'string' ? rec.itemId : null,
+      dealt: Number.isFinite(dealt) && dealt > 0 ? dealt : 0,
+    };
+  });
+  while (rows.length < 9) rows.push({ itemId: null, dealt: 0 });
+  return rows;
+}
+
 function migrateRaw(raw: Record<string, unknown>): void {
   const fromVersion = raw.schemaVersion as number;
 
@@ -116,6 +131,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     ghostHotbar: Array.isArray(rawPlayer.ghostHotbar) ? (rawPlayer.ghostHotbar as Player['ghostHotbar']) : undefined,
     ghostBank: Array.isArray(rawPlayer.ghostBank) ? (rawPlayer.ghostBank as Player['ghostBank']) : undefined,
     voidBossesCleared: (rawPlayer.voidBossesCleared as number | undefined) ?? (raw.voidBossesCleared as number | undefined) ?? 0,
+    voidSlotBurden: normalizeVoidSlotBurden(rawPlayer.voidSlotBurden),
     drinkBuff: rawPlayer.drinkBuff as Player['drinkBuff'],
     banquet: rawPlayer.banquet as Player['banquet'],
     shrineOffering: rawPlayer.shrineOffering as Player['shrineOffering'],

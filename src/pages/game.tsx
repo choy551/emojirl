@@ -893,7 +893,7 @@ export default function Game() {
     const player = gameStateRef.current?.player;
     const item = player ? buildHotbarSlots(player)[slot] : undefined;
     setSelectedItemId(null);
-    if (item && !item.isVoidGhost && mobileBagUseClosesBag(item)) setBankOpen(false);
+    if (item && !item.isVoidGhost && mobileBagUseClosesBag(item, { asVoid: player?.characterClass === '👤' })) setBankOpen(false);
     handleUseSlot(slot);
   }, [gameStateRef, handleUseSlot]);
 
@@ -4012,6 +4012,7 @@ export default function Game() {
           chefLessonCount={gameState?.chefLessonCount ?? 0}
           maxHp={gameState?.player.stats.maxHp ?? 0}
           consumeSlot={statCardConsumeSlot}
+          asVoid={player.characterClass === '👤'}
           onConsume={(slot) => {
             closeStatCard();
             useMobileBagSlot(slot);
@@ -4078,6 +4079,7 @@ export default function Game() {
                 mobileConsume={isMobile}
                 onUseSlot={useMobileBagSlot}
                 onConsumeRefused={(item) => addLog(bagConsumeRefusal(item))}
+                asVoid={player.characterClass === '👤'}
               />
             )}
 

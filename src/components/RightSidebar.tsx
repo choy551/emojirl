@@ -5,6 +5,7 @@ import { cloverLootSummary, rarityTooltipSuffix } from '../game/dropTable';
 import { getCowboyUnarmedBonus } from '../game/combat';
 import { MiniMap } from './MiniMap';
 import { activeKindEmoji } from './itemUtils';
+import { voidGhostBadge } from '../game/voidCharge';
 import { foodHealLabel, foodHealDescription } from '../game/economy';
 import { drinkEffectForClass } from '../game/drinks';
 
@@ -145,13 +146,13 @@ export function RightSidebar({
                   <span className="absolute top-0.5 left-1 text-[8px] text-muted-foreground font-bold leading-none">{i + 1}</span>
                   {item.isVoidGhost && <span className="absolute bottom-0.5 left-0.5 text-[8px] leading-none">👤</span>}
                   {item.isVoidGhost && (
-                    <span data-testid={`ghost-stack-${item.emoji}`} className="absolute top-0.5 right-0.5 text-[8px] text-violet-300 font-bold leading-none">×{Math.max(1, item.stackCount ?? 1)}</span>
+                    <span data-testid={`ghost-stack-${item.emoji}`} className="absolute top-0.5 right-0.5 text-[8px] text-violet-300 font-bold leading-none">{voidGhostBadge(item)}</span>
                   )}
                   {item.isEquipment && <span className="absolute bottom-0.5 right-0.5 text-[8px] leading-none">⚔️</span>}
                   {!item.isEquipment && kindEmoji && (
                     <span className="absolute bottom-0.5 right-0.5 text-[9px] leading-none">{kindEmoji}</span>
                   )}
-                  {item.charges !== undefined && item.charges >= 0 && (
+                  {item.charges !== undefined && item.charges >= 0 && !item.isVoidGhost && (
                     <span className="absolute top-0.5 right-0.5 text-[7px] text-amber-400/80 font-bold leading-none">×{item.charges}</span>
                   )}
                   {!item.isVoidGhost && !item.isEquipment && !kindEmoji && (item.stackCount ?? 0) > 1 && (

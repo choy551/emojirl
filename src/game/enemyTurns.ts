@@ -21,6 +21,7 @@ import { applyLevelUp } from './playerTurn';
 import { markEnemyKilled } from './discoveries';
 import { settleBlinkStrikeMarks } from './blinkStrike';
 import { applyDrinkBuffTick, effectiveVoidPressureSlots, isDrinkStealthActive, voidPressureIgnoredSlots } from './drinks';
+import { attributeVoidSlotPressure } from './voidSlotBurden';
 import { farmDenizenIntent } from './farmer';
 import { applyBanquetTick, feastAttackBonus, tickFeastBuffs } from './foodSinks';
 import { applyHouseRoundTick } from './goldSinks';
@@ -52,6 +53,8 @@ export interface EnemyTurnResult {
   titheKills?: GhostKillEffect[];
   /** Set when this phase spent the floor's Void grace turn. */
   voidGraceFloor?: number;
+  /** Hotbar slot pressure after this phase. Void only. */
+  voidSlotBurden?: GameState['player']['voidSlotBurden'];
 }
 
 export function runEnemyTurns(state: GameState, skipId?: string, sleeping = false): EnemyTurnResult {
@@ -64,6 +67,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   const playerVisionRadius = Math.max(1, visionRadiusFor(player.characterClass, player.stats.level) + playerBagPassives(player).losBonus);
   const newEnemies = [...state.enemies];
   let playerHp = player.stats.hp;
+  let voidSlotBurden = player.voidSlotBurden;
   let playerDied = false;
   let depthBossKills = 0;
   const titheKills: GhostKillEffect[] = [];
@@ -212,7 +216,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     log('💊 You regenerate! (+1 HP)');
   }
   if (player.characterClass === '👤') {
-    const filled = effectiveVoidPressureSlots(countVoidPressureSlots(player), voidPressureIgnoredSlots(player));
+    const ignored = voidPressureIgnoredSlots(player);
+    voidSlotBurden = attributeVoidSlotPressure(player, state.currentFloor, ignored).voidSlotBurden;
+    const filled = effectiveVoidPressureSlots(countVoidPressureSlots(player), ignored);
     if (filled > 0) {
       const dmg = voidClassTurnDamage(filled, state.currentFloor);
       const tick = applyVoidPressureTick({
@@ -908,7 +914,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
 
   const feasted = tickFeastBuffs(newEnemies.filter(e => e.hp > 0));
   for (const text of feasted.logs) log(text);
-  return { enemies: feasted.enemies, playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn, depthBossKills, titheKills, voidGraceFloor };
+  return { enemies: feasted.enemies, playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn, depthBossKills, titheKills, voidGraceFloor, voidSlotBurden };
 }
 
 export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): GameState {
@@ -951,7 +957,11 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
       activeProjectile: result.activeProjectile,
       pendingExplosion,
       pendingBeam,
-      player: { ...state.player, trailblazerCooldown: result.trailblazerCooldown },
+      player: {
+        ...state.player,
+        trailblazerCooldown: result.trailblazerCooldown,
+        voidSlotBurden: result.voidSlotBurden ?? state.player.voidSlotBurden,
+      },
       ...(result.voidGraceFloor !== undefined ? { voidGraceFloor: result.voidGraceFloor } : {}),
     };
   } else {
@@ -966,6 +976,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
         inventory: newInventory,
         bank: newBank,
         trailblazerCooldown: result.trailblazerCooldown,
+        voidSlotBurden: result.voidSlotBurden ?? state.player.voidSlotBurden,
       },
       logs: [...result.newLogs, ...state.logs].slice(0, 24),
       floatingTexts: mergedFloating,

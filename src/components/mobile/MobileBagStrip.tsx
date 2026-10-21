@@ -3,6 +3,7 @@ import { EmojiItem } from '../../game/types';
 import { activeKindEmoji } from '../itemUtils';
 import { rarityTooltipSuffix } from '../../game/dropTable';
 import { getPassiveTooltipSuffix } from '../../game/passives';
+import { voidGhostBadge } from '../../game/voidCharge';
 
 interface MobileBagStripProps {
   bagSlots: (EmojiItem | null)[];
@@ -50,7 +51,7 @@ export function MobileBagStrip({
             <span className="absolute top-0 left-px text-[6px] text-muted-foreground/60 font-bold leading-none">{i + 1}</span>
             {item.isVoidGhost && <span className="absolute bottom-0 left-px text-[7px] leading-none">👤</span>}
             {item.isVoidGhost && (
-              <span data-testid={`ghost-stack-${item.emoji}`} className="absolute top-0 right-px text-[7px] text-violet-300 font-bold leading-none">×{Math.max(1, item.stackCount ?? 1)}</span>
+              <span data-testid={`ghost-stack-${item.emoji}`} className="absolute top-0 right-px text-[7px] text-violet-300 font-bold leading-none">{voidGhostBadge(item)}</span>
             )}
             {kindEmoji && <span className="absolute bottom-0 right-0 text-[7px] leading-none">{kindEmoji}</span>}
             {!item.isVoidGhost && !item.isEquipment && !kindEmoji && (item.stackCount ?? 0) > 1 && (

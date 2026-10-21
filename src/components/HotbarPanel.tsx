@@ -3,6 +3,7 @@ import { EmojiItem } from '../game/types';
 import { getPassiveTooltipSuffix } from '../game/passives';
 import { rarityTooltipSuffix } from '../game/dropTable';
 import { BAG_LONG_PRESS_MS, resolveBagSlotClick } from '../game/bagConsume';
+import { voidGhostBadge } from '../game/voidCharge';
 import { activeKindEmoji } from './itemUtils';
 import { ActivePassivesPanel } from './ActivePassivesPanel';
 
@@ -19,6 +20,8 @@ interface HotbarPanelProps {
   mobileConsume?: boolean;
   onUseSlot?: (slot: number) => void;
   onConsumeRefused?: (item: EmojiItem) => void;
+  /** Void unmakes charge items and money bags on double-tap. */
+  asVoid?: boolean;
 }
 
 export function HotbarPanel({
@@ -33,6 +36,7 @@ export function HotbarPanel({
   mobileConsume = false,
   onUseSlot,
   onConsumeRefused,
+  asVoid = false,
 }: HotbarPanelProps) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTapRef = useRef<{ slot: number; at: number; selectOnly: boolean } | null>(null);
@@ -94,6 +98,7 @@ export function HotbarPanel({
                     selectedItemId,
                     now: Date.now(),
                     last: lastTapRef.current,
+                    asVoid,
                   });
                   lastTapRef.current = decision.last;
                   if (decision.action === 'use' && onUseSlot) {
@@ -134,12 +139,12 @@ export function HotbarPanel({
               <span className={`absolute top-0.5 left-1 text-[8px] font-bold leading-none ${item ? 'text-muted-foreground/60' : 'text-muted-foreground/20'}`}>{i + 1}</span>
               {item?.isVoidGhost && <span className="absolute bottom-0.5 left-0.5 text-[8px] leading-none">👤</span>}
               {item?.isVoidGhost && (
-                <span data-testid={`ghost-stack-${item.emoji}`} className="absolute top-0.5 right-0.5 text-[8px] text-violet-300 font-bold leading-none">×{Math.max(1, item.stackCount ?? 1)}</span>
+                <span data-testid={`ghost-stack-${item.emoji}`} className="absolute top-0.5 right-0.5 text-[8px] text-violet-300 font-bold leading-none">{voidGhostBadge(item)}</span>
               )}
               {item && kindEmoji && (
                 <span className="absolute bottom-0.5 right-0.5 text-[9px] leading-none">{kindEmoji}</span>
               )}
-              {item?.charges !== undefined && item.charges >= 0 && (
+              {item?.charges !== undefined && item.charges >= 0 && !item.isVoidGhost && (
                 <span className="absolute top-0.5 right-0.5 text-[7px] text-amber-400/80 font-bold leading-none">×{item.charges}</span>
               )}
               {item && !item.isVoidGhost && !item.isEquipment && !kindEmoji && (item.stackCount ?? 0) > 1 && (

@@ -4,6 +4,7 @@ import { soulHelpText } from '../game/emojis';
 import { RarityLabel } from './RarityLabel';
 import { foodHealLabel, foodHealDescription, cookedEatHeal } from '../game/economy';
 import { bagConsumeRefusal, canConsumeBagItem } from '../game/bagConsume';
+import { voidGhostBadge } from '../game/voidCharge';
 import { drinkEffectLines } from '../game/drinks';
 
 interface ItemStatCardProps {
@@ -15,6 +16,8 @@ interface ItemStatCardProps {
   consumeSlot?: number | null;
   onConsume?: (slot: number) => void;
   onConsumeRefused?: (item: EmojiItem) => void;
+  /** Void unmakes charge items and money bags from the consume button. */
+  asVoid?: boolean;
 }
 
 export function ItemStatCard({
@@ -25,10 +28,12 @@ export function ItemStatCard({
   consumeSlot = null,
   onConsume,
   onConsumeRefused,
+  asVoid = false,
 }: ItemStatCardProps) {
   const help = soulHelpText(si);
   const offerConsume = typeof consumeSlot === 'number';
-  const canConsume = offerConsume && canConsumeBagItem(si);
+  const act = { asVoid };
+  const canConsume = offerConsume && canConsumeBagItem(si, act);
   const effect = (si as any).effect as Record<string, number | boolean> | undefined;
   const consumeLines: string[] = [];
   if (effect) {
@@ -140,6 +145,7 @@ export function ItemStatCard({
             {si.isVoidGhost && (
               <div className="text-[10px] text-violet-300">
                 Ghost stack ×{Math.max(1, si.stackCount ?? 1)}
+                {si.charges === -1 ? ' · endless uses' : si.charges !== undefined && si.charges >= 0 ? ` · uses ${voidGhostBadge(si)}` : ''}
                 {si.isVoidGhostDormant ? ' · dormant' : ''}
                 {!isStackableBagPassive(si) ? ' — the effect does not grow with stacks' : ''}
               </div>
@@ -171,7 +177,13 @@ export function ItemStatCard({
         {si.ammoAmount !== undefined && (
           <div className="text-xs text-sky-400/80">Ammo: <span className="font-bold">+{si.ammoAmount}</span></div>
         )}
-        {si.charges !== undefined && si.charges >= 0 && (
+        {si.isVoidGhost && si.charges === -1 && (
+          <div className="text-xs text-violet-300/90">Endless uses. Spending a use does not add Void pressure.</div>
+        )}
+        {si.isVoidGhost && si.charges !== undefined && si.charges >= 0 && (
+          <div className="text-xs text-violet-300/90">Ghost uses: <span className="font-bold">×{si.charges}</span>. Spending a use does not add Void pressure.</div>
+        )}
+        {!si.isVoidGhost && si.charges !== undefined && si.charges >= 0 && (
           <div className="text-xs text-amber-400/80">Charges remaining: <span className="font-bold">×{si.charges}</span></div>
         )}
 
@@ -180,7 +192,7 @@ export function ItemStatCard({
             type="button"
             data-testid="bag-item-consume"
             aria-disabled={!canConsume}
-            title={canConsume ? `Consume ${si.emoji} ${si.name}` : bagConsumeRefusal(si)}
+            title={canConsume ? `Consume ${si.emoji} ${si.name}` : bagConsumeRefusal(si, act)}
             onClick={() => {
               if (!canConsume || consumeSlot == null) {
                 onConsumeRefused?.(si);
@@ -194,7 +206,7 @@ export function ItemStatCard({
           >Consume</button>
         )}
         {offerConsume && !canConsume && (
-          <p className="text-[10px] text-center text-muted-foreground/60 leading-snug">{bagConsumeRefusal(si)}</p>
+          <p className="text-[10px] text-center text-muted-foreground/60 leading-snug">{bagConsumeRefusal(si, act)}</p>
         )}
         <button
           onClick={onClose}

@@ -6,6 +6,7 @@ import { isNonStackableBagPassiveDuplicate, isActiveKindDuplicate } from '../gam
 import { foodHealDescription } from '../game/economy';
 import { drinkEffectForClass } from '../game/drinks';
 import { activeKindEmoji } from './itemUtils';
+import { voidGhostBadge } from '../game/voidCharge';
 import { RarityLabel } from './RarityLabel';
 import { rarityTooltipSuffix } from '../game/dropTable';
 import { ActivePassivesPanel } from './ActivePassivesPanel';
@@ -76,13 +77,13 @@ export function BankPanel({
                 {hItem ? hItem.emoji : <span className="text-[8px] text-muted-foreground/20">{i + 1}</span>}
                 {hItem?.isVoidGhost && <span className="absolute bottom-0 left-0.5 text-[7px] leading-none">👤</span>}
                 {hItem?.isVoidGhost && (
-                  <span data-testid={`ghost-stack-${hItem.emoji}`} className="absolute top-0 right-0.5 text-[7px] text-violet-300 font-bold leading-none">×{Math.max(1, hItem.stackCount ?? 1)}</span>
+                  <span data-testid={`ghost-stack-${hItem.emoji}`} className="absolute top-0 right-0.5 text-[7px] text-violet-300 font-bold leading-none">{voidGhostBadge(hItem)}</span>
                 )}
                 {hItem && !hItem.isVoidGhost && !hKind && (hItem.stackCount ?? 0) > 1 && (
                   <span className="absolute bottom-0 right-0.5 text-[7px] text-emerald-400 font-bold leading-none">×{hItem.stackCount}</span>
                 )}
                 {hItem && hKind && <span className="absolute bottom-0 right-0.5 text-[7px] leading-none">{hKind}</span>}
-                {hItem && hItem.charges !== undefined && hItem.charges >= 0 && (
+                {hItem && hItem.charges !== undefined && hItem.charges >= 0 && !hItem.isVoidGhost && (
                   <span className="absolute top-0 right-0.5 text-[7px] text-amber-400/80 font-bold leading-none">×{hItem.charges}</span>
                 )}
                 {hItem && !hKind && hBankDupes > 0 && (
