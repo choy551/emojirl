@@ -42,11 +42,13 @@ function ninja(stats: Partial<Player['stats']> = {}): Player {
 }
 
 describe('Blink Strike multiplier', () => {
-  it('is 200% at 0 CRIT, +2% per CRIT, and clamps at 400% after the soft cap', () => {
+  it('is 200% at 0 CRIT and exactly 400% at 99 CRIT', () => {
     expect(blinkStrikeMultiplierPercent(0)).toBe(200);
-    expect(blinkStrikeMultiplierPercent(50)).toBe(300);
-    expect(blinkStrikeMultiplierPercent(100)).toBe(398);
-    expect(blinkStrikeMultiplierPercent(150)).toBe(398);
+    expect(blinkStrikeMultiplierPercent(50)).toBe(301);
+    expect(blinkStrikeMultiplierPercent(98)).toBe(398);
+    expect(blinkStrikeMultiplierPercent(99)).toBe(400);
+    expect(blinkStrikeMultiplierPercent(100)).toBe(400);
+    expect(blinkStrikeMultiplierPercent(150)).toBe(400);
     expect(blinkStrikeMultiplierPercent(-8)).toBe(200);
     expect(critStat(0)).toBe(5);
     expect(blinkStrikeDamagePhrase(0)).toBe('210% damage (CRIT 5%)');
