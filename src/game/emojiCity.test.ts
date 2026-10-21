@@ -948,7 +948,10 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('data-testid="city-train-status"');
     expect(city).toContain('data-testid="city-train-hint"');
     expect(city).toContain('data-testid="visit-cities"');
-    expect(city).toContain('Visit Cities (coming soon)');
+    expect(city).toContain('Visit Cities');
+    expect(city).toContain('ONLINE_UNAVAILABLE');
+    expect(city).toContain('href="/ledger"');
+    expect(city).not.toContain('Visit Cities (coming soon)');
     expect(city).toContain('data-testid="share-city"');
     expect(city).toContain('Share');
     expect(city).toContain('ensureCityProfile');
@@ -1011,6 +1014,7 @@ describe('EmojiCB city name and visitor', () => {
     expect(generateAnonymousName(() => 0)).toBe('BraveOtter1000');
     expect(emojiCityRulesBlurb()).toContain('defaulting to Emoji City');
     expect(emojiCityRulesBlurb()).toContain('Visit Cities and Share stay offline');
+    expect(emojiCityRulesBlurb()).toContain('online features unavailable');
   });
 });
 

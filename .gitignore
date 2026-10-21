@@ -11,6 +11,11 @@ dist
 dist-ssr
 *.local
 
+# secrets — connection strings stay out of git
+.env
+.env.*
+!.env.example
+
 # misc
 .DS_Store
 *.pem

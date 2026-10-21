@@ -50,6 +50,8 @@ type PalettePick = { kind: 'token' | 'decor'; emoji: string };
 const CITY_TILE_MAX = '2.75rem';
 /** Smallest lot. Narrow screens shrink toward this before a horizontal scrollbar appears. */
 const CITY_TILE_MIN = '2rem';
+import { ensurePlayerToken, loadShareStatus, publishMyCity } from '../game/cityShareClient';
+import { ONLINE_UNAVAILABLE } from '../game/cityShareModel';
 import { ensureCityProfile, loadMeta, replaceEmojiConsumes, saveCity, saveCityName, settleCityCatchUp } from '../game/meta';
 
 export default function CityPage() {
@@ -62,6 +64,10 @@ export default function CityPage() {
   const [nameDraft, setNameDraft] = useState('');
   const [nameError, setNameError] = useState<string | null>(null);
   const [visitor, setVisitor] = useState('');
+  const [online, setOnline] = useState<boolean | null>(null);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [shareNote, setShareNote] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
   const killsRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
@@ -87,6 +93,9 @@ export default function CityPage() {
       .flatMap(section => section.entries)
       .find(entry => entry.kind === 'token' && !entry.locked);
     setSelected(first ? { kind: 'token', emoji: first.emoji } : null);
+    let cancel = false;
+    loadShareStatus().then(status => { if (!cancel) setOnline(status.online); });
+    return () => { cancel = true; };
   }, []);
 
   useEffect(() => {
@@ -167,6 +176,37 @@ export default function CityPage() {
     setNote(`Placed ${selected.emoji}.`);
   };
 
+  const onShare = async () => {
+    if (!city || !visitor) return;
+    const named = saveCityName(nameDraft);
+    if (!named.ok) { setNameError(named.reason); return; }
+    setNameDraft(named.name);
+    setSharing(true);
+    setShareNote(null);
+    const token = ensurePlayerToken(localStorage);
+    const result = await publishMyCity({ username: visitor, cityName: named.name, city, token });
+    setSharing(false);
+    if (!result.online) {
+      setOnline(false);
+      setShareLink(null);
+      setShareNote(ONLINE_UNAVAILABLE);
+      return;
+    }
+    if (!result.ok) {
+      setShareNote(result.error);
+      return;
+    }
+    const link = `${window.location.origin}${result.path}`;
+    setShareLink(link);
+    setShareNote('Copied cities can open this read-only link.');
+  };
+
+  const copyShareLink = async () => {
+    if (!shareLink) return;
+    try { await navigator.clipboard.writeText(shareLink); setShareNote('Link copied.'); }
+    catch { setShareNote('Select the link and copy it.'); }
+  };
+
   const commitName = () => {
     const result = saveCityName(nameDraft);
     if (!result.ok) {
@@ -177,6 +217,8 @@ export default function CityPage() {
     setNameDraft(result.name);
   };
 
+  const trainUnlocked = city ? trainLineSpansCity(city) : false;
+  const canShare = trainUnlocked && online === true;
   const placed = city ? placedCount(city) : 0;
   const cap = city ? citizenCapacityOf(city) : 0;
   const citizens = city?.citizens.length ?? 0;
@@ -233,29 +275,48 @@ export default function CityPage() {
         <p className="text-[11px] leading-snug text-muted-foreground" data-testid="city-train-hint">
           {TRAIN_LINE_HINT}
         </p>
+        {online === false && (
+          <p data-testid="share-offline" className="text-[11px] font-semibold text-muted-foreground">
+            {ONLINE_UNAVAILABLE}
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            className="min-h-11 flex-1 text-xs"
-            disabled
-            aria-disabled="true"
-            title="Coming soon. This build stays on this device."
-            data-testid="visit-cities"
-          >
-            Visit Cities (coming soon)
-          </Button>
+          {canShare ? (
+            <Button asChild className="min-h-11 flex-1 text-xs">
+              <Link href="/ledger" data-testid="visit-cities">Visit Cities</Link>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              className="min-h-11 flex-1 text-xs"
+              disabled
+              aria-disabled="true"
+              data-testid="visit-cities"
+            >
+              Visit Cities
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
             className="min-h-11 flex-1 text-xs"
-            disabled
-            aria-disabled="true"
-            title="Coming soon. This build stays on this device."
+            disabled={!canShare || sharing}
+            aria-disabled={!canShare || sharing}
             data-testid="share-city"
+            onClick={() => { void onShare(); }}
           >
-            Share
+            {sharing ? 'Sharing…' : 'Share'}
           </Button>
         </div>
+        {shareLink && (
+          <div className="flex gap-2">
+            <Input readOnly data-testid="share-link" aria-label="Public city link" value={shareLink} className="min-h-11 text-xs" />
+            <Button type="button" variant="outline" className="min-h-11" data-testid="share-copy" onClick={() => { void copyShareLink(); }}>
+              Copy
+            </Button>
+          </div>
+        )}
+        {shareNote && <p data-testid="share-note" className="text-[11px] text-muted-foreground">{shareNote}</p>}
       </section>
 
       <div
