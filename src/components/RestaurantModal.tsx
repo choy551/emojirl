@@ -170,11 +170,7 @@ export function RestaurantModal({
                 aria-describedby="chef-lesson-tip"
                 onPointerDown={(e) => { lessonTouch.current = e.pointerType === 'touch' || e.pointerType === 'pen'; }}
                 onClick={() => {
-                  const tapPin = lessonTouch.current || (typeof window !== 'undefined' && (
-                    window.matchMedia('(hover: none)').matches
-                    || window.matchMedia('(pointer: coarse)').matches
-                    || window.matchMedia('(max-width: 767px)').matches
-                  ));
+                  const tapPin = lessonTouch.current || (typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches);
                   lessonTouch.current = false;
                   if (tapPin) {
                     setLessonPinned(true);
