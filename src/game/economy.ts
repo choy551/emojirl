@@ -69,10 +69,19 @@ export function restaurantCookedPrice(i: EmojiItem, lessons = 0): number {
 
 export const MAX_CHEF_LESSONS = 5;
 
+/**
+ * Paid Chef's Lesson price.
+ * Was max(1000 + (floor-1)×250, floor×350). Both terms are halved.
+ * From D:8 the floor×175 term is the higher one.
+ */
 export function chefLessonCost(floor: number): number {
   const f = Math.max(1, floor);
-  return Math.max(1000 + (f - 1) * 250, f * 350);
+  return Math.max(500 + (f - 1) * 125, f * 175);
 }
+
+/** Shown on the lesson tooltip and in the manual. The first lesson stays free. */
+export const CHEF_LESSON_COST_TEXT =
+  'The first lesson is free. Later lessons cost the higher of 500 + (floor-1)×125 and floor×175 gold.';
 
 /** Gold charged for the next lesson. The first lesson of a run is free. */
 export function chefLessonPrice(lessonsOwned: number, floor: number): number {
@@ -120,7 +129,7 @@ export function chefLessonTooltip(lessons: number, maxHp: number): ChefLessonToo
   const current = chefLessonBonus(lessons, maxHp);
   const next = current.lessons >= MAX_CHEF_LESSONS ? null : chefLessonBonus(current.lessons + 1, maxHp);
   return {
-    summary: "A Chef's Lesson improves every cooked dish for the rest of this run. Cooked food heals more when eaten, and cooked dishes sell for more. Raw food is unchanged. The first lesson is free; later lessons cost gold. Up to 5 lessons.",
+    summary: `A Chef's Lesson improves every cooked dish for the rest of this run. Cooked food heals more when eaten, and cooked dishes sell for more. Raw food is unchanged. ${CHEF_LESSON_COST_TEXT} Up to 5 lessons.`,
     current,
     next,
     nextEatDelta: next ? next.eatBonusHp - current.eatBonusHp : 0,

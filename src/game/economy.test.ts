@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { moneyBagSellValue, getItemSellValue, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, chefLessonPrice, chefLessonPriceLabel, chefLessonTooltip, cookedHealBonus, cookedSellBonus, MAX_CHEF_LESSONS, restaurantCookedSellPrice, cookedEatHeal, foodHealLabel, foodHealDescription, slotShrineCost, slotTierFromRoll, rollSlotTier, resolveSlotPrize, grantSlotPrizeItems } from './economy';
+import { readFileSync } from 'node:fs';
+import { moneyBagSellValue, getItemSellValue, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, pickBestDishesToSell, restaurantCookedPrice, CHEF_LESSON_COST_TEXT, chefLessonCost, chefLessonPrice, chefLessonPriceLabel, chefLessonTooltip, cookedHealBonus, cookedSellBonus, MAX_CHEF_LESSONS, restaurantCookedSellPrice, cookedEatHeal, foodHealLabel, foodHealDescription, slotShrineCost, slotTierFromRoll, rollSlotTier, resolveSlotPrize, grantSlotPrizeItems } from './economy';
 import { MONEY_BAG } from './emojis';
 import type { EmojiItem } from './types';
 
@@ -103,11 +104,13 @@ describe('pickBestDishesToSell', () => {
 
 describe("Chef's Lesson", () => {
   it('uses locked floor costs', () => {
-    expect(chefLessonCost(1)).toBe(1000);
-    expect(chefLessonCost(10)).toBe(3500);
-    expect(chefLessonCost(13)).toBe(4550);
-    expect(chefLessonCost(27)).toBe(9450);
-    expect(chefLessonCost(32)).toBe(11200);
+    expect(chefLessonCost(1)).toBe(500);
+    expect(chefLessonCost(7)).toBe(1250);
+    expect(chefLessonCost(8)).toBe(1400);
+    expect(chefLessonCost(10)).toBe(1750);
+    expect(chefLessonCost(13)).toBe(2275);
+    expect(chefLessonCost(27)).toBe(4725);
+    expect(chefLessonCost(32)).toBe(5600);
     expect(MAX_CHEF_LESSONS).toBe(5);
   });
 
@@ -117,8 +120,8 @@ describe("Chef's Lesson", () => {
     expect(chefLessonPriceLabel(0, 13)).toBe('Free');
     expect(chefLessonPrice(1, 1)).toBe(chefLessonCost(1));
     expect(chefLessonPrice(1, 27)).toBe(chefLessonCost(27));
-    expect(chefLessonPriceLabel(1, 1)).toBe('1000g');
-    expect(chefLessonPrice(4, 13)).toBe(4550);
+    expect(chefLessonPriceLabel(1, 1)).toBe('500g');
+    expect(chefLessonPrice(4, 13)).toBe(2275);
     expect(chefLessonPriceLabel(5, 1)).toBe('');
   });
 
@@ -126,6 +129,11 @@ describe("Chef's Lesson", () => {
     const fresh = chefLessonTooltip(0, 100);
     expect(fresh.summary).toMatch(/cooked dish/i);
     expect(fresh.summary).toMatch(/first lesson is free/i);
+    expect(fresh.summary).toContain(CHEF_LESSON_COST_TEXT);
+    expect(CHEF_LESSON_COST_TEXT).toContain('500 + (floor-1)×125');
+    expect(CHEF_LESSON_COST_TEXT).toContain('floor×175');
+    const manual = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
+    expect(manual).toContain('CHEF_LESSON_COST_TEXT');
     expect(fresh.current.lessons).toBe(0);
     expect(fresh.current.eatBonusHp).toBe(0);
     expect(fresh.current.sellFlatGold).toBe(0);

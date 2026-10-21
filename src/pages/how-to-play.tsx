@@ -18,6 +18,7 @@ import {
 import { softCapRulesBlurb } from "../game/softCap";
 import { farmerRulesBlurb } from "../game/farmer";
 import { foodSinkRulesBlurb } from "../game/foodSinks";
+import { CHEF_LESSON_COST_TEXT } from "../game/economy";
 import { goldSinkRulesBlurb } from "../game/goldSinks";
 import { goldSink2RulesBlurb } from "../game/goldSinks2";
 import { voidExtrasRulesBlurb } from "../game/hollowMarket";
@@ -984,7 +985,7 @@ export default function HowToPlay({
               desc: "Heals HP and raises max HP when stepped on (scales with floor depth). One use per shrine. Offer one food here, on a used shrine, or at a slot shrine for a floor-long ATK/DEF blessing. Offering does not spend the pray.",
             },
             { icon: "🏪", label: "Shop", desc: "Buy emojis, equipment, and ammo with 💰 gold. Sell anything from your bag or bank for gold too. Gold services here: Identity Reroll (once per run, unlocked classes only, bag stays) and vault insurance for 1–3 hotbar emojis. Autoexplore stops here automatically." },
-            { icon: "🏪🔥", label: "Restaurant", desc: "A food-only shop. Buy and cook food, rest for +2 extra HP nearby (the low-HP rest multiplier applies to the whole rest), and sell cooked food for 250% value. Chef's Lesson improves cooked dishes for the rest of the run (more heal when eaten, more gold when sold, up to 5). The first lesson is free; later lessons cost gold. Hover the lesson for your current bonuses, or tap it to pin that note — the tap does not buy. You can sell up to 5 cooked dishes — the kitchen closes after that (no more selling or cooking there), but the +2 HP/turn rest bonus remains. Round for the House spends gold for a mood floor and reopens the kitchen without raising that cap of 5. Warning: the food smell draws nearby enemies (+2 aggro range). Autoexplore stops here." },
+            { icon: "🏪🔥", label: "Restaurant", desc: `A food-only shop. Buy and cook food, rest for +2 extra HP nearby (the low-HP rest multiplier applies to the whole rest), and sell cooked food for 250% value. Chef's Lesson improves cooked dishes for the rest of the run (more heal when eaten, more gold when sold, up to 5). ${CHEF_LESSON_COST_TEXT} Hover the lesson for your current bonuses, or tap it to pin that note — the tap does not buy. You can sell up to 5 cooked dishes — the kitchen closes after that (no more selling or cooking there), but the +2 HP/turn rest bonus remains. Round for the House spends gold for a mood floor and reopens the kitchen without raising that cap of 5. Warning: the food smell draws nearby enemies (+2 aggro range). Autoexplore stops here.` },
             { icon: "🍺", label: "Bar", desc: "Spend 15 XP for an instant HP restore from the innkeeper (overheal to 150% of max HP). Won't work if you're already overhealed or have fewer than 15 XP. Beds overheal to 200% instead, with no XP cost." },
             {
               icon: "🔥",
