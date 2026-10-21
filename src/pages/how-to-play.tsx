@@ -38,17 +38,79 @@ function Kbd({ children }: { children: React.ReactNode }) {
 }
 
 function Section({
+  id,
   title,
   children,
 }: {
+  id: string;
   title: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-3">
+    <section id={id} className="scroll-mt-32 space-y-3 lg:scroll-mt-6">
       <h2 className="text-xl font-bold border-b border-border pb-2">{title}</h2>
       {children}
     </section>
+  );
+}
+
+const RTFM_TOC = [
+  { id: "getting-started", label: "Getting Started" },
+  { id: "controls", label: "Controls" },
+  { id: "classes", label: "Classes & Prestige" },
+  { id: "combat-stats", label: "Combat & Stats" },
+  { id: "items", label: "Items, Rarity & Consumes" },
+  { id: "cooking-drinks", label: "Cooking & Drinks" },
+  { id: "shops", label: "Shops & Gold Sinks" },
+  { id: "tiles", label: "Tiles & Vaults" },
+  { id: "pressure", label: "Dungeon Pressure & D:27" },
+  { id: "emojicb", label: "EmojiCB City" },
+  { id: "bestiary", label: "Bestiary" },
+] as const;
+
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  let node: HTMLElement | null = el.parentElement;
+  while (node) {
+    const overflow = getComputedStyle(node).overflowY;
+    if (overflow === "auto" || overflow === "scroll") return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+function TocLinks({
+  activeId,
+  onJump,
+}: {
+  activeId: string;
+  onJump: (id: string) => void;
+}) {
+  return (
+    <ul className="space-y-0.5">
+      {RTFM_TOC.map((item) => {
+        const active = item.id === activeId;
+        return (
+          <li key={item.id}>
+            <a
+              href={`#${item.id}`}
+              data-testid={`rtfm-toc-link-${item.id}`}
+              aria-current={active ? "location" : undefined}
+              onClick={(event) => {
+                event.preventDefault();
+                onJump(item.id);
+              }}
+              className={`flex items-center min-h-11 rounded-md px-2.5 text-sm leading-snug ${
+                active
+                  ? "bg-primary/15 text-primary font-semibold"
+                  : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+              }`}
+            >
+              {item.label}
+            </a>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -94,6 +156,56 @@ export default function HowToPlay({
     return () => window.removeEventListener("keydown", onKey);
   }, [onBack, setLocation]);
 
+  const [tocOpen, setTocOpen] = useState(false);
+  const [activeId, setActiveId] = useState<string>(RTFM_TOC[0].id);
+  const activeLabel = RTFM_TOC.find((item) => item.id === activeId)?.label ?? "Contents";
+
+  useEffect(() => {
+    const nodes = RTFM_TOC.map((item) => document.getElementById(item.id)).filter(
+      (el): el is HTMLElement => el instanceof HTMLElement,
+    );
+    if (nodes.length === 0) return;
+    const root = scrollParent(nodes[0]);
+    const update = () => {
+      const rootTop = root ? root.getBoundingClientRect().top : 0;
+      const marker = rootTop + 128;
+      let current = nodes[0].id;
+      for (const node of nodes) {
+        if (node.getBoundingClientRect().top <= marker) current = node.id;
+      }
+      setActiveId((prev) => (prev === current ? prev : current));
+    };
+    update();
+    const target: HTMLElement | Window = root ?? window;
+    target.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      target.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
+  useEffect(() => {
+    const id = window.location.hash.replace(/^#/, "");
+    if (!RTFM_TOC.some((item) => item.id === id)) return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActiveId(id);
+  }, []);
+
+  const jumpTo = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    setActiveId(id);
+    setTocOpen(false);
+    if (!onBack && window.location.hash !== `#${id}`) {
+      history.replaceState(null, "", `#${id}`);
+    }
+  };
+
   const seenEmojiCount = EMOJI_POWERS.filter((e) =>
     seenEmojis.has(e.emoji),
   ).length;
@@ -102,25 +214,44 @@ export default function HowToPlay({
   ).length;
 
   return (
-    <div className="min-h-screen w-full max-w-2xl mx-auto p-6 space-y-10 pb-16">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        {onBack ? (
-          <Button variant="ghost" size="icon" onClick={onBack}>
-            <ChevronLeft className="w-6 h-6" />
-          </Button>
-        ) : (
-          <Link href="/">
-            <Button variant="ghost" size="icon">
-              <ChevronLeft className="w-6 h-6" />
-            </Button>
-          </Link>
-        )}
-        <h1 className="text-3xl font-bold text-primary">RTFM 📖</h1>
-      </div>
+    <div className="min-h-screen w-full max-w-6xl mx-auto px-4 py-6 pb-16 sm:px-6">
+      <div className="lg:grid lg:grid-cols-[minmax(0,42rem)_16rem] lg:justify-center lg:gap-10 lg:items-start">
+        <div className="min-w-0 space-y-10">
+          <div className="sticky top-0 z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 py-2 bg-background/95 backdrop-blur-md border-b border-border lg:static lg:mx-0 lg:px-0 lg:py-0 lg:bg-transparent lg:backdrop-blur-none lg:border-0">
+            <div className="flex items-center gap-4">
+              {onBack ? (
+                <Button variant="ghost" size="icon" onClick={onBack}>
+                  <ChevronLeft className="w-6 h-6" />
+                </Button>
+              ) : (
+                <Link href="/">
+                  <Button variant="ghost" size="icon">
+                    <ChevronLeft className="w-6 h-6" />
+                  </Button>
+                </Link>
+              )}
+              <h1 className="text-3xl font-bold text-primary">RTFM 📖</h1>
+            </div>
+            <div className="lg:hidden pt-2">
+              <button
+                type="button"
+                data-testid="rtfm-toc-toggle"
+                aria-expanded={tocOpen}
+                aria-controls="rtfm-toc-mobile"
+                onClick={() => setTocOpen((open) => !open)}
+                className="min-h-11 w-full rounded-md border border-border bg-card/60 px-3 text-left text-sm font-semibold"
+              >
+                {tocOpen ? "Hide contents" : `Contents · ${activeLabel}`}
+              </button>
+              {tocOpen && (
+                <nav id="rtfm-toc-mobile" aria-label="Table of contents" className="pt-1 pb-2">
+                  <TocLinks activeId={activeId} onJump={jumpTo} />
+                </nav>
+              )}
+            </div>
+          </div>
 
-      {/* Basics */}
-      <Section title="The Basics">
+      <Section id="getting-started" title="Getting Started">
         <p className="text-muted-foreground leading-relaxed">
           Descend through procedurally generated dungeon floors. Pick up emoji
           powers to boost your stats. If your emoji bag empties completely, you
@@ -132,92 +263,9 @@ export default function HowToPlay({
           is safe. Bump into enemies to attack. Reach the stairs{" "}
           <span className="text-lg">🔽</span> to descend deeper.
         </p>
-        <p className="text-muted-foreground leading-relaxed">
-          <strong className="text-foreground">D:27</strong> is the final floor: a circular arena
-          with the crowd in the stands and a boss rush in the pit. Clear the last wave and a
-          stairway opens at the north end. You can win the game there, or dive even deeper —
-          from D:28 on, Dungeon Pressure is doubled on each floor.
-        </p>
-        <div className="rounded-lg border border-primary/30 bg-card/50 px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
-          <div className="font-bold text-primary mb-1">EmojiCB</div>
-          {emojiCityRulesBlurb()}
-        </div>
-        <p className="text-muted-foreground leading-relaxed">
-          Your <strong className="text-foreground">Mood</strong> affects combat
-          — a happy adventurer hits harder, dodges more, and lands crits. Taking
-          damage, fleeing, and losing items all hurt your mood. Finding items,
-          defeating enemies, and levelling up lift it.
-        </p>
       </Section>
 
-      {/* Stats */}
-      <Section title="Stats Explained">
-        <div className="space-y-2 text-sm">
-          {[
-            {
-              label: "❤️ HP",
-              color: "text-red-400",
-              desc: "Hit Points — reach 0 and it's over. Healed by food, shrines, campfires, and resting. Rest is +1 HP a turn, ×2 at 50% HP or below and ×3 at 25% or below. The 🍺 bar overheals to 150% of max HP; a 🛏️ bed overheals to 200%. Excess decays by 1 per 5 turns.",
-            },
-            {
-              label: "⚔️ ATK",
-              color: "text-orange-400",
-              desc: "Attack — your base melee damage. Final hit = ATK × mood modifier − enemy DEF (minimum 1). Crits double the pre-defence damage. Surprise attacks deal ×1.6 ATK. Some classes get multi-hit combos at higher ATK.",
-            },
-            {
-              label: "🛡️ DEF",
-              color: "text-sky-400",
-              desc: "Defence — reduces incoming damage. Formula: damage taken = max(1, enemy ATK − ⌊DEF ÷ 2⌋). DEF is halved before subtracting, so every 2 points removes 1 damage. DEF soft-caps at 20; further points become max HP instead of more mitigation.",
-            },
-            {
-              label: "👤 DR",
-              color: "text-zinc-300",
-              desc: "Null Momentum — The Void only. Incoming damage (attacks, lava, blasts) is reduced by 1% + 1% per level, hard cap 44%. Level 1 is 2%. Rounded down, and a hit still deals at least 1. Void pressure is not reduced. Shown in the Stats row.",
-            },
-            {
-              label: "💨 SPD",
-              color: "text-green-400",
-              desc: "Speed — if an enemy's speed exceeds yours, it strikes twice per turn (the extra hit follows a normal damage roll). Also widens enemy detection range slightly. SPD soft-caps at 8; further speed becomes Evasion, and that conversion is applied before Evasion overflow becomes Speed. Matching or exceeding enemy speed prevents double-hits.",
-            },
-            {
-              label: "🎯 EVA",
-              color: "text-violet-400",
-              desc: (
-                <>
-                  Evasion — percentage chance to dodge an incoming attack entirely.{" "}
-                  <strong className="text-foreground">Raw EVA soft-caps at 50. Ninja dodge still caps at 75%.</strong>{" "}
-                  Speed overflow can push effective EVA, and non-Ninja dodge, above 50. Ninja EVA also scales with level and spikes at low HP.
-                </>
-              ),
-            },
-            {
-              label: "🍀 LCK",
-              color: "text-yellow-400",
-              desc: "Luck — raw LCK still adds to crit chance (base crit = 5% + raw LCK + mood bonus) until CRIT soft-caps at 100. The LCK number itself stops at 20; further luck becomes gold find. Loot quality is shifted by the 🍀 Clover bag passive, not by the LCK stat itself.",
-            },
-            {
-              label: "🔮 MP",
-              color: "text-blue-400",
-              desc: "Mana Points — Wizard 🧙 and Genie 🧞‍♀️. Spells cost MP. It regenerates by 1 when you Wait out of enemy sight. The Genie's fireball costs 2 MP. Running dry prevents spellcasting until it refills (Genie level 5 can Bloodcast HP instead). Drinks restore MP by tier and never restore HP.",
-            },
-          ].map(({ label, color, desc }) => (
-            <div
-              key={label}
-              className="bg-card/50 border border-border/40 rounded-lg px-3 py-2.5 flex gap-3"
-            >
-              <span className={`font-bold shrink-0 w-16 ${color}`}>{label}</span>
-              <span className="text-muted-foreground leading-relaxed">{desc}</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 bg-card/50 border border-amber-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
-          <div className="font-bold text-amber-200 mb-1">Overflow soft caps</div>
-          {softCapRulesBlurb()}
-        </div>
-      </Section>
-
-      {/* Controls */}
-      <Section title="Controls">
+      <Section id="controls" title="Controls">
         <div className="space-y-4 text-sm">
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
@@ -430,218 +478,10 @@ export default function HowToPlay({
             20 turns to refresh the bounty back to 50%.
           </div>
         </div>
+      
       </Section>
 
-      {/* Tiles */}
-      <Section title="Tiles">
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          {[
-            { icon: "⬛", label: "Wall", desc: "Solid — cannot pass through" },
-            { icon: "⬜", label: "Floor", desc: "Walkable open ground" },
-            { icon: "🚪", label: "Door", desc: "Some 1-tile corridors have a closed door; others are open hallways. Bump to open, press C to close. Closed doors block vision, ranged attacks, and animals. Humanoid enemies (zombies, skeletons, elves, adventurers, …) can open a closed door and walk through. Open or closed, door tiles block ranged attacks — you cannot snipe through a doorway." },
-            {
-              icon: "🕳️",
-              label: "Stairs Down",
-              desc: "Descend to the next floor",
-            },
-            {
-              icon: "🛕",
-              label: "Shrine",
-              desc: "Heals HP and raises max HP when stepped on (scales with floor depth). One use per shrine. Offer one food here, on a used shrine, or at a slot shrine for a floor-long ATK/DEF blessing. Offering does not spend the pray.",
-            },
-            { icon: "🏪", label: "Shop", desc: "Buy emojis, equipment, and ammo with 💰 gold. Sell anything from your bag or bank for gold too. Gold services here: Identity Reroll (once per run, unlocked classes only, bag stays) and vault insurance for 1–3 hotbar emojis. Autoexplore stops here automatically." },
-            { icon: "🏪🔥", label: "Restaurant", desc: "A food-only shop. Buy and cook food, rest for +2 extra HP nearby (the low-HP rest multiplier applies to the whole rest), and sell cooked food for 250% value. Chef's Lesson improves cooked dishes for the rest of the run (more heal when eaten, more gold when sold, up to 5). The first lesson is free; later lessons cost gold. Hover the lesson for your current bonuses, or tap it to pin that note — the tap does not buy. You can sell up to 5 cooked dishes — the kitchen closes after that (no more selling or cooking there), but the +2 HP/turn rest bonus remains. Round for the House spends gold for a mood floor and reopens the kitchen without raising that cap of 5. Warning: the food smell draws nearby enemies (+2 aggro range). Autoexplore stops here." },
-            { icon: "🍺", label: "Bar", desc: "Spend 15 XP for an instant HP restore from the innkeeper (overheal to 150% of max HP). Won't work if you're already overhealed or have fewer than 15 XP. Beds overheal to 200% instead, with no XP cost." },
-            {
-              icon: "🔥",
-              label: "Campfire",
-              desc: "Forest rooms always have one, and a lone fire sometimes appears on floors that have none. Stand nearby and press F to cook raw food. Dump at least 3 cooked dishes with Banquet for a full heal and a temporary mood floor. Resting nearby heals +2 extra HP per turn, and the low-HP rest multiplier applies to that total.",
-            },
-            { icon: "📦", label: "Ammo Cache", desc: "Special shop tile (📦). Re-interact (z/Enter/Space on the tile) for class-specific ammo resupply before bosses." },
-            { icon: "🟦", label: "Water", desc: "Rivers, ponds, lakes, and vault moats. You cannot walk on water without a ⛵ Boat. Mermen lurk here. Flying enemies cross and stand on water freely. Lava that touches water cools the water into walkable ⚫ obsidian." },
-            { icon: "🌿", label: "Bush", desc: "Blocks movement like a wall, but you can see and shoot through it. Ranged enemies (archers, dark mages) like to hide behind these." },
-            { icon: "🟩", label: "Prairie", desc: "Grassland rooms on D:3–26 (about 18% of those floors). Green grass 🟩 is walkable. Crops 🌱🪴🌽🌾 block movement, not sight or shots. A 🧑‍🌾 Farmer wanders inside the field. Bump or use Trade to barter food and healing items — not gold — for 3–5 emoji goods. Cooked food is worth 1.25×, raw food 1.0×, potions 0.75×. Friendly animals (🐕🐈🐔, rarely 🐄) attack hostiles and defend the farmer. Autoexplore stops beside them." },
-            { icon: "🌋", label: "Volcano", desc: "A rare vault. Spews lava every 10–20 turns, but only near the crater — it will not flood the whole floor. Grab the high-tier loot around it before the lava eats it — and don't stand in the fire." },
-            { icon: "🛏️", label: "Bed", desc: "Inside a nested room vault: a tiny 2×2 to 4×4 walled chamber with one door, tucked into a larger regular room. Interact to sleep. Resting overheals to 200% of max HP (the 🍺 bar is 150%), fully restores Wizard mana, and resets all cooldowns. 100 turns then pass — enemies still move and volcanoes still spew lava. Each bed can be used twice, then it's worn out. You cannot start sleep while a hostile is in sight. If a hostile reaches you, they land one sneak attack at 200% damage and you wake. Close the door before sleeping if you can. Autoexplore stops here." },
-            { icon: "🟧", label: "Lava", desc: "Extreme heat: each turn standing in lava deals 25% of your max HP plus a flat amount (starts at +10, +5 per floor descended). You'll get a Yes/No warning before stepping onto it from safe ground. Destroys items on the tile. Volcanoes and lava rivers both use this. Flying enemies cross it and take no damage. Orthogonally adjacent 🟦 water cools into ⚫ obsidian." },
-            { icon: "⚫", label: "Obsidian", desc: "Cooled lava×water. Walkable like regular floor for you and enemies. Does not remelt." },
-            { icon: "🪞", label: "Identity Mirror", desc: "A rare shrine from D:4. Offers the same once-per-run Identity Reroll as a shop: swap to another unlocked class and keep your bag, hotbar, and bank. Autoexplore stops here." },
-            { icon: "📜", label: "Bounty Board", desc: "About 30% of floors. Pay a floor-scaled ante for one contract on this floor: slay a mob that is already here, stand on a 📍 mark, or survive a run of turns. Success pays a named uncommon or rare emoji. Leave the floor and an accepted bounty expires — the ante stays spent. Autoexplore stops here." },
-            { icon: "💎", label: "Vanity Flex", desc: "D:16 and deeper only, the same floors as Dungeon Pressure. Buy a trail or a title for 5,000 gold or more. Cosmetics only: no combat power. The title shows in the HUD and on the death screen, and the choice is saved with the run. Autoexplore stops here." },
-            { icon: "☠️", label: "Blood Auction", desc: "Bid floor-scaled gold for a named rare emoji shown before you bid. Gold is spent win or lose. The HP percent is a sweetener paid only if you win, and a win never drops you below 1 HP. Autoexplore stops here." },
-          ].map((t) => (
-            <div
-              key={t.label}
-              className="flex items-start gap-2 bg-card/50 rounded-lg p-2 border border-border/40"
-            >
-              <span className="text-2xl shrink-0">{t.icon}</span>
-              <div>
-                <div className="font-bold">{t.label}</div>
-                <div className="text-xs text-muted-foreground">{t.desc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-3 bg-card/50 border border-green-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
-          <div className="font-bold text-green-200 mb-1">Farmer shops</div>
-          {farmerRulesBlurb()}
-        </div>
-
-        <div className="mt-3 bg-card/50 border border-orange-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
-          <div className="font-bold text-orange-200 mb-1">Food sinks</div>
-          {foodSinkRulesBlurb()}
-        </div>
-
-        <div className="mt-3 bg-card/50 border border-yellow-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
-          <div className="font-bold text-yellow-200 mb-1">Gold sinks</div>
-          {goldSinkRulesBlurb()}
-        </div>
-
-        <div className="mt-3 bg-card/50 border border-fuchsia-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
-          <div className="font-bold text-fuchsia-200 mb-1">More gold sinks</div>
-          {goldSink2RulesBlurb()}
-        </div>
-
-        <div className="mt-3 text-xs text-muted-foreground space-y-3">
-          <p>
-            <strong className="text-foreground">Dungeon Pressure:</strong> From D:16 onward, spawned enemies gain +3 ATK / +2 DEF and +3 max HP per floor below 15 (D:16 = +3/+2, D:18 = +9/+6). Watch for on-screen warnings.
-          </p>
-          <p>
-            <strong className="text-foreground">🪢 Rope:</strong> Use rope 🪢 (from hotbar or tactics) to safely enter. This magical rope will transport you to a dimensional treasure vault that randomly intersects the current dungeon floor. Treasure vaults offer big rewards (risk of traps). Rope 🪢 can also be used as a quick &apos;teleport&apos;/&apos;get out of danger&apos; button, but beware of taking damage from traps if you&apos;re at low health!
-          </p>
-          <p>
-            Autoexplore stops at shops, restaurants, bars, and beds.
-          </p>
-        </div>
-      </Section>
-
-      <Section title="Vaults">
-        <p className="text-sm text-muted-foreground">
-          Some floors generate special vaults. When you descend, the combat log names each one:
-        </p>
-        <div className="space-y-2 text-sm">
-          {[
-            {
-              icon: "💎",
-              label: "Treasure Vault",
-              log: "💎 You sense hidden treasure surrounded by water...",
-              desc: "A water-moated island of loot. Big rewards, but you need a way to reach the treasure (⛵, 🧲, etc).",
-            },
-            {
-              icon: "🦴",
-              label: "Monster Den",
-              log: "🦴 You sense a terrible presence nearby...",
-              desc: "A packed room of extra-dangerous enemies. Do not wander in unprepared.",
-            },
-            {
-              icon: "🌿",
-              label: "Am-Bushes",
-              log: "🌿 You hear bowstrings drawn behind the bushes...",
-              desc: "Hedges of 🌿 bushes that block movement but not sight or shots. 1–5 ranged attackers (archers, dark mages, etc.) hide behind them — 1 is common, 5 is rare.",
-            },
-            {
-              icon: "🌋",
-              label: "Volcano",
-              log: "🌋 There is a Volcano on this floor!",
-              desc: "Pauses the screen with a warning, then spews spreading 🟧 lava every 10–20 turns near the crater (it will not flood the floor). Burns loot on the tile (Skull, Dagger, Boat, and deep-tier gear). Water it touches cools to ⚫ obsidian. Don't stand in the fire.",
-            },
-            {
-              icon: "🛏️",
-              label: "Bedroom",
-              log: "🛏️ A small room is tucked inside these halls...",
-              desc: "A tiny 2×2 to 4×4 walled room nested inside a larger chamber, entered through a single 🚪, with a 🛏️ bed. Sleep for 200% overheal, full mana, and reset cooldowns; 100 turns pass. Each bed works twice. You cannot sleep while a hostile is in sight. A hostile that finds you sneak-attacks at 200% and wakes you. Close the door first if you can.",
-            },
-          ].map((v) => (
-            <div
-              key={v.label}
-              className="flex items-start gap-2 bg-card/50 rounded-lg p-3 border border-border/40"
-            >
-              <span className="text-2xl shrink-0">{v.icon}</span>
-              <div className="min-w-0">
-                <div className="font-bold">{v.icon} {v.label}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">{v.desc}</div>
-                <div className="text-[11px] text-amber-200/80 mt-1 italic">Combat log: {v.log}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      <Section title="Blink Strike Talents">
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Ninja only. Blink Strike credits are tracked for the run. An instakill
-          is worth {BLINK_TALENT_INSTAKILL_CREDITS} credits. A Blink that does not
-          instakill — a fizzle or a normal hit — is worth 1 credit if that target
-          dies within {BLINK_TALENT_DELAYED_KILL_TURNS} turns. Every{" "}
-          {BLINK_TALENT_CREDITS_PER_TIER} credits opens a permanent pick. The first
-          three offers are tier-locked (two branches each). Later offers (T4+) let
-          you take any talent you skipped, until all six are yours.
-        </p>
-        {blinkCredits != null && (
-          <p className="text-xs font-semibold text-violet-200" data-testid="rtfm-blink-talents">
-            {blinkTalentProgress(blinkCredits, blinkTalents).hudLabel}
-            {" · "}
-            {blinkTalentProgress(blinkCredits, blinkTalents).nextLabel}
-            {blinkLuck != null ? ` · ${blinkStrikeRulesBlurb(blinkLuck).split(".")[0]}.` : ""}
-          </p>
-        )}
-        <div className="space-y-2">
-          {([1, 2, 3] as const).map(tier => (
-            <div key={tier} className="bg-card/50 border border-border/50 rounded-lg p-3 text-xs">
-              <div className="font-bold text-violet-300 mb-1">Tier {tier}</div>
-              <ul className="space-y-1">
-                {BLINK_TALENTS.filter(t => t.tier === tier).map(t => (
-                  <li key={t.id}>
-                    <span className="font-semibold text-foreground">{t.name}: </span>
-                    <span className="text-muted-foreground">{t.detail}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-          <div className="bg-card/50 border border-border/50 rounded-lg p-3 text-xs">
-            <div className="font-bold text-violet-300 mb-1">T4+</div>
-            <p className="text-muted-foreground">
-              Each further {BLINK_TALENT_CREDITS_PER_TIER} credits offers any talent
-              from the tiers above that you have not picked yet.
-            </p>
-          </div>
-        </div>
-      </Section>
-
-      <Section title="Drinks">
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Drinks are overflow items, like food: they do not fill the 9 hotbar slots, do not count as mood-bag souls, and do not count as Void pressure.
-          A shop often stocks one. Floors can drop them. Restaurants stay food-only. Drinking spends a turn.
-          Wizards and Genies drink the biggest when MP is low, otherwise the smallest drink that covers the gap, and refuse when MP is already full.
-          Every other class drinks the weakest one first. Prestige classes drink like their base class. Sell Junk does not include drinks.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {DRINK_DROPS.map(drink => (
-            <div key={drink.emoji + drink.name} className="flex items-start gap-2 bg-card/50 border border-border/40 rounded-lg px-3 py-2">
-              <span className="text-xl shrink-0">{drink.emoji}</span>
-              <div className="min-w-0 text-xs">
-                <div className="font-bold">{drink.name} · tier {drink.drinkTier}</div>
-                <div className="text-muted-foreground">
-                  Wizard +{drink.drinkTier ? DRINK_TIER_MP[drink.drinkTier] : 0} MP · sells for {drink.drinkTier ? DRINK_TIER_SELL[drink.drinkTier] : 0}g · no HP
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="space-y-2">
-          {classDrinkEffects().map(row => (
-            <div key={row.name} className="bg-card/50 border border-border/40 rounded-lg px-3 py-2 text-xs">
-              <div className="font-bold">{row.emoji} {row.name}</div>
-              <div className="text-muted-foreground leading-relaxed">{row.summary}</div>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      {/* Classes */}
-      <Section title="Classes">
+      <Section id="classes" title="Classes & Prestige">
         <p className="text-sm text-muted-foreground mb-3">
           Four vessels are open from the start. Win the game at D:27 — the &quot;Win the Game&quot; choice — as a base class to unlock its prestige vessel. The unlock is kept in the meta save, so it survives the next descent. Prestige classes and 👤 The Void stay visible on the vessel screen while locked. Hover the greyed emoji (or tap it, then dismiss) to read the hint: for example &quot;Win D:27 as 🧙 Wizard to unlock&quot;, and for The Void &quot;Die to Void damage to unlock&quot;. A locked choice never starts a run.
         </p>
@@ -721,12 +561,169 @@ export default function HowToPlay({
             </div>
           ))}
         </div>
+      
+        <h3 className="text-base font-bold text-foreground pt-4">Blink Strike Talents</h3>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Ninja only. Blink Strike credits are tracked for the run. An instakill
+          is worth {BLINK_TALENT_INSTAKILL_CREDITS} credits. A Blink that does not
+          instakill — a fizzle or a normal hit — is worth 1 credit if that target
+          dies within {BLINK_TALENT_DELAYED_KILL_TURNS} turns. Every{" "}
+          {BLINK_TALENT_CREDITS_PER_TIER} credits opens a permanent pick. The first
+          three offers are tier-locked (two branches each). Later offers (T4+) let
+          you take any talent you skipped, until all six are yours.
+        </p>
+        {blinkCredits != null && (
+          <p className="text-xs font-semibold text-violet-200" data-testid="rtfm-blink-talents">
+            {blinkTalentProgress(blinkCredits, blinkTalents).hudLabel}
+            {" · "}
+            {blinkTalentProgress(blinkCredits, blinkTalents).nextLabel}
+            {blinkLuck != null ? ` · ${blinkStrikeRulesBlurb(blinkLuck).split(".")[0]}.` : ""}
+          </p>
+        )}
+        <div className="space-y-2">
+          {([1, 2, 3] as const).map(tier => (
+            <div key={tier} className="bg-card/50 border border-border/50 rounded-lg p-3 text-xs">
+              <div className="font-bold text-violet-300 mb-1">Tier {tier}</div>
+              <ul className="space-y-1">
+                {BLINK_TALENTS.filter(t => t.tier === tier).map(t => (
+                  <li key={t.id}>
+                    <span className="font-semibold text-foreground">{t.name}: </span>
+                    <span className="text-muted-foreground">{t.detail}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <div className="bg-card/50 border border-border/50 rounded-lg p-3 text-xs">
+            <div className="font-bold text-violet-300 mb-1">T4+</div>
+            <p className="text-muted-foreground">
+              Each further {BLINK_TALENT_CREDITS_PER_TIER} credits offers any talent
+              from the tiers above that you have not picked yet.
+            </p>
+          </div>
+        </div>
+      
       </Section>
 
-      {/* Emoji Powers */}
-      <Section
-        title={`Emoji Powers — ${seenEmojiCount} / ${EMOJI_POWERS.length} discovered`}
-      >
+      <Section id="combat-stats" title="Combat & Stats">
+        <div className="space-y-2 text-sm">
+          {[
+            {
+              label: "❤️ HP",
+              color: "text-red-400",
+              desc: "Hit Points — reach 0 and it's over. Healed by food, shrines, campfires, and resting. Rest is +1 HP a turn, ×2 at 50% HP or below and ×3 at 25% or below. The 🍺 bar overheals to 150% of max HP; a 🛏️ bed overheals to 200%. Excess decays by 1 per 5 turns.",
+            },
+            {
+              label: "⚔️ ATK",
+              color: "text-orange-400",
+              desc: "Attack — your base melee damage. Final hit = ATK × mood modifier − enemy DEF (minimum 1). Crits double the pre-defence damage. Surprise attacks deal ×1.6 ATK. Some classes get multi-hit combos at higher ATK.",
+            },
+            {
+              label: "🛡️ DEF",
+              color: "text-sky-400",
+              desc: "Defence — reduces incoming damage. Formula: damage taken = max(1, enemy ATK − ⌊DEF ÷ 2⌋). DEF is halved before subtracting, so every 2 points removes 1 damage. DEF soft-caps at 20; further points become max HP instead of more mitigation.",
+            },
+            {
+              label: "👤 DR",
+              color: "text-zinc-300",
+              desc: "Null Momentum — The Void only. Incoming damage (attacks, lava, blasts) is reduced by 1% + 1% per level, hard cap 44%. Level 1 is 2%. Rounded down, and a hit still deals at least 1. Void pressure is not reduced. Shown in the Stats row.",
+            },
+            {
+              label: "💨 SPD",
+              color: "text-green-400",
+              desc: "Speed — if an enemy's speed exceeds yours, it strikes twice per turn (the extra hit follows a normal damage roll). Also widens enemy detection range slightly. SPD soft-caps at 8; further speed becomes Evasion, and that conversion is applied before Evasion overflow becomes Speed. Matching or exceeding enemy speed prevents double-hits.",
+            },
+            {
+              label: "🎯 EVA",
+              color: "text-violet-400",
+              desc: (
+                <>
+                  Evasion — percentage chance to dodge an incoming attack entirely.{" "}
+                  <strong className="text-foreground">Raw EVA soft-caps at 50. Ninja dodge still caps at 75%.</strong>{" "}
+                  Speed overflow can push effective EVA, and non-Ninja dodge, above 50. Ninja EVA also scales with level and spikes at low HP.
+                </>
+              ),
+            },
+            {
+              label: "🍀 LCK",
+              color: "text-yellow-400",
+              desc: "Luck — raw LCK still adds to crit chance (base crit = 5% + raw LCK + mood bonus) until CRIT soft-caps at 100. The LCK number itself stops at 20; further luck becomes gold find. Loot quality is shifted by the 🍀 Clover bag passive, not by the LCK stat itself.",
+            },
+            {
+              label: "🔮 MP",
+              color: "text-blue-400",
+              desc: "Mana Points — Wizard 🧙 and Genie 🧞‍♀️. Spells cost MP. It regenerates by 1 when you Wait out of enemy sight. The Genie's fireball costs 2 MP. Running dry prevents spellcasting until it refills (Genie level 5 can Bloodcast HP instead). Drinks restore MP by tier and never restore HP.",
+            },
+          ].map(({ label, color, desc }) => (
+            <div
+              key={label}
+              className="bg-card/50 border border-border/40 rounded-lg px-3 py-2.5 flex gap-3"
+            >
+              <span className={`font-bold shrink-0 w-16 ${color}`}>{label}</span>
+              <span className="text-muted-foreground leading-relaxed">{desc}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 bg-card/50 border border-amber-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-amber-200 mb-1">Overflow soft caps</div>
+          {softCapRulesBlurb()}
+        </div>
+        <h3 className="text-base font-bold text-foreground pt-4">Mood System</h3>
+        <p className="text-muted-foreground leading-relaxed">
+          Your <strong className="text-foreground">Mood</strong> affects combat
+          — a happy adventurer hits harder, dodges more, and lands crits. Taking
+          damage, fleeing, and losing items all hurt your mood. Finding items,
+          defeating enemies, and levelling up lift it.
+        </p>
+      
+        <p className="text-xs text-muted-foreground mb-3">
+          Your mood shifts constantly and directly affects combat performance.
+        </p>
+        <div className="space-y-1.5 text-sm">
+          {[
+            {
+              emoji: "😄",
+              name: "Very Happy",
+              effect: "+crit chance, +damage, +evasion",
+            },
+            { emoji: "🙂", name: "Happy", effect: "Slight combat bonus" },
+            { emoji: "😐", name: "Neutral", effect: "No bonus or penalty" },
+            {
+              emoji: "😠",
+              name: "Angry",
+              effect: "Slightly reduced performance",
+            },
+            {
+              emoji: "😢",
+              name: "Sad",
+              effect: "Reduced hit chance and damage",
+            },
+            { emoji: "😨", name: "Scared", effect: "May flee from combat" },
+            {
+              emoji: "💀",
+              name: "Desperate",
+              effect: "High flee chance, severely reduced stats",
+            },
+          ].map((m) => (
+            <div
+              key={m.name}
+              className="flex items-center gap-3 bg-card/30 rounded-lg px-3 py-1.5 border border-border/30"
+            >
+              <span className="text-xl shrink-0">{m.emoji}</span>
+              <div className="flex-1">
+                <span className="font-semibold">{m.name}</span>
+                <span className="text-muted-foreground text-xs ml-2">
+                  — {m.effect}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      
+      </Section>
+
+      <Section id="items" title="Items, Rarity & Consumes">
+        <h3 className="text-base font-bold text-foreground">Emoji Powers — {seenEmojiCount} / {EMOJI_POWERS.length} discovered</h3>
         <p className="text-xs text-muted-foreground">
           Pick up soul emojis to permanently boost your stats. Discover them by
           finding them in the dungeon.
@@ -770,10 +767,8 @@ export default function HowToPlay({
             );
           })}
         </div>
-      </Section>
-
-      {/* Stacking Emojis */}
-      <Section title="Stacking Emojis">
+      
+        <h3 className="text-base font-bold text-foreground pt-4">Stacking Emojis</h3>
         <p className="text-xs text-muted-foreground mb-3">
           Most bag passives are{" "}
           <strong className="text-foreground">non-stackable</strong> — carrying
@@ -910,12 +905,189 @@ export default function HowToPlay({
           the foe is at 25% HP or below. Adds to luck/mood crit chance — never a
           guaranteed crit. Consume still grants +2 ATK and +2 SPD.
         </p>
+      
       </Section>
 
-      {/* Enemies */}
-      <Section
-        title={`Bestiary — ${seenEnemyCount} / ${ENEMY_TYPES.length} encountered`}
-      >
+      <Section id="cooking-drinks" title="Cooking & Drinks">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Drinks are overflow items, like food: they do not fill the 9 hotbar slots, do not count as mood-bag souls, and do not count as Void pressure.
+          A shop often stocks one. Floors can drop them. Restaurants stay food-only. Drinking spends a turn.
+          Wizards and Genies drink the biggest when MP is low, otherwise the smallest drink that covers the gap, and refuse when MP is already full.
+          Every other class drinks the weakest one first. Prestige classes drink like their base class. Sell Junk does not include drinks.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {DRINK_DROPS.map(drink => (
+            <div key={drink.emoji + drink.name} className="flex items-start gap-2 bg-card/50 border border-border/40 rounded-lg px-3 py-2">
+              <span className="text-xl shrink-0">{drink.emoji}</span>
+              <div className="min-w-0 text-xs">
+                <div className="font-bold">{drink.name} · tier {drink.drinkTier}</div>
+                <div className="text-muted-foreground">
+                  Wizard +{drink.drinkTier ? DRINK_TIER_MP[drink.drinkTier] : 0} MP · sells for {drink.drinkTier ? DRINK_TIER_SELL[drink.drinkTier] : 0}g · no HP
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="space-y-2">
+          {classDrinkEffects().map(row => (
+            <div key={row.name} className="bg-card/50 border border-border/40 rounded-lg px-3 py-2 text-xs">
+              <div className="font-bold">{row.emoji} {row.name}</div>
+              <div className="text-muted-foreground leading-relaxed">{row.summary}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 bg-card/50 border border-orange-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-orange-200 mb-1">Food sinks</div>
+          {foodSinkRulesBlurb()}
+        </div>
+      </Section>
+
+      <Section id="shops" title="Shops & Gold Sinks">
+        <div className="mt-3 bg-card/50 border border-green-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-green-200 mb-1">Farmer shops</div>
+          {farmerRulesBlurb()}
+        </div>
+        <div className="mt-3 bg-card/50 border border-yellow-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-yellow-200 mb-1">Gold sinks</div>
+          {goldSinkRulesBlurb()}
+        </div>
+        <div className="mt-3 bg-card/50 border border-fuchsia-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-fuchsia-200 mb-1">More gold sinks</div>
+          {goldSink2RulesBlurb()}
+        </div>
+      </Section>
+
+      <Section id="tiles" title="Tiles & Vaults">
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          {[
+            { icon: "⬛", label: "Wall", desc: "Solid — cannot pass through" },
+            { icon: "⬜", label: "Floor", desc: "Walkable open ground" },
+            { icon: "🚪", label: "Door", desc: "Some 1-tile corridors have a closed door; others are open hallways. Bump to open, press C to close. Closed doors block vision, ranged attacks, and animals. Humanoid enemies (zombies, skeletons, elves, adventurers, …) can open a closed door and walk through. Open or closed, door tiles block ranged attacks — you cannot snipe through a doorway." },
+            {
+              icon: "🕳️",
+              label: "Stairs Down",
+              desc: "Descend to the next floor",
+            },
+            {
+              icon: "🛕",
+              label: "Shrine",
+              desc: "Heals HP and raises max HP when stepped on (scales with floor depth). One use per shrine. Offer one food here, on a used shrine, or at a slot shrine for a floor-long ATK/DEF blessing. Offering does not spend the pray.",
+            },
+            { icon: "🏪", label: "Shop", desc: "Buy emojis, equipment, and ammo with 💰 gold. Sell anything from your bag or bank for gold too. Gold services here: Identity Reroll (once per run, unlocked classes only, bag stays) and vault insurance for 1–3 hotbar emojis. Autoexplore stops here automatically." },
+            { icon: "🏪🔥", label: "Restaurant", desc: "A food-only shop. Buy and cook food, rest for +2 extra HP nearby (the low-HP rest multiplier applies to the whole rest), and sell cooked food for 250% value. Chef's Lesson improves cooked dishes for the rest of the run (more heal when eaten, more gold when sold, up to 5). The first lesson is free; later lessons cost gold. Hover the lesson for your current bonuses, or tap it to pin that note — the tap does not buy. You can sell up to 5 cooked dishes — the kitchen closes after that (no more selling or cooking there), but the +2 HP/turn rest bonus remains. Round for the House spends gold for a mood floor and reopens the kitchen without raising that cap of 5. Warning: the food smell draws nearby enemies (+2 aggro range). Autoexplore stops here." },
+            { icon: "🍺", label: "Bar", desc: "Spend 15 XP for an instant HP restore from the innkeeper (overheal to 150% of max HP). Won't work if you're already overhealed or have fewer than 15 XP. Beds overheal to 200% instead, with no XP cost." },
+            {
+              icon: "🔥",
+              label: "Campfire",
+              desc: "Forest rooms always have one, and a lone fire sometimes appears on floors that have none. Stand nearby and press F to cook raw food. Dump at least 3 cooked dishes with Banquet for a full heal and a temporary mood floor. Resting nearby heals +2 extra HP per turn, and the low-HP rest multiplier applies to that total.",
+            },
+            { icon: "📦", label: "Ammo Cache", desc: "Special shop tile (📦). Re-interact (z/Enter/Space on the tile) for class-specific ammo resupply before bosses." },
+            { icon: "🟦", label: "Water", desc: "Rivers, ponds, lakes, and vault moats. You cannot walk on water without a ⛵ Boat. Mermen lurk here. Flying enemies cross and stand on water freely. Lava that touches water cools the water into walkable ⚫ obsidian." },
+            { icon: "🌿", label: "Bush", desc: "Blocks movement like a wall, but you can see and shoot through it. Ranged enemies (archers, dark mages) like to hide behind these." },
+            { icon: "🟩", label: "Prairie", desc: "Grassland rooms on D:3–26 (about 18% of those floors). Green grass 🟩 is walkable. Crops 🌱🪴🌽🌾 block movement, not sight or shots. A 🧑‍🌾 Farmer wanders inside the field. Bump or use Trade to barter food and healing items — not gold — for 3–5 emoji goods. Cooked food is worth 1.25×, raw food 1.0×, potions 0.75×. Friendly animals (🐕🐈🐔, rarely 🐄) attack hostiles and defend the farmer. Autoexplore stops beside them." },
+            { icon: "🌋", label: "Volcano", desc: "A rare vault. Spews lava every 10–20 turns, but only near the crater — it will not flood the whole floor. Grab the high-tier loot around it before the lava eats it — and don't stand in the fire." },
+            { icon: "🛏️", label: "Bed", desc: "Inside a nested room vault: a tiny 2×2 to 4×4 walled chamber with one door, tucked into a larger regular room. Interact to sleep. Resting overheals to 200% of max HP (the 🍺 bar is 150%), fully restores Wizard mana, and resets all cooldowns. 100 turns then pass — enemies still move and volcanoes still spew lava. Each bed can be used twice, then it's worn out. You cannot start sleep while a hostile is in sight. If a hostile reaches you, they land one sneak attack at 200% damage and you wake. Close the door before sleeping if you can. Autoexplore stops here." },
+            { icon: "🟧", label: "Lava", desc: "Extreme heat: each turn standing in lava deals 25% of your max HP plus a flat amount (starts at +10, +5 per floor descended). You'll get a Yes/No warning before stepping onto it from safe ground. Destroys items on the tile. Volcanoes and lava rivers both use this. Flying enemies cross it and take no damage. Orthogonally adjacent 🟦 water cools into ⚫ obsidian." },
+            { icon: "⚫", label: "Obsidian", desc: "Cooled lava×water. Walkable like regular floor for you and enemies. Does not remelt." },
+            { icon: "🪞", label: "Identity Mirror", desc: "A rare shrine from D:4. Offers the same once-per-run Identity Reroll as a shop: swap to another unlocked class and keep your bag, hotbar, and bank. Autoexplore stops here." },
+            { icon: "📜", label: "Bounty Board", desc: "About 30% of floors. Pay a floor-scaled ante for one contract on this floor: slay a mob that is already here, stand on a 📍 mark, or survive a run of turns. Success pays a named uncommon or rare emoji. Leave the floor and an accepted bounty expires — the ante stays spent. Autoexplore stops here." },
+            { icon: "💎", label: "Vanity Flex", desc: "D:16 and deeper only, the same floors as Dungeon Pressure. Buy a trail or a title for 5,000 gold or more. Cosmetics only: no combat power. The title shows in the HUD and on the death screen, and the choice is saved with the run. Autoexplore stops here." },
+            { icon: "☠️", label: "Blood Auction", desc: "Bid floor-scaled gold for a named rare emoji shown before you bid. Gold is spent win or lose. The HP percent is a sweetener paid only if you win, and a win never drops you below 1 HP. Autoexplore stops here." },
+          ].map((t) => (
+            <div
+              key={t.label}
+              className="flex items-start gap-2 bg-card/50 rounded-lg p-2 border border-border/40"
+            >
+              <span className="text-2xl shrink-0">{t.icon}</span>
+              <div>
+                <div className="font-bold">{t.label}</div>
+                <div className="text-xs text-muted-foreground">{t.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 text-xs text-muted-foreground space-y-3">
+          <p>
+            <strong className="text-foreground">🪢 Rope:</strong> Use rope 🪢 (from hotbar or tactics) to safely enter. This magical rope will transport you to a dimensional treasure vault that randomly intersects the current dungeon floor. Treasure vaults offer big rewards (risk of traps). Rope 🪢 can also be used as a quick &apos;teleport&apos;/&apos;get out of danger&apos; button, but beware of taking damage from traps if you&apos;re at low health!
+          </p>
+          <p>
+            Autoexplore stops at shops, restaurants, bars, and beds.
+          </p>
+        </div>
+      
+        <h3 className="text-base font-bold text-foreground pt-4">Vaults</h3>
+        <p className="text-sm text-muted-foreground">
+          Some floors generate special vaults. When you descend, the combat log names each one:
+        </p>
+        <div className="space-y-2 text-sm">
+          {[
+            {
+              icon: "💎",
+              label: "Treasure Vault",
+              log: "💎 You sense hidden treasure surrounded by water...",
+              desc: "A water-moated island of loot. Big rewards, but you need a way to reach the treasure (⛵, 🧲, etc).",
+            },
+            {
+              icon: "🦴",
+              label: "Monster Den",
+              log: "🦴 You sense a terrible presence nearby...",
+              desc: "A packed room of extra-dangerous enemies. Do not wander in unprepared.",
+            },
+            {
+              icon: "🌿",
+              label: "Am-Bushes",
+              log: "🌿 You hear bowstrings drawn behind the bushes...",
+              desc: "Hedges of 🌿 bushes that block movement but not sight or shots. 1–5 ranged attackers (archers, dark mages, etc.) hide behind them — 1 is common, 5 is rare.",
+            },
+            {
+              icon: "🌋",
+              label: "Volcano",
+              log: "🌋 There is a Volcano on this floor!",
+              desc: "Pauses the screen with a warning, then spews spreading 🟧 lava every 10–20 turns near the crater (it will not flood the floor). Burns loot on the tile (Skull, Dagger, Boat, and deep-tier gear). Water it touches cools to ⚫ obsidian. Don't stand in the fire.",
+            },
+            {
+              icon: "🛏️",
+              label: "Bedroom",
+              log: "🛏️ A small room is tucked inside these halls...",
+              desc: "A tiny 2×2 to 4×4 walled room nested inside a larger chamber, entered through a single 🚪, with a 🛏️ bed. Sleep for 200% overheal, full mana, and reset cooldowns; 100 turns pass. Each bed works twice. You cannot sleep while a hostile is in sight. A hostile that finds you sneak-attacks at 200% and wakes you. Close the door first if you can.",
+            },
+          ].map((v) => (
+            <div
+              key={v.label}
+              className="flex items-start gap-2 bg-card/50 rounded-lg p-3 border border-border/40"
+            >
+              <span className="text-2xl shrink-0">{v.icon}</span>
+              <div className="min-w-0">
+                <div className="font-bold">{v.icon} {v.label}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{v.desc}</div>
+                <div className="text-[11px] text-amber-200/80 mt-1 italic">Combat log: {v.log}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      
+      </Section>
+
+      <Section id="pressure" title="Dungeon Pressure & D:27">
+        <p className="text-muted-foreground leading-relaxed">
+          <strong className="text-foreground">D:27</strong> is the final floor: a circular arena
+          with the crowd in the stands and a boss rush in the pit. Clear the last wave and a
+          stairway opens at the north end. You can win the game there, or dive even deeper —
+          from D:28 on, Dungeon Pressure is doubled on each floor.
+        </p>
+        <p className="text-muted-foreground leading-relaxed">
+          <strong className="text-foreground">Dungeon Pressure:</strong> From D:16 onward, spawned enemies gain +3 ATK / +2 DEF and +3 max HP per floor below 15 (D:16 = +3/+2, D:18 = +9/+6). Watch for on-screen warnings.
+        </p>
+      </Section>
+
+      <Section id="emojicb" title="EmojiCB City">
+        <div className="rounded-lg border border-primary/30 bg-card/50 px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-primary mb-1">EmojiCB</div>
+          {emojiCityRulesBlurb()}
+        </div>
+      </Section>
+
+      <Section id="bestiary" title={`Bestiary — ${seenEnemyCount} / ${ENEMY_TYPES.length} encountered`}>
         <p className="text-xs text-muted-foreground">
           Enemies are revealed when you fight them. Hover or inspect enemies
           in-game to see their stats.
@@ -1267,54 +1439,20 @@ export default function HowToPlay({
             );
           })}
         </div>
+      
       </Section>
-
-      {/* Mood */}
-      <Section title="Mood System">
-        <p className="text-xs text-muted-foreground mb-3">
-          Your mood shifts constantly and directly affects combat performance.
-        </p>
-        <div className="space-y-1.5 text-sm">
-          {[
-            {
-              emoji: "😄",
-              name: "Very Happy",
-              effect: "+crit chance, +damage, +evasion",
-            },
-            { emoji: "🙂", name: "Happy", effect: "Slight combat bonus" },
-            { emoji: "😐", name: "Neutral", effect: "No bonus or penalty" },
-            {
-              emoji: "😠",
-              name: "Angry",
-              effect: "Slightly reduced performance",
-            },
-            {
-              emoji: "😢",
-              name: "Sad",
-              effect: "Reduced hit chance and damage",
-            },
-            { emoji: "😨", name: "Scared", effect: "May flee from combat" },
-            {
-              emoji: "💀",
-              name: "Desperate",
-              effect: "High flee chance, severely reduced stats",
-            },
-          ].map((m) => (
-            <div
-              key={m.name}
-              className="flex items-center gap-3 bg-card/30 rounded-lg px-3 py-1.5 border border-border/30"
-            >
-              <span className="text-xl shrink-0">{m.emoji}</span>
-              <div className="flex-1">
-                <span className="font-semibold">{m.name}</span>
-                <span className="text-muted-foreground text-xs ml-2">
-                  — {m.effect}
-                </span>
-              </div>
-            </div>
-          ))}
         </div>
-      </Section>
+        <nav
+          data-testid="rtfm-toc"
+          aria-label="Table of contents"
+          className="hidden lg:block sticky top-6 self-start max-h-[calc(100vh-3rem)] overflow-y-auto border-l border-border pl-4"
+        >
+          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+            On this page
+          </div>
+          <TocLinks activeId={activeId} onJump={jumpTo} />
+        </nav>
+      </div>
     </div>
   );
 }
