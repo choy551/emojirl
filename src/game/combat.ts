@@ -1,7 +1,7 @@
 import { Player, Enemy, MoodType } from './types';
 import { crowGoldSteal } from './economy';
 import { applyNullMomentum } from './voidDamage';
-import { blinkStrikeDamageMultiplier, critStat } from './blinkStrike';
+import { blinkStrikeAlwaysHits, blinkStrikeDamageMultiplier, critStat } from './blinkStrike';
 import { DODGE_CHANCE_CAP, effectiveCrit } from './softCap';
 import { feastDefense } from './foodSinks';
 import { fencerCritBonus, fencerEvasion, isFencer, isRoyalGuard, royalDefenseBonus, royalIncomingMult, royalMeleeMultiplier } from './prestige';
@@ -99,7 +99,7 @@ export function resolveCombat(
   player: Player,
   enemy: Enemy,
   addLog: (msg: string) => void,
-  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean; floor?: number; blinkStrike?: boolean; damageMult?: number; critBonus?: number; parryChance?: number; incomingMult?: number } = {}
+  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean; floor?: number; blinkStrike?: boolean; bonusDamage?: number; damageMult?: number; critBonus?: number; parryChance?: number; incomingMult?: number } = {}
 ): CombatResult {
   const cls = player.characterClass;
   const mods = getMoodModifiers(opts.mood ?? 'neutral', player.stats.hp, player.stats.maxHp, opts.cowboyMoodValue);
@@ -192,13 +192,14 @@ export function resolveCombat(
     }
   } else {
     // ── Normal attack path ────────────────────────────────────────────────────
-    const hit = (opts.trueAim ?? false) || r() * 100 < Math.max(5, Math.min(99, baseHit));
+    const blinkTruestrike = !!opts.blinkStrike && blinkStrikeAlwaysHits(player.stats.blinkTalents);
+    const hit = (opts.trueAim ?? false) || blinkTruestrike || r() * 100 < Math.max(5, Math.min(99, baseHit));
     if (!hit) {
       addLog(`You swing at ${enemy.emoji} — miss!`);
     } else {
       let rawDamage = player.stats.attack;
       if (opts.blinkStrike) {
-        const mult = blinkStrikeDamageMultiplier(critStat(player.stats.luck ?? 0));
+        const mult = blinkStrikeDamageMultiplier(critStat(player.stats.luck ?? 0), player.stats.blinkTalents);
         rawDamage = Math.round(rawDamage * mult);
       }
       if (cls === '🥷' && !enemy.engaged) {
@@ -219,12 +220,15 @@ export function resolveCombat(
 
       const isCrit = rollCrit(newEnemyHp);
       const moodDamage = Math.round(rawDamage * mods.damageMult * (isCrit ? 2 : 1));
-      const actualDamage = Math.max(1, moodDamage - enemyDef);
+      const overkillBonus = opts.blinkStrike ? Math.max(0, Math.floor(opts.bonusDamage ?? 0)) : 0;
+      let actualDamage = Math.max(1, moodDamage - enemyDef);
+      if (overkillBonus > 0) actualDamage += overkillBonus;
       newEnemyHp = enemy.hp - actualDamage;
 
       if (opts.blinkStrike) {
         const unaware = cls === '🥷' && !enemy.engaged;
-        addLog(`⚡ Blink Strike! ${actualDamage} dmg to ${enemy.emoji}${unaware ? ' (unaware)' : ''}${isCrit ? ' CRITICAL!' : ''}!`);
+        const bonusNote = overkillBonus > 0 ? ` (+${overkillBonus} overkill)` : '';
+        addLog(`⚡ Blink Strike! ${actualDamage} dmg to ${enemy.emoji}${unaware ? ' (unaware)' : ''}${isCrit ? ' CRITICAL!' : ''}${bonusNote}!`);
       } else if (cls === '🥷' && !enemy.engaged) {
         addLog(`🥷 Shadow Strike! ${actualDamage} dmg to ${enemy.emoji} (unaware)!`);
       } else if (opts.wizardMelee) {

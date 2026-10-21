@@ -25,6 +25,8 @@ function playerAt(x: number, y: number, over: Partial<Player['stats']> = {}): Pl
       hp: 10, maxHp: 10, attack: 1, defense: 0, speed: 1, evasion: 0,
       luck: 0, level: 1, xp: 0, moodValue: 0, gold: 0, mana: 0, maxMana: 4,
       blinkStrikeCooldown: 5,
+      blinkOverkillCooldown: 4,
+      blinkOverkillBank: 12,
       ...over,
     },
     inventory: [{
@@ -82,6 +84,8 @@ describe('applyBedRest', () => {
     expect(p.stats.hp).toBe(10 * BED_OVERHEAL_MULT);
     expect(p.stats.mana).toBe(4);
     expect(p.stats.blinkStrikeCooldown).toBe(0);
+    expect(p.stats.blinkOverkillCooldown).toBe(0);
+    expect(p.stats.blinkOverkillBank).toBe(12);
     expect(p.trailblazerCooldown).toBe(0);
     expect(p.stats.overhealDecayTick).toBe(0);
   });

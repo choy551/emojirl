@@ -1,4 +1,5 @@
 import { GameState, Player, PlayerStats, EmojiItem, Equipment } from './types';
+import { knownBlinkTalents } from './blinkStrike';
 import { applySoulCatalogCopy } from './emojis';
 import { normalizeBounty, normalizeVanity } from './goldSinks2';
 
@@ -99,9 +100,11 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     blinkStrikeInstakillChain:     rawStats.blinkStrikeInstakillChain      as number | undefined,
     blinkStrikeInstakillOutOfCombat: rawStats.blinkStrikeInstakillOutOfCombat as number | undefined,
     blinkStrikeCredits:            rawStats.blinkStrikeCredits             as number | undefined,
-    blinkTalents:                  rawStats.blinkTalents                   as PlayerStats['blinkTalents'],
+    blinkTalents:                  knownBlinkTalents(rawStats.blinkTalents as readonly string[] | undefined),
     blinkStrikeMarks:              rawStats.blinkStrikeMarks               as PlayerStats['blinkStrikeMarks'],
     blinkMeleeCdCharges:           rawStats.blinkMeleeCdCharges            as number | undefined,
+    blinkOverkillBank:             rawStats.blinkOverkillBank              as number | undefined,
+    blinkOverkillCooldown:         rawStats.blinkOverkillCooldown          as number | undefined,
     overhealDecayTick:             rawStats.overhealDecayTick             as number | undefined,
     backdashCooldown:              rawStats.backdashCooldown              as number | undefined,
     lungeCooldown:                 rawStats.lungeCooldown                 as number | undefined,

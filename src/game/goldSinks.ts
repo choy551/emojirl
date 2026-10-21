@@ -124,6 +124,8 @@ export function executeIdentityReroll(player: Player, floor: number, nextClass: 
     speed: shiftStat(player.stats.speed, old.baseStats.speed, next.baseStats.speed, 1),
     evasion: shiftStat(player.stats.evasion, old.baseStats.evasion, next.baseStats.evasion),
     blinkStrikeCooldown: 0,
+    blinkOverkillCooldown: 0,
+    blinkOverkillBank: undefined,
     backdashCooldown: 0,
     lungeCooldown: 0,
     executeCooldown: 0,

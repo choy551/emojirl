@@ -4,10 +4,12 @@ import { Player, Enemy, EmojiItem, GameState, Position, EquipSlot } from '../gam
 import { getCowboyUnarmedBonus, isHostileCombatTarget } from '../game/combat';
 import { DODGE_CHANCE_CAP, softCapTitles } from '../game/softCap';
 import {
-  blinkStrikeDamagePhrase,
+  blinkNoTargetLog,
+  blinkStrikeHudTitle,
   blinkTalentById,
   blinkTalentChoices,
   blinkTalentProgress,
+  isBlinkStrikeTarget,
   pendingBlinkTalentOffer,
 } from '../game/blinkStrike';
 import type { BlinkTalentId } from '../game/types';
@@ -910,13 +912,17 @@ export default function Game() {
       addLog(`🥷 Blink Strike not ready — ${gs.player.stats.blinkStrikeCooldown}t remaining.`);
       return;
     }
-    const targets = gs.enemies.filter(e => {
-      const d = chebyshev(gs.player.pos, e.pos);
-      return d >= 1 && d <= 6 && hasLOSBetween(gs.map, gs.player.pos, e.pos) && gs.map[e.pos.y]?.[e.pos.x]?.visible
-        && isHostileCombatTarget(e);
-    }).sort((a, b) => chebyshev(gs.player.pos, a.pos) - chebyshev(gs.player.pos, b.pos));
+    const telepathy = playerBagPassives(gs.player).trueVision;
+    const targets = gs.enemies.filter(e => isBlinkStrikeTarget({
+      dist: chebyshev(gs.player.pos, e.pos),
+      hasLos: hasLOSBetween(gs.map, gs.player.pos, e.pos),
+      tileVisible: !!gs.map[e.pos.y]?.[e.pos.x]?.visible,
+      hostile: isHostileCombatTarget(e),
+      talents: gs.player.stats.blinkTalents,
+      telepathy,
+    })).sort((a, b) => chebyshev(gs.player.pos, a.pos) - chebyshev(gs.player.pos, b.pos));
     if (targets.length === 0) {
-      addLog('🥷 Blink Strike — no targets in range (6 tiles, requires LOS).');
+      addLog(blinkNoTargetLog(gs.player.stats.blinkTalents, telepathy));
       return;
     }
     const nearest = targets[0];
@@ -1804,11 +1810,15 @@ export default function Game() {
           e.preventDefault();
           const gs = gameStateRef.current;
           if (gs) {
-            const blinkTargets = gs.enemies.filter(en => {
-              const d = chebyshev(gs.player.pos, en.pos);
-              return d >= 1 && d <= 6 && hasLOSBetween(gs.map, gs.player.pos, en.pos) && gs.map[en.pos.y]?.[en.pos.x]?.visible
-                && isHostileCombatTarget(en);
-            }).sort((a, b) => chebyshev(gs.player.pos, a.pos) - chebyshev(gs.player.pos, b.pos));
+            const telepathy = playerBagPassives(gs.player).trueVision;
+            const blinkTargets = gs.enemies.filter(en => isBlinkStrikeTarget({
+              dist: chebyshev(gs.player.pos, en.pos),
+              hasLos: hasLOSBetween(gs.map, gs.player.pos, en.pos),
+              tileVisible: !!gs.map[en.pos.y]?.[en.pos.x]?.visible,
+              hostile: isHostileCombatTarget(en),
+              talents: gs.player.stats.blinkTalents,
+              telepathy,
+            })).sort((a, b) => chebyshev(gs.player.pos, a.pos) - chebyshev(gs.player.pos, b.pos));
             if (blinkTargets.length > 0) {
               const idx = blinkTargets.findIndex(en => en.id === inspectedEnemyIdRef.current);
               const dir = e.shiftKey ? -1 : 1;
@@ -2093,7 +2103,12 @@ export default function Game() {
   const cls = getClassDef(player.characterClass);
   const ninjaBlink = player.characterClass === '🥷'
     ? {
-        phrase: blinkStrikeDamagePhrase(applyEquipmentAndPassives(player).stats.luck),
+        hudTitle: blinkStrikeHudTitle({
+          luck: applyEquipmentAndPassives(player).stats.luck,
+          talents: player.stats.blinkTalents,
+          overkillBank: player.stats.blinkOverkillBank,
+          overkillCooldown: player.stats.blinkOverkillCooldown,
+        }),
         progress: blinkTalentProgress(player.stats.blinkStrikeCredits ?? 0, player.stats.blinkTalents),
         offer: pendingBlinkTalentOffer(player.stats.blinkStrikeCredits ?? 0, player.stats.blinkTalents),
       }
@@ -2944,7 +2959,7 @@ export default function Game() {
                   <span
                     className={`px-1 py-px rounded text-[8px] font-bold border ${(player.stats.blinkStrikeCooldown ?? 0) === 0 ? 'bg-violet-500/30 text-violet-200 border-violet-400/60' : 'bg-zinc-700/40 text-zinc-400 border-zinc-600/40'}`}
                     style={blinkReadyFlash ? { animation: 'blink-cd-ready 0.7s ease-out forwards' } : blinkCdReducedFlash ? { animation: 'blink-cd-reduced 0.6s ease-out forwards' } : undefined}
-                    title={`Blink Strike — ${ninjaBlink?.phrase ?? 'strike'}. ${ninjaBlink?.progress.hudLabel ?? ''} ${ninjaBlink?.progress.nextLabel ?? ''}. Kills reduce cooldown by 1 (2 if unseen). Instakills: -2.`}
+                    title={`${ninjaBlink?.hudTitle ?? 'Blink Strike'} ${ninjaBlink?.progress.hudLabel ?? ''} ${ninjaBlink?.progress.nextLabel ?? ''}`}
                   >
                     ⚡{(player.stats.blinkStrikeCooldown ?? 0) === 0 ? 'BLINK' : player.stats.blinkStrikeCooldown}
                   </span>

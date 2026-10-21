@@ -54,7 +54,9 @@ export type BlinkTalentId =
   | 'shorter-cd'
   | 'lifesteal'
   | 'flowing-strikes'
-  | 'longer-chain'
+  | 'heavier-blink'
+  | 'overkill'
+  | 'blink-truestrike'
   | 'twin-strike'
   | 'endless-chain';
 
@@ -90,6 +92,10 @@ export interface PlayerStats {
   blinkStrikeMarks?: BlinkStrikeMark[];
   /** Remaining melee attacks that reduce Blink cooldown (Flowing Strikes). */
   blinkMeleeCdCharges?: number;
+  /** Flat damage added to the next Blink Strike that connects (Overkill). */
+  blinkOverkillBank?: number;
+  /** Turns until Overkill can bank again. Spending the bank does not wait on this. */
+  blinkOverkillCooldown?: number;
   overhealDecayTick?: number;
   backdashCooldown?: number;
   lungeCooldown?: number;

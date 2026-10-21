@@ -5,7 +5,7 @@ import { getFoodHealItems } from '../game/emojis';
 import { applyBanquetTick } from '../game/foodSinks';
 import { applyHouseRoundTick } from '../game/goldSinks';
 import { rollKillDrop } from '../game/dropTable';
-import { applyFlowingStrike } from '../game/blinkStrike';
+import { applyFlowingStrike, tickBlinkCooldowns } from '../game/blinkStrike';
 import { resolveGenieFireball } from '../game/prestigeCast';
 import {
   classFlies, fencerOutgoingMult, gunshotPlan, isArcaneCaster, isFencer,
@@ -1160,9 +1160,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
       }
 
-      // Tick blink strike cooldown per turn
-      if (cls === '🥷' && (newPlayer.stats.blinkStrikeCooldown ?? 0) > 0) {
-        newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, blinkStrikeCooldown: (newPlayer.stats.blinkStrikeCooldown ?? 1) - 1 } };
+      // Tick Blink Strike and Overkill cooldowns per turn
+      if (cls === '🥷') {
+        newPlayer = { ...newPlayer, stats: tickBlinkCooldowns(newPlayer.stats) };
       }
       newPlayer = tickPrestigeTimers(newPlayer);
 
@@ -1337,9 +1337,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
       }
 
-      // Tick blink strike cooldown on wait
-      if (prev.player.characterClass === '🥷' && (waitPlayer.stats.blinkStrikeCooldown ?? 0) > 0) {
-        waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, blinkStrikeCooldown: (waitPlayer.stats.blinkStrikeCooldown ?? 1) - 1 } };
+      // Tick Blink Strike and Overkill cooldowns on wait
+      if (prev.player.characterClass === '🥷') {
+        waitPlayer = { ...waitPlayer, stats: tickBlinkCooldowns(waitPlayer.stats) };
       }
       waitPlayer = tickPrestigeTimers(waitPlayer);
 

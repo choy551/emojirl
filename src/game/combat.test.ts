@@ -91,6 +91,39 @@ describe('Blink Strike damage', () => {
     expect(400 - crit.enemyHp).toBe(base * 2);
   });
 
+  it('adds Heavier Blink as a +100 shift and keeps banked Overkill flat through a crit', () => {
+    expect(blinkStrikeMultiplierPercent(critStat(0), ['heavier-blink'])).toBe(310);
+    scriptedRandom([0, 0.99, 0.99]);
+    const heavy = resolveCombat(ninja({ blinkTalents: ['heavier-blink'] }), rat(), () => {}, { blinkStrike: true, mood: 'neutral' });
+    expect(400 - heavy.enemyHp).toBe(Math.round(10 * 310 / 100));
+
+    scriptedRandom([0, 0.99, 0.99]);
+    const bonus = resolveCombat(ninja(), rat(), () => {}, { blinkStrike: true, mood: 'neutral', bonusDamage: 20 });
+    expect(400 - bonus.enemyHp).toBe(21 + 20);
+    scriptedRandom([0, 0, 0.99]);
+    const critBonus = resolveCombat(ninja(), rat(), () => {}, { blinkStrike: true, mood: 'neutral', bonusDamage: 20 });
+    expect(400 - critBonus.enemyHp).toBe(42 + 20);
+  });
+
+  it('always hits with Blink Truestrike and leaves a miss untouched by banked damage', () => {
+    const logs: string[] = [];
+    scriptedRandom([0.99]);
+    const miss = resolveCombat(ninja(), rat(), m => logs.push(m), { blinkStrike: true, mood: 'neutral', bonusDamage: 20 });
+    expect(miss.enemyHp).toBe(400);
+    expect(logs.some(l => l.includes('miss'))).toBe(true);
+
+    logs.length = 0;
+    scriptedRandom([0.99]);
+    const sure = resolveCombat(
+      ninja({ blinkTalents: ['blink-truestrike'] }),
+      rat(),
+      m => logs.push(m),
+      { blinkStrike: true, mood: 'neutral' },
+    );
+    expect(400 - sure.enemyHp).toBe(21);
+    expect(logs.some(l => l.includes('miss'))).toBe(false);
+  });
+
   it('still applies the unaware Shadow Strike multiplier under the Blink multiplier', () => {
     scriptedRandom([0, 0.99, 0.99]);
     const hit = resolveCombat(ninja(), rat({ engaged: false }), () => {}, { blinkStrike: true, mood: 'neutral' });

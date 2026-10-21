@@ -3,12 +3,18 @@ import { GameState, Player, FloatingText, PlacedBomb, ActiveProjectile } from '.
 import { resolveCombat, isHostileCombatTarget } from '../../game/combat';
 import {
   addBlinkMarks,
+  blinkIgnoresGodBlessed,
   blinkLifestealHeal,
   blinkMeleeChargesAfterCast,
+  blinkNoTargetLog,
+  blinkOutOfRangeLog,
   blinkStrikeTargetCount,
   creditsForBlinkTarget,
   grantBlinkCredits,
+  isBlinkStrikeTarget,
+  overkillBankAfterHit,
   resolveBlinkCooldown,
+  resolveOverkillAfterBlink,
 } from '../../game/blinkStrike';
 import { playerMood } from '../../game/drinks';
 import { markEnemyKilled } from '../../game/discoveries';
@@ -127,9 +133,14 @@ export function useCombatActions(
   }, [addLog, setGameState]);
 
   const blinkInRange = (prev: GameState, enemy: GameState['enemies'][number]) => {
-    const dist = chebyshev(prev.player.pos, enemy.pos);
-    return dist >= 1 && dist <= 6 && hasLOSBetween(prev.map, prev.player.pos, enemy.pos) && !!prev.map[enemy.pos.y]?.[enemy.pos.x]?.visible
-      && isHostileCombatTarget(enemy);
+    return isBlinkStrikeTarget({
+      dist: chebyshev(prev.player.pos, enemy.pos),
+      hasLos: hasLOSBetween(prev.map, prev.player.pos, enemy.pos),
+      tileVisible: !!prev.map[enemy.pos.y]?.[enemy.pos.x]?.visible,
+      hostile: isHostileCombatTarget(enemy),
+      talents: prev.player.stats.blinkTalents,
+      telepathy: playerBagPassives(prev.player).trueVision,
+    });
   };
 
   const executeBlinkStrike = useCallback((prev: GameState, primary: GameState['enemies'][number]): GameState => {
@@ -172,7 +183,10 @@ export function useCombatActions(
     let anyInstakill = false;
     let totalDmg = 0;
     let immediateCredits = 0;
+    let overkillBank = prev.player.stats.blinkOverkillBank ?? 0;
+    const instakillDamages: { damage: number; maxHp: number }[] = [];
     const markIds: string[] = [];
+    const ignoreBlessed = blinkIgnoresGodBlessed(talents);
     const blinkFloats: FloatingText[] = [];
     let playerDied = false;
     let killer = { name: primary.name, emoji: primary.emoji };
@@ -188,20 +202,23 @@ export function useCombatActions(
         bank,
         stats: { ...prev.player.stats, hp: runningHp, xp, level },
       });
+      const bonus = overkillBank;
       const combatResult = resolveCombat(striker, target, addLog, {
         mood,
         advantage: _blinkPassives.advantageDice,
         execBlow: _blinkPassives.execBlow,
         blinkStrike: true,
+        bonusDamage: bonus,
       });
       let actuallyKilled = combatResult.enemyDied;
-      const blinkDmg = target.hp - Math.max(0, combatResult.enemyHp);
-      totalDmg += Math.max(0, blinkDmg);
-      if (blinkDmg > 0) blinkFloats.push({ id: `blink-e-${target.id}-${prev.turn}`, pos: { ...target.pos }, text: `-${blinkDmg}`, color: '#818cf8', life: 2 });
+      const dealt = target.hp - combatResult.enemyHp;
+      overkillBank = overkillBankAfterHit(overkillBank, dealt);
+      totalDmg += Math.max(0, dealt);
+      if (dealt > 0) blinkFloats.push({ id: `blink-e-${target.id}-${prev.turn}`, pos: { ...target.pos }, text: `-${dealt}`, color: '#818cf8', life: 2 });
       runningHp = combatResult.playerHp;
 
       let targetIdx = newEnemies.findIndex(e => e.id === target.id);
-      if (combatResult.enemyDied && target.godBlessed && targetIdx !== -1) {
+      if (combatResult.enemyDied && target.godBlessed && !ignoreBlessed && targetIdx !== -1) {
         const gb = handleGodBlessedImmunity(target, newEnemies, targetIdx, runningHp, prev.turn, addLog, blinkFloats);
         if (gb.proc) {
           actuallyKilled = false;
@@ -219,7 +236,10 @@ export function useCombatActions(
 
       if (actuallyKilled) {
         anyKill = true;
-        if (instakill) anyInstakill = true;
+        if (instakill) {
+          anyInstakill = true;
+          instakillDamages.push({ damage: Math.max(0, dealt), maxHp: target.maxHp });
+        }
         markEnemyKilled(target.emoji);
         newKillCounts[target.emoji] = (newKillCounts[target.emoji] ?? 0) + 1;
         if (targetIdx !== -1) newEnemies.splice(targetIdx, 1);
@@ -293,6 +313,13 @@ export function useCombatActions(
       chain: prev.player.stats.blinkStrikeInstakillChain ?? 0,
     });
     addLog(cd.log);
+    const overkill = resolveOverkillAfterBlink({
+      talents,
+      cooldown: prev.player.stats.blinkOverkillCooldown ?? 0,
+      carriedBank: overkillBank,
+      instakillDamages,
+    });
+    if (overkill.log) addLog(overkill.log);
     if (anyKill) {
       const freeMovesGain = prev.stealthMode ? 2 : 1;
       ninjaFreeMoves += freeMovesGain;
@@ -315,6 +342,8 @@ export function useCombatActions(
         blinkStrikeCooldown: cd.cooldown,
         blinkStrikeInstakillChain: cd.chain,
         blinkStrikeInstakillOutOfCombat: 0,
+        blinkOverkillBank: overkill.bank > 0 ? overkill.bank : undefined,
+        blinkOverkillCooldown: overkill.cooldown,
         moodValue: anyKill
           ? Math.min(moodMax('🥷'), prev.player.stats.moodValue + 15)
           : Math.max(-100, prev.player.stats.moodValue - 5),
@@ -358,7 +387,7 @@ export function useCombatActions(
         return prev;
       }
       if (!blinkInRange(prev, target)) {
-        addLog('🥷 Blink Strike — target out of range or LOS broken.');
+        addLog(blinkOutOfRangeLog(prev.player.stats.blinkTalents, playerBagPassives(prev.player).trueVision));
         return prev;
       }
       return executeBlinkStrike(prev, target);
@@ -374,13 +403,9 @@ export function useCombatActions(
         return prev;
       }
 
-      const targets = prev.enemies.filter(e => {
-        const dist = chebyshev(prev.player.pos, e.pos);
-        return dist >= 1 && dist <= 6 && hasLOSBetween(prev.map, prev.player.pos, e.pos) && prev.map[e.pos.y]?.[e.pos.x]?.visible
-          && isHostileCombatTarget(e);
-      });
+      const targets = prev.enemies.filter(e => blinkInRange(prev, e));
       if (targets.length === 0) {
-        addLog('🥷 Blink Strike — no targets in range (6 tiles, requires LOS).');
+        addLog(blinkNoTargetLog(prev.player.stats.blinkTalents, playerBagPassives(prev.player).trueVision));
         return prev;
       }
       const target = targets.reduce((a, b) =>
