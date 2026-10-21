@@ -22,6 +22,7 @@ import { markEnemyKilled } from './discoveries';
 import { settleBlinkStrikeMarks } from './blinkStrike';
 import { applyDrinkBuffTick, effectiveVoidPressureSlots, isDrinkStealthActive, voidPressureIgnoredSlots } from './drinks';
 import { farmDenizenIntent } from './farmer';
+import { applyBanquetTick, feastAttackBonus, tickFeastBuffs } from './foodSinks';
 
 export interface EnemyTurnResult {
   enemies: Enemy[];
@@ -327,7 +328,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
           const shouldChase = behavior !== 'far' || distToTarget <= 1;
           if (distToTarget <= 1) {
             const ti = newEnemies.findIndex(e => e.id === companionTarget.id);
-            const effectiveAtk = enemy.attack + soulAtkBonus;
+            const effectiveAtk = enemy.attack + soulAtkBonus + feastAttackBonus(enemy);
             const dmg = Math.max(1, effectiveAtk - Math.floor((companionTarget.defense ?? 0) / 2));
             const newTargetHp = companionTarget.hp - dmg;
             newFloatingTexts.push({ id: `companion-${enemy.id}-${state.turn}`, pos: { ...companionTarget.pos }, text: `-${dmg}`, color: enemy.bear ? '#f59e0b' : '#22d3ee', life: 2 });
@@ -883,7 +884,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     }
   }
 
-  return { enemies: newEnemies.filter(e => e.hp > 0), playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn, depthBossKills, titheKills };
+  const feasted = tickFeastBuffs(newEnemies.filter(e => e.hp > 0));
+  for (const text of feasted.logs) log(text);
+  return { enemies: feasted.enemies, playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn, depthBossKills, titheKills };
 }
 
 export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): GameState {
@@ -1025,7 +1028,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     };
   }
 
-  const afterHazards = withVisibility(tickBossrush(tickVolcanoAndLava(applyDrinkBuffTick(next))));
+  const afterHazards = withVisibility(tickBossrush(tickVolcanoAndLava(applyBanquetTick(applyDrinkBuffTick(next)))));
   const settled = settleBlinkStrikeMarks(afterHazards.player, afterHazards.enemies, state.turn);
   if (settled.logs.length === 0 && settled.player === afterHazards.player) return afterHazards;
   return {

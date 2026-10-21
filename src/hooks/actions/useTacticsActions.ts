@@ -180,7 +180,8 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
     setGameState(prev => {
       if (!prev || prev.gameOver) return prev;
       const swing = fencerOutgoingMult(prev.player.stats);
-      const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false);
+      const banquetFloor = prev.player.banquet && prev.player.banquet.turnsLeft > 0 ? prev.player.banquet.floor : 0;
+      const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false, 0, banquetFloor);
       const attacker = applyEquipmentAndPassives({ ...prev.player, pos: plan.pos });
       const result = resolveCombat(attacker, plan.target, addLog, { mood, damageMult: FENCER_LUNGE_MULT * swing.mult, floor: prev.currentFloor });
       let player: Player = { ...prev.player, pos: plan.pos, stats: { ...prev.player.stats, hp: result.playerHp, lungeCooldown: FENCER_LUNGE_CD, flourishCount: swing.nextFlourish, riposteReady: result.parried } };

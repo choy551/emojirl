@@ -408,9 +408,11 @@ export function rawCombatStats(player: Player): SoftCapInput {
   }
   const buffAtk = (player.stats.activeBuffs ?? []).filter(b => b.stat === 'attack').reduce((s, b) => s + b.amount, 0);
   const buffDef = (player.stats.activeBuffs ?? []).filter(b => b.stat === 'defense').reduce((s, b) => s + b.amount, 0);
+  const shrineAtk = player.shrineOffering?.attack ?? 0;
+  const shrineDef = player.shrineOffering?.defense ?? 0;
   return {
-    attack:  player.stats.attack  + passives.attack  + eqAtk + buffAtk,
-    defense: player.stats.defense + passives.defense + eqDef + buffDef,
+    attack:  player.stats.attack  + passives.attack  + eqAtk + buffAtk + shrineAtk,
+    defense: player.stats.defense + passives.defense + eqDef + buffDef + shrineDef,
     speed:   player.stats.speed   + passives.speed   + eqSpd,
     evasion: player.stats.evasion + passives.evasion + eqEva + drinkEvasionBonus(player),
     luck:    player.stats.luck    + passives.luck    + eqLck,

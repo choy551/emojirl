@@ -16,6 +16,8 @@ interface SlotShrineModalProps {
   setGameState: React.Dispatch<React.SetStateAction<GameState | null>>;
   addLog: (text: string) => void;
   onClose: () => void;
+  /** Close the spin and open the food offering. Does not spend the gold spin. */
+  onOffer?: () => void;
 }
 
 const REEL_FACES = Object.values(SLOT_REEL_FACE);
@@ -26,7 +28,7 @@ interface PendingSpin {
   floor: number;
 }
 
-export function SlotShrineModal({ gameState, setGameState, addLog, onClose }: SlotShrineModalProps) {
+export function SlotShrineModal({ gameState, setGameState, addLog, onClose, onOffer }: SlotShrineModalProps) {
   const dismiss = useDismissGuard(onClose);
   const hand = useMobileHand();
   const [reels, setReels] = useState<string[]>(['❓', '❓', '❓']);
@@ -159,6 +161,16 @@ export function SlotShrineModal({ gameState, setGameState, addLog, onClose }: Sl
         >
           {spinning ? 'Spinning…' : `Spin 🪙${cost}`}
         </button>
+
+        {onOffer && (
+          <button
+            type="button"
+            onClick={onOffer}
+            className="w-full min-h-11 mt-2 rounded-lg border border-amber-400/40 bg-amber-500/15 text-amber-100 text-sm font-bold"
+          >
+            Offer food
+          </button>
+        )}
 
         <CloseHintButton onClose={dismiss}>Leave</CloseHintButton>
       </div>

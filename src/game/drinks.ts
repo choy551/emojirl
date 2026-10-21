@@ -430,6 +430,7 @@ export function moodFloorBonus(player: Player): number {
 
 export function playerMood(player: Player): MoodType {
   const floorActive = player.characterClass === '🤠' || (isHitman(player.characterClass) && moodFloorBonus(player) > 0);
+  const banquetFloor = player.banquet && player.banquet.turnsLeft > 0 ? player.banquet.floor : 0;
   return getMood(
     player.stats.moodValue,
     player.stats.hp,
@@ -437,6 +438,7 @@ export function playerMood(player: Player): MoodType {
     moodBagSize(player.inventory),
     floorActive,
     moodFloorBonus(player),
+    banquetFloor,
   );
 }
 
