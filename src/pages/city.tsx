@@ -39,6 +39,11 @@ import {
 } from '../game/emojiCity';
 
 type PalettePick = { kind: 'token' | 'decor'; emoji: string };
+
+/** Lot size when the page has room. The grid widens at this size as columns are added. */
+const CITY_TILE_MAX = '2.75rem';
+/** Smallest lot. Narrow screens shrink toward this before a horizontal scrollbar appears. */
+const CITY_TILE_MIN = '2rem';
 import { loadMeta, replaceEmojiConsumes, saveCity, settleCityCatchUp } from '../game/meta';
 
 export default function CityPage() {
@@ -157,7 +162,8 @@ export default function CityPage() {
   const standings = city ? districtStandings(city) : [];
 
   return (
-    <div className="min-h-screen w-full max-w-lg mx-auto flex flex-col px-3 py-3 gap-3">
+    <div className="min-h-screen w-full">
+    <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-3 py-3">
       <div className="flex items-center gap-2">
         <Link href="/">
           <Button variant="ghost" size="icon" className="min-h-11 min-w-11" aria-label="Back to home" data-testid="city-back">
@@ -250,19 +256,20 @@ export default function CityPage() {
           Raise {selectedBuilding.emoji} · {BUILDING_EXCHANGE_COST} tokens
         </Button>
       )}
+    </div>
 
       {city && (
-        <div className="flex w-full flex-col gap-1" data-testid="city-expand">
+        <div className="flex w-full flex-col gap-1 px-1 sm:px-3" data-testid="city-expand">
           <div className="flex justify-center">
             <ExpandEdge edge="north" city={city} tokens={tokens} onExpand={onExpand} />
           </div>
           <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1">
             <ExpandEdge edge="west" city={city} tokens={tokens} onExpand={onExpand} />
-            <div className="min-w-0 overflow-x-auto">
+            <div className="min-w-0 overflow-x-auto" data-testid="city-grid-scroll">
         <div
           data-testid="city-grid"
-          className="grid w-max gap-1"
-          style={{ gridTemplateColumns: `repeat(${city.cols}, minmax(2.75rem, 1fr))` }}
+          className="mx-auto grid w-fit min-w-min max-w-full gap-0.5"
+          style={{ gridTemplateColumns: `repeat(${city.cols}, minmax(${CITY_TILE_MIN}, ${CITY_TILE_MAX}))` }}
         >
           {city.tiles.map((cell, index) => {
             const here = city.citizens.filter(c => c.y * city.cols + c.x === index);
@@ -273,7 +280,7 @@ export default function CityPage() {
                 data-testid={`lot-${index}`}
                 onClick={() => onLot(index)}
                 aria-label={cell ? `Remove ${cell}` : `Empty lot ${index + 1}`}
-                className="relative min-h-11 aspect-square rounded-md border border-border/70 bg-emerald-950/30 text-xl leading-none"
+                className="relative aspect-square w-full min-h-0 min-w-0 rounded-md border border-border/70 bg-emerald-950/30 text-xl leading-none"
               >
                 {cell ?? <span className="text-muted-foreground/30 text-sm">·</span>}
                 {here.map(citizen => (
@@ -298,7 +305,9 @@ export default function CityPage() {
         </div>
       )}
 
-      <p className="text-[11px] text-muted-foreground leading-relaxed pb-4">{emojiCityRulesBlurb()}</p>
+      <div className="mx-auto w-full max-w-lg px-3">
+        <p className="text-[11px] text-muted-foreground leading-relaxed pb-4">{emojiCityRulesBlurb()}</p>
+      </div>
     </div>
   );
 }
@@ -478,7 +487,7 @@ function ExpandEdge({
           <Button
             type="button"
             variant="outline"
-            className="min-h-11 min-w-11 px-2"
+            className="flex h-11 w-9 flex-col gap-0 whitespace-normal px-0.5 sm:w-11"
             disabled={blocked !== null}
             data-testid={`expand-${edge}`}
             aria-label={hint}

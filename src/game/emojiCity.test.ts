@@ -810,6 +810,11 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('overflow-x-hidden');
     expect(city).toContain("pointerType === 'mouse'");
     expect(city).toContain('placeDecor');
+    expect(city).toContain('CITY_TILE_MIN');
+    expect(city).toContain('CITY_TILE_MAX');
+    expect(city).toContain('minmax(${CITY_TILE_MIN}, ${CITY_TILE_MAX})');
+    expect(city).toContain('data-testid="city-grid-scroll"');
+    expect(city).toContain('w-fit min-w-min max-w-full');
     expect(city).toContain('edge="north"');
     expect(city).toContain('expand-${edge}');
     expect(city).toContain('expandBlockReason');
