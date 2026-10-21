@@ -82,7 +82,7 @@ function DpadCell({
       onPointerUp={stopRepeat}
       onPointerLeave={stopRepeat}
       onPointerCancel={stopRepeat}
-      title={cell.isCenter ? 'Wait / rest (+1 HP)' : `Move ${cell.label}`}
+      title={cell.isCenter ? 'Wait / rest (+1 HP, ×2 at half, ×3 at 25%)' : `Move ${cell.label}`}
       aria-label={cell.isCenter ? 'Wait' : `Move ${cell.label}`}
     >
       {cell.label}
