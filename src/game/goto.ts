@@ -9,7 +9,8 @@ export type GotoKind =
   | 'restaurant'
   | 'cache'
   | 'campfire'
-  | 'bed';
+  | 'bed'
+  | 'mirror';
 
 export interface GotoDestination {
   key: string;
@@ -38,6 +39,7 @@ const KIND_META: Record<GotoKind, { icon: string; label: string }> = {
   campfire: { icon: '🔥', label: 'Campfire' },
   bed: { icon: '🛏️', label: 'Bed' },
   stairs: { icon: '🕳️', label: 'Downstairs' },
+  mirror: { icon: '🪞', label: 'Mirror' },
 };
 
 function classifyTile(
@@ -49,6 +51,7 @@ function classifyTile(
   if (type === 'stairs') return 'stairs';
   if (type === 'restaurant') return 'restaurant';
   if (type === 'campfire') return 'campfire';
+  if (type === 'mirror') return 'mirror';
   if (type === 'bed') return 'bed';
   if (type === 'shop-item' && emoji === '🏪') return opts.shopSoldOut ? null : 'shop';
   if (type === 'shop-item' && emoji === '🍺') return 'bar';

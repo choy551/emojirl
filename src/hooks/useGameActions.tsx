@@ -3,6 +3,7 @@ import { Player, Enemy, Position, FloatingText, GameState } from '../game/types'
 import { resolveCombat, getCowboyUnarmedBonus, isHostileCombatTarget } from '../game/combat';
 import { getFoodHealItems } from '../game/emojis';
 import { applyBanquetTick } from '../game/foodSinks';
+import { applyHouseRoundTick } from '../game/goldSinks';
 import { rollKillDrop } from '../game/dropTable';
 import { applyFlowingStrike } from '../game/blinkStrike';
 import { resolveGenieFireball } from '../game/prestigeCast';
@@ -1185,7 +1186,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const remaining = (prev.ninjaFreeMoves ?? 0) - 1;
         newState.ninjaFreeMoves = remaining;
         if (remaining > 0) addLog(`🥷 Ghost step! (${remaining} free move${remaining !== 1 ? 's' : ''} left)`);
-        return withVisibility(applyBanquetTick(applyDrinkBuffTick(newState)));
+        return withVisibility(applyHouseRoundTick(applyBanquetTick(applyDrinkBuffTick(newState))));
       }
 
       return withVisibility(applyEnemyTurns(newState, runEnemyTurns(newState)));

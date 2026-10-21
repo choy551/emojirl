@@ -18,6 +18,7 @@ import {
 import { softCapRulesBlurb } from "../game/softCap";
 import { farmerRulesBlurb } from "../game/farmer";
 import { foodSinkRulesBlurb } from "../game/foodSinks";
+import { goldSinkRulesBlurb } from "../game/goldSinks";
 import {
   getSeenEmojis,
   getSeenEnemies,
@@ -441,8 +442,8 @@ export default function HowToPlay({
               label: "Shrine",
               desc: "Heals HP and raises max HP when stepped on (scales with floor depth). One use per shrine. Offer one food here, on a used shrine, or at a slot shrine for a floor-long ATK/DEF blessing. Offering does not spend the pray.",
             },
-            { icon: "🏪", label: "Shop", desc: "Buy emojis, equipment, and ammo with 💰 gold. Sell anything from your bag or bank for gold too. Autoexplore stops here automatically." },
-            { icon: "🏪🔥", label: "Restaurant", desc: "A food-only shop. Buy and cook food, rest for +2 extra HP nearby, and sell cooked food for 250% value. Chef's Lesson improves cooked dishes for the rest of the run (more heal when eaten, more gold when sold, up to 5). The first lesson is free; later lessons cost gold. Hover the lesson for your current bonuses, or tap it to pin that note — the tap does not buy. You can sell up to 5 cooked dishes — the kitchen closes after that (no more selling or cooking there), but the +2 HP/turn rest bonus remains. Warning: the food smell draws nearby enemies (+2 aggro range). Autoexplore stops here." },
+            { icon: "🏪", label: "Shop", desc: "Buy emojis, equipment, and ammo with 💰 gold. Sell anything from your bag or bank for gold too. Gold services here: Identity Reroll (once per run, unlocked classes only, bag stays) and vault insurance for 1–3 hotbar emojis. Autoexplore stops here automatically." },
+            { icon: "🏪🔥", label: "Restaurant", desc: "A food-only shop. Buy and cook food, rest for +2 extra HP nearby, and sell cooked food for 250% value. Chef's Lesson improves cooked dishes for the rest of the run (more heal when eaten, more gold when sold, up to 5). The first lesson is free; later lessons cost gold. Hover the lesson for your current bonuses, or tap it to pin that note — the tap does not buy. You can sell up to 5 cooked dishes — the kitchen closes after that (no more selling or cooking there), but the +2 HP/turn rest bonus remains. Round for the House spends gold for a mood floor and reopens the kitchen without raising that cap of 5. Warning: the food smell draws nearby enemies (+2 aggro range). Autoexplore stops here." },
             { icon: "🍺", label: "Bar", desc: "Spend 15 XP for an instant HP restore from the innkeeper (overheal to 150% of max HP). Won't work if you're already overhealed or have fewer than 15 XP. Beds overheal to 200% instead, with no XP cost." },
             {
               icon: "🔥",
@@ -457,6 +458,7 @@ export default function HowToPlay({
             { icon: "🛏️", label: "Bed", desc: "Inside a nested room vault: a tiny 2×2 to 4×4 walled chamber with one door, tucked into a larger regular room. Interact to sleep. Resting overheals to 200% of max HP (the 🍺 bar is 150%), fully restores Wizard mana, and resets all cooldowns. 100 turns then pass — enemies still move and volcanoes still spew lava. Each bed can be used twice, then it's worn out. You cannot start sleep while a hostile is in sight. If a hostile reaches you, they land one sneak attack at 200% damage and you wake. Close the door before sleeping if you can. Autoexplore stops here." },
             { icon: "🟧", label: "Lava", desc: "Extreme heat: each turn standing in lava deals 25% of your max HP plus a flat amount (starts at +10, +5 per floor descended). You'll get a Yes/No warning before stepping onto it from safe ground. Destroys items on the tile. Volcanoes and lava rivers both use this. Flying enemies cross it and take no damage. Orthogonally adjacent 🟦 water cools into ⚫ obsidian." },
             { icon: "⚫", label: "Obsidian", desc: "Cooled lava×water. Walkable like regular floor for you and enemies. Does not remelt." },
+            { icon: "🪞", label: "Identity Mirror", desc: "A rare shrine from D:4. Offers the same once-per-run Identity Reroll as a shop: swap to another unlocked class and keep your bag, hotbar, and bank. Autoexplore stops here." },
           ].map((t) => (
             <div
               key={t.label}
@@ -479,6 +481,11 @@ export default function HowToPlay({
         <div className="mt-3 bg-card/50 border border-orange-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
           <div className="font-bold text-orange-200 mb-1">Food sinks</div>
           {foodSinkRulesBlurb()}
+        </div>
+
+        <div className="mt-3 bg-card/50 border border-yellow-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-yellow-200 mb-1">Gold sinks</div>
+          {goldSinkRulesBlurb()}
         </div>
 
         <div className="mt-3 text-xs text-muted-foreground space-y-3">

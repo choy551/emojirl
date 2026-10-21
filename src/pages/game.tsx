@@ -54,7 +54,10 @@ import { ShopModal } from '../components/ShopModal';
 import { FarmerTradeModal } from '../components/FarmerTradeModal';
 import { CampfireBanquetModal } from '../components/CampfireBanquetModal';
 import { ShrineOfferingModal } from '../components/ShrineOfferingModal';
+import { IdentityRerollModal } from '../components/IdentityRerollModal';
+import { InsuranceModal } from '../components/InsuranceModal';
 import { BANQUET_MIN_DISHES, cookedDishCount, nearCampfire, nearShrineOffer } from '../game/foodSinks';
+import { stashInsuranceOnDeath, takeInsuredStartItems } from '../game/goldSinks';
 import { AmmoCacheModal } from '../components/AmmoCacheModal';
 import { RestaurantModal } from '../components/RestaurantModal';
 import { SlotShrineModal } from '../components/SlotShrineModal';
@@ -66,7 +69,7 @@ import { EquipmentTab } from '../components/EquipmentTab';
 import { canEquipItem } from '../components/itemUtils';
 import { RightSidebar } from '../components/RightSidebar';
 import {
-  chebyshev, playerBagPassives, applyEquipmentAndPassives, computeNinjaEvasion, livingMaxHp, playerSoftCap,
+  chebyshev, playerBagPassives, applyEquipmentAndPassives, computeNinjaEvasion, livingMaxHp, playerSoftCap, addToPlayerBag,
   VISION_RADIUS, hasLOS, hasLOSBetween, detectionRadius,
   eagleEyeRange, sortBagSlots, buildHotbarSlots, banishPlayerGhost, manifestPlayerGhost,
   generateShopStock, generateAmmoCacheStock, generateRestaurantStock,
@@ -361,6 +364,8 @@ export default function Game() {
       { id: 'farmer', isOpen: () => !!pendingFarmerId, close: () => setPendingFarmerId(null) },
       { id: 'banquet', isOpen: () => banquetOpen, close: () => setBanquetOpen(false) },
       { id: 'offer', isOpen: () => shrineOfferOpen, close: () => setShrineOfferOpen(false) },
+      { id: 'reroll', isOpen: () => rerollOpen, close: () => setRerollOpen(false) },
+      { id: 'insure', isOpen: () => insureOpen, close: () => setInsureOpen(false) },
       { id: 'dir-pick', isOpen: () => dirPickModeRef.current !== null, close: () => { dirPickModeRef.current = null; setDirPickMode(null); } },
       { id: 'unmake', isOpen: () => unmakeTargetModeRef.current, close: () => { unmakeTargetModeRef.current = false; setUnmakeTargetMode(false); } },
       { id: 'blink', isOpen: () => blinkTargetModeRef.current, close: () => { setBlinkTargetMode(false); blinkTargetModeRef.current = false; } },
@@ -418,6 +423,7 @@ export default function Game() {
       setRestaurantOpen(true);
     }
     if (tile?.type === 'bed') setBedRestOpen(true);
+    if (tile?.type === 'mirror' && !rerollOpenRef.current) setRerollOpen(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.player.pos.x, gameState?.player.pos.y]);
 
@@ -470,6 +476,12 @@ export default function Game() {
   const [shrineOfferOpen, setShrineOfferOpen] = useState(false);
   const shrineOfferOpenRef = useRef(false);
   useEffect(() => { shrineOfferOpenRef.current = shrineOfferOpen; }, [shrineOfferOpen]);
+  const [rerollOpen, setRerollOpen] = useState(false);
+  const rerollOpenRef = useRef(false);
+  useEffect(() => { rerollOpenRef.current = rerollOpen; }, [rerollOpen]);
+  const [insureOpen, setInsureOpen] = useState(false);
+  const insureOpenRef = useRef(false);
+  useEffect(() => { insureOpenRef.current = insureOpen; }, [insureOpen]);
   const [pendingMonkeyInteraction, setPendingMonkeyInteraction] = useState<{ id: string; wants: string } | null>(null);
   const [pendingAdventurerInteraction, setPendingAdventurerInteraction] = useState<string | null>(null);
   const [pendingBearInteraction, setPendingBearInteraction] = useState<{ id: string; stage: 'neutral' | 'friendly'; offerId: string | null } | null>(null);
@@ -497,6 +509,8 @@ export default function Game() {
     pendingFarmerId ||
     banquetOpen ||
     shrineOfferOpen ||
+    rerollOpen ||
+    insureOpen ||
     dirPickMode ||
     unmakeTargetMode ||
     blinkTargetMode ||
@@ -614,6 +628,7 @@ export default function Game() {
 
   useEffect(() => {
     if (gameState?.gameOver) {
+      if (!gameState.victory) stashInsuranceOnDeath(gameState.player);
       saveCurrentScore(gameState);
       clearSave();
     }
@@ -675,6 +690,11 @@ export default function Game() {
     };
     const openingContract = startFloorContract(initialPlayer);
     initialPlayer = openingContract.player;
+    const carried = takeInsuredStartItems();
+    if (carried.length > 0) {
+      const added = addToPlayerBag(initialPlayer, ...carried);
+      initialPlayer = { ...initialPlayer, inventory: added.inventory, bank: added.bank };
+    }
 
     setGameState({
       schemaVersion: 1,
@@ -687,6 +707,7 @@ export default function Game() {
       logs: [
         { id: 'l1', text: vessel === '🤠' ? `Welcome, Cowboy. Only real Cowboys fight with their fists! Descend and collect emojis.` : vessel === '👤' ? `Welcome, The Void. Emptiness is peace — filled souls burn.` : `Welcome, ${cls.name}. Descend and collect emojis.`, turn: 1 },
         ...(openingContract.log ? [{ id: 'l1-contract', text: openingContract.log, turn: 1 }] : []),
+        ...(carried.length > 0 ? [{ id: 'l1-insured', text: `🏦 Insured emojis return: ${carried.map(item => item.emoji).join(' ')}`, turn: 1 }] : []),
       ],
       floatingTexts: [],
       gameOver: false,
@@ -976,6 +997,11 @@ export default function Game() {
         addLog('Autoexplore stopped: 🛏️ a bed.');
         return;
       }
+      if (exploreTile?.type === 'mirror') {
+        setAutoExplore(false);
+        addLog('Autoexplore stopped: 🪞 Identity mirror.');
+        return;
+      }
       // Stop when adjacent to a visible bar tile. BFS already routes around bars so
       // the player never steps on one, but without this stop the player could end up
       // right next to a bar with no feedback. This lets them decide whether to visit.
@@ -1249,6 +1275,7 @@ export default function Game() {
       case 'cook': setTravelTarget(null); handleCook(); break;
       case 'banquet': setTravelTarget(null); setBanquetOpen(true); break;
       case 'offer': setTravelTarget(null); setShrineOfferOpen(true); break;
+      case 'open-mirror': setTravelTarget(null); setRerollOpen(true); break;
       case 'talk': {
         const gs = gameStateRef.current;
         if (gs && action.dir) {
@@ -1436,6 +1463,16 @@ export default function Game() {
       if (shrineOfferOpenRef.current) {
         e.preventDefault();
         if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setShrineOfferOpen(false); return; }
+        return;
+      }
+      if (rerollOpenRef.current) {
+        e.preventDefault();
+        if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setRerollOpen(false); return; }
+        return;
+      }
+      if (insureOpenRef.current) {
+        e.preventDefault();
+        if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setInsureOpen(false); return; }
         return;
       }
 
@@ -3706,6 +3743,24 @@ export default function Game() {
         />
       )}
 
+      {rerollOpen && gameState && (
+        <IdentityRerollModal
+          gameState={gameState}
+          setGameState={setGameState}
+          addLog={addLog}
+          onClose={() => setRerollOpen(false)}
+        />
+      )}
+
+      {insureOpen && gameState && (
+        <InsuranceModal
+          gameState={gameState}
+          setGameState={setGameState}
+          addLog={addLog}
+          onClose={() => setInsureOpen(false)}
+        />
+      )}
+
       {shopOpen && gameState && (
         <ShopModal
           gameState={gameState}
@@ -3715,6 +3770,8 @@ export default function Game() {
           addLog={addLog}
           onBuyAndUse={handleShopBuyAndUse}
           onClose={() => setShopOpen(false)}
+          onReroll={() => setRerollOpen(true)}
+          onInsure={() => setInsureOpen(true)}
         />
       )}
 
@@ -3845,6 +3902,7 @@ export default function Game() {
                 onShowStatCard={showStatCard}
                 chefLessonCount={gameState?.chefLessonCount ?? 0}
                 onBanishGhost={slot => setGameState(prev => prev ? { ...prev, player: banishPlayerGhost(prev.player, slot) } : prev)}
+                onInsure={() => setInsureOpen(true)}
                 onManifestGhost={emoji => setGameState(prev => {
                   if (!prev) return prev;
                   const res = manifestPlayerGhost(prev.player, emoji);

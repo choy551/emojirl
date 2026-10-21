@@ -1,3 +1,4 @@
+import type { EmojiItem } from './types';
 import {
   META_SAVE_KEY,
   META_SCHEMA_VERSION,
@@ -8,6 +9,8 @@ import {
 export interface MetaSave {
   schemaVersion: number;
   unlockedPrestige: string[];
+  /** Hotbar copies waiting for the next run. Cleared when that run starts. */
+  insuredCarry?: EmojiItem[];
 }
 
 export interface KeyValueStore {
@@ -40,8 +43,17 @@ export function setMetaStore(next?: KeyValueStore): void {
   store = next ?? browserStore() ?? memoryStore;
 }
 
+function carryItems(raw: unknown): EmojiItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((item): item is EmojiItem => {
+    if (!item || typeof item !== 'object') return false;
+    const row = item as Partial<EmojiItem>;
+    return typeof row.id === 'string' && typeof row.emoji === 'string' && typeof row.name === 'string';
+  });
+}
+
 export function emptyMeta(): MetaSave {
-  return { schemaVersion: META_SCHEMA_VERSION, unlockedPrestige: [] };
+  return { schemaVersion: META_SCHEMA_VERSION, unlockedPrestige: [], insuredCarry: [] };
 }
 
 export function loadMeta(): MetaSave {
@@ -52,7 +64,11 @@ export function loadMeta(): MetaSave {
     const unlocked = Array.isArray(parsed.unlockedPrestige)
       ? parsed.unlockedPrestige.filter((e): e is string => typeof e === 'string')
       : [];
-    return { schemaVersion: META_SCHEMA_VERSION, unlockedPrestige: [...new Set(unlocked)] };
+    return {
+      schemaVersion: META_SCHEMA_VERSION,
+      unlockedPrestige: [...new Set(unlocked)],
+      insuredCarry: carryItems(parsed.insuredCarry),
+    };
   } catch {
     return emptyMeta();
   }

@@ -23,6 +23,7 @@ import { settleBlinkStrikeMarks } from './blinkStrike';
 import { applyDrinkBuffTick, effectiveVoidPressureSlots, isDrinkStealthActive, voidPressureIgnoredSlots } from './drinks';
 import { farmDenizenIntent } from './farmer';
 import { applyBanquetTick, feastAttackBonus, tickFeastBuffs } from './foodSinks';
+import { applyHouseRoundTick } from './goldSinks';
 
 export interface EnemyTurnResult {
   enemies: Enemy[];
@@ -1028,7 +1029,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     };
   }
 
-  const afterHazards = withVisibility(tickBossrush(tickVolcanoAndLava(applyBanquetTick(applyDrinkBuffTick(next)))));
+  const afterHazards = withVisibility(tickBossrush(tickVolcanoAndLava(applyHouseRoundTick(applyBanquetTick(applyDrinkBuffTick(next))))));
   const settled = settleBlinkStrikeMarks(afterHazards.player, afterHazards.enemies, state.turn);
   if (settled.logs.length === 0 && settled.player === afterHazards.player) return afterHazards;
   return {

@@ -7,7 +7,7 @@ import { BANQUET_MIN_DISHES, cookedDishCount, nearCampfire } from './foodSinks';
 export type ContextActionKind =
   | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear' | 'talk' | 'trade'
   | 'cook' | 'banquet' | 'close-door' | 'rest'
-  | 'open-shop' | 'open-cache' | 'open-restaurant' | 'open-slots'
+  | 'open-shop' | 'open-cache' | 'open-restaurant' | 'open-slots' | 'open-mirror'
   | 'descend' | 'shrine' | 'offer' | 'pickup' | 'wait' | 'explore';
 
 export interface ContextActionDescriptor {
@@ -38,6 +38,7 @@ export function resolveContextAction(
   if (here?.type === 'shop-item' && here.emoji === '📦') return { kind: 'open-cache', label: 'Ammo', icon: '📦' };
   if (here?.type === 'restaurant') return { kind: 'open-restaurant', label: 'Eat', icon: '🍽️' };
   if (here?.type === 'bed') return { kind: 'rest', label: 'Rest', icon: '🛏️' };
+  if (here?.type === 'mirror') return { kind: 'open-mirror', label: 'Reroll', icon: '🪞' };
 
   const neighbours: { dx: number; dy: number }[] = [];
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) neighbours.push({ dx, dy });
@@ -108,6 +109,9 @@ export function resolveContextAction(
     return kind === 'shrine-used' || kind === 'slot-shrine';
   });
   if (offerDir) return { kind: 'offer', label: 'Offer', icon: '🛕', dir: offerDir };
+
+  const mirrorDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'mirror');
+  if (mirrorDir) return { kind: 'open-mirror', label: 'Reroll', icon: '🪞', dir: mirrorDir };
 
   const stairDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'stairs');
   if (stairDir) {

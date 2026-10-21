@@ -25,7 +25,8 @@ export type TileType =
   | 'restaurant'
   | 'boss-floor'
   | 'campfire'
-  | 'bed';
+  | 'bed'
+  | 'mirror';
 
 export interface Tile {
   type: TileType;
@@ -208,6 +209,12 @@ export interface Player {
   banquet?: BanquetBuff;
   /** One shrine food blessing for the current floor. Cleared on descend. */
   shrineOffering?: ShrineOffering;
+  /** Identity Reroll has been used this run. */
+  identityRerolled?: boolean;
+  /** Hotbar copies that return on the next run if this run ends in death. */
+  insurance?: { items: EmojiItem[] };
+  /** Round for the House. Same shape as a banquet mood floor. */
+  houseRound?: BanquetBuff;
 }
 
 export interface BanquetBuff {
