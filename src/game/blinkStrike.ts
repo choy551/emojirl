@@ -1,4 +1,4 @@
-import type { BlinkStrikeMark, BlinkTalentId, Player } from './types';
+import type { BlinkStrikeMark, BlinkTalentId, Player, PlayerStats } from './types';
 
 /**
  * Blink Strike damage and Ninja talent rules.
@@ -119,17 +119,92 @@ export const BLINK_TALENTS: readonly BlinkTalentDef[] = [
 
 const TALENT_BY_ID = new Map(BLINK_TALENTS.map(t => [t.id, t]));
 
+/** Pre-rework T2. Replaced in place by Heavier Blink. */
+const LEGACY_LONGER_CHAIN = 'longer-chain';
+/** These were Tier 3 before the rework and are now Tier 4. */
+const LEGACY_T3_IDS = new Set<string>(['twin-strike', 'endless-chain']);
+
+export const LONGER_CHAIN_MIGRATION_LOG =
+  '🥷 Longer Chain is now Heavier Blink (+100% Blink damage and cap).';
+
+export const BLINK_T3_RESPEC_NOTE =
+  'Twin Strike and Endless Chain moved to Tier 4. Your old pick stays. Choose one new Tier 3 talent. This prompt is shown once.';
+
 export function blinkTalentById(id: BlinkTalentId): BlinkTalentDef {
   const found = TALENT_BY_ID.get(id);
   if (!found) throw new Error(`unknown blink talent ${id}`);
   return found;
 }
 
-/** Drops removed ids such as the old Longer Chain talent. Empty becomes undefined. */
-export function knownBlinkTalents(picked: readonly string[] | null | undefined): BlinkTalentId[] | undefined {
-  if (!picked?.length) return undefined;
-  const kept = picked.filter((id): id is BlinkTalentId => TALENT_BY_ID.has(id as BlinkTalentId));
+/**
+ * Maps the removed Longer Chain id onto Heavier Blink, in the same slot.
+ * Drops any other unknown id. Duplicate ids collapse. Empty becomes undefined.
+ */
+export function migrateLegacyBlinkTalents(picked: readonly string[] | null | undefined): BlinkTalentId[] | undefined {
+  if (!Array.isArray(picked) || picked.length === 0) return undefined;
+  const kept: BlinkTalentId[] = [];
+  const seen = new Set<string>();
+  for (const id of picked) {
+    if (typeof id !== 'string') continue;
+    const mapped = id === LEGACY_LONGER_CHAIN ? 'heavier-blink' : id;
+    if (!TALENT_BY_ID.has(mapped as BlinkTalentId) || seen.has(mapped)) continue;
+    seen.add(mapped);
+    kept.push(mapped as BlinkTalentId);
+  }
   return kept.length ? kept : undefined;
+}
+
+export function knownBlinkTalents(picked: readonly string[] | null | undefined): BlinkTalentId[] | undefined {
+  return migrateLegacyBlinkTalents(picked);
+}
+
+/** True only for a Ninja save that already owned a talent which moved from T3 to T4. */
+export function legacyBlinkRunNeedsT3Respec(
+  characterClass: unknown,
+  picked: readonly string[] | null | undefined,
+): boolean {
+  if (characterClass !== '🥷' || !Array.isArray(picked)) return false;
+  return picked.some(id => typeof id === 'string' && LEGACY_T3_IDS.has(id));
+}
+
+export interface BlinkTalentMigrationResult {
+  replacedLongerChain: boolean;
+  respecPending: boolean;
+}
+
+/**
+ * In-place v1 → v2 talent migration. Longer Chain becomes Heavier Blink for every
+ * class. A Ninja who already picked Twin Strike or Endless Chain is flagged for
+ * one new Tier 3 choice; that old pick is left in the list.
+ */
+export function applyBlinkTalentSaveMigration(raw: Record<string, unknown>): BlinkTalentMigrationResult {
+  const player = raw.player;
+  if (!player || typeof player !== 'object') {
+    return { replacedLongerChain: false, respecPending: false };
+  }
+  const record = player as Record<string, unknown>;
+  const stats = record.stats && typeof record.stats === 'object'
+    ? record.stats as Record<string, unknown>
+    : null;
+  const rawTalents = stats && Array.isArray(stats.blinkTalents)
+    ? stats.blinkTalents.filter((id): id is string => typeof id === 'string')
+    : undefined;
+  const replacedLongerChain = !!rawTalents?.includes(LEGACY_LONGER_CHAIN);
+  const respecPending = legacyBlinkRunNeedsT3Respec(record.characterClass, rawTalents);
+  if (stats && Array.isArray(stats.blinkTalents)) {
+    const next = migrateLegacyBlinkTalents(rawTalents);
+    if (next) stats.blinkTalents = next;
+    else delete stats.blinkTalents;
+  }
+  if (replacedLongerChain && record.characterClass === '🥷') {
+    const turn = typeof raw.turn === 'number' ? raw.turn : 0;
+    const prev = Array.isArray(raw.logs) ? raw.logs : [];
+    raw.logs = [
+      { id: `blink-heavier-${turn}`, text: LONGER_CHAIN_MIGRATION_LOG, turn },
+      ...prev,
+    ].slice(0, 24);
+  }
+  return { replacedLongerChain, respecPending };
 }
 
 function ownedList(picked: readonly string[] | null | undefined): BlinkTalentId[] {
@@ -408,6 +483,56 @@ export function pendingBlinkTalentOffer(
   const choices = blinkTalentChoices(owned);
   if (choices.length === 0) return null;
   return { tierLabel: tierLabelForOffer(owned.length), choices };
+}
+
+/** New Tier 3 pair offered once to a migrated Ninja. Null when the flag is off or both are owned. */
+export function blinkT3RespecOffer(
+  pending: boolean | undefined,
+  talents: readonly string[] | null | undefined,
+): { tierLabel: string; choices: BlinkTalentDef[]; note: string } | null {
+  if (pending !== true) return null;
+  const owned = ownedList(talents);
+  const choices = BLINK_TALENTS.filter(t => t.tier === 3 && !owned.includes(t.id));
+  if (choices.length === 0) return null;
+  return { tierLabel: 'T3', choices, note: BLINK_T3_RESPEC_NOTE };
+}
+
+export interface BlinkTalentPrompt {
+  kind: 'respec' | 'offer';
+  tierLabel: string;
+  choices: BlinkTalentDef[];
+  note?: string;
+}
+
+/** Respec wins over a normal talent offer. Only Ninjas are prompted. */
+export function blinkTalentPrompt(opts: {
+  characterClass?: string;
+  credits: number;
+  talents?: readonly string[] | null;
+  respecPending?: boolean;
+}): BlinkTalentPrompt | null {
+  if (opts.characterClass !== '🥷') return null;
+  const respec = blinkT3RespecOffer(opts.respecPending, opts.talents);
+  if (respec) return { kind: 'respec', tierLabel: respec.tierLabel, choices: respec.choices, note: respec.note };
+  const offer = pendingBlinkTalentOffer(opts.credits, opts.talents ?? undefined);
+  if (!offer) return null;
+  return { kind: 'offer', tierLabel: offer.tierLabel, choices: offer.choices };
+}
+
+/**
+ * Appends the chosen new Tier 3 and grants one tier of credits.
+ * The credit grant keeps credits % 44 and the count of unspent offers stable,
+ * so this free pick does not consume a talent the run had already earned.
+ */
+export function grantBlinkT3Respec(stats: PlayerStats, id: BlinkTalentId): PlayerStats | null {
+  const offer = blinkT3RespecOffer(true, stats.blinkTalents);
+  if (!offer?.choices.some(choice => choice.id === id)) return null;
+  const owned = ownedList(stats.blinkTalents);
+  return {
+    ...stats,
+    blinkTalents: [...owned, id],
+    blinkStrikeCredits: (stats.blinkStrikeCredits ?? 0) + BLINK_TALENT_CREDITS_PER_TIER,
+  };
 }
 
 export interface BlinkTalentProgress {

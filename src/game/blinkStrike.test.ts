@@ -126,7 +126,7 @@ describe('Blink Strike talents', () => {
 
     expect(pendingBlinkTalentOffer(44 * BLINK_TALENTS.length, BLINK_TALENTS.map(t => t.id))).toBeNull();
     expect(blinkTalentProgress(44 * BLINK_TALENTS.length, BLINK_TALENTS.map(t => t.id)).complete).toBe(true);
-    expect(knownBlinkTalents(['shorter-cd', 'longer-chain', 'twin-strike'])).toEqual(['shorter-cd', 'twin-strike']);
+    expect(knownBlinkTalents(['shorter-cd', 'longer-chain', 'twin-strike'])).toEqual(['shorter-cd', 'heavier-blink', 'twin-strike']);
   });
 
   it('pays 2 credits for an instakill and 1 when a marked target dies inside the window', () => {

@@ -491,6 +491,11 @@ export interface GameState {
   hollowUsedFloor?: number;
   /** Bounty board contract for this floor. Cleared on descend. */
   bounty?: BountyQuest;
+  /**
+   * One-time prompt after a pre-rework Ninja save is loaded. The old Tier 3
+   * pick stays (it is Tier 4 now). Cleared when Overkill or Blink Truestrike is chosen.
+   */
+  blinkT3RespecPending?: boolean;
 }
 
 export interface BossrushState {
