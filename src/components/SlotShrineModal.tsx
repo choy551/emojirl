@@ -5,6 +5,8 @@ import {
   SLOT_REEL_FACE, SlotPrize, SlotTier,
 } from '../game/gameHelpers';
 import { hotbarCapFor } from '../game/voidDamage';
+import { playerSoftCap } from '../game/inventory';
+import { goldWithLuck } from '../game/softCap';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
@@ -41,13 +43,14 @@ export function SlotShrineModal({ gameState, setGameState, addLog, onClose }: Sl
     setStateRef.current(prev => {
       if (!prev) return prev;
       const placed = grantSlotPrizeItems(prev.player.inventory, prev.player.bank, prize.items, floor, hotbarCapFor(prev.player));
+      const gain = goldWithLuck(prize.goldGain + placed.gold, playerSoftCap(prev.player).raw.luck);
       return {
         ...prev,
         player: {
           ...prev.player,
           inventory: placed.inventory,
           bank: placed.bank,
-          stats: { ...prev.player.stats, gold: prev.player.stats.gold + prize.goldGain + placed.gold },
+          stats: { ...prev.player.stats, gold: prev.player.stats.gold + gain },
         },
         logs: [
           ...placed.logs.map(text => ({ id: Math.random().toString(), text, turn: prev.turn })),

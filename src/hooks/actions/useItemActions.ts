@@ -7,7 +7,7 @@ import { isStackableBagPassive } from '../../game/passives';
 import {
   moodMax, refillBagFromBank, removeAndRefillBag, takeOneMatchingFromBank,
   tickActiveBuffs, withVisibility, runEnemyTurns, applyEnemyTurns, getItemBuyPrice, cookedEatHeal,
-  buildHotbarSlots, grantGhostStack,
+  buildHotbarSlots, grantGhostStack, livingMaxHp,
 } from '../../game/gameHelpers';
 import { applyInstantItemUse, canBuyAndUse } from '../../game/shopUse';
 import { applyDrinkToPlayer, pickDrink } from '../../game/drinks';
@@ -111,7 +111,7 @@ export function applyRopeVault(
   let newItems = [...prev.items];
   let newLogs: Array<{ id: string; text: string; turn: number }> = [];
   if (isTrap) {
-    const trapDmg = Math.max(1, Math.floor(newPlayer.stats.maxHp * 0.25));
+    const trapDmg = Math.max(1, Math.floor(livingMaxHp(newPlayer) * 0.25));
     newPlayer.stats = { ...newPlayer.stats, hp: Math.max(1, newPlayer.stats.hp - trapDmg) };
     newLogs = [{ id: Math.random().toString(), text: `🪢 You enter the vault — TRAP! Spikes deal ${trapDmg} damage!`, turn: prev.turn }];
     addLog(`🪢 You enter the vault — TRAP! Spikes deal ${trapDmg} damage!`);
@@ -151,17 +151,18 @@ export function useItemActions(
   const handleUseHeal = useCallback(() => {
     setGameState(prev => {
       if (!prev || prev.gameOver) return prev;
-      if (prev.player.stats.hp >= prev.player.stats.maxHp) { addLog('Already at full HP.'); return prev; }
+      const pool = livingMaxHp(prev.player);
+      if (prev.player.stats.hp >= pool) { addLog('Already at full HP.'); return prev; }
 
       const healCandidates = prev.player.inventory
         .map((it, idx) => ({ it, idx }))
         .filter(({ it }) => !it.consumed && it.healAmount !== undefined);
       if (healCandidates.length === 0) { addLog('No healing items! Search for 🍎🍖🧪 drops from enemies.'); return prev; }
 
-      const hpPct = prev.player.stats.hp / prev.player.stats.maxHp;
-      const missingHp = prev.player.stats.maxHp - prev.player.stats.hp;
+      const hpPct = prev.player.stats.hp / pool;
+      const missingHp = pool - prev.player.stats.hp;
       const lessons = prev.chefLessonCount ?? 0;
-      const healOf = (it: EmojiItem) => cookedEatHeal(it, lessons, prev.player.stats.maxHp);
+      const healOf = (it: EmojiItem) => cookedEatHeal(it, lessons, pool);
       let best: { it: EmojiItem; idx: number };
       if (hpPct <= 0.4) {
         // Low health — use the biggest heal available
@@ -176,10 +177,10 @@ export function useItemActions(
 
       const item = best.it;
       const stats = { ...prev.player.stats };
-      const amount = cookedEatHeal(item, prev.chefLessonCount ?? 0, stats.maxHp);
-      const wasLow = stats.hp / stats.maxHp <= 0.3;
+      const amount = cookedEatHeal(item, prev.chefLessonCount ?? 0, pool);
+      const wasLow = stats.hp / pool <= 0.3;
 
-      stats.hp = Math.min(stats.maxHp, stats.hp + amount);
+      stats.hp = Math.min(pool, stats.hp + amount);
       // Tick active buffs each time food is used (costs 1 turn)
       Object.assign(stats, tickActiveBuffs(stats));
 

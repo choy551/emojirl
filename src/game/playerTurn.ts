@@ -1,7 +1,7 @@
 import { Player, FloatingText, Position } from './types';
 import { getRandomEmojiPower } from './emojis';
 import { markEmojiSeen } from './discoveries';
-import { addToPlayerBag, activeKindLabel } from './inventory';
+import { addToPlayerBag, activeKindLabel, livingMaxHp } from './inventory';
 import { moodMax, hpBonusForLevel, mpBonusForLevel } from './progression';
 import { isArcaneCaster } from './prestige';
 
@@ -16,13 +16,14 @@ export function applyOverhealDecay(
   pos: Position,
   floatIdPrefix: string,
 ): { player: Player; float: FloatingText | null } {
-  if (player.stats.hp <= player.stats.maxHp) return { player, float: null };
+  const pool = livingMaxHp(player);
+  if (player.stats.hp <= pool) return { player, float: null };
 
   const tick = (player.stats.overhealDecayTick ?? 0) + 1;
   if (tick >= 5) {
-    const decayedHp = Math.max(player.stats.maxHp, player.stats.hp - 1);
+    const decayedHp = Math.max(pool, player.stats.hp - 1);
     const next = { ...player, stats: { ...player.stats, hp: decayedHp, overhealDecayTick: 0 } };
-    const float: FloatingText | null = decayedHp > player.stats.maxHp
+    const float: FloatingText | null = decayedHp > pool
       ? { id: `${floatIdPrefix}-${turn}`, pos: { ...pos }, text: '-1 ✨', color: '#fbbf24', life: 2 }
       : null;
     return { player: next, float };

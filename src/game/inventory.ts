@@ -4,6 +4,7 @@ import { STACKABLE_BAG_CAPS, isStackableBagPassive } from './passives';
 import { EMOJI_POWERS } from './emojis';
 import { hotbarCapFor, padGhostHotbar, voidGhostCapacity } from './voidDamage';
 import { drinkEvasionBonus } from './drinks';
+import { resolveSoftCap, type SoftCapInput, type SoftCapResult } from './softCap';
 
 export function isNonStackableBagPassiveDuplicate(item: EmojiItem, inv: EmojiItem[]): boolean {
   if (!item.bagPassive?.nonStackable) return false;
@@ -384,7 +385,8 @@ export function tickActiveBuffs(stats: import('./types').PlayerStats): import('.
   return { ...stats, activeBuffs: updated.length ? updated : undefined };
 }
 
-export function applyEquipmentAndPassives(player: Player): Player {
+/** Gear, bag passives, buffs, and drink EVA — before overflow soft caps. */
+export function rawCombatStats(player: Player): SoftCapInput {
   const passives = playerBagPassives(player);
   const eq = player.equipment;
   const slots = [eq.body, eq.mainHand, eq.offHand, eq.accessory].filter(Boolean) as EmojiItem[];
@@ -407,14 +409,38 @@ export function applyEquipmentAndPassives(player: Player): Player {
   const buffAtk = (player.stats.activeBuffs ?? []).filter(b => b.stat === 'attack').reduce((s, b) => s + b.amount, 0);
   const buffDef = (player.stats.activeBuffs ?? []).filter(b => b.stat === 'defense').reduce((s, b) => s + b.amount, 0);
   return {
+    attack:  player.stats.attack  + passives.attack  + eqAtk + buffAtk,
+    defense: player.stats.defense + passives.defense + eqDef + buffDef,
+    speed:   player.stats.speed   + passives.speed   + eqSpd,
+    evasion: player.stats.evasion + passives.evasion + eqEva + drinkEvasionBonus(player),
+    luck:    player.stats.luck    + passives.luck    + eqLck,
+    maxHp:   player.stats.maxHp,
+  };
+}
+
+export function playerSoftCap(player: Player): SoftCapResult {
+  return resolveSoftCap(rawCombatStats(player));
+}
+
+/** Hit-point pool after DEF overflow. Stored maxHp stays the base. */
+export function livingMaxHp(player: Player): number {
+  return playerSoftCap(player).maxHp;
+}
+
+export function applyEquipmentAndPassives(player: Player): Player {
+  const raw = rawCombatStats(player);
+  const caps = resolveSoftCap(raw);
+  return {
     ...player,
     stats: {
       ...player.stats,
-      attack:  player.stats.attack  + passives.attack  + eqAtk + buffAtk,
-      defense: player.stats.defense + passives.defense + eqDef + buffDef,
-      speed:   player.stats.speed   + passives.speed   + eqSpd,
-      evasion: player.stats.evasion + passives.evasion + eqEva + drinkEvasionBonus(player),
-      luck:    player.stats.luck    + passives.luck    + eqLck,
+      attack:  caps.attack,
+      defense: caps.defense,
+      speed:   caps.speed,
+      evasion: caps.evasion,
+      // Raw luck: crit uses it (then the CRIT cap). The stats row shows the LCK cap.
+      luck:    raw.luck,
+      maxHp:   caps.maxHp,
     },
   };
 }

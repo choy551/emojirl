@@ -1,6 +1,6 @@
 import { Enemy, GameState, MapGrid, Player, Position, Tile } from './types';
 import { chebyshev } from './geo';
-import { applyEquipmentAndPassives, playerBagPassives } from './inventory';
+import { applyEquipmentAndPassives, livingMaxHp, playerBagPassives } from './inventory';
 import { applyEnemyTurns, runEnemyTurns } from './enemyTurns';
 import { hasLineOfSight, visionRadiusFor } from './vision';
 import { BED_EMOJI, BED_MAX_USES } from './tiles';
@@ -73,7 +73,7 @@ export function sneakAttackDamage(player: Player, enemy: Enemy): number {
 }
 
 export function applyBedRest(player: Player): Player {
-  const maxHp = player.stats.maxHp;
+  const maxHp = livingMaxHp(player);
   const arcane = player.characterClass === '🧙' || player.characterClass === '🧞‍♀️';
   return {
     ...player,

@@ -1,9 +1,10 @@
 import { Player, GameState, BagPassiveSummary } from '../../game/types';
-import { applyEquipmentAndPassives, computeNinjaEvasion, pressureForRun } from '../../game/gameHelpers';
+import { applyEquipmentAndPassives, computeNinjaEvasion, pressureForRun, playerSoftCap } from '../../game/gameHelpers';
 import { fencerEvasion, isArcaneCaster, isFencer } from '../../game/prestige';
 import { getCowboyUnarmedBonus } from '../../game/combat';
 import { nullMomentumPercent } from '../../game/voidDamage';
-import { blinkStrikeDamagePhrase, blinkTalentById, blinkTalentProgress, critStat } from '../../game/blinkStrike';
+import { blinkStrikeDamagePhrase, blinkTalentById, blinkTalentProgress } from '../../game/blinkStrike';
+import { DODGE_CHANCE_CAP, softCapBonusLines, softCapTitles } from '../../game/softCap';
 import { MiniMap } from '../MiniMap';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './oneHandedLayout';
 import { useDismissGuard } from '../../hooks/useDismissGuard';
@@ -19,9 +20,9 @@ interface StatsModalProps {
   onClose: () => void;
 }
 
-function StatPill({ label, value, color }: { label: string; value: string | number; color: string }) {
+function StatPill({ label, value, color, title }: { label: string; value: string | number; color: string; title?: string }) {
   return (
-    <div className="bg-card/60 border border-border/40 rounded-lg px-2 py-1.5 flex flex-col items-center leading-none gap-1">
+    <div title={title || undefined} className="bg-card/60 border border-border/40 rounded-lg px-2 py-1.5 flex flex-col items-center leading-none gap-1">
       <span className={`font-bold text-sm ${color}`}>{value}</span>
       <span className="text-[9px] text-muted-foreground/50">{label}</span>
     </div>
@@ -30,21 +31,24 @@ function StatPill({ label, value, color }: { label: string; value: string | numb
 
 export function StatsModal({ player, className, currentFloor, moodEmoji, moodName, bagPassiveSummary, gameState, onClose }: StatsModalProps) {
   const eff = applyEquipmentAndPassives(player);
+  const caps = playerSoftCap(player);
+  const titles = softCapTitles(caps);
+  const bonusLines = softCapBonusLines(caps);
   const dualGuns = player.characterClass === '🤠' && player.equipment.mainHand?.weaponKind === 'gun' && player.equipment.offHand?.weaponKind === 'gun';
   const unarmed = player.characterClass === '🤠' && !player.equipment.mainHand?.weaponKind && !player.equipment.offHand?.weaponKind;
   const ironFist = (dualGuns && player.ammo <= 0) || unarmed ? getCowboyUnarmedBonus(player.stats.level) : 0;
-  const atk = eff.stats.attack + ironFist;
-  const crit = critStat(eff.stats.luck);
+  const atk = caps.attack + ironFist;
+  const crit = caps.crit;
   const dodge = player.characterClass === '🥷'
     ? computeNinjaEvasion(eff)
     : isFencer(player.characterClass)
       ? fencerEvasion(eff.stats.hp, eff.stats.maxHp, eff.stats.evasion ?? 0)
-      : Math.min(50, eff.stats.evasion ?? 0);
+      : Math.min(DODGE_CHANCE_CAP, caps.evasion);
   const pressure = pressureForRun(currentFloor, gameState.deepDive);
   const voidDr = player.characterClass === '👤' ? nullMomentumPercent(player.stats.level) : 0;
   const p = bagPassiveSummary;
   const hp = player.stats.hp;
-  const maxHp = player.stats.maxHp;
+  const maxHp = caps.maxHp;
   const overheal = hp > maxHp;
   const hpPct = overheal ? Math.min(100, (hp / (maxHp * 2)) * 100) : (hp / Math.max(1, maxHp)) * 100;
   const hpColor = overheal ? '#f59e0b' : hpPct > 60 ? '#22c55e' : hpPct > 30 ? '#f59e0b' : '#ef4444';
@@ -80,7 +84,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
           <div>
             <div className="flex justify-between text-[11px] mb-0.5">
               <span className="font-bold text-destructive">❤️ HP</span>
-              <span className="tabular-nums font-bold" style={{ color: hpColor }}>{overheal ? '✨' : ''}{hp}/{maxHp}</span>
+              <span className="tabular-nums font-bold" style={{ color: hpColor }} title={titles.HP || undefined}>{overheal ? '✨' : ''}{hp}/{maxHp}</span>
             </div>
             <div className="h-2 bg-black/40 rounded-full overflow-hidden border border-white/10">
               <div className="h-full rounded-full transition-all" style={{ width: `${hpPct}%`, backgroundColor: hpColor }} />
@@ -112,16 +116,22 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
 
         {/* Combat stats */}
         <div className="grid grid-cols-4 gap-1.5">
-          <StatPill label="ATK" value={atk} color="text-orange-400" />
-          <StatPill label="DEF" value={eff.stats.defense} color="text-blue-400" />
-          <StatPill label="SPD" value={eff.stats.speed} color="text-yellow-400" />
-          <StatPill label="EVA" value={eff.stats.evasion} color="text-emerald-400" />
-          <StatPill label="LCK" value={eff.stats.luck} color="text-pink-400" />
-          <StatPill label="CRIT" value={`${crit}%`} color="text-rose-300" />
+          <StatPill label="ATK" value={atk} color="text-orange-400" title={[titles.ATK, ironFist > 0 ? `+${ironFist} Iron Fist` : ''].filter(Boolean).join(' · ')} />
+          <StatPill label="DEF" value={caps.defense} color="text-blue-400" title={titles.DEF} />
+          <StatPill label="SPD" value={caps.speed} color="text-yellow-400" title={titles.SPD} />
+          <StatPill label="EVA" value={caps.evasion} color="text-emerald-400" title={titles.EVA} />
+          <StatPill label="LCK" value={caps.luck} color="text-pink-400" title={titles.LCK} />
+          <StatPill label="CRIT" value={`${crit}%`} color="text-rose-300" title={titles.CRIT} />
           <StatPill label="DODGE" value={`${dodge}%`} color="text-sky-300" />
           {voidDr > 0 && <StatPill label="DR" value={`${voidDr}%`} color="text-zinc-200" />}
           {pressure.atk > 0 && <StatPill label="PRESSURE" value={`+${pressure.atk}/+${pressure.def}`} color="text-red-400" />}
         </div>
+
+        {bonusLines.length > 0 && (
+          <div data-testid="soft-cap-bonuses" className="text-[10px] leading-snug text-amber-200/90">
+            {bonusLines.join(' · ')}
+          </div>
+        )}
 
         {player.characterClass === '🥷' && (() => {
           const progress = blinkTalentProgress(player.stats.blinkStrikeCredits ?? 0, player.stats.blinkTalents);

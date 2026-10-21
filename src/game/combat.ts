@@ -2,6 +2,7 @@ import { Player, Enemy, MoodType } from './types';
 import { crowGoldSteal } from './economy';
 import { applyNullMomentum } from './voidDamage';
 import { blinkStrikeDamageMultiplier, critStat } from './blinkStrike';
+import { DODGE_CHANCE_CAP, effectiveCrit } from './softCap';
 import { fencerCritBonus, fencerEvasion, isFencer, isRoyalGuard, royalDefenseBonus, royalIncomingMult, royalMeleeMultiplier } from './prestige';
 import { FENCER_PARRY_CHANCE } from './prestigeConstants';
 
@@ -117,7 +118,7 @@ export function resolveCombat(
   // ── 2. Hit resolution ──────────────────────────────────────────────────────
   const baseHit = 85 + mods.hitChance;
   const fencer = isFencer(cls);
-  const critChance = 5 + (player.stats.luck ?? 1) + mods.critBonus + (opts.critBonus ?? 0) + (fencer ? fencerCritBonus(player.stats.hp, player.stats.maxHp) : 0);
+  const critChance = effectiveCrit(player.stats.luck ?? 1) + mods.critBonus + (opts.critBonus ?? 0) + (fencer ? fencerCritBonus(player.stats.hp, player.stats.maxHp) : 0);
   const parryChance = Math.max(opts.parryChance ?? 0, fencer ? FENCER_PARRY_CHANCE : 0);
   const defenderEvasion = fencer
     ? fencerEvasion(player.stats.hp, player.stats.maxHp, player.stats.evasion ?? 0)
@@ -283,7 +284,7 @@ export function resolveCombat(
         addLog(`🛡️ Shield wall! The blow is deflected!`);
         return;
       }
-      const dodgeChance = Math.min(95, defenderEvasion + mods.dodgeBonus);
+      const dodgeChance = Math.min(DODGE_CHANCE_CAP, defenderEvasion + mods.dodgeBonus);
       if (r() * 100 < dodgeChance) {
         dodged = true;
         addLog(`${label}${enemy.emoji} swings — you dodge!`);

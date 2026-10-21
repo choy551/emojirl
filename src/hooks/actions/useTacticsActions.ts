@@ -1,11 +1,12 @@
 import { useCallback } from 'react';
-import { chebyshev, withVisibility, runEnemyTurns, applyEnemyTurns, applyEquipmentAndPassives, hasLOSBetween } from '../../game/gameHelpers';
+import { chebyshev, withVisibility, runEnemyTurns, applyEnemyTurns, applyEquipmentAndPassives, hasLOSBetween, playerSoftCap } from '../../game/gameHelpers';
 import { getMood } from '../../game/moods';
 import { isHostileCombatTarget, resolveCombat } from '../../game/combat';
 import type { GameRefs, GameSetters, AddLog } from './types';
 import type { Player } from '../../game/types';
 import { isArcaneCaster, isFencer, isHitman, isRoyalGuard, activateGuardianStance, planBackdash, planLunge, nearestExecuteTarget, executeStrike, notePrestigeKill, fencerOutgoingMult } from '../../game/prestige';
 import { FENCER_BACKDASH_CD, FENCER_LUNGE_CD, FENCER_LUNGE_MULT, HITMAN_EXECUTE_BULLETS, HITMAN_EXECUTE_CD, HITMAN_EXECUTE_GOLD } from '../../game/prestigeConstants';
+import { goldWithLuck } from '../../game/softCap';
 
 const BLINK_ACTIVE = 3;
 const BLINK_CD = 5;
@@ -186,7 +187,7 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
       let enemies = prev.enemies.map(e => ({ ...e }));
       const idx = enemies.findIndex(e => e.id === plan.target.id);
       if (result.enemyDied && idx >= 0) {
-        const paid = notePrestigeKill(player, prev.currentFloor);
+        const paid = notePrestigeKill(player, prev.currentFloor, playerSoftCap(player).raw.luck);
         player = paid.player;
         paid.logs.forEach(addLog);
         player = { ...player, stats: { ...player.stats, xp: player.stats.xp + (plan.target.isBoss ? 25 : 5) } };
@@ -219,17 +220,18 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
       const idx = enemies.findIndex(e => e.id === target.id);
       if (hp <= 0 && idx >= 0) {
         if (strike.executed) {
+          const gained = goldWithLuck(HITMAN_EXECUTE_GOLD, playerSoftCap(player).raw.luck);
           player = {
             ...player,
             ammo: (player.ammo ?? 0) + HITMAN_EXECUTE_BULLETS,
-            stats: { ...player.stats, gold: player.stats.gold + HITMAN_EXECUTE_GOLD, xp: player.stats.xp + (target.isBoss ? 25 : 5) },
+            stats: { ...player.stats, gold: player.stats.gold + gained, xp: player.stats.xp + (target.isBoss ? 25 : 5) },
           };
-          addLog(`🕴️ Contract executed — +${HITMAN_EXECUTE_GOLD} gold, +${HITMAN_EXECUTE_BULLETS} bullets.`);
+          addLog(`🕴️ Contract executed — +${gained} gold, +${HITMAN_EXECUTE_BULLETS} bullets.`);
         } else {
           player = { ...player, stats: { ...player.stats, xp: player.stats.xp + (target.isBoss ? 25 : 5) } };
           addLog(`🕴️ Execute Contract — ${strike.damage} damage.`);
         }
-        const paid = notePrestigeKill(player, prev.currentFloor);
+        const paid = notePrestigeKill(player, prev.currentFloor, playerSoftCap(player).raw.luck);
         player = paid.player;
         paid.logs.forEach(addLog);
         enemies.splice(idx, 1);

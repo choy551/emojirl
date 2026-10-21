@@ -15,6 +15,7 @@ import {
   blinkTalentProgress,
   type BlinkTalentId,
 } from "../game/blinkStrike";
+import { softCapRulesBlurb } from "../game/softCap";
 import {
   getSeenEmojis,
   getSeenEnemies,
@@ -156,7 +157,7 @@ export default function HowToPlay({
             {
               label: "🛡️ DEF",
               color: "text-sky-400",
-              desc: "Defence — reduces incoming damage. Formula: damage taken = max(1, enemy ATK − ⌊DEF ÷ 2⌋). DEF is halved before subtracting, so every 2 points removes 1 damage. There is no hard cap.",
+              desc: "Defence — reduces incoming damage. Formula: damage taken = max(1, enemy ATK − ⌊DEF ÷ 2⌋). DEF is halved before subtracting, so every 2 points removes 1 damage. DEF soft-caps at 20; further points become max HP instead of more mitigation.",
             },
             {
               label: "👤 DR",
@@ -166,7 +167,7 @@ export default function HowToPlay({
             {
               label: "💨 SPD",
               color: "text-green-400",
-              desc: "Speed — if an enemy's speed exceeds yours, it strikes twice per turn (the extra hit follows a normal damage roll). Also widens enemy detection range slightly. Matching or exceeding enemy speed prevents double-hits.",
+              desc: "Speed — if an enemy's speed exceeds yours, it strikes twice per turn (the extra hit follows a normal damage roll). Also widens enemy detection range slightly. SPD soft-caps at 8; further speed becomes Evasion, and that conversion is applied before Evasion overflow becomes Speed. Matching or exceeding enemy speed prevents double-hits.",
             },
             {
               label: "🎯 EVA",
@@ -174,15 +175,15 @@ export default function HowToPlay({
               desc: (
                 <>
                   Evasion — percentage chance to dodge an incoming attack entirely.{" "}
-                  <strong className="text-foreground">Cap: 75% for Ninja 🥷, 50% for all other classes.</strong>{" "}
-                  Ninja EVA also scales with level (+1% per level, up to +25%) and spikes at low HP (base jumps from 25% → 45% below 40% HP). Mood and gear can push any class toward the cap.
+                  <strong className="text-foreground">Raw EVA soft-caps at 50. Ninja dodge still caps at 75%.</strong>{" "}
+                  Speed overflow can push effective EVA, and non-Ninja dodge, above 50. Ninja EVA also scales with level and spikes at low HP.
                 </>
               ),
             },
             {
               label: "🍀 LCK",
               color: "text-yellow-400",
-              desc: "Luck — directly adds to your crit chance. Base crit = 5% + LCK + mood bonus. A lucky character lands critical hits that deal double damage much more often. Loot quality is shifted by the 🍀 Clover bag passive, not by the LCK stat itself.",
+              desc: "Luck — raw LCK still adds to crit chance (base crit = 5% + raw LCK + mood bonus) until CRIT soft-caps at 100. The LCK number itself stops at 20; further luck becomes gold find. Loot quality is shifted by the 🍀 Clover bag passive, not by the LCK stat itself.",
             },
             {
               label: "🔮 MP",
@@ -198,6 +199,10 @@ export default function HowToPlay({
               <span className="text-muted-foreground leading-relaxed">{desc}</span>
             </div>
           ))}
+        </div>
+        <div className="mt-3 bg-card/50 border border-amber-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-amber-200 mb-1">Overflow soft caps</div>
+          {softCapRulesBlurb()}
         </div>
       </Section>
 

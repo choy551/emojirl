@@ -1,4 +1,5 @@
 import { Player } from '../../game/types';
+import { livingMaxHp } from '../../game/inventory';
 import { ammoIcon, isArcaneCaster, usesArrows, usesBullets } from '../../game/prestige';
 
 interface MobileTopBarProps {
@@ -36,7 +37,7 @@ function MiniBar({ pct, color, label, value }: { pct: number; color: string; lab
 /** Slim always-visible stat strip for touch devices. Tapping it opens the full StatsModal. */
 export function MobileTopBar({ player, className, level, currentFloor, xpProgress, onExpand, onMenu, menuSide = 'right', blinkTalentCompact, blinkTalentTitle }: MobileTopBarProps) {
   const hp = player.stats.hp;
-  const maxHp = player.stats.maxHp;
+  const maxHp = livingMaxHp(player);
   const overheal = hp > maxHp;
   const hpPct = overheal ? Math.min(100, (hp / (maxHp * 2)) * 100) : (hp / Math.max(1, maxHp)) * 100;
   const hpColor = overheal ? '#f59e0b' : hpPct > 60 ? '#22c55e' : hpPct > 30 ? '#f59e0b' : '#ef4444';
