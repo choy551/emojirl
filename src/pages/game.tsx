@@ -2342,7 +2342,7 @@ export default function Game() {
               }
               onMouseEnter={enemy && !isPlayer ? () => setHoveredEnemyId(enemy.id) : undefined}
               onMouseLeave={enemy && !isPlayer ? () => setHoveredEnemyId(null) : undefined}
-              title={isPlayer ? 'Wait / rest (+1 HP)' : (enemy && !isPlayer ? (clickToMove ? `${enemy.name} — click to approach` : `${enemy.name} — click for stats`) : (clickToMove ? 'Walk here' : undefined))}
+              title={isPlayer ? 'Wait / rest (+1 HP, ×2 at half, ×3 at 25%)' : (enemy && !isPlayer ? (clickToMove ? `${enemy.name} — click to approach` : `${enemy.name} — click for stats`) : (clickToMove ? 'Walk here' : undefined))}
               data-testid={isPlayer ? 'player-tile' : (enemy && !isPlayer ? `enemy-tile-${enemy.id}` : undefined)}
             >
               {displayChar}

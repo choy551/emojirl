@@ -38,8 +38,7 @@ import { useTacticsActions } from './actions/useTacticsActions';
 import { useInventoryActions } from './actions/useInventoryActions';
 import { useItemActions } from './actions/useItemActions';
 import { useCombatActions } from './actions/useCombatActions';
-
-const WAIT_HEAL = 1;
+import { restHealAmount, restHealMultiplier } from '../game/restHeal';
 
 function noteKill(player: Player, floor: number) {
   return notePrestigeKill(player, floor, playerSoftCap(player).raw.luck);
@@ -1205,12 +1204,12 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         [-1, 0, 1].some(dx => prev.map[py + dy]?.[px + dx]?.type === 'restaurant')
       );
       const onCampfire = nearCampfire || nearRest;
-      const campfireBonus = onCampfire ? 2 : 0;
       const stats = { ...prev.player.stats };
       const waitPassives = playerBagPassives(prev.player);
       const regen = waitPassives.combatRegen || 0;
-      const totalHeal = WAIT_HEAL + regen + campfireBonus;
       const pool = livingMaxHp(prev.player);
+      const restMult = restHealMultiplier(stats.hp, pool);
+      const totalHeal = restHealAmount({ hp: stats.hp, maxHp: pool, waveRegen: regen, campfire: onCampfire });
       const atFull = stats.hp >= pool;
       if (!atFull) {
         stats.hp = Math.min(pool, stats.hp + totalHeal);
@@ -1370,7 +1369,11 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             id: Math.random().toString(),
             text: atFull
               ? (onCampfire ? '🔥 Campfire crackles warmly…' : 'You wait, watching the shadows…')
-              : (onCampfire ? `🔥 Campfire rest. (+${totalHeal} HP)` : nearRest ? `🏪 Restaurant rest. (+${totalHeal} HP, mood ↑)` : `You rest a moment. (+${totalHeal} HP)`),
+              : (onCampfire
+                ? `🔥 Campfire rest. (+${totalHeal} HP${restMult > 1 ? `, ×${restMult} while hurt` : ''})`
+                : nearRest
+                  ? `🏪 Restaurant rest. (+${totalHeal} HP${restMult > 1 ? `, ×${restMult} while hurt` : ''}, mood ↑)`
+                  : `You rest a moment. (+${totalHeal} HP${restMult > 1 ? `, ×${restMult} while hurt` : ''})`),
             turn: prev.turn,
           },
           ...prev.logs,
