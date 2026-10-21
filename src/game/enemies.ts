@@ -3,6 +3,7 @@ import { ENEMY_PASSABLE_TILES, FLYING_TILES, HUMANOID_ENEMY_PASSABLE_TILES, MERM
 
 const ANIMAL_EMOJIS = new Set([
   '🐍', '🕷️', '🐦‍⬛', '🐺', '🦊', '🐗', '🐻', '🐒', '👁️', '🐉', '🦑',
+  '🐕', '🐈', '🐔', '🐄',
 ]);
 
 const ANIMAL_NAME_RE = /spider queen|dragon|kraken|snake|spider|crow|wolf|fox|boar|bear|monkey|\beye\b/i;
@@ -14,8 +15,9 @@ export function isAnimalEnemy(e: {
   monkey?: boolean;
   bear?: boolean;
   crow?: boolean;
+  isFarmAnimal?: boolean;
 }): boolean {
-  if (e.monkey || e.bear || e.crow) return true;
+  if (e.monkey || e.bear || e.crow || e.isFarmAnimal) return true;
   if (e.emoji && ANIMAL_EMOJIS.has(e.emoji)) return true;
   if (e.name && ANIMAL_NAME_RE.test(e.name)) return true;
   return false;

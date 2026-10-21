@@ -21,6 +21,7 @@ import { applyLevelUp } from './playerTurn';
 import { markEnemyKilled } from './discoveries';
 import { settleBlinkStrikeMarks } from './blinkStrike';
 import { applyDrinkBuffTick, effectiveVoidPressureSlots, isDrinkStealthActive, voidPressureIgnoredSlots } from './drinks';
+import { farmDenizenIntent } from './farmer';
 
 export interface EnemyTurnResult {
   enemies: Enemy[];
@@ -432,6 +433,40 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
           }
         } else {
           occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
+        }
+      } else if (enemy.isFarmer || enemy.isFarmAnimal) {
+        const actor = newEnemies[i];
+        const blocked = new Set(occupied);
+        blocked.add(playerKey);
+        const intent = farmDenizenIntent(actor, newEnemies, newEnemies, map, blocked, passable);
+        if (intent.kind === 'attack') {
+          const ti = newEnemies.findIndex(e => e.id === intent.targetId);
+          const target = ti >= 0 ? newEnemies[ti] : undefined;
+          if (target && target.hp > 0 && chebyshev(actor.pos, target.pos) <= 1) {
+            const dmg = Math.max(1, actor.attack - Math.floor((target.defense ?? 0) / 2));
+            const newHp = target.hp - dmg;
+            newFloatingTexts.push({
+              id: `farm-${actor.id}-${state.turn}`,
+              pos: { ...target.pos },
+              text: `-${dmg}`,
+              color: '#86efac',
+              life: 2,
+            });
+            if (newHp <= 0) {
+              reclaimMonkeyLoot(target);
+              newEnemies[ti] = { ...target, hp: 0 };
+              markEnemyKilled(target.emoji);
+              log(`${actor.emoji} ${actor.name} defends the farmer and fells ${target.emoji} ${target.name}!`);
+            } else {
+              newEnemies[ti] = { ...target, hp: newHp };
+            }
+          }
+          occupied.add(`${actor.pos.x},${actor.pos.y}`);
+        } else if (intent.kind === 'step') {
+          newEnemies[i] = { ...actor, pos: intent.pos };
+          occupied.add(`${intent.pos.x},${intent.pos.y}`);
+        } else {
+          occupied.add(`${actor.pos.x},${actor.pos.y}`);
         }
       } else {
         occupied.add(`${enemy.pos.x},${enemy.pos.y}`);

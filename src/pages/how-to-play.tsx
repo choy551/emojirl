@@ -16,6 +16,7 @@ import {
   type BlinkTalentId,
 } from "../game/blinkStrike";
 import { softCapRulesBlurb } from "../game/softCap";
+import { farmerRulesBlurb } from "../game/farmer";
 import {
   getSeenEmojis,
   getSeenEnemies,
@@ -251,7 +252,7 @@ export default function HowToPlay({
               <div className="flex items-center gap-2 flex-wrap">
                 <Kbd>Space</Kbd>
                 <span className="text-muted-foreground">
-                  — context-sensitive action: automatically performs the most relevant action for your surroundings — attack an adjacent enemy, feed a nearby Bear, recruit an adventurer, cook at a campfire, enter a shop, close a door, pick up an item, or wait. On mobile the context button idles as Auto-Explore instead of wait (tap again to stop). Pause → Options → One-handed mode parks the d-pad, hotbar, actions, and menus on the left or right for thumb reach.
+                  — context-sensitive action: automatically performs the most relevant action for your surroundings — attack an adjacent enemy, feed a nearby Bear, trade with a Farmer, recruit an adventurer, cook at a campfire, enter a shop, close a door, pick up an item, or wait. On mobile the context button idles as Auto-Explore instead of wait (tap again to stop). Pause → Options → One-handed mode parks the d-pad, hotbar, actions, and menus on the left or right for thumb reach.
                 </span>
               </div>
             </div>
@@ -450,6 +451,7 @@ export default function HowToPlay({
             { icon: "📦", label: "Ammo Cache", desc: "Special shop tile (📦). Re-interact (z/Enter/Space on the tile) for class-specific ammo resupply before bosses." },
             { icon: "🟦", label: "Water", desc: "Rivers, ponds, lakes, and vault moats. You cannot walk on water without a ⛵ Boat. Mermen lurk here. Flying enemies cross and stand on water freely. Lava that touches water cools the water into walkable ⚫ obsidian." },
             { icon: "🌿", label: "Bush", desc: "Blocks movement like a wall, but you can see and shoot through it. Ranged enemies (archers, dark mages) like to hide behind these." },
+            { icon: "🟩", label: "Prairie", desc: "Grassland rooms on D:3–26 (about 18% of those floors). Green grass 🟩 is walkable. Crops 🌱🪴🌽🌾 block movement, not sight or shots. A 🧑‍🌾 Farmer wanders inside the field. Bump or use Trade to barter food and healing items — not gold — for 3–5 emoji goods. Cooked food is worth 1.25×, raw food 1.0×, potions 0.75×. Friendly animals (🐕🐈🐔, rarely 🐄) attack hostiles and defend the farmer. Autoexplore stops beside them." },
             { icon: "🌋", label: "Volcano", desc: "A rare vault. Spews lava every 10–20 turns, but only near the crater — it will not flood the whole floor. Grab the high-tier loot around it before the lava eats it — and don't stand in the fire." },
             { icon: "🛏️", label: "Bed", desc: "Inside a nested room vault: a tiny 2×2 to 4×4 walled chamber with one door, tucked into a larger regular room. Interact to sleep. Resting overheals to 200% of max HP (the 🍺 bar is 150%), fully restores Wizard mana, and resets all cooldowns. 100 turns then pass — enemies still move and volcanoes still spew lava. Each bed can be used twice, then it's worn out. You cannot start sleep while a hostile is in sight. If a hostile reaches you, they land one sneak attack at 200% damage and you wake. Close the door before sleeping if you can. Autoexplore stops here." },
             { icon: "🟧", label: "Lava", desc: "Extreme heat: each turn standing in lava deals 25% of your max HP plus a flat amount (starts at +10, +5 per floor descended). You'll get a Yes/No warning before stepping onto it from safe ground. Destroys items on the tile. Volcanoes and lava rivers both use this. Flying enemies cross it and take no damage. Orthogonally adjacent 🟦 water cools into ⚫ obsidian." },
@@ -466,6 +468,11 @@ export default function HowToPlay({
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="mt-3 bg-card/50 border border-green-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-green-200 mb-1">Farmer shops</div>
+          {farmerRulesBlurb()}
         </div>
 
         <div className="mt-3 text-xs text-muted-foreground space-y-3">

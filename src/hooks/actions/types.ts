@@ -40,6 +40,7 @@ export interface GameSetters {
   setPendingMonkeyInteraction: React.Dispatch<React.SetStateAction<{ id: string; wants: string } | null>>;
   setPendingAdventurerInteraction: React.Dispatch<React.SetStateAction<string | null>>;
   setPendingBearInteraction: React.Dispatch<React.SetStateAction<{ id: string; stage: 'neutral' | 'friendly'; offerId: string | null } | null>>;
+  setPendingFarmerId: React.Dispatch<React.SetStateAction<string | null>>;
   setBlinkTurn: React.Dispatch<React.SetStateAction<number>>;
   setTrailblazeTurn: React.Dispatch<React.SetStateAction<number>>;
 }

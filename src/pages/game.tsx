@@ -51,6 +51,7 @@ import HowToPlay from './how-to-play';
 import { HotbarPanel } from '../components/HotbarPanel';
 import { BankPanel } from '../components/BankPanel';
 import { ShopModal } from '../components/ShopModal';
+import { FarmerTradeModal } from '../components/FarmerTradeModal';
 import { AmmoCacheModal } from '../components/AmmoCacheModal';
 import { RestaurantModal } from '../components/RestaurantModal';
 import { SlotShrineModal } from '../components/SlotShrineModal';
@@ -354,6 +355,7 @@ export default function Game() {
       { id: 'adventurer', isOpen: () => !!pendingAdventurerInteraction, close: () => setPendingAdventurerInteraction(null) },
       { id: 'monkey', isOpen: () => !!pendingMonkeyInteraction, close: () => setPendingMonkeyInteraction(null) },
       { id: 'fairy', isOpen: () => !!pendingFairyId, close: () => setPendingFairyId(null) },
+      { id: 'farmer', isOpen: () => !!pendingFarmerId, close: () => setPendingFarmerId(null) },
       { id: 'dir-pick', isOpen: () => dirPickModeRef.current !== null, close: () => { dirPickModeRef.current = null; setDirPickMode(null); } },
       { id: 'unmake', isOpen: () => unmakeTargetModeRef.current, close: () => { unmakeTargetModeRef.current = false; setUnmakeTargetMode(false); } },
       { id: 'blink', isOpen: () => blinkTargetModeRef.current, close: () => { setBlinkTargetMode(false); blinkTargetModeRef.current = false; } },
@@ -454,6 +456,9 @@ export default function Game() {
   }, [gameState?.turn]);
 
   const [pendingFairyId, setPendingFairyId] = useState<string | null>(null);
+  const [pendingFarmerId, setPendingFarmerId] = useState<string | null>(null);
+  const pendingFarmerRef = useRef(false);
+  useEffect(() => { pendingFarmerRef.current = !!pendingFarmerId; }, [pendingFarmerId]);
   const [pendingMonkeyInteraction, setPendingMonkeyInteraction] = useState<{ id: string; wants: string } | null>(null);
   const [pendingAdventurerInteraction, setPendingAdventurerInteraction] = useState<string | null>(null);
   const [pendingBearInteraction, setPendingBearInteraction] = useState<{ id: string; stage: 'neutral' | 'friendly'; offerId: string | null } | null>(null);
@@ -478,6 +483,7 @@ export default function Game() {
     pendingAdventurerInteraction ||
     pendingMonkeyInteraction ||
     pendingFairyId ||
+    pendingFarmerId ||
     dirPickMode ||
     unmakeTargetMode ||
     blinkTargetMode ||
@@ -766,6 +772,7 @@ export default function Game() {
       setPendingMonkeyInteraction,
       setPendingAdventurerInteraction,
       setPendingBearInteraction,
+      setPendingFarmerId,
       setBlinkTurn,
       setTrailblazeTurn,
     },
@@ -1237,6 +1244,16 @@ export default function Game() {
         }
         break;
       }
+      case 'trade': {
+        const gs = gameStateRef.current;
+        if (gs && action.dir) {
+          const px = gs.player.pos.x + action.dir.dx;
+          const py = gs.player.pos.y + action.dir.dy;
+          const farmer = gs.enemies.find(e => e.isFarmer && e.pos.x === px && e.pos.y === py);
+          if (farmer) setPendingFarmerId(farmer.id);
+        }
+        break;
+      }
       case 'attack':
       case 'recruit':
       case 'fairy':
@@ -1389,6 +1406,11 @@ export default function Game() {
       if (shopOpenRef.current) {
         e.preventDefault();
         if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setShopOpen(false); return; }
+        return;
+      }
+      if (pendingFarmerRef.current) {
+        e.preventDefault();
+        if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setPendingFarmerId(null); return; }
         return;
       }
 
@@ -2109,6 +2131,8 @@ export default function Game() {
           else if (tileData.type === 'obsidian') tileBg = 'rgba(40,40,48,0.35)';
           else if (tileData.type === 'volcano') tileBg = 'rgba(220,30,0,0.55)';
           else if (tileData.type === 'bush') tileBg = 'rgba(40,90,30,0.35)';
+          else if (tileData.type === 'grass') tileBg = 'rgba(40,140,50,0.28)';
+          else if (tileData.type === 'crop') tileBg = 'rgba(70,130,30,0.4)';
           else if (tileData.type === 'water') tileBg = 'rgba(30,80,160,0.28)';
 
           row.push(
@@ -3627,6 +3651,16 @@ export default function Game() {
       })()}
 
       {/* Shop Modal */}
+      {pendingFarmerId && gameState && (
+        <FarmerTradeModal
+          gameState={gameState}
+          setGameState={setGameState}
+          farmerId={pendingFarmerId}
+          addLog={addLog}
+          onClose={() => setPendingFarmerId(null)}
+        />
+      )}
+
       {shopOpen && gameState && (
         <ShopModal
           gameState={gameState}

@@ -66,7 +66,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
   const {
     setGameState, setWizardTactics, setRangerMode,
     setPendingFairyId, setPendingMonkeyInteraction,
-    setPendingAdventurerInteraction, setPendingBearInteraction,
+    setPendingAdventurerInteraction, setPendingBearInteraction, setPendingFarmerId,
     setBlinkTurn, setTrailblazeTurn,
     setPendingLavaStep,
     setFinalePrompt,
@@ -558,8 +558,16 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           setPendingBearInteraction({ id: enemy.id, stage: enemy.tag === 'Friendly' ? 'friendly' : 'neutral', offerId: offerItem?.id ?? null });
           return prev;
         }
-        if (enemy.tag === 'Friendly' && !enemy.isAdventurer && !enemy.bear) {
-          // Only genuine fairies reach here. Friendly bears/adventurers are handled above.
+        if (enemy.isFarmer && enemy.hp > 0) {
+          setPendingFarmerId(enemy.id);
+          return prev;
+        }
+        if (enemy.isFarmAnimal && enemy.tag !== 'Hostile') {
+          addLog(`${enemy.emoji} ${enemy.name} stays close to the farmer.`);
+          return prev;
+        }
+        if (enemy.tag === 'Friendly' && !enemy.isAdventurer && !enemy.bear && !enemy.isFarmer && !enemy.isFarmAnimal) {
+          // Only genuine fairies reach here. Friendly bears, farmers, and livestock are handled above.
           setPendingFairyId(enemy.id);
           return prev;
         }

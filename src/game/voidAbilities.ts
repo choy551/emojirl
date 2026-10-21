@@ -24,7 +24,7 @@ const RANGED_EMOJI = new Set(['🏹', '🎯', '🔫', '💥', '🪃', '🪙']);
 const MAGIC_EMOJI = new Set(['🧪', '🔮', '🌟', '💊', '🪄', '🔱', '🌂', '📖', '📜', '✨', '⚡', '🧊', '❄️', '🌙', '🧿', '💫']);
 
 const UNMAKE_TERRAIN = new Set([
-  'wall', 'door-closed', 'door-open', 'water', 'grass', 'tree', 'bush', 'lava', 'obsidian', 'volcano',
+  'wall', 'door-closed', 'door-open', 'water', 'grass', 'tree', 'bush', 'crop', 'lava', 'obsidian', 'volcano',
 ]);
 
 export function voidEmojiTheme(item: {
