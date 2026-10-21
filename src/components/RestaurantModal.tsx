@@ -1,5 +1,6 @@
+import { useRef, useState } from 'react';
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToPlayerBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, MAX_CHEF_LESSONS, cookedHealBonus, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG, playerSoftCap } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToPlayerBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonPrice, chefLessonPriceLabel, chefLessonTooltip, MAX_CHEF_LESSONS, cookedHealBonus, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG, playerSoftCap } from '../game/gameHelpers';
 import { goldWithLuck } from '../game/softCap';
 import { canEquipItem } from './itemUtils';
 import { RarityLabel } from './RarityLabel';
@@ -25,6 +26,8 @@ export function RestaurantModal({
   const dismiss = useDismissGuard(onClose);
   const hand = useMobileHand();
   const sellLuck = playerSoftCap(gameState.player).raw.luck;
+  const [lessonPinned, setLessonPinned] = useState(false);
+  const lessonTouch = useRef(false);
   return (
     <div
       className={`fixed inset-0 z-[70] flex bg-black/60 backdrop-blur-sm ${overlayFlexClass(hand)}`}
@@ -129,45 +132,114 @@ export function RestaurantModal({
 
         {(() => {
           const n = gameState.chefLessonCount ?? 0;
-          const cost = chefLessonCost(gameState.currentFloor);
+          const cost = chefLessonPrice(n, gameState.currentFloor);
+          const priceLabel = chefLessonPriceLabel(n, gameState.currentFloor);
           const master = n >= MAX_CHEF_LESSONS;
           const canAfford = gameState.player.stats.gold >= cost;
           const maxHp = gameState.player.stats.maxHp;
+          const tip = chefLessonTooltip(n, maxHp);
+          const purchase = () => {
+            const owned = gameState.chefLessonCount ?? 0;
+            if (owned >= MAX_CHEF_LESSONS) return;
+            const lessonCost = chefLessonPrice(owned, gameState.currentFloor);
+            if (gameState.player.stats.gold < lessonCost) return;
+            setGameState(prev => {
+              if (!prev) return prev;
+              const now = prev.chefLessonCount ?? 0;
+              if (now >= MAX_CHEF_LESSONS) return prev;
+              const price = chefLessonPrice(now, prev.currentFloor);
+              if (prev.player.stats.gold < price) return prev;
+              return {
+                ...prev,
+                chefLessonCount: now + 1,
+                player: {
+                  ...prev.player,
+                  stats: { ...prev.player.stats, gold: prev.player.stats.gold - price },
+                },
+              };
+            });
+            addLog(`🧑‍🍳 Chef's Lesson ${owned + 1}/5! Cooked dishes heal & sell better run-wide.`);
+            setLessonPinned(false);
+          };
           return (
-            <div className="mb-4">
+            <div className="group relative mb-4">
               <button
                 type="button"
-                disabled={master || !canAfford}
-                title={master ? "You're already a Master Chef!" : !canAfford ? `Need ${cost}g` : "Cooked dishes heal and sell better run-wide"}
+                data-testid="chef-lesson"
+                aria-expanded={lessonPinned}
+                aria-describedby="chef-lesson-tip"
+                onPointerDown={(e) => { lessonTouch.current = e.pointerType === 'touch' || e.pointerType === 'pen'; }}
                 onClick={() => {
-                  if (master || !canAfford) return;
-                  setGameState(prev => {
-                    if (!prev || (prev.chefLessonCount ?? 0) >= MAX_CHEF_LESSONS) return prev;
-                    const lessonCost = chefLessonCost(prev.currentFloor);
-                    if (prev.player.stats.gold < lessonCost) return prev;
-                    return {
-                      ...prev,
-                      chefLessonCount: (prev.chefLessonCount ?? 0) + 1,
-                      player: {
-                        ...prev.player,
-                        stats: { ...prev.player.stats, gold: prev.player.stats.gold - lessonCost },
-                      },
-                    };
-                  });
-                  addLog(`🧑‍🍳 Chef's Lesson ${n + 1}/5! Cooked dishes heal & sell better run-wide.`);
+                  const tapPin = lessonTouch.current || (typeof window !== 'undefined' && (
+                    window.matchMedia('(hover: none)').matches
+                    || window.matchMedia('(pointer: coarse)').matches
+                    || window.matchMedia('(max-width: 767px)').matches
+                  ));
+                  lessonTouch.current = false;
+                  if (tapPin) {
+                    setLessonPinned(true);
+                    return;
+                  }
+                  purchase();
                 }}
                 className={`w-full text-left text-xs font-bold px-3 py-2 rounded-lg border transition-colors ${
                   master
-                    ? 'bg-secondary/10 border-border/30 text-muted-foreground/70 cursor-not-allowed'
+                    ? 'bg-secondary/10 border-border/30 text-muted-foreground/70'
                     : canAfford
                       ? 'bg-amber-500/15 border-amber-500/40 text-amber-200 hover:bg-amber-500/25'
-                      : 'bg-secondary/10 border-border/30 text-red-400/70 cursor-not-allowed'
+                      : 'bg-secondary/10 border-border/30 text-red-400/70'
                 }`}
               >
                 {master
                   ? "🧑‍🍳 You're already a Master Chef!"
-                  : `🧑‍🍳 Chef's Lesson (${n}/5) — ${cost}g`}
+                  : `🧑‍🍳 Chef's Lesson (${n}/5) — ${priceLabel}`}
               </button>
+              <div
+                id="chef-lesson-tip"
+                role="tooltip"
+                data-testid="chef-lesson-tip"
+                className={`mt-1 rounded-md border border-border bg-popover px-2.5 py-2 text-left text-[11px] font-normal normal-case leading-snug text-popover-foreground shadow-lg ${
+                  lessonPinned ? 'block' : 'hidden group-hover:block'
+                }`}
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <p>{tip.summary}</p>
+                <p className="mt-1 font-semibold text-foreground">Lessons {tip.current.lessons}/{tip.current.maxLessons}</p>
+                {tip.current.lessons === 0 ? (
+                  <p>No cooking bonus yet.</p>
+                ) : (
+                  <p>Cooked eat +{tip.current.eatBonusHp} HP · cooked sell +{tip.current.sellFlatGold}g and +{tip.current.sellPercent}%</p>
+                )}
+                {tip.next ? (
+                  <p className="mt-1">Next lesson adds +{tip.nextEatDelta} HP eaten, +{tip.nextSellFlat}g and +{tip.nextSellPercent}% sold.</p>
+                ) : (
+                  <p className="mt-1">No further lessons.</p>
+                )}
+                {lessonPinned && (
+                  <div className="mt-1.5 flex gap-2">
+                    {!master && (
+                      <button
+                        type="button"
+                        data-testid="chef-lesson-buy"
+                        disabled={!canAfford}
+                        onClick={(e) => { e.stopPropagation(); purchase(); }}
+                        className="text-[10px] font-semibold text-amber-200 disabled:text-red-400/80"
+                      >
+                        {canAfford ? `Learn — ${priceLabel}` : `Need ${cost}g`}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      data-testid="chef-lesson-dismiss"
+                      className="text-[10px] font-semibold text-primary"
+                      onClick={(e) => { e.stopPropagation(); setLessonPinned(false); }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+              </div>
               {n > 0 && (
                 <div className="text-[10px] text-muted-foreground mt-1 px-1">
                   Cooked eat +{cookedHealBonus(n, maxHp)} HP · cooked sell +{10 * n}g and +{10 * n}%
