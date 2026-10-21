@@ -1,5 +1,6 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToPlayerBag, removeAndRefillBag, COOKED_OVERFLOW_THRESHOLD, cookedHealCount, isHealJunk, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToPlayerBag, removeAndRefillBag, COOKED_OVERFLOW_THRESHOLD, cookedHealCount, isHealJunk, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG, playerSoftCap } from '../game/gameHelpers';
+import { goldWithLuck } from '../game/softCap';
 import { soulHelpText } from '../game/emojis';
 import { isStackableBagPassive } from '../game/passives';
 import { canBuyAndUse } from '../game/shopUse';
@@ -23,6 +24,7 @@ interface ShopModalProps {
 export function ShopModal({ gameState, setGameState, shopItems, setShopItems, addLog, onBuyAndUse, onClose }: ShopModalProps) {
   const dismiss = useDismissGuard(onClose);
   const hand = useMobileHand();
+  const sellLuck = playerSoftCap(gameState.player).raw.luck;
   const listing = (gameState.shopStock ?? shopItems).filter(i => !i.consumed);
   return (
     <div
@@ -194,10 +196,10 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
             isHealJunk(i, overflowHeals);
           const junk = allSellable.filter(isJunk);
           const soldOverflowHeals = overflowHeals && junk.some(i => isHealJunk(i, true) && (i.healAmount ?? 0) > 4);
-          const junkGold = junk.reduce((s, i) => s + getItemSellValue(i, 1, gameState.currentFloor), 0);
+          const junkGold = goldWithLuck(junk.reduce((s, i) => s + getItemSellValue(i, 1, gameState.currentFloor), 0), sellLuck);
 
           const SellRow = ({ item }: { item: EmojiItem }) => {
-            const price = getItemSellValue(item, 1, gameState.currentFloor);
+            const price = goldWithLuck(getItemSellValue(item, 1, gameState.currentFloor), sellLuck);
             const inBank = gameState.player.bank.some(i => i.id === item.id);
             return (
               <div className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">

@@ -16,7 +16,7 @@ import {
   tilesInRadius,
 } from './prestige';
 import { GENIE_FIREBALL_RADIUS } from './prestigeConstants';
-import { applyEquipmentAndPassives } from './inventory';
+import { applyEquipmentAndPassives, playerSoftCap } from './inventory';
 
 export interface GenieVolley {
   player: Player;
@@ -125,7 +125,7 @@ export function resolveGenieFireball(args: {
   for (const dead of doomed) {
     markEnemyKilled(dead.emoji);
     killCountAdds.push(dead.emoji);
-    const paid = notePrestigeKill(player, args.floor);
+    const paid = notePrestigeKill(player, args.floor, playerSoftCap(player).raw.luck);
     player = paid.player;
     paid.logs.forEach(args.addLog);
     const xpGain = dead.isBoss ? 25 : 5;

@@ -2,12 +2,12 @@ import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { generateMap } from '../game/mapgen';
 import { Player, Enemy, EmojiItem, GameState, Position, EquipSlot } from '../game/types';
 import { getCowboyUnarmedBonus, isHostileCombatTarget } from '../game/combat';
+import { DODGE_CHANCE_CAP, softCapTitles } from '../game/softCap';
 import {
   blinkStrikeDamagePhrase,
   blinkTalentById,
   blinkTalentChoices,
   blinkTalentProgress,
-  critStat,
   pendingBlinkTalentOffer,
 } from '../game/blinkStrike';
 import type { BlinkTalentId } from '../game/types';
@@ -62,7 +62,7 @@ import { EquipmentTab } from '../components/EquipmentTab';
 import { canEquipItem } from '../components/itemUtils';
 import { RightSidebar } from '../components/RightSidebar';
 import {
-  chebyshev, playerBagPassives, applyEquipmentAndPassives, computeNinjaEvasion,
+  chebyshev, playerBagPassives, applyEquipmentAndPassives, computeNinjaEvasion, livingMaxHp, playerSoftCap,
   VISION_RADIUS, hasLOS, hasLOSBetween, detectionRadius,
   eagleEyeRange, sortBagSlots, buildHotbarSlots, banishPlayerGhost, manifestPlayerGhost,
   generateShopStock, generateAmmoCacheStock, generateRestaurantStock,
@@ -1008,7 +1008,7 @@ export default function Game() {
       // Auto-rest first if HP or MP (Wizard) isn't full and no enemies are visible
       const exploreIsWizard = isArcaneCaster(player.characterClass);
       const exploreMpFull = !exploreIsWizard || (player.stats.mana ?? 0) >= (player.stats.maxMana ?? 4);
-      if (player.stats.hp < player.stats.maxHp || !exploreMpFull) {
+      if (player.stats.hp < livingMaxHp(player) || !exploreMpFull) {
         const anyVisibleEnemy = hostileEnemies.some(e => enemyInEngageSight(e));
         if (!anyVisibleEnemy) {
           handleWaitRef.current?.();
@@ -1277,7 +1277,7 @@ export default function Game() {
       }
 
       const isWizard = isArcaneCaster(state.player.characterClass);
-      const hpFull = state.player.stats.hp >= state.player.stats.maxHp;
+      const hpFull = state.player.stats.hp >= livingMaxHp(state.player);
       const mpFull = !isWizard || (state.player.stats.mana ?? 0) >= (state.player.stats.maxMana ?? 4);
       const bountyWait = autoRestNeedsBountyWait(state.companionKillTally ?? 0);
       if (hpFull && mpFull && !bountyWait) {
@@ -1311,7 +1311,7 @@ export default function Game() {
       const curr = gameStateRef.current;
       if (!curr) return;
       const hp = curr.player.stats.hp;
-      const maxHp = curr.player.stats.maxHp || 1;
+      const maxHp = livingMaxHp(curr.player) || 1;
       const ratio = Math.max(0, Math.min(1, hp / maxHp));
       const delay = Math.max(60, Math.floor(260 - 200 * ratio));
       timeout = setTimeout(tick, delay);
@@ -2536,6 +2536,9 @@ export default function Game() {
   const xpThisLevel = xpThresholdForLevel(player.stats.level);
   const xpNextLevel = xpThresholdForLevel(player.stats.level + 1);
   const xpProgress  = Math.min(1, (player.stats.xp - xpThisLevel) / Math.max(1, xpNextLevel - xpThisLevel));
+  const softCaps = playerSoftCap(player);
+  const poolMaxHp = softCaps.maxHp;
+  const softTitles = softCapTitles(softCaps);
   const oneHanded = isMobile && controlSettings.oneHanded;
   const thumbSide = controlSettings.dpadSide;
   const ctxSide = actionSide(controlSettings);
@@ -2738,19 +2741,19 @@ export default function Game() {
           <div>
             <div className="flex justify-between text-[9px] mb-0.5">
               <span className="font-bold text-destructive">❤️ HP</span>
-              {player.stats.hp > player.stats.maxHp
-                ? <span className="font-bold tabular-nums text-amber-300">✨{player.stats.hp}/{player.stats.maxHp}</span>
-                : <span className="font-bold tabular-nums">{player.stats.hp}/{player.stats.maxHp}</span>
+              {player.stats.hp > poolMaxHp
+                ? <span className="font-bold tabular-nums text-amber-300" title={softTitles.HP || undefined}>✨{player.stats.hp}/{poolMaxHp}</span>
+                : <span className="font-bold tabular-nums" title={softTitles.HP || undefined}>{player.stats.hp}/{poolMaxHp}</span>
               }
             </div>
             <div className="h-3.5 bg-secondary/20 rounded-full overflow-hidden border border-border/50">
               {(() => {
-                const isOverheal = player.stats.hp > player.stats.maxHp;
+                const isOverheal = player.stats.hp > poolMaxHp;
                 if (isOverheal) {
-                  const overhealPct = Math.min(100, (player.stats.hp / (player.stats.maxHp * 2)) * 100);
+                  const overhealPct = Math.min(100, (player.stats.hp / (poolMaxHp * 2)) * 100);
                   return <div className="h-full transition-all duration-300 rounded-full animate-pulse" style={{ width: `${overhealPct}%`, backgroundColor: '#f59e0b', boxShadow: '0 0 6px #fbbf24' }} />;
                 }
-                const pct = (player.stats.hp / player.stats.maxHp) * 100;
+                const pct = (player.stats.hp / poolMaxHp) * 100;
                 const color = pct > 60 ? '#22c55e' : pct > 30 ? '#f59e0b' : '#ef4444';
                 return <div className="h-full transition-all duration-300 rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />;
               })()}
@@ -2906,24 +2909,30 @@ export default function Game() {
           const _ifUnarmed = player.characterClass === '🤠' && !player.equipment.mainHand?.weaponKind && !player.equipment.offHand?.weaponKind;
           const hudIronFistBonus = (_ifDualGuns && player.ammo <= 0) || _ifUnarmed ? getCowboyUnarmedBonus(player.stats.level) : 0;
           const _effPlayer = applyEquipmentAndPassives(player);
-          const displayedAtk = _effPlayer.stats.attack + hudIronFistBonus;
-          const atkTitle = hudIronFistBonus > 0 ? `ATK ${_effPlayer.stats.attack} + ${hudIronFistBonus} Iron Fist` : '';
-          const crit = critStat(_effPlayer.stats.luck);
+          const displayedAtk = softCaps.attack + hudIronFistBonus;
+          const atkTitle = [softTitles.ATK, hudIronFistBonus > 0 ? `+${hudIronFistBonus} Iron Fist` : ''].filter(Boolean).join(' · ');
+          const crit = softCaps.crit;
           const dodge = player.characterClass === '🥷'
             ? computeNinjaEvasion(_effPlayer)
             : isFencer(player.characterClass)
               ? fencerEvasion(_effPlayer.stats.hp, _effPlayer.stats.maxHp, _effPlayer.stats.evasion ?? 0)
-              : Math.min(50, _effPlayer.stats.evasion ?? 0);
+              : Math.min(DODGE_CHANCE_CAP, softCaps.evasion);
           const voidDr = player.characterClass === '👤' ? nullMomentumPercent(player.stats.level) : 0;
           return (
             <div className="flex gap-1.5 shrink-0 text-[9px]" data-testid="stat-grid">
-              {[['ATK', displayedAtk, 'text-orange-400', atkTitle], ['DEF', _effPlayer.stats.defense, 'text-blue-400', ''], ['SPD', _effPlayer.stats.speed, 'text-yellow-400', ''], ['EVA', _effPlayer.stats.evasion, 'text-emerald-400', ''], ['LCK', _effPlayer.stats.luck, 'text-pink-400', '']].map(([label, val, color, title]) => (
-                <div key={label as string} title={title as string || undefined} className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
-                  <span className={`font-bold ${color as string}`}>{val as number}</span>
-                  <span className="text-muted-foreground/50">{label as string}</span>
+              {([
+                ['ATK', displayedAtk, 'text-orange-400', atkTitle],
+                ['DEF', softCaps.defense, 'text-blue-400', softTitles.DEF],
+                ['SPD', softCaps.speed, 'text-yellow-400', softTitles.SPD],
+                ['EVA', softCaps.evasion, 'text-emerald-400', softTitles.EVA],
+                ['LCK', softCaps.luck, 'text-pink-400', softTitles.LCK],
+              ] as const).map(([label, val, color, title]) => (
+                <div key={label} title={title || undefined} className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
+                  <span className={`font-bold ${color}`}>{val}</span>
+                  <span className="text-muted-foreground/50">{label}</span>
                 </div>
               ))}
-              <div className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
+              <div title={softTitles.CRIT || undefined} className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
                 <span className="font-bold text-rose-300">{crit}%</span>
                 <span className="text-muted-foreground/50">CRIT</span>
               </div>

@@ -5,7 +5,7 @@ import { markEnemySeen, markEnemyKilled } from '../../game/discoveries';
 import { isStackableBagPassive } from '../../game/passives';
 import {
   moodMax, levelFromXP, addToPlayerBag, activeKindLabel, sortBagSlots, buildHotbarSlots, computeBagPassives,
-  isNonStackableBagPassiveDuplicate, isActiveKindDuplicate, runEnemyTurns, applyEnemyTurns, cookedEatHeal,
+  isNonStackableBagPassiveDuplicate, isActiveKindDuplicate, runEnemyTurns, applyEnemyTurns, cookedEatHeal, livingMaxHp,
 } from '../../game/gameHelpers';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 import { _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../../game/flashSignals';
@@ -100,10 +100,11 @@ export function useInventoryActions(
       const stats = { ...prev.player.stats };
 
       if (item.healAmount !== undefined) {
-        if (stats.hp >= stats.maxHp) { addLog('Already at full HP.'); return prev; }
-        const amount = cookedEatHeal(item, prev.chefLessonCount ?? 0, stats.maxHp);
-        const wasLow = stats.hp / stats.maxHp <= 0.3;
-        stats.hp = Math.min(stats.maxHp, stats.hp + amount);
+        const pool = livingMaxHp(prev.player);
+        if (stats.hp >= pool) { addLog('Already at full HP.'); return prev; }
+        const amount = cookedEatHeal(item, prev.chefLessonCount ?? 0, pool);
+        const wasLow = stats.hp / pool <= 0.3;
+        stats.hp = Math.min(pool, stats.hp + amount);
         stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + (wasLow ? 40 : 10));
         addLog(wasLow
           ? `${item.emoji} ${item.name}: +${amount} HP — relief floods through you! Mood surges!`

@@ -1,5 +1,6 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToPlayerBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, MAX_CHEF_LESSONS, cookedHealBonus, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToPlayerBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonCost, MAX_CHEF_LESSONS, cookedHealBonus, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG, playerSoftCap } from '../game/gameHelpers';
+import { goldWithLuck } from '../game/softCap';
 import { canEquipItem } from './itemUtils';
 import { RarityLabel } from './RarityLabel';
 import { useDismissGuard } from '../hooks/useDismissGuard';
@@ -23,6 +24,7 @@ export function RestaurantModal({
 }: RestaurantModalProps) {
   const dismiss = useDismissGuard(onClose);
   const hand = useMobileHand();
+  const sellLuck = playerSoftCap(gameState.player).raw.luck;
   return (
     <div
       className={`fixed inset-0 z-[70] flex bg-black/60 backdrop-blur-sm ${overlayFlexClass(hand)}`}
@@ -198,7 +200,7 @@ export function RestaurantModal({
             const isLastCooked = restaurantSoldCount === 4;
             const lessons = gameState.chefLessonCount ?? 0;
             const bestBatch = pickBestDishesToSell(sellable, restaurantSoldCount);
-            const bestGold = bestBatch.reduce((s, i) => s + restaurantCookedPrice(i, lessons), 0);
+            const bestGold = goldWithLuck(bestBatch.reduce((s, i) => s + restaurantCookedPrice(i, lessons), 0), sellLuck);
             const sellBestDishes = () => {
               if (bestBatch.length === 0) {
                 addLog('🍽️ No cooked dishes to sell.');
@@ -252,9 +254,9 @@ export function RestaurantModal({
                 {sellable.map(item => {
                   const isCooked = item.isCooked || !!item.cookedBuff;
                   const sellMul = isCooked ? 2.5 : 1;
-                  const price = isCooked
+                  const price = goldWithLuck(isCooked
                     ? restaurantCookedPrice(item, gameState.chefLessonCount ?? 0)
-                    : getItemSellValue(item, sellMul);
+                    : getItemSellValue(item, sellMul), sellLuck);
                   const inBank = gameState.player.bank.some(i => i.id === item.id);
                   return (
                     <div key={item.id} className="group flex items-start gap-2 bg-secondary/20 border border-border/40 rounded-lg px-3 py-2 transition-all">

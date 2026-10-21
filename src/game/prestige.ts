@@ -1,4 +1,5 @@
 import type { Enemy, Equipment, Player, Position } from './types';
+import { goldWithLuck } from './softCap';
 import {
   COWBOY,
   FENCER,
@@ -268,7 +269,7 @@ export function startFloorContract(player: Player): { player: Player; log: strin
   };
 }
 
-export function notePrestigeKill(player: Player, floor: number): { player: Player; logs: string[] } {
+export function notePrestigeKill(player: Player, floor: number, rawLuck = player.stats.luck): { player: Player; logs: string[] } {
   const logs: string[] = [];
   let next = player;
   if (next.characterClass === GENIE) {
@@ -284,7 +285,7 @@ export function notePrestigeKill(player: Player, floor: number): { player: Playe
     const goal = next.stats.contractGoal ?? HITMAN_CONTRACT_KILLS;
     const kills = (next.stats.contractKills ?? 0) + 1;
     if (kills >= goal) {
-      const gold = contractGold(floor);
+      const gold = goldWithLuck(contractGold(floor), rawLuck);
       next = {
         ...next,
         ammo: (next.ammo ?? 0) + HITMAN_CONTRACT_BULLETS,

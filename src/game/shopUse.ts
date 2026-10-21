@@ -2,15 +2,15 @@ import { Enemy, EmojiItem, FloatingText, GameState, Player } from './types';
 import type { SoulEffect } from './emojis';
 import { EMOJI_POWERS, getRandomEmojiPower } from './emojis';
 import { rollKillDrop } from './dropTable';
-import { computeBagPassives } from './inventory';
+import { addToPlayerBag, activeKindLabel, computeBagPassives, livingMaxHp, playerSoftCap } from './inventory';
 import { markEnemySeen, markEnemyKilled, markEmojiSeen } from './discoveries';
 import { moodMax, levelFromXP, hpBonusForLevel } from './progression';
-import { addToPlayerBag, activeKindLabel } from './inventory';
 import { creditVoidBoss } from './voidDamage';
 import { withVisibility } from './vision';
 import { runEnemyTurns, applyEnemyTurns } from './enemyTurns';
 import { _flashSignals } from './flashSignals';
 import { cookedEatHeal } from './economy';
+import { goldWithLuck } from './softCap';
 import { applyDrinkToPlayer } from './drinks';
 import { isArcaneCaster } from './prestige';
 
@@ -68,7 +68,7 @@ export function canBuyAndUse(
   if ((effect?.instakillNearest || item.emoji === '⚡') && !hasVisibleEnemy(state)) {
     return { ok: false, reason: 'No enemies on screen' };
   }
-  if (item.healAmount !== undefined && state.player.stats.hp >= state.player.stats.maxHp) {
+  if (item.healAmount !== undefined && state.player.stats.hp >= livingMaxHp(state.player)) {
     return { ok: false, reason: 'Already at full HP' };
   }
   if (item.drinkTier !== undefined && isArcaneCaster(state.player.characterClass)) {
@@ -110,14 +110,15 @@ export function applyInstantItemUse(
   }
 
   if (item.healAmount !== undefined) {
-    if (s.player.stats.hp >= s.player.stats.maxHp) {
+    const pool = livingMaxHp(s.player);
+    if (s.player.stats.hp >= pool) {
       log('Already at full HP.');
       return null;
     }
-    const amount = cookedEatHeal(item, s.chefLessonCount ?? 0, s.player.stats.maxHp);
+    const amount = cookedEatHeal(item, s.chefLessonCount ?? 0, pool);
     const stats = { ...s.player.stats };
-    const wasLow = stats.hp / stats.maxHp <= 0.3;
-    stats.hp = Math.min(stats.maxHp, stats.hp + amount);
+    const wasLow = stats.hp / pool <= 0.3;
+    stats.hp = Math.min(pool, stats.hp + amount);
     stats.moodValue = Math.min(moodMax(cls), stats.moodValue + (wasLow ? 40 : 10));
     log(wasLow
       ? `${item.emoji} ${item.name}: +${amount} HP — relief floods through you! Mood surges!`
@@ -150,8 +151,9 @@ export function applyInstantItemUse(
       stats.level = newLevel;
     }
     if (item.emoji === '⛵') {
-      stats.gold = (stats.gold ?? 0) + 50;
-      log(`${item.emoji} ${effect.label} +50g from the voyage!`);
+      const gained = goldWithLuck(50, playerSoftCap(s.player).raw.luck);
+      stats.gold = (stats.gold ?? 0) + gained;
+      log(`${item.emoji} ${effect.label} +${gained}g from the voyage!`);
     } else {
       log(`${item.emoji} ${effect.label}`);
     }
