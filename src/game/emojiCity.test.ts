@@ -909,9 +909,15 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('data-testid="city-decor"');
     expect(city).toContain('buildPaletteSections');
     expect(city).toContain('palette-more-');
-    expect(city).toContain('(more)');
+    expect(city).toContain('…');
+    expect(city).toContain('text-purple-400');
+    expect(city).toContain('data-testid="palette-flyout"');
+    expect(city).toContain('palette-flyout-grid');
+    expect(city).toContain('repeat(auto-fill, minmax(2.75rem, 1fr))');
     expect(city).not.toContain('palette-toggle-');
+    expect(city).not.toContain('(more)');
     expect(city).not.toContain('absolute inset-x-0 top-full');
+    expect(city.indexOf('data-testid="raise-structure"')).toBeLessThan(city.indexOf('data-testid="palette-menu"'));
     expect(city).toContain('data-testid="raise-structure"');
     expect(city).toContain('aria-expanded');
     expect(city).toContain('PALETTE_MENU_ROWS = 5');
