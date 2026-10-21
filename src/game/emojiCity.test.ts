@@ -16,6 +16,7 @@ import {
   WANDER_CATCHUP_CAP,
   activeDistricts,
   applyDistrictBonus,
+  buildPaletteSections,
   availableTokens,
   awaySummary,
   catchUpCity,
@@ -49,6 +50,7 @@ import {
   tokensForEmoji,
   totalAvailableTokens,
 } from './emojiCity';
+import { BUILDINGS } from './cityBuildings';
 import { loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, replaceEmojiConsumes, saveCity, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
 import { COWBOY, FENCER, GENIE, HITMAN, META_SAVE_KEY, META_SCHEMA_VERSION, NINJA, RANGER, ROYAL_GUARD, VOID, WIZARD } from './prestigeConstants';
 
@@ -706,6 +708,82 @@ describe('EmojiCB decor', () => {
   });
 });
 
+describe('EmojiCB palette sections', () => {
+  it('groups districts, neutral buildings, and decor, and keeps locked emoji listed', () => {
+    const sections = buildPaletteSections({ '🗡️': 2, '🍎': 1, '🏰': 1 }, emptyCity());
+    expect(sections.map(section => section.label)).toEqual([
+      'Slums of Thieves',
+      'Arcane Sanctum',
+      'Grove of Wilds',
+      'Frontier Saloon',
+      'Void Hollow',
+      'Neutral',
+      'Roads',
+      'Foliage',
+      'Vehicles',
+      'Shapes',
+      'Misc',
+    ]);
+    expect(sections.map(section => section.badge)).toEqual([
+      NINJA, WIZARD, RANGER, COWBOY, VOID,
+      null,
+      '🛣️', '🌲', '🚗', '🟢', '🪨',
+    ]);
+
+    const thieves = sections[0]!;
+    expect(thieves.entries.find(entry => entry.emoji === '🗡️')).toMatchObject({ locked: false, tokens: 2, kind: 'token' });
+    const knife = thieves.entries.find(entry => entry.emoji === '🔪')!;
+    expect(knife.locked).toBe(true);
+    expect(knife.tokens).toBe(0);
+    expect(knife.hint).toMatch(/locked/i);
+    expect(knife.hint).toMatch(/descent/i);
+    const sized = thieves.entries.filter(entry => entry.housing === 2).map(entry => entry.name);
+    expect(sized).toEqual(['Bridge', 'Hut', 'Ruin', 'Site']);
+    expect(thieves.entries.findIndex(entry => entry.emoji === '🛖')).toBeLessThan(
+      thieves.entries.findIndex(entry => entry.emoji === '🗡️'),
+    );
+
+    const neutral = sections.find(section => section.id === 'neutral')!;
+    expect(neutral.entries.map(entry => entry.emoji)).toEqual(['🏰', '🏭', '🏘️', '🏢', '🗺️', '🍎', '🏡', '🏠']);
+    expect(neutral.entries.find(entry => entry.emoji === '🏠')!.hint).toMatch(/Survey/);
+    expect(neutral.entries.find(entry => entry.emoji === '🍎')).toMatchObject({ name: 'Apple', locked: false, housing: 1 });
+    expect(sections.filter(section => section.id !== 'neutral').every(section => section.entries.every(entry => entry.emoji !== '🍎'))).toBe(true);
+
+    for (const section of sections) {
+      for (let i = 1; i < section.entries.length; i++) {
+        const prev = section.entries[i - 1]!;
+        const curr = section.entries[i]!;
+        const order = prev.housing !== curr.housing
+          ? prev.housing - curr.housing
+          : (curr.name.localeCompare(prev.name, 'en') || curr.emoji.localeCompare(prev.emoji, 'en'));
+        expect(order).toBeGreaterThanOrEqual(0);
+      }
+    }
+
+    const tokens = sections.flatMap(section => section.entries.filter(entry => entry.kind === 'token'));
+    for (const style of DISTRICTS) {
+      for (const emoji of style.emoji) expect(tokens.filter(entry => entry.emoji === emoji)).toHaveLength(1);
+    }
+    for (const building of BUILDINGS) expect(tokens.filter(entry => entry.emoji === building.emoji)).toHaveLength(1);
+
+    const foliage = sections.find(section => section.id === 'foliage')!;
+    expect(foliage.entries.every(entry => entry.kind === 'decor' && !entry.locked && entry.housing === 0)).toBe(true);
+    expect(foliage.entries.map(entry => entry.name)).toEqual(['Cactus', 'Palm', 'Pine', 'Sunflower', 'Tree', 'Tulip']);
+    expect(sections.find(section => section.id === 'saloon')!.entries.some(entry => entry.emoji === '⛲' && entry.kind === 'token')).toBe(true);
+    expect(sections.find(section => section.id === 'misc')!.entries.some(entry => entry.emoji === '⛲' && entry.kind === 'decor')).toBe(true);
+    const decor = sections.flatMap(section => section.entries.filter(entry => entry.kind === 'decor').map(entry => entry.emoji));
+    expect(new Set(decor)).toEqual(new Set(DECOR));
+
+    const cosmetic = placeDecor(emptyCity(), 0, '🌲').city;
+    const stillLocked = buildPaletteSections({}, cosmetic);
+    expect(stillLocked.find(section => section.id === 'grove')!.entries.find(entry => entry.emoji === '🌲')!.locked).toBe(true);
+    expect(stillLocked.find(section => section.id === 'neutral')!.entries.some(entry => entry.emoji === '🌲')).toBe(false);
+    const earned = buildPaletteSections({ '🌲': 1 }, emptyCity());
+    expect(earned.find(section => section.id === 'grove')!.entries.find(entry => entry.emoji === '🌲')).toMatchObject({ locked: false, tokens: 1, kind: 'token' });
+    expect(emojiCityRulesBlurb()).toContain('Locked emoji stay listed');
+  });
+});
+
 describe('EmojiCB surfaces', () => {
   it('is linked from home and described in the manual', () => {
     const home = readFileSync(new URL('../pages/home.tsx', import.meta.url), 'utf8');
@@ -724,6 +802,9 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('catchUpCity');
     expect(city).toContain('city-away');
     expect(city).toContain('data-testid="city-decor"');
+    expect(city).toContain('buildPaletteSections');
+    expect(city).toContain('palette-toggle-');
+    expect(city).toContain('aria-expanded');
     expect(city).toContain('placeDecor');
     expect(city).toContain('edge="north"');
     expect(city).toContain('expand-${edge}');

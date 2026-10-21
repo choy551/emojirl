@@ -6,8 +6,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { getEnemyKillCounts } from '../game/discoveries';
 import {
   BUILDING_EXCHANGE_COST,
-  BUILDINGS,
-  buildingDistrictName,
   buildingOf,
 } from '../game/cityBuildings';
 import {
@@ -15,9 +13,9 @@ import {
   CITY_TICK_MS,
   availableTokens,
   awaySummary,
+  buildPaletteSections,
   catchUpCity,
   citizenCapacityOf,
-  DECOR,
   DISTRICT_BONUS_TIER_CAP,
   DISTRICT_THRESHOLD,
   districtStandings,
@@ -32,11 +30,12 @@ import {
   placedCount,
   placedOf,
   removeAt,
-  supplyPalette,
   tickCitizens,
   totalAvailableTokens,
   type CityEdge,
   type CityState,
+  type PaletteEntry,
+  type PaletteSection,
 } from '../game/emojiCity';
 
 type PalettePick = { kind: 'token' | 'decor'; emoji: string };
@@ -67,11 +66,10 @@ export default function CityPage() {
     setConsumes(counts);
     setCity(caught.city);
     if (caught.turns > 0) setAway(awaySummary(caught.turns, caught.citizensGained));
-    const palette = supplyPalette(counts, caught.city);
-    const owned = palette.find(emoji => availableTokens(counts[emoji] ?? 0, placedOf(caught.city, emoji)) > 0);
-    const ownedBuilding = BUILDINGS.find(building => availableTokens(counts[building.emoji] ?? 0, placedOf(caught.city, building.emoji)) > 0);
-    const first = owned ?? ownedBuilding?.emoji ?? palette[0] ?? null;
-    setSelected(first ? { kind: 'token', emoji: first } : null);
+    const first = buildPaletteSections(counts, caught.city)
+      .flatMap(section => section.entries)
+      .find(entry => entry.kind === 'token' && !entry.locked);
+    setSelected(first ? { kind: 'token', emoji: first.emoji } : null);
   }, []);
 
   useEffect(() => {
@@ -97,8 +95,8 @@ export default function CityPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [setLocation]);
 
-  const palette = useMemo(
-    () => (city ? supplyPalette(consumes, city) : []),
+  const sections = useMemo(
+    () => (city ? buildPaletteSections(consumes, city) : []),
     [consumes, city],
   );
   const selectedBuilding = selected?.kind === 'token' ? buildingOf(selected.emoji) : undefined;
@@ -228,88 +226,30 @@ export default function CityPage() {
 
       <p className="text-[11px] text-muted-foreground leading-snug min-h-8" data-testid="city-note">{note}</p>
 
-      <div className="flex gap-1.5 overflow-x-auto pb-1" data-testid="city-palette" aria-label="Supply palette">
-        {palette.length === 0 && (
-          <p className="text-xs text-muted-foreground">Consume emoji on a descent to earn tokens.</p>
-        )}
-        {palette.map(emoji => {
-          const left = availableTokens(consumes[emoji] ?? 0, city ? placedOf(city, emoji) : 0);
-          const on = selected?.kind === 'token' && selected.emoji === emoji;
-          return (
-            <button
-              key={emoji}
-              type="button"
-              data-testid={`palette-${emoji}`}
-              aria-pressed={on}
-              onClick={() => { setSelected({ kind: 'token', emoji }); setNote(`${emoji} selected. ${left} token${left === 1 ? '' : 's'} left.`); }}
-              className={`shrink-0 min-h-11 min-w-11 rounded-lg border text-xl leading-none ${on ? 'border-primary bg-primary/15' : 'border-border bg-card'} ${left <= 0 ? 'opacity-50' : ''}`}
-            >
-              <span className="block">{emoji}</span>
-              <span className="block text-[10px] font-bold tabular-nums">{left}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="space-y-1">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Structures</p>
-        <div className="flex gap-1.5 overflow-x-auto pb-1" data-testid="city-structures" aria-label="Structure palette">
-          {BUILDINGS.map(building => {
-            const left = availableTokens(consumes[building.emoji] ?? 0, city ? placedOf(city, building.emoji) : 0);
-            const on = selected?.kind === 'token' && selected.emoji === building.emoji;
-            return (
-              <button
-                key={building.emoji}
-                type="button"
-                data-testid={`structure-${building.emoji}`}
-                aria-pressed={on}
-                title={`${building.name} · ${buildingDistrictName(building)} · counts as ${building.housing}`}
-                onClick={() => {
-                  setSelected({ kind: 'token', emoji: building.emoji });
-                  setNote(`${building.name}. ${left} token${left === 1 ? '' : 's'}. Counts as ${building.housing}. Raise costs ${BUILDING_EXCHANGE_COST} spare tokens.`);
-                }}
-                className={`shrink-0 min-h-11 min-w-11 rounded-lg border text-xl leading-none ${on ? 'border-primary bg-primary/15' : 'border-border bg-card'} ${left <= 0 ? 'opacity-60' : ''}`}
-              >
-                <span className="block">{building.emoji}</span>
-                <span className="block text-[10px] font-bold tabular-nums">{left}</span>
-              </button>
-            );
-          })}
-        </div>
-        {selectedBuilding && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full min-h-11"
-            data-testid="raise-structure"
-            onClick={raiseStructure}
-          >
-            Raise {selectedBuilding.emoji} · {BUILDING_EXCHANGE_COST} tokens
-          </Button>
-        )}
-      </div>
-
-      <div className="space-y-1">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Decor</p>
-        <div className="flex gap-1.5 overflow-x-auto pb-1" data-testid="city-decor" aria-label="Decor palette">
-          {DECOR.map(emoji => {
-            const on = selected?.kind === 'decor' && selected.emoji === emoji;
-            return (
-              <button
-                key={emoji}
-                type="button"
-                data-testid={`decor-${emoji}`}
-                aria-pressed={on}
-                title="Free decor. Does not count for districts or citizens."
-                onClick={() => { setSelected({ kind: 'decor', emoji }); setNote(`${emoji} decor. Free, and it does not count.`); }}
-                className={`shrink-0 min-h-11 min-w-11 rounded-lg border text-xl leading-none ${on ? 'border-primary bg-primary/15' : 'border-border bg-card'}`}
-              >
-                {emoji}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <BuildPalette
+        sections={sections}
+        selected={selected}
+        onSelect={entry => {
+          const structure = entry.kind === 'token' && Boolean(buildingOf(entry.emoji));
+          if (entry.locked && !structure) {
+            setNote(entry.hint);
+            return;
+          }
+          setSelected({ kind: entry.kind, emoji: entry.emoji });
+          setNote(entry.kind === 'decor' ? `${entry.emoji} decor. Free, and it does not count.` : entry.hint);
+        }}
+      />
+      {selectedBuilding && (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full min-h-11"
+          data-testid="raise-structure"
+          onClick={raiseStructure}
+        >
+          Raise {selectedBuilding.emoji} · {BUILDING_EXCHANGE_COST} tokens
+        </Button>
+      )}
 
       {city && (
         <div className="flex w-full flex-col gap-1" data-testid="city-expand">
@@ -360,6 +300,120 @@ export default function CityPage() {
 
       <p className="text-[11px] text-muted-foreground leading-relaxed pb-4">{emojiCityRulesBlurb()}</p>
     </div>
+  );
+}
+
+function sectionStartsOpen(section: PaletteSection): boolean {
+  return section.entries.some(entry => entry.kind === 'token' && !entry.locked);
+}
+
+function BuildPalette({
+  sections,
+  selected,
+  onSelect,
+}: {
+  sections: PaletteSection[];
+  selected: PalettePick | null;
+  onSelect: (entry: PaletteEntry) => void;
+}) {
+  const [forced, setForced] = useState<Record<string, boolean>>({});
+  const decor = sections.filter(section => section.entries[0]?.kind === 'decor');
+  const build = sections.filter(section => section.entries[0]?.kind !== 'decor');
+  const fold = (section: PaletteSection) => (
+    <PaletteFold
+      key={section.id}
+      section={section}
+      open={section.id in forced ? forced[section.id]! : sectionStartsOpen(section)}
+      onToggle={next => setForced(prev => ({ ...prev, [section.id]: next }))}
+      selected={selected}
+      onSelect={onSelect}
+    />
+  );
+  return (
+    <div className="space-y-1.5" data-testid="city-palette" aria-label="Build palette">
+      {build.map(fold)}
+      <div className="space-y-1.5" data-testid="city-decor" aria-label="Decor palette">
+        {decor.map(fold)}
+      </div>
+    </div>
+  );
+}
+
+function PaletteFold({
+  section,
+  open,
+  onToggle,
+  selected,
+  onSelect,
+}: {
+  section: PaletteSection;
+  open: boolean;
+  onToggle: (open: boolean) => void;
+  selected: PalettePick | null;
+  onSelect: (entry: PaletteEntry) => void;
+}) {
+  const ready = section.entries.filter(entry => !entry.locked).length;
+  const tally = section.entries.some(entry => entry.kind === 'token')
+    ? `${ready}/${section.entries.length}`
+    : `${section.entries.length}`;
+  return (
+    <section className="rounded-lg border border-border bg-card/40" data-testid={`palette-section-${section.id}`}>
+      <button
+        type="button"
+        className="flex w-full min-h-11 items-center gap-2 px-2 text-left"
+        aria-expanded={open}
+        aria-controls={`palette-panel-${section.id}`}
+        data-testid={`palette-toggle-${section.id}`}
+        onClick={() => onToggle(!open)}
+      >
+        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden="true" />
+        {section.badge && <span className="shrink-0 text-lg leading-none" aria-hidden="true">{section.badge}</span>}
+        <span className="min-w-0 truncate text-xs font-semibold">{section.label}</span>
+        <span className="ml-auto shrink-0 text-[10px] tabular-nums text-muted-foreground">{tally}</span>
+      </button>
+      {open && (
+        <div id={`palette-panel-${section.id}`} className="flex flex-wrap gap-1.5 px-2 pb-2">
+          {section.entries.map(entry => (
+            <PaletteChoice key={`${entry.kind}-${entry.emoji}`} entry={entry} selected={selected} onSelect={onSelect} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PaletteChoice({
+  entry,
+  selected,
+  onSelect,
+}: {
+  entry: PaletteEntry;
+  selected: PalettePick | null;
+  onSelect: (entry: PaletteEntry) => void;
+}) {
+  const on = selected?.kind === entry.kind && selected.emoji === entry.emoji;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span title={entry.hint} className="inline-flex">
+          <button
+            type="button"
+            data-testid={entry.kind === 'decor' ? `decor-${entry.emoji}` : `palette-${entry.emoji}`}
+            data-locked={entry.locked ? 'true' : 'false'}
+            aria-pressed={on}
+            aria-disabled={entry.locked && entry.kind === 'token' && !buildingOf(entry.emoji)}
+            onClick={() => onSelect(entry)}
+            className={`shrink-0 min-h-11 min-w-11 rounded-lg border px-1 text-xl leading-none ${on ? 'border-primary bg-primary/15' : 'border-border bg-card'} ${entry.locked ? 'opacity-40' : ''}`}
+          >
+            <span className="block">{entry.emoji}</span>
+            {entry.kind === 'token' && (
+              <span className="block text-[10px] font-bold tabular-nums">{entry.tokens}</span>
+            )}
+          </button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{entry.hint}</TooltipContent>
+    </Tooltip>
   );
 }
 

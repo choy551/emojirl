@@ -1,5 +1,6 @@
 import { EmojiItem } from './types';
-import { DRINK_FLOOR_DROP_CHANCE, getRandomDrinkDrop } from './drinks';
+import { normalizeEmojiKey } from './discoveries';
+import { DRINK_DROPS, DRINK_FLOOR_DROP_CHANCE, getRandomDrinkDrop } from './drinks';
 
 export const HEAL_DROPS: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   { emoji: '🍎', name: 'Apple',    description: 'Restores 2 HP · cook on 🔥 for more',  healAmount: 2 },
@@ -349,6 +350,31 @@ export function equipmentPoolForFloor(floor = 1, rng: () => number = Math.random
 export function getRandomEquipmentDrop(floor = 1, rng: () => number = Math.random): Omit<EmojiItem, 'id' | 'consumed'> {
   const pool = equipmentPoolForFloor(floor, rng);
   return pool[Math.floor(rng() * pool.length)];
+}
+
+const EMOJI_NAMES = new Map<string, string>();
+function rememberEmojiName(emoji: string, name: string | undefined) {
+  if (!name) return;
+  const key = normalizeEmojiKey(emoji);
+  if (!EMOJI_NAMES.has(key)) EMOJI_NAMES.set(key, name);
+}
+for (const item of [
+  ...EMOJI_POWERS,
+  ...HEAL_DROPS,
+  ...Object.values(RAW_TO_COOKED),
+  ...DRINK_DROPS,
+  ...ACTIVE_DROPS,
+  ...EQUIPMENT_DROPS,
+  MONEY_BAG,
+  AMMO_DROP,
+  BULLET_DROP,
+]) {
+  rememberEmojiName(item.emoji, item.name);
+}
+
+/** First catalog name for an emoji. Buildings keep their own names elsewhere. */
+export function knownEmojiName(emoji: string): string | undefined {
+  return EMOJI_NAMES.get(normalizeEmojiKey(emoji));
 }
 
 /** Named gear for one emoji, using the floor's power tier (T1/T2/T3). */

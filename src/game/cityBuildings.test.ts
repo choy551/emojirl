@@ -190,10 +190,11 @@ describe('EmojiCB buildings', () => {
     expect(rollStructureFind([boss], floorMap(), [], () => 0)).toBeNull();
   });
 
-  it('shows structures on their own row in the city', () => {
+  it('groups structures into the build palette', () => {
     const city = readFileSync(new URL('../pages/city.tsx', import.meta.url), 'utf8');
-    expect(city).toContain('city-structures');
-    expect(city).toContain('raise-structure');
     expect(city).toContain('data-testid="city-palette"');
+    expect(city).toContain('raise-structure');
+    expect(city).toContain('palette-section-');
+    expect(city).toContain('buildPaletteSections');
   });
 });

@@ -1,4 +1,5 @@
 import { normalizeEmojiKey } from './discoveries';
+import { knownEmojiName } from './emojis';
 import { BUILDING_EXCHANGE_COST, BUILDINGS, STRUCTURE_FLOOR_CHANCE, STRUCTURE_SELL_VALUE, STRUCTURE_SURVEY_MOOD, buildingOf } from './cityBuildings';
 import { COWBOY, FENCER, GENIE, HITMAN, NINJA, RANGER, ROYAL_GUARD, VOID, WIZARD } from './prestigeConstants';
 
@@ -29,20 +30,79 @@ export const DISTRICT_BONUS_TIER_CAP = 4;
 
 export const CITY_SIZE = CITY_COLS * CITY_ROWS;
 
+export interface DecorPiece {
+  emoji: string;
+  name: string;
+}
+
+export interface DecorGroup {
+  id: 'roads' | 'foliage' | 'vehicles' | 'shapes' | 'misc';
+  label: string;
+  pieces: readonly DecorPiece[];
+}
+
 /**
- * Free cosmetic lots. Always available. They do not spend tokens and do not
- * score districts, bonuses, or citizen housing. Some glyphs also exist as real
- * token placements (🌲🌳🌵⛲); only a decor flag makes that copy cosmetic.
+ * Free cosmetic lots, grouped for the build palette. Always available. They do
+ * not spend tokens and do not score districts, bonuses, or citizen housing.
+ * Some glyphs also exist as real token placements (🌲🌳🌵⛲); only a decor
+ * flag makes that copy cosmetic.
  */
-export const DECOR = [
-  '🛣️',
-  '🌲', '🌳', '🌴', '🌵', '🌷', '🌻',
-  '🚗', '🚓', '🚕', '🛺',
-  '🟢', '🟠', '🟥', '🟧', '🟦', '🟩', '🟨',
-  '◽', '◾', '⬜', '⬛',
-  '🔷', '🔶', '🔳', '🔲',
-  '🪨', '⛲',
-] as const;
+export const DECOR_GROUPS: readonly DecorGroup[] = [
+  { id: 'roads', label: 'Roads', pieces: [{ emoji: '🛣️', name: 'Road' }] },
+  {
+    id: 'foliage',
+    label: 'Foliage',
+    pieces: [
+      { emoji: '🌲', name: 'Pine' },
+      { emoji: '🌳', name: 'Tree' },
+      { emoji: '🌴', name: 'Palm' },
+      { emoji: '🌵', name: 'Cactus' },
+      { emoji: '🌷', name: 'Tulip' },
+      { emoji: '🌻', name: 'Sunflower' },
+    ],
+  },
+  {
+    id: 'vehicles',
+    label: 'Vehicles',
+    pieces: [
+      { emoji: '🚗', name: 'Car' },
+      { emoji: '🚓', name: 'Police Car' },
+      { emoji: '🚕', name: 'Taxi' },
+      { emoji: '🛺', name: 'Rickshaw' },
+    ],
+  },
+  {
+    id: 'shapes',
+    label: 'Shapes',
+    pieces: [
+      { emoji: '🟢', name: 'Green Circle' },
+      { emoji: '🟠', name: 'Orange Circle' },
+      { emoji: '🟥', name: 'Red Square' },
+      { emoji: '🟧', name: 'Orange Square' },
+      { emoji: '🟦', name: 'Blue Square' },
+      { emoji: '🟩', name: 'Green Square' },
+      { emoji: '🟨', name: 'Yellow Square' },
+      { emoji: '◽', name: 'White Small' },
+      { emoji: '◾', name: 'Black Small' },
+      { emoji: '⬜', name: 'White Square' },
+      { emoji: '⬛', name: 'Black Square' },
+      { emoji: '🔷', name: 'Blue Diamond' },
+      { emoji: '🔶', name: 'Orange Diamond' },
+      { emoji: '🔳', name: 'White Button' },
+      { emoji: '🔲', name: 'Black Button' },
+    ],
+  },
+  {
+    id: 'misc',
+    label: 'Misc',
+    pieces: [
+      { emoji: '🪨', name: 'Rock' },
+      { emoji: '⛲', name: 'Fountain' },
+    ],
+  },
+];
+
+export const DECOR: readonly string[] = DECOR_GROUPS.flatMap(group => group.pieces.map(piece => piece.emoji));
 
 export function decorKey(emoji: string): string {
   return normalizeEmojiKey(emoji).replace(/\uFE0F/g, '');
@@ -483,6 +543,135 @@ export function classifyEmoji(emoji: string): DistrictStyle | null {
   return DISTRICT_BY_EMOJI.get(normalizeEmojiKey(emoji)) ?? null;
 }
 
+export function placementName(emoji: string): string {
+  const key = normalizeEmojiKey(emoji);
+  return buildingOf(key)?.name ?? knownEmojiName(key) ?? key;
+}
+
+export interface PaletteEntry {
+  emoji: string;
+  kind: 'token' | 'decor';
+  name: string;
+  /** Citizen housing. Decor is 0. Plain emoji count as 1. */
+  housing: number;
+  tokens: number;
+  locked: boolean;
+  hint: string;
+}
+
+export interface PaletteSection {
+  id: string;
+  label: string;
+  /** Class emoji on a district header. Decor uses its first glyph. Neutral has none. */
+  badge: string | null;
+  entries: PaletteEntry[];
+}
+
+/** Palette districts. Grove sits ahead of the saloon so the rows match the build list. */
+export const PALETTE_DISTRICT_ORDER: readonly DistrictId[] = ['thieves', 'arcane', 'grove', 'saloon', 'void'];
+
+function paletteHint(name: string, emoji: string, housing: number, tokens: number, locked: boolean, structure: boolean): string {
+  if (locked && structure) {
+    return `${name} is locked. Survey ${emoji} on a floor, or raise it for ${BUILDING_EXCHANGE_COST} spare tokens.`;
+  }
+  if (locked) {
+    return `${name} is locked. Use ${emoji} on a descent to earn a token.`;
+  }
+  const lots = housing === 1 ? '1 lot' : `${housing} lots`;
+  return `${name}. ${tokens} token${tokens === 1 ? '' : 's'}. Counts as ${lots}.`;
+}
+
+function comparePaletteEntries(a: PaletteEntry, b: PaletteEntry): number {
+  if (a.housing !== b.housing) return b.housing - a.housing;
+  const byName = a.name.localeCompare(b.name, 'en');
+  if (byName !== 0) return byName;
+  return a.emoji.localeCompare(b.emoji, 'en');
+}
+
+function tokenPaletteEntry(emoji: string, consumes: Record<string, number>, city: CityState): PaletteEntry {
+  const key = normalizeEmojiKey(emoji);
+  const building = buildingOf(key);
+  const housing = building?.housing ?? 1;
+  const tokens = availableTokens(consumes[key] ?? 0, placedOf(city, key));
+  const locked = tokens <= 0;
+  const name = placementName(key);
+  return {
+    emoji: key,
+    kind: 'token',
+    name,
+    housing,
+    tokens,
+    locked,
+    hint: paletteHint(name, key, housing, tokens, locked, Boolean(building)),
+  };
+}
+
+/** Districts, then Neutral, then Decor by type. Locked catalog emoji stay in the list. */
+export function buildPaletteSections(consumes: Record<string, number>, city: CityState): PaletteSection[] {
+  const normalized = normalizeCity(city);
+  const sections: PaletteSection[] = [];
+  const claimed = new Set<string>();
+
+  for (const id of PALETTE_DISTRICT_ORDER) {
+    const style = DISTRICTS.find(row => row.id === id);
+    if (!style) continue;
+    const entries: PaletteEntry[] = [];
+    for (const emoji of style.emoji) {
+      const entry = tokenPaletteEntry(emoji, consumes, normalized);
+      if (claimed.has(entry.emoji)) continue;
+      claimed.add(entry.emoji);
+      entries.push(entry);
+    }
+    for (const building of BUILDINGS) {
+      if (building.district !== id) continue;
+      const entry = tokenPaletteEntry(building.emoji, consumes, normalized);
+      if (claimed.has(entry.emoji)) continue;
+      claimed.add(entry.emoji);
+      entries.push(entry);
+    }
+    entries.sort(comparePaletteEntries);
+    sections.push({ id: style.id, label: style.name, badge: style.classEmoji, entries });
+  }
+
+  const neutral: PaletteEntry[] = [];
+  for (const building of BUILDINGS) {
+    if (building.district) continue;
+    const entry = tokenPaletteEntry(building.emoji, consumes, normalized);
+    if (claimed.has(entry.emoji)) continue;
+    claimed.add(entry.emoji);
+    neutral.push(entry);
+  }
+  for (const emoji of paletteEmojis(consumes, normalized)) {
+    if (claimed.has(emoji) || buildingOf(emoji) || classifyEmoji(emoji)) continue;
+    const entry = tokenPaletteEntry(emoji, consumes, normalized);
+    claimed.add(entry.emoji);
+    neutral.push(entry);
+  }
+  neutral.sort(comparePaletteEntries);
+  sections.push({ id: 'neutral', label: 'Neutral', badge: null, entries: neutral });
+
+  for (const group of DECOR_GROUPS) {
+    const entries: PaletteEntry[] = group.pieces.map(piece => ({
+      emoji: normalizeEmojiKey(piece.emoji),
+      kind: 'decor',
+      name: piece.name,
+      housing: 0,
+      tokens: 0,
+      locked: false,
+      hint: 'Free decor. Does not count for districts or citizens.',
+    }));
+    entries.sort(comparePaletteEntries);
+    sections.push({
+      id: group.id,
+      label: group.label,
+      badge: normalizeEmojiKey(group.pieces[0]?.emoji ?? ''),
+      entries,
+    });
+  }
+
+  return sections;
+}
+
 export interface DistrictStanding {
   id: DistrictId;
   name: string;
@@ -841,5 +1030,5 @@ export function awaySummary(turns: number, citizensGained: number): string {
 }
 
 export function emojiCityRulesBlurb(): string {
-  return `EmojiCB is a city on the home screen, kept in the meta save so it survives runs. Each emoji you use from the hotbar, eat, drink, or buy-and-use grants ${TOKENS_PER_CONSUME} placement token for that emoji. Spell Echo does not spend the emoji, so it grants no token. Those consume counts, and the lifetime enemy kill counts, are the only ledgers — the city reads them again every visit. The grid starts at ${CITY_COLS}×${CITY_ROWS}. Each edge grows by one row or column for ${CITY_EXPAND_COST} unspent placement tokens, the Tokens count on the city HUD. North and west shift the blocks already placed. The Decor row is free and always available. Decor does not spend a token, and it does not count toward districts, bonuses, or citizen housing. A copy placed from a token still counts. Pick an emoji and tap an empty lot to build. Tap a built lot to clear it and refund the token. One citizen arrives per ${CITIZEN_TILES} lots of housing, weighted by kills. A plain emoji or an ordinary house counts as 1 lot. Most structures count as 2, 🏘️🏢🏭🏨🏟️🏬 count as 3, and 🏰 counts as 4. No kills means empty streets. Structures are not on the kill-loot table. About ${Math.round(STRUCTURE_FLOOR_CHANCE * 100)}% of floors hide one blueprint. Survey it from the hotbar for +${STRUCTURE_SURVEY_MOOD} mood and 1 token for that building. Selling a blueprint pays ${STRUCTURE_SELL_VALUE}g and grants no token. In the city, ${BUILDING_EXCHANGE_COST} spare tokens from non-building emoji raise 1 structure token. The structures row is separate from the supply palette. Every roguelike turn is a city turn. While you are away, one unspent token builds itself every ${GROWTH_TURNS} city turns, citizens arrive to the new capacity, and they wander. A long absence is caught up in at most ${WANDER_CATCHUP_CAP} wander steps. Placed emoji form districts, and every style can be active at once: Slums of Thieves (Ninja), Arcane Sanctum (Wizard), Frontier Saloon (Cowboy), Grove of Wilds (Ranger), and Void Hollow (The Void). 🛖🏚️ are slums, ⛩️🛕 are the sanctum, ⛺🏕️🏔️ are the grove, 🏤🏦🏟️ are the saloon, and 🌋 is the hollow. 🏰🏭🏢 and ordinary houses are neutral. Prestige classes use their base class's district. A plain themed emoji weighs 1. A structure weighs its housing, so a larger building counts for more. Weight ${DISTRICT_THRESHOLD} is tier 1. The tier rises by 1 each time that weight doubles, through ${DISTRICT_THRESHOLD * 2}, ${DISTRICT_THRESHOLD * 4}, and ${DISTRICT_THRESHOLD * 8}, and ${DISTRICT_BONUS_TIER_CAP} is the cap. The run-start bonus is the tier times the base (${DISTRICTS.map(d => `${d.bonus.label} ${d.className}`).join(', ')}). The city HUD and the vessel picker show each district's placed count, weight, and current bonus. A meta save from before this rule keeps its grid, consumes, and prestige; bonuses are read from the tiles.`;
+  return `EmojiCB is a city on the home screen, kept in the meta save so it survives runs. Each emoji you use from the hotbar, eat, drink, or buy-and-use grants ${TOKENS_PER_CONSUME} placement token for that emoji. Spell Echo does not spend the emoji, so it grants no token. Those consume counts, and the lifetime enemy kill counts, are the only ledgers — the city reads them again every visit. The grid starts at ${CITY_COLS}×${CITY_ROWS}. Each edge grows by one row or column for ${CITY_EXPAND_COST} unspent placement tokens, the Tokens count on the city HUD. North and west shift the blocks already placed. Decor is free, always available, and grouped into Roads, Foliage, Vehicles, Shapes, and Misc. Decor does not spend a token, and it does not count toward districts, bonuses, or citizen housing. A copy placed from a token still counts. Pick an emoji and tap an empty lot to build. Tap a built lot to clear it and refund the token. One citizen arrives per ${CITIZEN_TILES} lots of housing, weighted by kills. A plain emoji or an ordinary house counts as 1 lot. Most structures count as 2, 🏘️🏢🏭🏨🏟️🏬 count as 3, and 🏰 counts as 4. No kills means empty streets. Structures are not on the kill-loot table. About ${Math.round(STRUCTURE_FLOOR_CHANCE * 100)}% of floors hide one blueprint. Survey it from the hotbar for +${STRUCTURE_SURVEY_MOOD} mood and 1 token for that building. Selling a blueprint pays ${STRUCTURE_SELL_VALUE}g and grants no token. In the city, ${BUILDING_EXCHANGE_COST} spare tokens from non-building emoji raise 1 structure token. The build palette lists each class district, then Neutral buildings, then those Decor groups. Locked emoji stay listed until a token unlocks them. Every roguelike turn is a city turn. While you are away, one unspent token builds itself every ${GROWTH_TURNS} city turns, citizens arrive to the new capacity, and they wander. A long absence is caught up in at most ${WANDER_CATCHUP_CAP} wander steps. Placed emoji form districts, and every style can be active at once: Slums of Thieves (Ninja), Arcane Sanctum (Wizard), Frontier Saloon (Cowboy), Grove of Wilds (Ranger), and Void Hollow (The Void). 🛖🏚️ are slums, ⛩️🛕 are the sanctum, ⛺🏕️🏔️ are the grove, 🏤🏦🏟️ are the saloon, and 🌋 is the hollow. 🏰🏭🏢 and ordinary houses are neutral. Prestige classes use their base class's district. A plain themed emoji weighs 1. A structure weighs its housing, so a larger building counts for more. Weight ${DISTRICT_THRESHOLD} is tier 1. The tier rises by 1 each time that weight doubles, through ${DISTRICT_THRESHOLD * 2}, ${DISTRICT_THRESHOLD * 4}, and ${DISTRICT_THRESHOLD * 8}, and ${DISTRICT_BONUS_TIER_CAP} is the cap. The run-start bonus is the tier times the base (${DISTRICTS.map(d => `${d.bonus.label} ${d.className}`).join(', ')}). The city HUD and the vessel picker show each district's placed count, weight, and current bonus. A meta save from before this rule keeps its grid, consumes, and prestige; bonuses are read from the tiles.`;
 }
