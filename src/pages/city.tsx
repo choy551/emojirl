@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Link, useLocation } from 'wouter';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -233,6 +233,17 @@ export default function CityPage() {
 
       <p className="text-[11px] text-muted-foreground leading-snug min-h-8" data-testid="city-note">{note}</p>
 
+      {selectedBuilding && (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full min-h-11"
+          data-testid="raise-structure"
+          onClick={raiseStructure}
+        >
+          Raise {selectedBuilding.emoji} · {BUILDING_EXCHANGE_COST} tokens
+        </Button>
+      )}
       <BuildPalette
         sections={sections}
         selected={selected}
@@ -246,17 +257,6 @@ export default function CityPage() {
           setNote(entry.kind === 'decor' ? `${entry.emoji} decor. Free, and it does not count.` : entry.hint);
         }}
       />
-      {selectedBuilding && (
-        <Button
-          type="button"
-          variant="outline"
-          className="relative w-full min-h-11"
-          data-testid="raise-structure"
-          onClick={raiseStructure}
-        >
-          Raise {selectedBuilding.emoji} · {BUILDING_EXCHANGE_COST} tokens
-        </Button>
-      )}
     </div>
 
       {city && (
@@ -313,8 +313,44 @@ export default function CityPage() {
   );
 }
 
-/** The structures menu is these rows, all visible. Expansion grows a section in place. */
+/** District bands. Each section inside a band is still its own full-width row. */
 const PALETTE_MENU_ROWS = 5;
+
+function flyoutStyle(anchor: DOMRect): { layout: 'side' | 'sheet'; style: CSSProperties } {
+  const gap = 8;
+  const want = 384;
+  const spaceRight = window.innerWidth - anchor.right - gap;
+  const spaceLeft = anchor.left - gap;
+  const narrow = window.innerWidth < 640 || (spaceRight < 240 && spaceLeft < 240);
+  if (narrow) {
+    const top = Math.min(anchor.bottom + gap, Math.max(8, window.innerHeight - 220));
+    return {
+      layout: 'sheet',
+      style: {
+        position: 'fixed',
+        left: 8,
+        right: 8,
+        top,
+        maxHeight: Math.max(160, window.innerHeight - top - 8),
+        zIndex: 50,
+      },
+    };
+  }
+  const placeRight = spaceRight >= spaceLeft;
+  const width = Math.min(want, placeRight ? spaceRight : spaceLeft);
+  const top = Math.max(8, Math.min(anchor.top, window.innerHeight - 220));
+  return {
+    layout: 'side',
+    style: {
+      position: 'fixed',
+      top,
+      width,
+      maxHeight: Math.max(200, window.innerHeight - top - 8),
+      zIndex: 50,
+      left: placeRight ? anchor.right + gap : Math.max(8, anchor.left - gap - width),
+    },
+  };
+}
 
 function BuildPalette({
   sections,
@@ -326,10 +362,30 @@ function BuildPalette({
   onSelect: (entry: PaletteEntry) => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const pointerRef = useRef('');
+  const closeTimer = useRef<number | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [flyout, setFlyout] = useState<{ layout: 'side' | 'sheet'; style: CSSProperties } | null>(null);
   const rows = paletteMenuRows(sections);
+  const openId = pinned ?? hovered;
+  const openSection = sections.find(section => section.id === openId) ?? null;
+
+  const clearClose = () => {
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  };
+  const holdOpen = (id: string) => {
+    clearClose();
+    setHovered(id);
+  };
+  const scheduleClose = () => {
+    clearClose();
+    closeTimer.current = window.setTimeout(() => setHovered(null), 140);
+  };
+
+  useEffect(() => () => clearClose(), []);
 
   useEffect(() => {
     if (!pinned) return;
@@ -340,6 +396,22 @@ function BuildPalette({
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [pinned]);
 
+  useLayoutEffect(() => {
+    if (!openSection) return;
+    const place = () => {
+      const box = menuRef.current?.getBoundingClientRect();
+      if (!box) return;
+      setFlyout(flyoutStyle(box));
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [openSection]);
+
   const togglePinned = (id: string, event: ReactMouseEvent<HTMLButtonElement>) => {
     const fineHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     if (event.detail !== 0 && fineHover && pointerRef.current === 'mouse') return;
@@ -347,125 +419,129 @@ function BuildPalette({
   };
 
   return (
-    <div ref={rootRef} data-testid="city-palette" className="min-w-0">
-    <div
-      id="palette-menu"
-      data-testid="palette-menu"
-      data-rows={PALETTE_MENU_ROWS}
-      aria-label="Structures"
-      className="flex flex-col gap-1 overflow-x-hidden rounded-lg border border-border bg-card p-1.5"
-    >
-      {rows.map((row, index) => {
-        const decorStart = row.findIndex(section => section.entries[0]?.kind === 'decor');
-        const lead = decorStart === -1 ? row : row.slice(0, decorStart);
-        const decor = decorStart === -1 ? [] : row.slice(decorStart);
-        const share = row.length > 1;
-        const strip = (section: PaletteSection) => (
-          <PaletteStrip
-            key={section.id}
-            section={section}
-            share={share}
-            expanded={pinned === section.id || hovered === section.id}
-            selected={selected}
-            onSelect={onSelect}
-            onPointerDown={event => { pointerRef.current = event.pointerType; }}
-            onMoreEnter={event => { if (event.pointerType === 'mouse') setHovered(section.id); }}
-            onSectionLeave={event => {
-              if (event.pointerType === 'mouse') setHovered(current => current === section.id ? null : current);
-            }}
-            onMoreClick={event => togglePinned(section.id, event)}
-          />
-        );
-        return (
-          <div key={row.map(section => section.id).join('-') || index} data-testid={`palette-row-${index + 1}`} className="flex min-w-0 items-start gap-1">
-            {lead.map(strip)}
-            {decor.length > 0 && (
-              <div data-testid="city-decor" aria-label="Decor palette" className="contents">
-                {decor.map(strip)}
-              </div>
-            )}
+    <div ref={rootRef} data-testid="city-palette" className="relative min-w-0">
+      <div
+        ref={menuRef}
+        id="palette-menu"
+        data-testid="palette-menu"
+        data-rows={PALETTE_MENU_ROWS}
+        aria-label="Structures"
+        className="flex flex-col gap-1 overflow-x-hidden rounded-lg border border-border bg-card p-1.5"
+      >
+        {rows.map((row, index) => {
+          const decorStart = row.findIndex(section => section.entries[0]?.kind === 'decor');
+          const lead = decorStart === -1 ? row : row.slice(0, decorStart);
+          const decor = decorStart === -1 ? [] : row.slice(decorStart);
+          const strip = (section: PaletteSection) => (
+            <PaletteStrip
+              key={section.id}
+              section={section}
+              selected={selected}
+              open={openId === section.id}
+              onSelect={onSelect}
+              onPointerDown={event => { pointerRef.current = event.pointerType; }}
+              onDotsEnter={event => { if (event.pointerType === 'mouse') holdOpen(section.id); }}
+              onDotsLeave={event => { if (event.pointerType === 'mouse') scheduleClose(); }}
+              onDotsClick={event => togglePinned(section.id, event)}
+            />
+          );
+          return (
+            <div key={row.map(section => section.id).join('-') || index} data-testid={`palette-row-${index + 1}`} className="flex min-w-0 flex-col gap-1">
+              {lead.map(strip)}
+              {decor.length > 0 && (
+                <div data-testid="city-decor" aria-label="Decor palette" className="flex flex-col gap-1">
+                  {decor.map(strip)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {openSection && flyout && (
+        <div
+          role="dialog"
+          aria-label={openSection.label}
+          data-testid="palette-flyout"
+          data-section={openSection.id}
+          data-layout={flyout.layout}
+          style={flyout.style}
+          onPointerEnter={event => { if (event.pointerType === 'mouse' && openId) holdOpen(openId); }}
+          onPointerLeave={event => { if (event.pointerType === 'mouse') scheduleClose(); }}
+          className="overflow-y-auto rounded-lg border border-border bg-popover p-2 shadow-lg"
+        >
+          <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold">
+            {openSection.badge && <span aria-hidden="true">{openSection.badge}</span>}
+            <span>{openSection.label}</span>
           </div>
-        );
-      })}
-    </div>
+          <div
+            data-testid="palette-flyout-grid"
+            className="grid gap-1"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(2.75rem, 1fr))' }}
+          >
+            {openSection.entries.map(entry => (
+              <PaletteChoice
+                key={`${entry.kind}-${entry.emoji}`}
+                entry={entry}
+                selected={selected}
+                onSelect={onSelect}
+                testIdPrefix="flyout-"
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function PaletteStrip({
   section,
-  share,
-  expanded,
   selected,
+  open,
   onSelect,
   onPointerDown,
-  onMoreEnter,
-  onSectionLeave,
-  onMoreClick,
+  onDotsEnter,
+  onDotsLeave,
+  onDotsClick,
 }: {
   section: PaletteSection;
-  share: boolean;
-  expanded: boolean;
   selected: PalettePick | null;
+  open: boolean;
   onSelect: (entry: PaletteEntry) => void;
   onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-  onMoreEnter: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-  onSectionLeave: (event: ReactPointerEvent<HTMLElement>) => void;
-  onMoreClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onDotsEnter: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onDotsLeave: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onDotsClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }) {
-  const tilesRef = useRef<HTMLDivElement>(null);
-  const [overflows, setOverflows] = useState(false);
-
-  useLayoutEffect(() => {
-    const el = tilesRef.current;
-    if (!el) return;
-    const measure = () => {
-      if (expanded) return;
-      setOverflows(el.scrollWidth > el.clientWidth + 1);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [expanded, section.entries]);
-
   return (
     <section
       data-testid={`palette-section-${section.id}`}
       aria-label={section.label}
-      onPointerLeave={onSectionLeave}
-      className={`relative min-w-0 ${share ? 'flex-1' : 'w-full'}`}
+      className="relative flex w-full min-w-0 items-start gap-1"
     >
-      <div className="flex min-w-0 items-start gap-1">
-        <div className="relative z-20 flex shrink-0 items-center gap-0.5 pt-2">
-          {section.badge && <span className="text-base leading-none" aria-hidden="true">{section.badge}</span>}
-          <span className={`truncate text-[10px] font-semibold ${share && section.badge ? 'hidden max-w-[4.5rem] sm:inline' : 'max-w-[7.5rem]'}`}>
-            {section.label}
-          </span>
-        </div>
-        <div
-          ref={tilesRef}
-          className={`flex min-w-0 flex-1 gap-1 ${expanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'} ${overflows ? 'pr-12' : ''}`}
-        >
-          {section.entries.map(entry => (
-            <PaletteChoice key={`${entry.kind}-${entry.emoji}`} entry={entry} selected={selected} onSelect={onSelect} />
-          ))}
-        </div>
+      <div className="flex w-[7.25rem] shrink-0 items-center gap-0.5 pt-2">
+        {section.badge && <span className="shrink-0 text-base leading-none" aria-hidden="true">{section.badge}</span>}
+        <span className="min-w-0 truncate text-[10px] font-semibold">{section.label}</span>
       </div>
-      {overflows && (
-        <button
-          type="button"
-          data-testid={`palette-more-${section.id}`}
-          aria-expanded={expanded}
-          aria-label={`${section.label} (more)`}
-          onPointerDown={onPointerDown}
-          onPointerEnter={onMoreEnter}
-          onClick={onMoreClick}
-          className="absolute bottom-0 right-0 z-10 px-1 pb-px text-[10px] font-semibold leading-none text-primary before:absolute before:-inset-x-1 before:-top-8 before:bottom-0 before:content-['']"
-        >
-          (more)
-        </button>
-      )}
+      <div className="flex min-w-0 flex-1 flex-nowrap gap-1 overflow-hidden pr-8">
+        {section.entries.map(entry => (
+          <PaletteChoice key={`${entry.kind}-${entry.emoji}`} entry={entry} selected={selected} onSelect={onSelect} />
+        ))}
+      </div>
+      <button
+        type="button"
+        data-testid={`palette-more-${section.id}`}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={`Show all ${section.label}`}
+        onPointerDown={onPointerDown}
+        onPointerEnter={onDotsEnter}
+        onPointerLeave={onDotsLeave}
+        onClick={onDotsClick}
+        className="absolute bottom-0 right-0 z-10 flex h-8 w-8 items-end justify-end text-lg font-black leading-none text-purple-400"
+      >
+        …
+      </button>
     </section>
   );
 }
@@ -474,19 +550,22 @@ function PaletteChoice({
   entry,
   selected,
   onSelect,
+  testIdPrefix = '',
 }: {
   entry: PaletteEntry;
   selected: PalettePick | null;
   onSelect: (entry: PaletteEntry) => void;
+  testIdPrefix?: string;
 }) {
   const on = selected?.kind === entry.kind && selected.emoji === entry.emoji;
+  const testId = `${testIdPrefix}${entry.kind === 'decor' ? `decor-${entry.emoji}` : `palette-${entry.emoji}`}`;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span title={entry.hint} className="inline-flex">
           <button
             type="button"
-            data-testid={entry.kind === 'decor' ? `decor-${entry.emoji}` : `palette-${entry.emoji}`}
+            data-testid={testId}
             data-locked={entry.locked ? 'true' : 'false'}
             aria-pressed={on}
             aria-disabled={entry.locked && entry.kind === 'token' && !buildingOf(entry.emoji)}
