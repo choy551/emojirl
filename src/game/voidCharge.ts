@@ -2,7 +2,7 @@ import type { ActiveKind, EmojiItem, Player, VoidGhost } from './types';
 import { ACTIVE_DROPS } from './emojis';
 import { getItemSellValue } from './economy';
 import { buildHotbarSlots, grantGhostStack, removeAndRefillBag } from './inventory';
-import { recordEmojiConsume } from './meta';
+import { recordRunEmojiConsume } from './meta';
 import { GHOST_LINGER_TEXT, padGhostHotbar } from './voidDamage';
 import { recordHotbarSoulConsume } from './voidMeta';
 import { noteThemedHotbarConsume } from './voidAbilities';
@@ -187,7 +187,8 @@ export function consumeVoidBurdenItem(player: Player, item: EmojiItem, floor: nu
     next = { ...next, stats: { ...next.stats, gold: next.stats.gold + gold } };
     logs.push(`💰 ${item.name} unmade — +${gold}g. The slot is empty.`);
     noteReclaim();
-    recordEmojiConsume(item.emoji);
+    const bagGrant = recordRunEmojiConsume(item.emoji);
+    if (bagGrant.notice) logs.unshift(bagGrant.notice);
     return { removed: true, player: next, logs, goldGained: gold };
   }
 
@@ -217,7 +218,8 @@ export function consumeVoidBurdenItem(player: Player, item: EmojiItem, floor: nu
   }
   noteReclaim();
 
-  recordEmojiConsume(item.emoji);
+  const cityGrant = recordRunEmojiConsume(item.emoji);
+  if (cityGrant.notice) logs.unshift(cityGrant.notice);
   const themed = noteThemedHotbarConsume(item);
   if (themed) logs.push(themed.text);
   return { removed: true, player: next, logs, goldGained: 0 };

@@ -20,6 +20,7 @@ import {
   availableTokens,
   awaySummary,
   catchUpCity,
+  cityGridIsFull,
   citizenCapacity,
   citizenCapacityOf,
   classifyEmoji,
@@ -36,6 +37,7 @@ import {
   emojiCityRulesBlurb,
   expandBlockReason,
   expandCity,
+  fullCityConsumeNotice,
   scaledBonusAmount,
   paletteEmojis,
   supplyPalette,
@@ -48,10 +50,11 @@ import {
   syncCitizens,
   tickCitizens,
   tokensForEmoji,
+  tokensGrantedForRunConsume,
   totalAvailableTokens,
 } from './emojiCity';
-import { BUILDINGS } from './cityBuildings';
-import { loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, replaceEmojiConsumes, saveCity, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
+import { BUILDING_EXCHANGE_COST, BUILDINGS } from './cityBuildings';
+import { loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, recordRunEmojiConsume, replaceEmojiConsumes, saveCity, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
 import { COWBOY, FENCER, GENIE, HITMAN, META_SAVE_KEY, META_SCHEMA_VERSION, NINJA, RANGER, ROYAL_GUARD, VOID, WIZARD } from './prestigeConstants';
 
 function memoryStore(): KeyValueStore {
@@ -126,6 +129,69 @@ describe('EmojiCB token math', () => {
     expect(meta.city?.tiles[0]).toBe('🍎');
     expect(meta.unlockedPrestige.length).toBe(1);
     expect(paletteEmojis(meta.emojiConsumes ?? {}, meta.city!)).toContain('🍎');
+  });
+
+  it('converts a run consume into building-exchange tokens when the grid has no empty tile', () => {
+    expect(BUILDING_EXCHANGE_COST).toBe(3);
+    expect(cityGridIsFull(undefined)).toBe(false);
+    expect(cityGridIsFull(emptyCity())).toBe(false);
+    expect(tokensGrantedForRunConsume(undefined, 1)).toBe(TOKENS_PER_CONSUME);
+
+    const unsaved = recordRunEmojiConsume('🍇');
+    expect(unsaved).toMatchObject({ granted: 1, notice: null, count: 1 });
+
+    const open = emptyCity();
+    open.tiles[0] = '🏠';
+    saveCity(open);
+    replaceEmojiConsumes({ '🍎': 4 });
+    const spared = recordRunEmojiConsume('🍎');
+    expect(spared.granted).toBe(1);
+    expect(spared.notice).toBeNull();
+    expect(loadMeta().emojiConsumes?.['🍎']).toBe(5);
+
+    const almost = emptyCity();
+    for (let i = 0; i < almost.tiles.length - 1; i++) almost.tiles[i] = '🏠';
+    saveCity(almost);
+    replaceEmojiConsumes({});
+    const hole = recordRunEmojiConsume('🍎');
+    expect(cityGridIsFull(almost)).toBe(false);
+    expect(hole.granted).toBe(TOKENS_PER_CONSUME);
+    expect(hole.notice).toBeNull();
+
+    const full = emptyCity();
+    for (let i = 0; i < full.tiles.length; i++) full.tiles[i] = '🏠';
+    saveCity(full);
+    const before = totalAvailableTokens(loadMeta().emojiConsumes ?? {}, loadMeta().city!);
+    const converted = recordRunEmojiConsume('🗡️');
+    expect(converted.granted).toBe(BUILDING_EXCHANGE_COST);
+    expect(converted.notice).toBe(fullCityConsumeNotice('🗡️', 1, BUILDING_EXCHANGE_COST));
+    expect(converted.notice).toBe('🏙️ City is full. 🗡️ became 3 tokens.');
+    const meta = loadMeta();
+    expect(meta.emojiConsumes?.['🗡️']).toBe(BUILDING_EXCHANGE_COST);
+    expect(availableTokens(meta.emojiConsumes?.['🗡️'] ?? 0, placedOf(meta.city!, '🗡️'))).toBe(BUILDING_EXCHANGE_COST);
+    expect(totalAvailableTokens(meta.emojiConsumes ?? {}, meta.city!) - before).toBe(BUILDING_EXCHANGE_COST);
+
+    const decor = emptyCity();
+    for (let i = 0; i < decor.tiles.length; i++) {
+      decor.tiles[i] = '🌲';
+      decor.decor[i] = true;
+    }
+    saveCity(decor);
+    const cosmetic = recordRunEmojiConsume('🌵');
+    expect(cityGridIsFull(decor)).toBe(true);
+    expect(cosmetic.granted).toBe(BUILDING_EXCHANGE_COST);
+    expect(cosmetic.notice).toBe('🏙️ City is full. 🌵 became 3 tokens.');
+
+    saveCity(full);
+    const batch = recordRunEmojiConsume('🍞', 2);
+    expect(batch.granted).toBe(BUILDING_EXCHANGE_COST * 2);
+    expect(batch.notice).toBe('🏙️ City is full. 🍞 ×2 became 6 tokens.');
+
+    const structure = recordRunEmojiConsume('🏰');
+    expect(structure.granted).toBe(BUILDING_EXCHANGE_COST);
+    expect(totalAvailableTokens(loadMeta().emojiConsumes ?? {}, loadMeta().city!)).toBeGreaterThanOrEqual(BUILDING_EXCHANGE_COST);
+
+    expect(emojiCityRulesBlurb()).toContain(`becomes ${BUILDING_EXCHANGE_COST} tokens instead`);
   });
 });
 
@@ -821,5 +887,13 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('title={hint}');
     expect(game).toContain('noteCityTurns');
     expect(game).toContain('applyDistrictBonus');
+    const items = readFileSync(new URL('../hooks/actions/useItemActions.ts', import.meta.url), 'utf8');
+    const burden = readFileSync(new URL('../game/voidCharge.ts', import.meta.url), 'utf8');
+    expect(items).toContain('recordRunEmojiConsume');
+    expect(items).toContain('noteFullCity');
+    expect(items).not.toContain('recordEmojiConsume(');
+    expect(burden).toContain('recordRunEmojiConsume');
+    expect(burden).toContain('cityGrant.notice');
+    expect(burden).not.toContain('recordEmojiConsume(');
   });
 });
