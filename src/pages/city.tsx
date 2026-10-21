@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Link, useLocation } from 'wouter';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import {
   expandCity,
   isDecorLot,
   normalizeCity,
+  paletteMenuRows,
   placeAt,
   placeDecor,
   placedCount,
@@ -249,7 +250,7 @@ export default function CityPage() {
         <Button
           type="button"
           variant="outline"
-          className="w-full min-h-11"
+          className="relative w-full min-h-11"
           data-testid="raise-structure"
           onClick={raiseStructure}
         >
@@ -312,7 +313,7 @@ export default function CityPage() {
   );
 }
 
-/** Visible tile rows when the structures menu is open. Tiles wrap inside it. */
+/** The structures menu is these rows, all visible. Expansion grows a section in place. */
 const PALETTE_MENU_ROWS = 5;
 
 function BuildPalette({
@@ -326,100 +327,145 @@ function BuildPalette({
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const pointerRef = useRef('');
-  const [pinned, setPinned] = useState(false);
-  const [hover, setHover] = useState(false);
-  const open = pinned || hover;
-  const ready = sections.reduce((sum, section) => sum + section.entries.filter(entry => !entry.locked).length, 0);
-  const decor = sections.filter(section => section.entries[0]?.kind === 'decor');
-  const build = sections.filter(section => section.entries[0]?.kind !== 'decor');
+  const [pinned, setPinned] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const rows = paletteMenuRows(sections);
 
   useEffect(() => {
     if (!pinned) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setPinned(false);
+      if (!rootRef.current?.contains(event.target as Node)) setPinned(null);
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [pinned]);
 
-  const togglePinned = (event: ReactMouseEvent<HTMLButtonElement>) => {
+  const togglePinned = (id: string, event: ReactMouseEvent<HTMLButtonElement>) => {
     const fineHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     if (event.detail !== 0 && fineHover && pointerRef.current === 'mouse') return;
-    setPinned(value => !value);
+    setPinned(current => current === id ? null : id);
   };
 
   return (
+    <div ref={rootRef} data-testid="city-palette" className="min-w-0">
     <div
-      ref={rootRef}
-      className="relative"
-      data-testid="city-palette"
+      id="palette-menu"
+      data-testid="palette-menu"
+      data-rows={PALETTE_MENU_ROWS}
       aria-label="Structures"
-      onPointerEnter={event => { if (event.pointerType === 'mouse') setHover(true); }}
-      onPointerLeave={event => { if (event.pointerType === 'mouse') setHover(false); }}
+      className="flex flex-col gap-1 overflow-x-hidden rounded-lg border border-border bg-card p-1.5"
     >
-      <button
-        type="button"
-        className="flex w-full min-h-11 items-center gap-2 overflow-hidden rounded-lg border border-border bg-card px-2 text-left"
-        aria-expanded={open}
-        aria-controls="palette-menu"
-        data-testid="palette-toggle-structures"
-        onPointerDown={event => { pointerRef.current = event.pointerType; }}
-        onClick={togglePinned}
-      >
-        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden="true" />
-        <span className="shrink-0 text-xs font-semibold">Structures</span>
-        <span className="flex min-w-0 gap-1 overflow-hidden" aria-hidden="true">
-          {build.map(section => section.badge && (
-            <span key={section.id} className="text-base leading-none">{section.badge}</span>
-          ))}
-        </span>
-        {selected && <span className="ml-auto shrink-0 text-lg leading-none">{selected.emoji}</span>}
-        <span className={`shrink-0 text-[10px] tabular-nums text-muted-foreground ${selected ? '' : 'ml-auto'}`}>{ready} ready</span>
-      </button>
-      {open && (
-        <div className="absolute inset-x-0 top-full z-30 pt-1">
-          <div
-            id="palette-menu"
-            data-testid="palette-menu"
-            data-rows={PALETTE_MENU_ROWS}
-            className="overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover p-1.5 shadow-md"
-            style={{ maxHeight: `calc(${PALETTE_MENU_ROWS} * 2.75rem + ${PALETTE_MENU_ROWS - 1} * 0.375rem + 0.75rem)` }}
-          >
-            {build.map(section => (
-              <PaletteGroup key={section.id} section={section} selected={selected} onSelect={onSelect} />
-            ))}
-            <div data-testid="city-decor" aria-label="Decor palette">
-              {decor.map(section => (
-                <PaletteGroup key={section.id} section={section} selected={selected} onSelect={onSelect} />
-              ))}
-            </div>
+      {rows.map((row, index) => {
+        const decorStart = row.findIndex(section => section.entries[0]?.kind === 'decor');
+        const lead = decorStart === -1 ? row : row.slice(0, decorStart);
+        const decor = decorStart === -1 ? [] : row.slice(decorStart);
+        const share = row.length > 1;
+        const strip = (section: PaletteSection) => (
+          <PaletteStrip
+            key={section.id}
+            section={section}
+            share={share}
+            expanded={pinned === section.id || hovered === section.id}
+            selected={selected}
+            onSelect={onSelect}
+            onPointerDown={event => { pointerRef.current = event.pointerType; }}
+            onMoreEnter={event => { if (event.pointerType === 'mouse') setHovered(section.id); }}
+            onSectionLeave={event => {
+              if (event.pointerType === 'mouse') setHovered(current => current === section.id ? null : current);
+            }}
+            onMoreClick={event => togglePinned(section.id, event)}
+          />
+        );
+        return (
+          <div key={row.map(section => section.id).join('-') || index} data-testid={`palette-row-${index + 1}`} className="flex min-w-0 items-start gap-1">
+            {lead.map(strip)}
+            {decor.length > 0 && (
+              <div data-testid="city-decor" aria-label="Decor palette" className="contents">
+                {decor.map(strip)}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })}
+    </div>
     </div>
   );
 }
 
-function PaletteGroup({
+function PaletteStrip({
   section,
+  share,
+  expanded,
   selected,
   onSelect,
+  onPointerDown,
+  onMoreEnter,
+  onSectionLeave,
+  onMoreClick,
 }: {
   section: PaletteSection;
+  share: boolean;
+  expanded: boolean;
   selected: PalettePick | null;
   onSelect: (entry: PaletteEntry) => void;
+  onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onMoreEnter: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onSectionLeave: (event: ReactPointerEvent<HTMLElement>) => void;
+  onMoreClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }) {
+  const tilesRef = useRef<HTMLDivElement>(null);
+  const [overflows, setOverflows] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = tilesRef.current;
+    if (!el) return;
+    const measure = () => {
+      if (expanded) return;
+      setOverflows(el.scrollWidth > el.clientWidth + 1);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [expanded, section.entries]);
+
   return (
-    <section className="mb-1.5 last:mb-0" data-testid={`palette-section-${section.id}`}>
-      <div className="sticky top-0 z-10 flex items-center gap-1 bg-popover py-0.5 text-[10px] font-semibold">
-        {section.badge && <span className="text-sm leading-none" aria-hidden="true">{section.badge}</span>}
-        <span className="truncate">{section.label}</span>
+    <section
+      data-testid={`palette-section-${section.id}`}
+      aria-label={section.label}
+      onPointerLeave={onSectionLeave}
+      className={`relative min-w-0 ${share ? 'flex-1' : 'w-full'}`}
+    >
+      <div className="flex min-w-0 items-start gap-1">
+        <div className="relative z-20 flex shrink-0 items-center gap-0.5 pt-2">
+          {section.badge && <span className="text-base leading-none" aria-hidden="true">{section.badge}</span>}
+          <span className={`truncate text-[10px] font-semibold ${share && section.badge ? 'hidden max-w-[4.5rem] sm:inline' : 'max-w-[7.5rem]'}`}>
+            {section.label}
+          </span>
+        </div>
+        <div
+          ref={tilesRef}
+          className={`flex min-w-0 flex-1 gap-1 ${expanded ? 'flex-wrap' : 'flex-nowrap overflow-hidden'} ${overflows ? 'pr-12' : ''}`}
+        >
+          {section.entries.map(entry => (
+            <PaletteChoice key={`${entry.kind}-${entry.emoji}`} entry={entry} selected={selected} onSelect={onSelect} />
+          ))}
+        </div>
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {section.entries.map(entry => (
-          <PaletteChoice key={`${entry.kind}-${entry.emoji}`} entry={entry} selected={selected} onSelect={onSelect} />
-        ))}
-      </div>
+      {overflows && (
+        <button
+          type="button"
+          data-testid={`palette-more-${section.id}`}
+          aria-expanded={expanded}
+          aria-label={`${section.label} (more)`}
+          onPointerDown={onPointerDown}
+          onPointerEnter={onMoreEnter}
+          onClick={onMoreClick}
+          className="absolute bottom-0 right-0 z-10 px-1 pb-px text-[10px] font-semibold leading-none text-primary before:absolute before:-inset-x-1 before:-top-8 before:bottom-0 before:content-['']"
+        >
+          (more)
+        </button>
+      )}
     </section>
   );
 }

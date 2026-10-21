@@ -17,6 +17,7 @@ import {
   activeDistricts,
   applyDistrictBonus,
   buildPaletteSections,
+  paletteMenuRows,
   availableTokens,
   awaySummary,
   catchUpCity,
@@ -870,6 +871,21 @@ describe('EmojiCB palette sections', () => {
     const earned = buildPaletteSections({ '🌲': 1 }, emptyCity());
     expect(earned.find(section => section.id === 'grove')!.entries.find(entry => entry.emoji === '🌲')).toMatchObject({ locked: false, tokens: 1, kind: 'token' });
     expect(emojiCityRulesBlurb()).toContain('Locked emoji stay listed');
+
+    const rows = paletteMenuRows(sections);
+    expect(rows).toHaveLength(5);
+    expect(rows.slice(0, 4).map(row => row.map(section => section.id))).toEqual([
+      ['thieves'],
+      ['arcane'],
+      ['grove'],
+      ['saloon'],
+    ]);
+    expect(rows[4]!.map(section => section.id)).toEqual([
+      'void', 'neutral', 'roads', 'foliage', 'vehicles', 'shapes', 'misc',
+    ]);
+    expect(rows[4]![0]!.badge).toBe(VOID);
+    expect(rows[4]![0]!.label).toBe('Void Hollow');
+    expect(emojiCityRulesBlurb()).toContain('Void Hollow leads the fifth row');
   });
 });
 
@@ -892,7 +908,11 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('city-away');
     expect(city).toContain('data-testid="city-decor"');
     expect(city).toContain('buildPaletteSections');
-    expect(city).toContain('palette-toggle-');
+    expect(city).toContain('palette-more-');
+    expect(city).toContain('(more)');
+    expect(city).not.toContain('palette-toggle-');
+    expect(city).not.toContain('absolute inset-x-0 top-full');
+    expect(city).toContain('data-testid="raise-structure"');
     expect(city).toContain('aria-expanded');
     expect(city).toContain('PALETTE_MENU_ROWS = 5');
     expect(city).toContain('data-testid="palette-menu"');
