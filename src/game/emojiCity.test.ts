@@ -53,10 +53,17 @@ import {
   tokensForEmoji,
   tokensGrantedForRunConsume,
   totalAvailableTokens,
+  TRAIN_EMOJI,
+  TRAIN_LINE_HINT,
+  isTrainEmoji,
+  spanningTrainLine,
+  trainLineSpansCity,
+  trainLineStatusLabel,
 } from './emojiCity';
+import { CITY_NAME_DEFAULT, CITY_NAME_MAX, generateAnonymousName, isAnonymousName, normalizeCityName } from './cityIdentity';
 import { BUILDINGS } from './cityBuildings';
 import { DROP_RARITIES, FULL_GRID_RARITY_TOKENS } from './dropTable';
-import { loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, recordRunEmojiConsume, replaceEmojiConsumes, saveCity, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
+import { ensureCityProfile, loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, recordRunEmojiConsume, replaceEmojiConsumes, saveCity, saveCityName, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
 import { COWBOY, FENCER, GENIE, HITMAN, META_SAVE_KEY, META_SCHEMA_VERSION, NINJA, RANGER, ROYAL_GUARD, VOID, WIZARD } from './prestigeConstants';
 
 function memoryStore(): KeyValueStore {
@@ -856,6 +863,14 @@ describe('EmojiCB palette sections', () => {
     }
     for (const building of BUILDINGS) expect(tokens.filter(entry => entry.emoji === building.emoji)).toHaveLength(1);
 
+    const roads = sections.find(section => section.id === 'roads')!;
+    expect(roads.badge).toBe('🛣️');
+    expect(roads.entries.every(entry => entry.kind === 'decor' && !entry.locked && entry.housing === 0)).toBe(true);
+    expect(roads.entries.map(entry => entry.emoji)).toEqual(expect.arrayContaining([...TRAIN_EMOJI]));
+    expect(roads.entries.map(entry => entry.name)).toEqual([
+      'Bullet Train', 'Express', 'Locomotive', 'Railcar', 'Road', 'Station', 'Track', 'Train',
+    ]);
+
     const foliage = sections.find(section => section.id === 'foliage')!;
     expect(foliage.entries.every(entry => entry.kind === 'decor' && !entry.locked && entry.housing === 0)).toBe(true);
     expect(foliage.entries.map(entry => entry.name)).toEqual(['Cactus', 'Palm', 'Pine', 'Sunflower', 'Tree', 'Tulip']);
@@ -928,6 +943,17 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('CITY_TILE_MIN');
     expect(city).toContain('CITY_TILE_MAX');
     expect(city).toContain('minmax(${CITY_TILE_MIN}, ${CITY_TILE_MAX})');
+    expect(city).toContain('data-testid="city-name"');
+    expect(city).toContain('data-testid="city-visitor"');
+    expect(city).toContain('data-testid="city-train-status"');
+    expect(city).toContain('data-testid="city-train-hint"');
+    expect(city).toContain('data-testid="visit-cities"');
+    expect(city).toContain('Visit Cities (coming soon)');
+    expect(city).toContain('data-testid="share-city"');
+    expect(city).toContain('Share');
+    expect(city).toContain('ensureCityProfile');
+    expect(city).toContain('trainLineSpansCity');
+    expect(city).not.toContain('fetch(');
     expect(city).toContain('data-testid="city-grid-scroll"');
     expect(city).toContain('w-fit min-w-min max-w-full');
     expect(city).toContain('edge="north"');
@@ -944,5 +970,132 @@ describe('EmojiCB surfaces', () => {
     expect(burden).toContain('recordRunEmojiConsume');
     expect(burden).toContain('cityGrant.notice');
     expect(burden).not.toContain('recordEmojiConsume(');
+  });
+});
+
+describe('EmojiCB city name and visitor', () => {
+  it('accepts a short name, rejects symbols, and persists it with the visitor name', () => {
+    expect(normalizeCityName('   ')).toEqual({ ok: true, name: CITY_NAME_DEFAULT });
+    expect(normalizeCityName('  North   Yard  ')).toEqual({ ok: true, name: 'North Yard' });
+    expect(normalizeCityName("O'Hare!")).toEqual({ ok: true, name: "O'Hare!" });
+    expect(normalizeCityName('A'.repeat(CITY_NAME_MAX)).ok).toBe(true);
+    expect(normalizeCityName('A'.repeat(CITY_NAME_MAX + 1))).toEqual({
+      ok: false,
+      reason: `Keep the name to ${CITY_NAME_MAX} characters.`,
+    });
+    expect(normalizeCityName('City 🏙️').ok).toBe(false);
+    expect(normalizeCityName('Line\nBreak').ok).toBe(false);
+    expect(normalizeCityName('---').ok).toBe(false);
+
+    const profile = ensureCityProfile(() => 0);
+    expect(profile).toEqual({ cityName: CITY_NAME_DEFAULT, anonymousName: 'BraveOtter1000' });
+    expect(isAnonymousName(profile.anonymousName)).toBe(true);
+    expect(ensureCityProfile(() => { throw new Error('visitor name must stay'); })).toEqual(profile);
+
+    const saved = saveCityName('  Dockside  ');
+    expect(saved).toEqual({ ok: true, name: 'Dockside' });
+    expect(saveCityName('City 🚆')).toMatchObject({ ok: false });
+    saveCity(emptyCity());
+    settleCityCatchUp(emptyCity(), 2);
+    expect(loadMeta().cityName).toBe('Dockside');
+    expect(loadMeta().anonymousName).toBe('BraveOtter1000');
+    expect(loadMeta().schemaVersion).toBe(3);
+
+    saveMeta({ ...loadMeta(), anonymousName: 'not-a-name', cityName: '🏙️' });
+    const replaced = ensureCityProfile(() => 0.5);
+    expect(replaced.cityName).toBe(CITY_NAME_DEFAULT);
+    expect(replaced.anonymousName).not.toBe('not-a-name');
+    expect(isAnonymousName(replaced.anonymousName)).toBe(true);
+    expect(ensureCityProfile(() => 0)).toEqual(replaced);
+
+    expect(generateAnonymousName(() => 0)).toBe('BraveOtter1000');
+    expect(emojiCityRulesBlurb()).toContain('defaulting to Emoji City');
+    expect(emojiCityRulesBlurb()).toContain('Visit Cities and Share stay offline');
+  });
+});
+
+describe('EmojiCB train line', () => {
+  function paint(city: ReturnType<typeof emptyCity>, edits: (tiles: (string | null)[], cols: number) => void) {
+    const tiles = [...city.tiles];
+    edits(tiles, city.cols);
+    return normalizeCity({ ...city, tiles, decor: city.decor });
+  }
+
+  function fillRow(city: ReturnType<typeof emptyCity>, y: number, glyphAt: (x: number) => string) {
+    return paint(city, (tiles, cols) => {
+      for (let x = 0; x < cols; x++) tiles[y * cols + x] = glyphAt(x);
+    });
+  }
+
+  function fillColumn(city: ReturnType<typeof emptyCity>, x: number, glyphAt: (y: number) => string) {
+    return paint(city, (tiles, cols) => {
+      for (let y = 0; y < city.rows; y++) tiles[y * cols + x] = glyphAt(y);
+    });
+  }
+
+  const mixed = (index: number) => TRAIN_EMOJI[index % TRAIN_EMOJI.length]!;
+
+  it('accepts a mixed edge-to-edge row or column and rejects gaps', () => {
+    expect(trainLineSpansCity(emptyCity())).toBe(false);
+    expect(TRAIN_EMOJI.every(isTrainEmoji)).toBe(true);
+    expect(isTrainEmoji('🛤️'.replace(/\uFE0F/g, ''))).toBe(true);
+    expect(isTrainEmoji('🛣️')).toBe(false);
+
+    const row = fillRow(emptyCity(), 3, mixed);
+    expect(spanningTrainLine(row)).toEqual({ axis: 'row', index: 3 });
+    expect(trainLineStatusLabel(true)).toMatch(/unlocked/i);
+    expect(TRAIN_LINE_HINT).toMatch(/full row or one full column/i);
+
+    const gapped = fillRow(emptyCity(), 3, x => (x === 4 ? '🛣️' : mixed(x)));
+    expect(trainLineSpansCity(gapped)).toBe(false);
+    const short = fillRow(emptyCity(), 1, x => (x === CITY_COLS - 1 ? '🏠' : '🚆'));
+    expect(trainLineSpansCity(short)).toBe(false);
+
+    const column = fillColumn(emptyCity(), 0, mixed);
+    expect(spanningTrainLine(column)).toEqual({ axis: 'column', index: 0 });
+    const columnGap = fillColumn(emptyCity(), 2, y => (y === 5 ? null as unknown as string : '🚉'));
+    expect(trainLineSpansCity(columnGap)).toBe(false);
+
+    const placed = TRAIN_EMOJI.reduce((next, emoji, index) => placeDecor(next, index, emoji).city, emptyCity());
+    expect(placed.tiles.slice(0, TRAIN_EMOJI.length)).toEqual([...TRAIN_EMOJI]);
+    expect(placed.decor.slice(0, TRAIN_EMOJI.length).every(Boolean)).toBe(true);
+    expect(trainLineSpansCity(placed)).toBe(false);
+  });
+
+  it('drops a spanning line when that side grows, and keeps it when the other side grows', () => {
+    const row = fillRow(emptyCity(), 0, mixed);
+    const east = expandCity(row, 'east', { '🍎': 10 });
+    expect(east.ok).toBe(true);
+    expect(east.city.cols).toBe(CITY_COLS + 1);
+    expect(trainLineSpansCity(east.city)).toBe(false);
+    const extendedEast = paint(east.city, (tiles, cols) => { tiles[cols - 1] = '🚉'; });
+    expect(spanningTrainLine(extendedEast)).toEqual({ axis: 'row', index: 0 });
+
+    const west = expandCity(row, 'west', { '🍎': 10 });
+    expect(west.ok).toBe(true);
+    expect(trainLineSpansCity(west.city)).toBe(false);
+    const extendedWest = paint(west.city, tiles => { tiles[0] = '🚂'; });
+    expect(trainLineSpansCity(extendedWest)).toBe(true);
+
+    const southFromRow = expandCity(row, 'south', { '🍎': 10 });
+    expect(southFromRow.ok).toBe(true);
+    expect(trainLineSpansCity(southFromRow.city)).toBe(true);
+
+    const column = fillColumn(emptyCity(), CITY_COLS - 1, mixed);
+    const south = expandCity(column, 'south', { '🍎': 10 });
+    expect(south.ok).toBe(true);
+    expect(trainLineSpansCity(south.city)).toBe(false);
+    const extendedSouth = paint(south.city, (tiles, cols) => {
+      tiles[(south.city.rows - 1) * cols + (CITY_COLS - 1)] = '🚅';
+    });
+    expect(spanningTrainLine(extendedSouth)).toEqual({ axis: 'column', index: CITY_COLS - 1 });
+
+    const north = expandCity(column, 'north', { '🍎': 10 });
+    expect(north.ok).toBe(true);
+    expect(trainLineSpansCity(north.city)).toBe(false);
+
+    const eastFromColumn = expandCity(column, 'east', { '🍎': 10 });
+    expect(eastFromColumn.ok).toBe(true);
+    expect(spanningTrainLine(eastFromColumn.city)).toEqual({ axis: 'column', index: CITY_COLS - 1 });
   });
 });
