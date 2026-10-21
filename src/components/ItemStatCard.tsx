@@ -136,8 +136,14 @@ export function ItemStatCard({
               );
             })() : si.bagPassive.nonStackable
               ? <div className="text-[10px] text-amber-400/60">Non-stackable — only 1 copy applies</div>
-              : <div className="text-[10px] text-emerald-400/60">Stackable — each copy adds another instance</div>
-            }
+              : <div className="text-[10px] text-emerald-400/60">Stackable — each copy adds another instance</div>}
+            {si.isVoidGhost && (
+              <div className="text-[10px] text-violet-300">
+                Ghost stack ×{Math.max(1, si.stackCount ?? 1)}
+                {si.isVoidGhostDormant ? ' · dormant' : ''}
+                {!isStackableBagPassive(si) ? ' — the effect does not grow with stacks' : ''}
+              </div>
+            )}
           </div>
         )}
 

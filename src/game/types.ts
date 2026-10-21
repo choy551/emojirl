@@ -29,7 +29,8 @@ export type TileType =
   | 'mirror'
   | 'bounty'
   | 'vanity'
-  | 'auction';
+  | 'auction'
+  | 'hollow';
 
 export interface Tile {
   type: TileType;
@@ -464,6 +465,10 @@ export interface GameState {
   voidAttackMode?: 'melee' | 'ranger' | 'wizard';
   /** Floor number on which Unmake was already spent. Resets when this no longer matches currentFloor. */
   unmakeUsedFloor?: number;
+  /** Floor that already spent its Void grace turn. A new floor refreshes it. */
+  voidGraceFloor?: number;
+  /** Floor that already traded at the Hollow Market. */
+  hollowUsedFloor?: number;
   /** Bounty board contract for this floor. Cleared on descend. */
   bounty?: BountyQuest;
 }

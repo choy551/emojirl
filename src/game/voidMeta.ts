@@ -85,13 +85,15 @@ function writeGhostCatalog(cat: GhostCatalog): void {
  * Count one hotbar consume of a soul emoji on a Void run.
  * Unlocks (stacks) = floor(consumes / 10). `crossed` is true when a new stack is earned.
  */
-export function recordHotbarSoulConsume(emoji: string): { unlocks: number; consumes: number; crossed: boolean } {
-  const cat = readGhostCatalog();
-  const cur = cat[emoji] ?? { unlocks: 0, consumes: 0, order: 0 };
-  const consumes = cur.consumes + 1;
+function writeConsumeEntry(
+  emoji: string,
+  consumes: number,
+  prev: GhostCatalogEntry,
+  cat: GhostCatalog,
+): { unlocks: number; consumes: number; crossed: boolean } {
   const unlocks = Math.floor(consumes / 10);
-  const crossed = unlocks > cur.unlocks;
-  let order = cur.order;
+  const crossed = unlocks > prev.unlocks;
+  let order = prev.order;
   if (crossed && order === 0) {
     const maxOrder = Object.values(cat).reduce((m, e) => Math.max(m, e.order), 0);
     order = maxOrder + 1;
@@ -99,6 +101,44 @@ export function recordHotbarSoulConsume(emoji: string): { unlocks: number; consu
   cat[emoji] = { unlocks, consumes, order };
   writeGhostCatalog(cat);
   return { unlocks, consumes, crossed };
+}
+
+export function recordHotbarSoulConsume(emoji: string): { unlocks: number; consumes: number; crossed: boolean } {
+  const cat = readGhostCatalog();
+  const cur = cat[emoji] ?? { unlocks: 0, consumes: 0, order: 0 };
+  return writeConsumeEntry(emoji, cur.consumes + 1, cur, cat);
+}
+
+/** Add several consumes at once. Same unlock rule as a hotbar spend: floor(consumes / 10). */
+export function addVoidConsumes(emoji: string, n: number): { unlocks: number; consumes: number; crossed: boolean } {
+  const add = Math.max(0, Math.floor(n));
+  const cat = readGhostCatalog();
+  const cur = cat[emoji] ?? { unlocks: 0, consumes: 0, order: 0 };
+  return writeConsumeEntry(emoji, cur.consumes + add, cur, cat);
+}
+
+/** Consumes above the current ghost-stack floor. Spending these does not drop a stack. */
+export function spareConsumes(entry?: GhostCatalogEntry): number {
+  if (!entry) return 0;
+  return Math.max(0, entry.consumes - entry.unlocks * 10);
+}
+
+export function spendSpareConsumes(emoji: string, n: number): {
+  ok: boolean;
+  consumes: number;
+  spare: number;
+  unlocks: number;
+} {
+  const need = Math.max(0, Math.floor(n));
+  const cat = readGhostCatalog();
+  const cur = cat[emoji] ?? { unlocks: 0, consumes: 0, order: 0 };
+  const spare = spareConsumes(cur);
+  if (spare < need) return { ok: false, consumes: cur.consumes, spare, unlocks: cur.unlocks };
+  const consumes = cur.consumes - need;
+  const unlocks = Math.floor(consumes / 10);
+  cat[emoji] = { ...cur, consumes, unlocks };
+  writeGhostCatalog(cat);
+  return { ok: true, consumes, spare: spare - need, unlocks };
 }
 
 export function readVoidModeProgress(): VoidModeProgress {

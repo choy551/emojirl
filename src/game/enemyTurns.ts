@@ -1,7 +1,7 @@
 import { Enemy, EmojiItem, GameState, Position, FloatingText, PlacedBomb, ActiveProjectile } from './types';
 import { chebyshev } from './geo';
 import { applyEquipmentAndPassives, addToPlayerBag, playerBagPassives, parkVoidOverflow, countVoidPressureSlots } from './inventory';
-import { applyNullMomentum, creditVoidBoss, occupiedGhosts, voidClassTurnDamage, voidDamageFor, voidGhostCapacity, VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from './voidDamage';
+import { applyNullMomentum, applyVoidPressureTick, creditVoidBoss, occupiedGhosts, voidClassTurnDamage, voidDamageFor, voidGhostCapacity, VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from './voidDamage';
 import { applyEntropicTithe, type GhostKillEffect } from './voidAbilities';
 import { unlockVoidClass } from './voidMeta';
 import { stealOneSoulEmoji, applySoulThefts, stolenEmojiSummary } from './monkeyLoot';
@@ -50,6 +50,8 @@ export interface EnemyTurnResult {
   depthBossKills?: number;
   /** Ghost-passive kills this phase (burn ticks). Loot stays suppressed; tithe is applied after. */
   titheKills?: GhostKillEffect[];
+  /** Set when this phase spent the floor's Void grace turn. */
+  voidGraceFloor?: number;
 }
 
 export function runEnemyTurns(state: GameState, skipId?: string, sleeping = false): EnemyTurnResult {
@@ -67,6 +69,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   const titheKills: GhostKillEffect[] = [];
   const soften = (raw: number) => applyNullMomentum(raw, player);
   let killer: { name: string; emoji: string } | undefined;
+  let voidGraceFloor: number | undefined;
   const newLogs: Array<{ id: string; text: string; turn: number }> = [];
   const newFloatingTexts: FloatingText[] = [];
   const explosionPositions: Position[] = [];
@@ -212,13 +215,31 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     const filled = effectiveVoidPressureSlots(countVoidPressureSlots(player), voidPressureIgnoredSlots(player));
     if (filled > 0) {
       const dmg = voidClassTurnDamage(filled, state.currentFloor);
-      playerHp -= dmg;
-      log(`👤 Void pressure (${filled} held) — ${dmg} dmg…`);
+      const tick = applyVoidPressureTick({
+        hp: playerHp,
+        damage: dmg,
+        floor: state.currentFloor,
+        graceFloor: state.voidGraceFloor,
+      });
+      playerHp = tick.hp;
       _flashSignals.emojilessFlashPending = true;
-      if (playerHp <= 0) {
-        playerDied = true;
-        if (!killer) killer = { name: 'the void', emoji: '👤' };
-        log(VOID_DEATH_TEXT);
+      if (tick.graced) {
+        log(tick.log ?? '👤 The Void hesitates.');
+        newFloatingTexts.push({
+          id: `void-grace-${state.turn}`,
+          pos: { ...player.pos },
+          text: 'GRACE',
+          color: '#c4b5fd',
+          life: 2,
+        });
+        voidGraceFloor = tick.graceFloor;
+      } else {
+        log(`👤 Void pressure (${filled} held) — ${dmg} dmg…`);
+        if (tick.died) {
+          playerDied = true;
+          if (!killer) killer = { name: 'the void', emoji: '👤' };
+          log(VOID_DEATH_TEXT);
+        }
       }
     }
   } else {
@@ -887,7 +908,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
 
   const feasted = tickFeastBuffs(newEnemies.filter(e => e.hp > 0));
   for (const text of feasted.logs) log(text);
-  return { enemies: feasted.enemies, playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn, depthBossKills, titheKills };
+  return { enemies: feasted.enemies, playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn, depthBossKills, titheKills, voidGraceFloor };
 }
 
 export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): GameState {
@@ -931,6 +952,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
       pendingExplosion,
       pendingBeam,
       player: { ...state.player, trailblazerCooldown: result.trailblazerCooldown },
+      ...(result.voidGraceFloor !== undefined ? { voidGraceFloor: result.voidGraceFloor } : {}),
     };
   } else {
     next = {
@@ -953,6 +975,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
       activeProjectile: result.activeProjectile,
       pendingExplosion,
       pendingBeam,
+      ...(result.voidGraceFloor !== undefined ? { voidGraceFloor: result.voidGraceFloor } : {}),
     };
   }
   const xpGain = result.playerXpGain ?? 0;

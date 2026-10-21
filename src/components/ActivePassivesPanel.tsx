@@ -46,11 +46,11 @@ export function ActivePassivesPanel({ bagSlots }: ActivePassivesPanelProps) {
         if (p.losBonus && p.losBonus > 0) statParts.push(`+${p.losBonus} VIS`);
         if (p.losBonus && p.losBonus < 0) statParts.push(`${p.losBonus} VIS`);
         const passiveDesc = help.bagPassiveDescription ?? p.description;
-        const effectLabel = cumulative
+        const effectLabel = (cumulative
           ? (n > 1 ? `×${n} — ${cumulative}` : cumulative)
           : statParts.length > 0
             ? `${passiveDesc} [${statParts.join(', ')}]`
-            : passiveDesc;
+            : passiveDesc) + (item.isVoidGhost ? ` · Ghost stack ×${n}` : '');
         return (
           <div key={item.id} className="flex items-start gap-1.5 text-[11px]">
             <span className="text-base leading-none shrink-0 mt-px">{item.emoji}</span>

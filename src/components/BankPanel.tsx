@@ -75,7 +75,10 @@ export function BankPanel({
               >
                 {hItem ? hItem.emoji : <span className="text-[8px] text-muted-foreground/20">{i + 1}</span>}
                 {hItem?.isVoidGhost && <span className="absolute bottom-0 left-0.5 text-[7px] leading-none">👤</span>}
-                {hItem && !hKind && (hItem.stackCount ?? 0) > 1 && (
+                {hItem?.isVoidGhost && (
+                  <span data-testid={`ghost-stack-${hItem.emoji}`} className="absolute top-0 right-0.5 text-[7px] text-violet-300 font-bold leading-none">×{Math.max(1, hItem.stackCount ?? 1)}</span>
+                )}
+                {hItem && !hItem.isVoidGhost && !hKind && (hItem.stackCount ?? 0) > 1 && (
                   <span className="absolute bottom-0 right-0.5 text-[7px] text-emerald-400 font-bold leading-none">×{hItem.stackCount}</span>
                 )}
                 {hItem && hKind && <span className="absolute bottom-0 right-0.5 text-[7px] leading-none">{hKind}</span>}
@@ -102,7 +105,7 @@ export function BankPanel({
                 key={`ghost-hot-${i}`}
                 type="button"
                 onClick={() => onBanishGhost?.(i)}
-                title={`Banish ${ghost.emoji} to the ghost bank`}
+                title={`Ghost stack ×${ghost.stacks}. Banish ${ghost.emoji} to the ghost bank`}
                 className="opacity-40 px-1.5 py-1 rounded border border-violet-400/40 bg-violet-950/30 text-sm leading-none"
               >
                 {ghost.emoji}
@@ -114,7 +117,7 @@ export function BankPanel({
                 key={`ghost-bank-${ghost.emoji}`}
                 type="button"
                 onClick={() => onManifestGhost?.(ghost.emoji)}
-                title={`Manifest ${ghost.emoji} into an empty hotbar slot`}
+                title={`Ghost stack ×${ghost.stacks}. Manifest ${ghost.emoji} into an empty hotbar slot`}
                 className="px-1.5 py-1 rounded border border-border/50 bg-black/30 text-sm leading-none hover:border-violet-400/50"
               >
                 {ghost.emoji}

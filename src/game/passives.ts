@@ -81,13 +81,21 @@ export function getStackableCumulativeLabel(item: EmojiItem): string | null {
   return null;
 }
 
+/** Ghost stacks are always named, including ×1. Dormant ghosts say so. */
+export function ghostStackSuffix(item: EmojiItem): string {
+  if (!item.isVoidGhost) return '';
+  const n = Math.max(1, item.stackCount ?? 1);
+  return ` · Ghost stack ×${n}${item.isVoidGhostDormant ? ' · dormant' : ''}`;
+}
+
 export function getPassiveTooltipSuffix(item: EmojiItem): string {
-  if (!hasBagPassive(item)) return '';
+  const ghost = ghostStackSuffix(item);
+  if (!hasBagPassive(item)) return ghost;
   const p = item.bagPassive!;
   const cumulative = getStackableCumulativeLabel(item);
   if (cumulative) {
     const n = item.stackCount ?? 1;
-    return ` · Passive ×${n}: ${cumulative}`;
+    return ` · Passive ×${n}: ${cumulative}${ghost}`;
   }
   const statParts: string[] = [];
   if (p.attackBonus)              statParts.push(`+${p.attackBonus} ATK`);
@@ -98,5 +106,6 @@ export function getPassiveTooltipSuffix(item: EmojiItem): string {
   if (p.losBonus && p.losBonus > 0) statParts.push(`+${p.losBonus} vision`);
   if (p.losBonus && p.losBonus < 0) statParts.push(`${p.losBonus} vision`);
   const base = ` · Passive: ${soulHelpText(item).bagPassiveDescription ?? p.description}`;
-  return statParts.length > 0 ? `${base} [${statParts.join(', ')}]` : base;
+  const body = statParts.length > 0 ? `${base} [${statParts.join(', ')}]` : base;
+  return `${body}${ghost}`;
 }

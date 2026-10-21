@@ -144,6 +144,9 @@ export function RightSidebar({
                 <>
                   <span className="absolute top-0.5 left-1 text-[8px] text-muted-foreground font-bold leading-none">{i + 1}</span>
                   {item.isVoidGhost && <span className="absolute bottom-0.5 left-0.5 text-[8px] leading-none">👤</span>}
+                  {item.isVoidGhost && (
+                    <span data-testid={`ghost-stack-${item.emoji}`} className="absolute top-0.5 right-0.5 text-[8px] text-violet-300 font-bold leading-none">×{Math.max(1, item.stackCount ?? 1)}</span>
+                  )}
                   {item.isEquipment && <span className="absolute bottom-0.5 right-0.5 text-[8px] leading-none">⚔️</span>}
                   {!item.isEquipment && kindEmoji && (
                     <span className="absolute bottom-0.5 right-0.5 text-[9px] leading-none">{kindEmoji}</span>
@@ -151,7 +154,7 @@ export function RightSidebar({
                   {item.charges !== undefined && item.charges >= 0 && (
                     <span className="absolute top-0.5 right-0.5 text-[7px] text-amber-400/80 font-bold leading-none">×{item.charges}</span>
                   )}
-                  {!item.isEquipment && !kindEmoji && (item.stackCount ?? 0) > 1 && (
+                  {!item.isVoidGhost && !item.isEquipment && !kindEmoji && (item.stackCount ?? 0) > 1 && (
                     <span className="absolute bottom-0.5 right-0.5 text-[8px] text-emerald-400 font-bold leading-none">×{item.stackCount}</span>
                   )}
                   {!item.isEquipment && !kindEmoji && bankDupes > 0 && (

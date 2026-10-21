@@ -20,6 +20,7 @@ import { farmerRulesBlurb } from "../game/farmer";
 import { foodSinkRulesBlurb } from "../game/foodSinks";
 import { goldSinkRulesBlurb } from "../game/goldSinks";
 import { goldSink2RulesBlurb } from "../game/goldSinks2";
+import { voidExtrasRulesBlurb } from "../game/hollowMarket";
 import {
   getSeenEmojis,
   getSeenEnemies,
@@ -650,6 +651,10 @@ export default function HowToPlay({
           Ranger autos are the Ranger’s directional shot and spend ammo. Wizard autos use the Wizard’s nearest / furthest / manual targeting and do not spend mana.
           Press <em>U</em> for Unmake, once per floor.
         </p>
+        <div className="mb-3 bg-card/50 border border-violet-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-violet-200 mb-1">The Void — Hollow Market and grace</div>
+          {voidExtrasRulesBlurb()}
+        </div>
         <div className="space-y-3">
           {Object.entries(CHARACTER_CLASSES).map(([emoji, cls]) => (
             <div
