@@ -59,6 +59,7 @@ import { InsuranceModal } from '../components/InsuranceModal';
 import { BountyBoardModal } from '../components/BountyBoardModal';
 import { VanityFlexModal } from '../components/VanityFlexModal';
 import { BloodAuctionModal } from '../components/BloodAuctionModal';
+import { HollowMarketModal } from '../components/HollowMarketModal';
 import { BANQUET_MIN_DISHES, cookedDishCount, nearCampfire, nearShrineOffer } from '../game/foodSinks';
 import { stashInsuranceOnDeath, takeInsuredStartItems } from '../game/goldSinks';
 import { bountyProgress, grantBounty, rollBountyOffer, vanityTitleName, vanityTrailById } from '../game/goldSinks2';
@@ -373,6 +374,7 @@ export default function Game() {
       { id: 'bounty', isOpen: () => bountyOpen, close: () => setBountyOpen(false) },
       { id: 'vanity', isOpen: () => vanityOpen, close: () => setVanityOpen(false) },
       { id: 'auction', isOpen: () => auctionOpen, close: () => setAuctionOpen(false) },
+      { id: 'hollow', isOpen: () => hollowOpen, close: () => setHollowOpen(false) },
       { id: 'dir-pick', isOpen: () => dirPickModeRef.current !== null, close: () => { dirPickModeRef.current = null; setDirPickMode(null); } },
       { id: 'unmake', isOpen: () => unmakeTargetModeRef.current, close: () => { unmakeTargetModeRef.current = false; setUnmakeTargetMode(false); } },
       { id: 'blink', isOpen: () => blinkTargetModeRef.current, close: () => { setBlinkTargetMode(false); blinkTargetModeRef.current = false; } },
@@ -434,6 +436,7 @@ export default function Game() {
     if (tile?.type === 'bounty' && !bountyOpenRef.current) openBountyBoard();
     if (tile?.type === 'vanity' && !vanityOpenRef.current) setVanityOpen(true);
     if (tile?.type === 'auction' && !auctionOpenRef.current) setAuctionOpen(true);
+    if (tile?.type === 'hollow' && !hollowOpenRef.current) setHollowOpen(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.player.pos.x, gameState?.player.pos.y]);
 
@@ -501,6 +504,9 @@ export default function Game() {
   const [auctionOpen, setAuctionOpen] = useState(false);
   const auctionOpenRef = useRef(false);
   useEffect(() => { auctionOpenRef.current = auctionOpen; }, [auctionOpen]);
+  const [hollowOpen, setHollowOpen] = useState(false);
+  const hollowOpenRef = useRef(false);
+  useEffect(() => { hollowOpenRef.current = hollowOpen; }, [hollowOpen]);
   const openBountyBoard = useCallback(() => {
     setGameState(prev => {
       if (!prev) return prev;
@@ -565,6 +571,7 @@ export default function Game() {
     bountyOpen ||
     vanityOpen ||
     auctionOpen ||
+    hollowOpen ||
     dirPickMode ||
     unmakeTargetMode ||
     blinkTargetMode ||
@@ -702,8 +709,8 @@ export default function Game() {
     } else {
       clearSave();
     }
-    const { map, startPos, rooms } = generateMap(1);
     const vessel = localStorage.getItem('emojirl_vessel') ?? '🧙';
+    const { map, startPos, rooms } = generateMap(1, { voidRun: vessel === '👤' });
     const cls = getClassDef(vessel);
     const arcane = isArcaneCaster(vessel);
     const startMp = isGenie(vessel) ? GENIE_BASE_MP : 4;
@@ -1071,6 +1078,11 @@ export default function Game() {
         addLog('Autoexplore stopped: ☠️ Blood auction.');
         return;
       }
+      if (exploreTile?.type === 'hollow') {
+        setAutoExplore(false);
+        addLog('Autoexplore stopped: 🌑 Hollow Market.');
+        return;
+      }
       // Stop when adjacent to a visible bar tile. BFS already routes around bars so
       // the player never steps on one, but without this stop the player could end up
       // right next to a bar with no feedback. This lets them decide whether to visit.
@@ -1348,6 +1360,7 @@ export default function Game() {
       case 'open-bounty': setTravelTarget(null); openBountyBoard(); break;
       case 'open-vanity': setTravelTarget(null); setVanityOpen(true); break;
       case 'open-auction': setTravelTarget(null); setAuctionOpen(true); break;
+      case 'open-hollow': setTravelTarget(null); setHollowOpen(true); break;
       case 'talk': {
         const gs = gameStateRef.current;
         if (gs && action.dir) {
@@ -1560,6 +1573,11 @@ export default function Game() {
       if (auctionOpenRef.current) {
         e.preventDefault();
         if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setAuctionOpen(false); return; }
+        return;
+      }
+      if (hollowOpenRef.current) {
+        e.preventDefault();
+        if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setHollowOpen(false); return; }
         return;
       }
 
@@ -2294,6 +2312,7 @@ export default function Game() {
           else if (tileData.type === 'bounty') tileBg = 'rgba(180,140,40,0.28)';
           else if (tileData.type === 'vanity') tileBg = 'rgba(180,60,160,0.28)';
           else if (tileData.type === 'auction') tileBg = 'rgba(140,20,40,0.32)';
+          else if (tileData.type === 'hollow') tileBg = 'rgba(48, 0, 72, 0.45)';
 
           row.push(
             <div
@@ -3907,6 +3926,15 @@ export default function Game() {
           setGameState={setGameState}
           addLog={addLog}
           onClose={() => setAuctionOpen(false)}
+        />
+      )}
+
+      {hollowOpen && gameState && (
+        <HollowMarketModal
+          gameState={gameState}
+          setGameState={setGameState}
+          addLog={addLog}
+          onClose={() => setHollowOpen(false)}
         />
       )}
 

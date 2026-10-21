@@ -3,6 +3,7 @@ import { placePrairie, prairieAppearsOnFloor } from './farmer';
 import { mapHasCampfire, shouldPlaceLoneCampfire } from './foodSinks';
 import { shouldPlaceMirror } from './goldSinks';
 import { shouldPlaceAuction, shouldPlaceBounty, shouldPlaceVanity } from './goldSinks2';
+import { HOLLOW_EMOJI, shouldPlaceHollow } from './hollowMarket';
 import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, coolLavaWaterContacts } from './lava';
 import { BED_EMOJI, BED_MAX_USES } from './tiles';
 import { FINALE_FLOOR } from './finaleConstants';
@@ -704,7 +705,7 @@ function ensureStairsReachable(map: MapGrid, start: Position, stairs: Position):
     'floor', 'stairs', 'boss-floor', 'grass',
     'door-open', 'door-closed',
     'safe-floor', 'shop-item', 'shrine', 'shrine-used', 'slot-shrine', 'bed',
-    'campfire', 'obsidian', 'mirror', 'bounty', 'vanity', 'auction',
+    'campfire', 'obsidian', 'mirror', 'bounty', 'vanity', 'auction', 'hollow',
   ]);
   if (reach(map, start, stairs, DRY)) return;
 
@@ -820,7 +821,7 @@ export function generateFinaleArena(): FinaleArena {
   return { map, startPos, stairsPos, rooms, seats, pitTiles };
 }
 
-export function generateMap(floor: number): { map: MapGrid; startPos: Position; stairsPos: Position; rooms: Room[] } {
+export function generateMap(floor: number, opts?: { voidRun?: boolean }): { map: MapGrid; startPos: Position; stairsPos: Position; rooms: Room[] } {
   if (floor === FINALE_FLOOR) {
     const arena = generateFinaleArena();
     return { map: arena.map, startPos: arena.startPos, stairsPos: arena.stairsPos, rooms: arena.rooms };
@@ -1014,6 +1015,7 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
   placeService(shouldPlaceBounty(floor, Math.random()), 'bounty', '📜');
   placeService(shouldPlaceVanity(floor, Math.random()), 'vanity', '💎');
   placeService(shouldPlaceAuction(floor, Math.random()), 'auction', '☠️');
+  placeService(shouldPlaceHollow(floor, Math.random(), !!opts?.voidRun), 'hollow', HOLLOW_EMOJI);
 
   // Floors with no forest fire sometimes grow a lone campfire for banquets.
   if (shouldPlaceLoneCampfire(mapHasCampfire(map), Math.random())) {

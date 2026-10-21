@@ -13,7 +13,8 @@ export type GotoKind =
   | 'mirror'
   | 'bounty'
   | 'vanity'
-  | 'auction';
+  | 'auction'
+  | 'hollow';
 
 export interface GotoDestination {
   key: string;
@@ -46,6 +47,7 @@ const KIND_META: Record<GotoKind, { icon: string; label: string }> = {
   bounty: { icon: '📜', label: 'Bounty board' },
   vanity: { icon: '💎', label: 'Vanity flex' },
   auction: { icon: '☠️', label: 'Blood auction' },
+  hollow: { icon: '🌑', label: 'Hollow Market' },
 };
 
 function classifyTile(
@@ -61,6 +63,7 @@ function classifyTile(
   if (type === 'bounty') return 'bounty';
   if (type === 'vanity') return 'vanity';
   if (type === 'auction') return 'auction';
+  if (type === 'hollow') return 'hollow';
   if (type === 'bed') return 'bed';
   if (type === 'shop-item' && emoji === '🏪') return opts.shopSoldOut ? null : 'shop';
   if (type === 'shop-item' && emoji === '🍺') return 'bar';

@@ -133,13 +133,16 @@ export function HotbarPanel({
               {item ? item.emoji : null}
               <span className={`absolute top-0.5 left-1 text-[8px] font-bold leading-none ${item ? 'text-muted-foreground/60' : 'text-muted-foreground/20'}`}>{i + 1}</span>
               {item?.isVoidGhost && <span className="absolute bottom-0.5 left-0.5 text-[8px] leading-none">👤</span>}
+              {item?.isVoidGhost && (
+                <span data-testid={`ghost-stack-${item.emoji}`} className="absolute top-0.5 right-0.5 text-[8px] text-violet-300 font-bold leading-none">×{Math.max(1, item.stackCount ?? 1)}</span>
+              )}
               {item && kindEmoji && (
                 <span className="absolute bottom-0.5 right-0.5 text-[9px] leading-none">{kindEmoji}</span>
               )}
               {item?.charges !== undefined && item.charges >= 0 && (
                 <span className="absolute top-0.5 right-0.5 text-[7px] text-amber-400/80 font-bold leading-none">×{item.charges}</span>
               )}
-              {item && !item.isEquipment && !kindEmoji && (item.stackCount ?? 0) > 1 && (
+              {item && !item.isVoidGhost && !item.isEquipment && !kindEmoji && (item.stackCount ?? 0) > 1 && (
                 <span className="absolute bottom-0.5 right-0.5 text-[8px] text-emerald-400 font-bold leading-none">×{item.stackCount}</span>
               )}
               {item && !kindEmoji && bankDupes > 0 && (

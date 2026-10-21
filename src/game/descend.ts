@@ -37,7 +37,7 @@ export function descendFloor(state: GameState, addLog: (text: string) => void): 
   const finale = enteringFinale
     ? buildFinaleFloor(nextFloor, prev.difficultyTier ?? 0, !!prev.deepDive)
     : null;
-  const generated = finale ?? generateMap(nextFloor);
+  const generated = finale ?? generateMap(nextFloor, { voidRun: cls === '👤' });
   const { map, startPos, rooms } = generated;
 
   newState.map = computeVisibility(map, startPos, visionRadiusFor(newPlayer.characterClass, newPlayer.stats.level));

@@ -17,6 +17,48 @@ export function voidClassTurnDamage(filledCount: number, floor: number): number 
   return voidDamageFor(filledCount, floor) + filledCount;
 }
 
+export interface VoidPressureTick {
+  hp: number;
+  died: boolean;
+  graced: boolean;
+  /** Floor that spent its grace, when this tick was the grace turn. */
+  graceFloor?: number;
+  /** HP actually removed. Grace spends only the points above 1. */
+  applied: number;
+  log?: string;
+}
+
+/**
+ * Inverted Void burden for one turn.
+ * A lethal tick leaves 1 HP the first time on a floor. The next lethal tick on that floor kills.
+ * Non-lethal ticks do not spend the grace. Other classes and Null Momentum do not use this.
+ */
+export function applyVoidPressureTick(input: {
+  hp: number;
+  damage: number;
+  floor: number;
+  graceFloor?: number;
+}): VoidPressureTick {
+  const hp = Math.max(0, Math.floor(input.hp));
+  const damage = Math.max(0, Math.floor(input.damage));
+  if (damage <= 0 || hp <= 0) {
+    return { hp, died: hp <= 0, graced: false, applied: 0 };
+  }
+  const next = hp - damage;
+  if (next > 0) return { hp: next, died: false, graced: false, applied: damage };
+  if (input.graceFloor !== input.floor) {
+    return {
+      hp: 1,
+      died: false,
+      graced: true,
+      graceFloor: input.floor,
+      applied: hp - 1,
+      log: `👤 The Void hesitates — ${damage} burden dmg would unmake you. Grace leaves 1 HP. One grace per floor; the next lethal burden here is final.`,
+    };
+  }
+  return { hp: next, died: true, graced: false, applied: damage };
+}
+
 /** Null Momentum hard cap. DR = 1% + 1% per player level, never above this. */
 export const NULL_MOMENTUM_CAP = 44;
 

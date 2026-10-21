@@ -168,6 +168,8 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
       ? raw.voidAttackMode
       : undefined,
     unmakeUsedFloor:          typeof raw.unmakeUsedFloor === 'number' ? raw.unmakeUsedFloor : undefined,
+    voidGraceFloor:           typeof raw.voidGraceFloor === 'number' ? raw.voidGraceFloor : undefined,
+    hollowUsedFloor:          typeof raw.hollowUsedFloor === 'number' ? raw.hollowUsedFloor : undefined,
     bounty:                   normalizeBounty(raw.bounty),
   };
 }

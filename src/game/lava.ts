@@ -14,7 +14,7 @@ export const VOLCANO_MAX_RADIUS = 5;
 const LAVA_IMMUNE = new Set([
   'wall', 'volcano', 'stairs', 'shrine', 'shrine-used',
   'shop-item', 'restaurant', 'safe-floor', 'slot-shrine', 'door-closed', 'door-open', 'bed',
-  'campfire', 'boss-floor', 'obsidian', 'water', 'mirror', 'bounty', 'vanity', 'auction',
+  'campfire', 'boss-floor', 'obsidian', 'water', 'mirror', 'bounty', 'vanity', 'auction', 'hollow',
 ]);
 
 export function volcanoMaxLava(floor: number): number {

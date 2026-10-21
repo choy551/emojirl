@@ -8,7 +8,7 @@ export type ContextActionKind =
   | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear' | 'talk' | 'trade'
   | 'cook' | 'banquet' | 'close-door' | 'rest'
   | 'open-shop' | 'open-cache' | 'open-restaurant' | 'open-slots' | 'open-mirror'
-  | 'open-bounty' | 'open-vanity' | 'open-auction'
+  | 'open-bounty' | 'open-vanity' | 'open-auction' | 'open-hollow'
   | 'descend' | 'shrine' | 'offer' | 'pickup' | 'wait' | 'explore';
 
 export interface ContextActionDescriptor {
@@ -43,6 +43,7 @@ export function resolveContextAction(
   if (here?.type === 'bounty') return { kind: 'open-bounty', label: 'Board', icon: '📜' };
   if (here?.type === 'vanity') return { kind: 'open-vanity', label: 'Flex', icon: '💎' };
   if (here?.type === 'auction') return { kind: 'open-auction', label: 'Bid', icon: '☠️' };
+  if (here?.type === 'hollow') return { kind: 'open-hollow', label: 'Market', icon: '🌑' };
 
   const neighbours: { dx: number; dy: number }[] = [];
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) neighbours.push({ dx, dy });
@@ -123,6 +124,8 @@ export function resolveContextAction(
   if (vanityDir) return { kind: 'open-vanity', label: 'Flex', icon: '💎', dir: vanityDir };
   const auctionDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'auction');
   if (auctionDir) return { kind: 'open-auction', label: 'Bid', icon: '☠️', dir: auctionDir };
+  const hollowDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'hollow');
+  if (hollowDir) return { kind: 'open-hollow', label: 'Market', icon: '🌑', dir: hollowDir };
 
   const stairDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'stairs');
   if (stairDir) {

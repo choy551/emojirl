@@ -155,16 +155,56 @@ describe('emoji-less and inverted Void ticks', () => {
     expect(unlockVoidClass()).toBe(false);
 
     localStorage.clear();
-    const voidDeath = turn(state(player({
+    const voidFirst = turn(state(player({
       emoji: '👤',
       characterClass: '👤',
       inventory: [soul('🔥', 'a')],
       stats: { ...player().stats, hp: 1 },
     }), 1));
+    expect(voidFirst.gameOver).toBe(false);
+    expect(voidFirst.player.stats.hp).toBe(1);
+    expect(voidFirst.voidGraceFloor).toBe(1);
+    expect(voidFirst.logs.some(l => l.text.includes('The Void hesitates'))).toBe(true);
+    expect(voidFirst.logs.some(l => l.text.includes('Grace leaves 1 HP'))).toBe(true);
+    expect(voidFirst.floatingTexts.some(f => f.text === 'GRACE')).toBe(true);
+    expect(isVoidUnlocked()).toBe(false);
+
+    const voidDeath = turn(voidFirst);
     expect(voidDeath.gameOver).toBe(true);
     expect(voidDeath.killer).toEqual({ name: 'the void', emoji: '👤' });
     expect(voidDeath.logs.some(l => l.text === VOID_DEATH_TEXT)).toBe(true);
     expect(isVoidUnlocked()).toBe(true);
+  });
+
+  it('spends grace only on a lethal burden and refreshes it on the next floor', () => {
+    const hardy = player({
+      emoji: '👤',
+      characterClass: '👤',
+      stats: { ...player().stats, hp: 20, level: 40 },
+      inventory: [soul('🔥', 'a')],
+    });
+    const scratched = turn(state(hardy, 4));
+    expect(scratched.player.stats.hp).toBe(20 - voidClassTurnDamage(1, 4));
+    expect(scratched.voidGraceFloor).toBeUndefined();
+    expect(scratched.gameOver).toBe(false);
+
+    const wounded = turn(state({
+      ...hardy,
+      stats: { ...hardy.stats, hp: 3 },
+    }, 4));
+    expect(wounded.gameOver).toBe(false);
+    expect(wounded.player.stats.hp).toBe(1);
+    expect(wounded.voidGraceFloor).toBe(4);
+    expect(wounded.floatingTexts.some(f => f.text === 'GRACE')).toBe(true);
+
+    const finished = turn(wounded);
+    expect(finished.gameOver).toBe(true);
+    expect(finished.killer).toEqual({ name: 'the void', emoji: '👤' });
+
+    const nextFloor = turn({ ...wounded, gameOver: false, currentFloor: 5, voidGraceFloor: 4, player: { ...wounded.player, stats: { ...wounded.player.stats, hp: 3 } } });
+    expect(nextFloor.gameOver).toBe(false);
+    expect(nextFloor.player.stats.hp).toBe(1);
+    expect(nextFloor.voidGraceFloor).toBe(5);
   });
 });
 
