@@ -1,4 +1,5 @@
 import { normalizeEmojiKey } from './discoveries';
+import { BUILDING_EXCHANGE_COST, BUILDINGS, STRUCTURE_FLOOR_CHANCE, STRUCTURE_SELL_VALUE, STRUCTURE_SURVEY_MOOD, buildingOf } from './cityBuildings';
 import { COWBOY, FENCER, GENIE, HITMAN, NINJA, RANGER, ROYAL_GUARD, VOID, WIZARD } from './prestigeConstants';
 
 /** One placement token per lifetime consume of that emoji. */
@@ -109,8 +110,60 @@ export function totalAvailableTokens(consumes: Record<string, number>, city: Cit
   return total;
 }
 
+/**
+ * Spend spare non-building tokens into the consume ledger as one structure token.
+ * Placed copies are not spent. The input map is left unchanged.
+ */
+export function exchangeForBuilding(
+  consumes: Record<string, number>,
+  city: CityState,
+  buildingEmoji: string,
+): { ok: boolean; consumes: Record<string, number>; reason?: string } {
+  const building = buildingOf(buildingEmoji);
+  if (!building) return { ok: false, consumes, reason: 'That is not a structure.' };
+  const next: Record<string, number> = { ...consumes };
+  const sources = Object.keys(next)
+    .filter(emoji => !buildingOf(emoji))
+    .map(emoji => ({ emoji, spare: availableTokens(next[emoji] ?? 0, placedOf(city, emoji)) }))
+    .filter(row => row.spare > 0)
+    .sort((a, b) => b.spare - a.spare || a.emoji.localeCompare(b.emoji));
+  let left = BUILDING_EXCHANGE_COST;
+  for (const row of sources) {
+    const take = Math.min(left, row.spare);
+    next[row.emoji] = (next[row.emoji] ?? 0) - take;
+    left -= take;
+    if (left === 0) break;
+  }
+  if (left > 0) {
+    return {
+      ok: false,
+      consumes,
+      reason: `Need ${BUILDING_EXCHANGE_COST} spare tokens. Structures do not pay for structures.`,
+    };
+  }
+  const key = normalizeEmojiKey(building.emoji);
+  next[key] = (next[key] ?? 0) + 1;
+  return { ok: true, consumes: next };
+}
+
 export function citizenCapacity(placed: number): number {
   return Math.floor(Math.max(0, Math.floor(placed || 0)) / CITIZEN_TILES);
+}
+
+/** Housing weight of one lot. Plain emoji and ordinary houses count as 1. */
+export function lotHousing(emoji: string | null): number {
+  if (!emoji) return 0;
+  return buildingOf(emoji)?.housing ?? 1;
+}
+
+/** Citizens from housing weight, still one arrival per CITIZEN_TILES lots. */
+export function citizenCapacityOf(city: CityState): number {
+  const weight = city.tiles.reduce((sum, cell) => sum + lotHousing(cell), 0);
+  return Math.floor(weight / CITIZEN_TILES);
+}
+
+export function supplyPalette(consumes: Record<string, number>, city: CityState): string[] {
+  return paletteEmojis(consumes, city).filter(emoji => !buildingOf(emoji));
 }
 
 export function paletteEmojis(consumes: Record<string, number>, city: CityState): string[] {
@@ -139,7 +192,7 @@ function cellIndex(x: number, y: number): number {
 
 /** Keep citizens up to capacity. Newcomers are weighted by lifetime kills and stand on open lots. */
 export function syncCitizens(city: CityState, kills: Record<string, number>, rng: () => number = Math.random): CityState {
-  const cap = citizenCapacity(placedCount(city));
+  const cap = citizenCapacityOf(city);
   const citizens = city.citizens.slice(0, cap);
   const occupied = new Set(citizens.map(c => cellIndex(c.x, c.y)));
   let nextId = city.nextId;
@@ -280,6 +333,11 @@ export const DISTRICTS: readonly DistrictStyle[] = [
 const DISTRICT_BY_EMOJI = new Map<string, DistrictStyle>();
 for (const style of DISTRICTS) {
   for (const emoji of style.emoji) DISTRICT_BY_EMOJI.set(normalizeEmojiKey(emoji), style);
+}
+for (const building of BUILDINGS) {
+  if (!building.district) continue;
+  const style = DISTRICTS.find(row => row.id === building.district);
+  if (style) DISTRICT_BY_EMOJI.set(normalizeEmojiKey(building.emoji), style);
 }
 
 /** Prestige vessels use their base class's district. */
@@ -464,5 +522,5 @@ export function awaySummary(turns: number, citizensGained: number): string {
 }
 
 export function emojiCityRulesBlurb(): string {
-  return `EmojiCB is a city on the home screen, kept in the meta save so it survives runs. Each emoji you use from the hotbar, eat, drink, or buy-and-use grants ${TOKENS_PER_CONSUME} placement token for that emoji. Spell Echo does not spend the emoji, so it grants no token. Those consume counts, and the lifetime enemy kill counts, are the only ledgers — the city reads them again every visit. The grid is ${CITY_COLS}×${CITY_ROWS}. Pick an emoji and tap an empty lot to build. Tap a built lot to clear it and refund the token. One citizen arrives per ${CITIZEN_TILES} placed tiles, weighted by kills. No kills means empty streets. Every roguelike turn is a city turn. While you are away, one unspent token builds itself every ${GROWTH_TURNS} city turns, citizens arrive to the new capacity, and they wander. A long absence is caught up in at most ${WANDER_CATCHUP_CAP} wander steps. Placed emoji form districts: Slums of Thieves (Ninja), Arcane Sanctum (Wizard), Frontier Saloon (Cowboy), Grove of Wilds (Ranger), and Void Hollow (The Void). Prestige classes use their base class's district. A style with at least ${DISTRICT_THRESHOLD} tiles and a strict lead grants a small run-start bonus to that class: ${DISTRICTS.map(d => `${d.bonus.label} ${d.className}`).join(', ')}. The vessel picker and the city HUD show the current lead.`;
+  return `EmojiCB is a city on the home screen, kept in the meta save so it survives runs. Each emoji you use from the hotbar, eat, drink, or buy-and-use grants ${TOKENS_PER_CONSUME} placement token for that emoji. Spell Echo does not spend the emoji, so it grants no token. Those consume counts, and the lifetime enemy kill counts, are the only ledgers — the city reads them again every visit. The grid is ${CITY_COLS}×${CITY_ROWS}. Pick an emoji and tap an empty lot to build. Tap a built lot to clear it and refund the token. One citizen arrives per ${CITIZEN_TILES} lots of housing, weighted by kills. A plain emoji or an ordinary house counts as 1 lot. Most structures count as 2, 🏘️🏢🏭🏨🏟️🏬 count as 3, and 🏰 counts as 4. No kills means empty streets. Structures are not on the kill-loot table. About ${Math.round(STRUCTURE_FLOOR_CHANCE * 100)}% of floors hide one blueprint. Survey it from the hotbar for +${STRUCTURE_SURVEY_MOOD} mood and 1 token for that building. Selling a blueprint pays ${STRUCTURE_SELL_VALUE}g and grants no token. In the city, ${BUILDING_EXCHANGE_COST} spare tokens from non-building emoji raise 1 structure token. The structures row is separate from the supply palette. Every roguelike turn is a city turn. While you are away, one unspent token builds itself every ${GROWTH_TURNS} city turns, citizens arrive to the new capacity, and they wander. A long absence is caught up in at most ${WANDER_CATCHUP_CAP} wander steps. Placed emoji form districts: Slums of Thieves (Ninja), Arcane Sanctum (Wizard), Frontier Saloon (Cowboy), Grove of Wilds (Ranger), and Void Hollow (The Void). 🛖🏚️ are slums, ⛩️🛕 are the sanctum, ⛺🏕️🏔️ are the grove, 🏤🏦🏟️ are the saloon, and 🌋 is the hollow. 🏰🏭🏢 and ordinary houses are neutral. Prestige classes use their base class's district. A style with at least ${DISTRICT_THRESHOLD} tiles and a strict lead grants a small run-start bonus to that class: ${DISTRICTS.map(d => `${d.bonus.label} ${d.className}`).join(', ')}. The vessel picker and the city HUD show the current lead.`;
 }

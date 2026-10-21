@@ -307,6 +307,8 @@ export interface EmojiItem {
   isCooked?: boolean;
   cookedBuff?: { stat: 'attack' | 'defense'; amount: number; turns: number };
   isMoneyBag?: boolean;
+  /** Blueprint of a city structure. Using it grants an EmojiCB token. */
+  isStructure?: boolean;
   /** Synthetic hotbar cell for a Void ghost. Not stored in inventory. */
   isVoidGhost?: boolean;
   /** In the hotbar, but past Hollow Roster capacity — no bag passive this depth. */

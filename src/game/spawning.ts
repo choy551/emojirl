@@ -4,6 +4,7 @@ import { getRandomEnemy, getForestEnemy, getBossForFloor, getEchoEnemy, getRando
 import { getRandomEmojiPower, getBulletDrop, getRandomEquipmentDrop, getEmojiPowerByEmoji, VOLCANO_VALUABLE_EMOJIS, MONEY_BAG } from './emojis';
 import { pressureForRun } from './progression';
 import { spawnPrairieDenizens } from './farmer';
+import { rollStructureBuilding, STRUCTURE_FLOOR_CHANCE, structureItem } from './cityBuildings';
 
 function floorScale<T extends { hp: number; attack: number; defense: number }>(type: T, floor: number): T {
   if (floor <= 1) return type;
@@ -250,6 +251,39 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
   return enemies;
 }
 
+/** One structure blueprint on a floor tile, outside boss rooms and treasure vaults. */
+export function rollStructureFind(
+  rooms: Room[],
+  map: MapGrid | undefined,
+  taken: { x: number; y: number }[],
+  rng: () => number = Math.random,
+): (EmojiItem & { pos: Position }) | null {
+  if (!map || rooms.length === 0 || rng() >= STRUCTURE_FLOOR_CHANCE) return null;
+  const openRooms = rooms.filter(room => room.theme !== 'boss' && room.theme !== 'treasure-vault');
+  if (openRooms.length === 0) return null;
+  const blocked = new Set(taken.map(pos => `${pos.x},${pos.y}`));
+  const spots: Position[] = [];
+  for (const room of openRooms) {
+    for (let y = room.y; y < room.y + room.h; y++) {
+      for (let x = room.x; x < room.x + room.w; x++) {
+        const tile = map[y]?.[x];
+        if (!tile || (tile.type !== 'floor' && tile.type !== 'grass')) continue;
+        if (blocked.has(`${x},${y}`)) continue;
+        spots.push({ x, y });
+      }
+    }
+  }
+  if (spots.length === 0) return null;
+  const pos = spots[Math.min(spots.length - 1, Math.floor(rng() * spots.length))]!;
+  const building = rollStructureBuilding(rng);
+  return {
+    ...structureItem(building),
+    id: `structure-${pos.x}-${pos.y}-${Math.floor(rng() * 1e9)}`,
+    consumed: false,
+    pos,
+  };
+}
+
 export function spawnVaultItems(rooms: Room[], playerClass?: string, floor = 1, map?: MapGrid): (EmojiItem & { pos: Position })[] {
   const items: (EmojiItem & { pos: Position })[] = [];
   for (const room of rooms) {
@@ -304,5 +338,7 @@ export function spawnVaultItems(rooms: Room[], playerClass?: string, floor = 1, 
       });
     }
   }
+  const structure = rollStructureFind(rooms, map, items.map(item => item.pos), Math.random);
+  if (structure) items.push(structure);
   return items;
 }

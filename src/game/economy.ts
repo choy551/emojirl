@@ -1,4 +1,5 @@
 import { EmojiItem, MapGrid, Position } from './types';
+import { STRUCTURE_SELL_VALUE } from './cityBuildings';
 import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, cookFood, HEAL_DROPS, COOKABLE_EMOJIS } from './emojis';
 import { DRINK_SHOP_CHANCE, DRINK_TIER_SELL, getRandomDrinkDrop } from './drinks';
 import { addToBag, addToBagCapped } from './inventory';
@@ -21,6 +22,7 @@ export function moneyBagSellValue(floor: number): number {
 
 export function getItemSellValue(item: EmojiItem, multiplier = 1, floor = 1): number {
   if (item.isMoneyBag || item.emoji === '💰') return moneyBagSellValue(floor);
+  if (item.isStructure) return Math.round(STRUCTURE_SELL_VALUE * multiplier);
   if (item.isEquipment) return 15 * multiplier;
   if (item.activeKind) return 10 * multiplier;
   if (item.healAmount !== undefined) {
