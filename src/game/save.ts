@@ -1,17 +1,22 @@
 import { GameState, Player, PlayerStats, EmojiItem, Equipment } from './types';
+import { applyBlinkTalentSaveMigration, knownBlinkTalents } from './blinkStrike';
 import { applySoulCatalogCopy } from './emojis';
 import { normalizeBounty, normalizeVanity } from './goldSinks2';
 
-const SAVE_KEY = 'emojirl_save_v1';
+export const SAVE_KEY = 'emojirl_save_v1';
 
 /**
  * Current save-file schema version. Bump this whenever a structural migration is needed.
  * Migration steps are added to `migrateRaw()` below.
+ *
+ * 2: Longer Chain → Heavier Blink. Ninjas who owned a moved Tier 3 talent get
+ *    `blinkT3RespecPending` so the next Continue offers one new Tier 3.
  */
-const CURRENT_SCHEMA_VERSION = 1;
+export const SAVE_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = SAVE_SCHEMA_VERSION;
 
 /** Set of schema versions this build knows how to load (after migration). */
-const KNOWN_VERSIONS = new Set([1]);
+const KNOWN_VERSIONS = new Set([1, 2]);
 
 /**
  * Runs in-place migrations on the raw parsed JSON object so that
@@ -19,9 +24,9 @@ const KNOWN_VERSIONS = new Set([1]);
  *
  * HOW TO ADD A MIGRATION
  * ──────────────────────
- * 1. Bump CURRENT_SCHEMA_VERSION above and add the new value to KNOWN_VERSIONS.
- * 2. Add a `case <old_version>:` block below (fall-through to the next case is
- *    intentional — every case runs until the switch exhausts).
+ * 1. Bump SAVE_SCHEMA_VERSION above and add the new value to KNOWN_VERSIONS.
+ * 2. Append a function to MIGRATIONS. Index 0 is version 1 → 2, index 1 is 2 → 3,
+ *    and so on. A save runs every step from its own version up to the current one.
  * 3. Mutate `raw` in-place (rename fields, change types, set defaults, etc.).
  *
  * NOTE: `migrateRaw` is only called after `loadGame()` has confirmed that
@@ -50,22 +55,20 @@ function normalizeVoidSlotBurden(raw: unknown): Player['voidSlotBurden'] {
   return rows;
 }
 
+/** Index 0 migrates schema 1 → 2. Later steps append in order. */
+const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
+  raw => {
+    const migrated = applyBlinkTalentSaveMigration(raw);
+    if (migrated.respecPending) raw.blinkT3RespecPending = true;
+    else delete raw.blinkT3RespecPending;
+  },
+];
+
 function migrateRaw(raw: Record<string, unknown>): void {
   const fromVersion = raw.schemaVersion as number;
-
-  switch (fromVersion) {
-    case 1:
-      // Version 1 is current — no structural changes needed.
-      break;
-    // case 1:
-    //   // Version 1 → 2: example migration
-    //   // raw.newField = (raw.oldField as string) ?? 'default';
-    //   // delete raw.oldField;
-    //   break;
-    default:
-      break;
+  for (let version = fromVersion; version < CURRENT_SCHEMA_VERSION; version++) {
+    MIGRATIONS[version - 1]?.(raw);
   }
-
   raw.schemaVersion = CURRENT_SCHEMA_VERSION;
 }
 
@@ -99,9 +102,11 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     blinkStrikeInstakillChain:     rawStats.blinkStrikeInstakillChain      as number | undefined,
     blinkStrikeInstakillOutOfCombat: rawStats.blinkStrikeInstakillOutOfCombat as number | undefined,
     blinkStrikeCredits:            rawStats.blinkStrikeCredits             as number | undefined,
-    blinkTalents:                  rawStats.blinkTalents                   as PlayerStats['blinkTalents'],
+    blinkTalents:                  knownBlinkTalents(rawStats.blinkTalents as readonly string[] | undefined),
     blinkStrikeMarks:              rawStats.blinkStrikeMarks               as PlayerStats['blinkStrikeMarks'],
     blinkMeleeCdCharges:           rawStats.blinkMeleeCdCharges            as number | undefined,
+    blinkOverkillBank:             rawStats.blinkOverkillBank              as number | undefined,
+    blinkOverkillCooldown:         rawStats.blinkOverkillCooldown          as number | undefined,
     overhealDecayTick:             rawStats.overhealDecayTick             as number | undefined,
     backdashCooldown:              rawStats.backdashCooldown              as number | undefined,
     lungeCooldown:                 rawStats.lungeCooldown                 as number | undefined,
@@ -187,6 +192,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     voidGraceFloor:           typeof raw.voidGraceFloor === 'number' ? raw.voidGraceFloor : undefined,
     hollowUsedFloor:          typeof raw.hollowUsedFloor === 'number' ? raw.hollowUsedFloor : undefined,
     bounty:                   normalizeBounty(raw.bounty),
+    blinkT3RespecPending:     raw.blinkT3RespecPending === true ? true : undefined,
   };
 }
 

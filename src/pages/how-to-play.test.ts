@@ -51,4 +51,14 @@ describe('RTFM sections and table of contents', () => {
     expect(manual).toContain('from D:28 on, Dungeon Pressure is doubled');
     expect(manual).toContain('D:16 = +3/+2');
   });
+
+  it('documents the Blink Strike talent tiers', () => {
+    expect(manual).toContain('all eight');
+    expect(manual).toContain('T5+');
+    expect(manual).toContain('Endless Chain removes that cap');
+    expect(manual).toContain('Blink Truestrike ignores this');
+    expect(manual).not.toContain('all six');
+    expect(manual).not.toContain('T4+');
+    expect(manual).not.toContain('Longer Chain');
+  });
 });

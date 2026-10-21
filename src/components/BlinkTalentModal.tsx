@@ -4,11 +4,13 @@ import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand }
 interface BlinkTalentModalProps {
   tierLabel: string;
   choices: BlinkTalentDef[];
+  /** Shown once for migrated Ninjas choosing a new Tier 3. */
+  note?: string;
   onPick: (id: BlinkTalentDef['id']) => void;
 }
 
 /** Permanent Blink Strike talent pick. Stays up until a branch is chosen. */
-export function BlinkTalentModal({ tierLabel, choices, onPick }: BlinkTalentModalProps) {
+export function BlinkTalentModal({ tierLabel, choices, note, onPick }: BlinkTalentModalProps) {
   const hand = useMobileHand();
   return (
     <div
@@ -25,6 +27,11 @@ export function BlinkTalentModal({ tierLabel, choices, onPick }: BlinkTalentModa
           <div id="blink-talent-title" className="text-sm font-bold uppercase tracking-wide text-violet-200">
             ⚡ Blink talent · {tierLabel}
           </div>
+          {note ? (
+            <p className="text-[11px] text-violet-200/90 mt-1 leading-snug" data-testid="blink-t3-respec-note">
+              {note}
+            </p>
+          ) : null}
           <p className="text-[11px] text-muted-foreground mt-1">
             Pick one. The choice is permanent for this run.
             {choices.length <= 9 ? ' Number keys select.' : ''}

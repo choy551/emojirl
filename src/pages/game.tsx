@@ -4,11 +4,13 @@ import { Player, Enemy, EmojiItem, GameState, Position, EquipSlot } from '../gam
 import { getCowboyUnarmedBonus, isHostileCombatTarget } from '../game/combat';
 import { DODGE_CHANCE_CAP, softCapTitles } from '../game/softCap';
 import {
-  blinkStrikeDamagePhrase,
+  blinkNoTargetLog,
+  blinkStrikeHudTitle,
   blinkTalentById,
-  blinkTalentChoices,
   blinkTalentProgress,
-  pendingBlinkTalentOffer,
+  blinkTalentPrompt,
+  grantBlinkT3Respec,
+  isBlinkStrikeTarget,
 } from '../game/blinkStrike';
 import type { BlinkTalentId } from '../game/types';
 import { BlinkTalentModal } from '../components/BlinkTalentModal';
@@ -24,7 +26,7 @@ import { saveScore, leaderboardEntryFromRun } from '../game/leaderboard';
 import { readVoidModeProgress, startingVoidLoadout } from '../game/voidMeta';
 import { VOID_DEATH_TEXT, VOID_UNLOCK_TEXT, nullMomentumPercent } from '../game/voidDamage';
 import { nextVoidAttackMode, resolveUnmake, voidAttackModeLabel, type VoidAttackMode } from '../game/voidAbilities';
-import { saveGame, loadGame, clearSave, getRawSave } from '../game/save';
+import { saveGame, loadGame, clearSave, getRawSave, SAVE_SCHEMA_VERSION } from '../game/save';
 import { isStackableBagPassive } from '../game/passives';
 import { useIsMobile } from '../hooks/use-mobile';
 import { useDismissGuard } from '../hooks/useDismissGuard';
@@ -126,6 +128,16 @@ function FloorAnnouncementOverlay({
       <p className="text-sm text-white/50 tracking-widest uppercase">Press any key or tap to continue</p>
     </div>
   );
+}
+
+function blinkPromptFor(state: GameState | null | undefined) {
+  if (!state) return null;
+  return blinkTalentPrompt({
+    characterClass: state.player.characterClass,
+    credits: state.player.stats.blinkStrikeCredits ?? 0,
+    talents: state.player.stats.blinkTalents,
+    respecPending: state.blinkT3RespecPending,
+  });
 }
 
 export default function Game() {
@@ -356,7 +368,7 @@ export default function Game() {
   // Android hardware/gesture Back and browser Back: close the top menu first.
   useAndroidBackButton(
     () => closeTopOverlay([
-      { id: 'blink-talent', isOpen: () => !!pendingBlinkTalentOffer(gameStateRef.current?.player.stats.blinkStrikeCredits ?? 0, gameStateRef.current?.player.characterClass === '🥷' ? gameStateRef.current.player.stats.blinkTalents : undefined), close: () => { /* pick is required */ } },
+      { id: 'blink-talent', isOpen: () => !!blinkPromptFor(gameStateRef.current), close: () => { /* pick is required */ } },
       { id: 'announce', isOpen: () => !!gameStateRef.current?.floorAnnouncement, close: () => setGameState(prev => prev ? { ...prev, floorAnnouncement: null } : prev) },
       { id: 'stat-card', isOpen: () => !!statCardItem, close: closeStatCard },
       { id: 'boat-warn', isOpen: () => lastBoatWarnSlot !== null, close: () => setLastBoatWarnSlot(null) },
@@ -591,7 +603,7 @@ export default function Game() {
     optionsOpen ||
     showRTFM ||
     pauseMenuOpen ||
-    (gameState?.player.characterClass === '🥷' && !!pendingBlinkTalentOffer(gameState.player.stats.blinkStrikeCredits ?? 0, gameState.player.stats.blinkTalents))
+    !!blinkPromptFor(gameState)
   );
   const blockingOverlayOpenRef = useRef(false);
   useEffect(() => { blockingOverlayOpenRef.current = blockingOverlayOpen; }, [blockingOverlayOpen]);
@@ -773,7 +785,7 @@ export default function Game() {
     initialPlayer = districtStart.player;
 
     setGameState({
-      schemaVersion: 1,
+      schemaVersion: SAVE_SCHEMA_VERSION,
       player: initialPlayer,
       currentFloor: 1,
       map: computeVisibility(map, startPos),
@@ -910,13 +922,17 @@ export default function Game() {
       addLog(`🥷 Blink Strike not ready — ${gs.player.stats.blinkStrikeCooldown}t remaining.`);
       return;
     }
-    const targets = gs.enemies.filter(e => {
-      const d = chebyshev(gs.player.pos, e.pos);
-      return d >= 1 && d <= 6 && hasLOSBetween(gs.map, gs.player.pos, e.pos) && gs.map[e.pos.y]?.[e.pos.x]?.visible
-        && isHostileCombatTarget(e);
-    }).sort((a, b) => chebyshev(gs.player.pos, a.pos) - chebyshev(gs.player.pos, b.pos));
+    const telepathy = playerBagPassives(gs.player).trueVision;
+    const targets = gs.enemies.filter(e => isBlinkStrikeTarget({
+      dist: chebyshev(gs.player.pos, e.pos),
+      hasLos: hasLOSBetween(gs.map, gs.player.pos, e.pos),
+      tileVisible: !!gs.map[e.pos.y]?.[e.pos.x]?.visible,
+      hostile: isHostileCombatTarget(e),
+      talents: gs.player.stats.blinkTalents,
+      telepathy,
+    })).sort((a, b) => chebyshev(gs.player.pos, a.pos) - chebyshev(gs.player.pos, b.pos));
     if (targets.length === 0) {
-      addLog('🥷 Blink Strike — no targets in range (6 tiles, requires LOS).');
+      addLog(blinkNoTargetLog(gs.player.stats.blinkTalents, telepathy));
       return;
     }
     const nearest = targets[0];
@@ -1512,10 +1528,7 @@ export default function Game() {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      const talentState = gameStateRef.current;
-      const talentOffer = talentState?.player.characterClass === '🥷'
-        ? pendingBlinkTalentOffer(talentState.player.stats.blinkStrikeCredits ?? 0, talentState.player.stats.blinkTalents)
-        : null;
+      const talentOffer = blinkPromptFor(gameStateRef.current);
       if (talentOffer) {
         e.preventDefault();
         if (e.repeat) return;
@@ -1804,11 +1817,15 @@ export default function Game() {
           e.preventDefault();
           const gs = gameStateRef.current;
           if (gs) {
-            const blinkTargets = gs.enemies.filter(en => {
-              const d = chebyshev(gs.player.pos, en.pos);
-              return d >= 1 && d <= 6 && hasLOSBetween(gs.map, gs.player.pos, en.pos) && gs.map[en.pos.y]?.[en.pos.x]?.visible
-                && isHostileCombatTarget(en);
-            }).sort((a, b) => chebyshev(gs.player.pos, a.pos) - chebyshev(gs.player.pos, b.pos));
+            const telepathy = playerBagPassives(gs.player).trueVision;
+            const blinkTargets = gs.enemies.filter(en => isBlinkStrikeTarget({
+              dist: chebyshev(gs.player.pos, en.pos),
+              hasLos: hasLOSBetween(gs.map, gs.player.pos, en.pos),
+              tileVisible: !!gs.map[en.pos.y]?.[en.pos.x]?.visible,
+              hostile: isHostileCombatTarget(en),
+              talents: gs.player.stats.blinkTalents,
+              telepathy,
+            })).sort((a, b) => chebyshev(gs.player.pos, a.pos) - chebyshev(gs.player.pos, b.pos));
             if (blinkTargets.length > 0) {
               const idx = blinkTargets.findIndex(en => en.id === inspectedEnemyIdRef.current);
               const dir = e.shiftKey ? -1 : 1;
@@ -2093,20 +2110,33 @@ export default function Game() {
   const cls = getClassDef(player.characterClass);
   const ninjaBlink = player.characterClass === '🥷'
     ? {
-        phrase: blinkStrikeDamagePhrase(applyEquipmentAndPassives(player).stats.luck),
+        hudTitle: blinkStrikeHudTitle({
+          luck: applyEquipmentAndPassives(player).stats.luck,
+          talents: player.stats.blinkTalents,
+          overkillBank: player.stats.blinkOverkillBank,
+          overkillCooldown: player.stats.blinkOverkillCooldown,
+        }),
         progress: blinkTalentProgress(player.stats.blinkStrikeCredits ?? 0, player.stats.blinkTalents),
-        offer: pendingBlinkTalentOffer(player.stats.blinkStrikeCredits ?? 0, player.stats.blinkTalents),
+        offer: blinkPromptFor(gameState),
       }
     : null;
   pickBlinkTalentRef.current = (id: BlinkTalentId) => {
-    const choices = blinkTalentChoices(gameStateRef.current?.player.stats.blinkTalents);
-    if (!choices.some(choice => choice.id === id)) return;
-    const talent = blinkTalentById(id);
     setGameState(prev => {
-      if (!prev || prev.player.characterClass !== '🥷') return prev;
+      if (!prev) return prev;
+      const prompt = blinkPromptFor(prev);
+      if (!prompt || !prompt.choices.some(choice => choice.id === id)) return prev;
+      const talent = blinkTalentById(id);
+      if (prompt.kind === 'respec') {
+        const nextStats = grantBlinkT3Respec(prev.player.stats, id);
+        if (!nextStats) return prev;
+        addLog(`🥷 Blink talent respec: ${talent.name}. Your Tier 4 pick stays.`);
+        return {
+          ...prev,
+          blinkT3RespecPending: undefined,
+          player: { ...prev.player, stats: nextStats },
+        };
+      }
       const owned = prev.player.stats.blinkTalents ?? [];
-      const offer = pendingBlinkTalentOffer(prev.player.stats.blinkStrikeCredits ?? 0, owned);
-      if (!offer || !offer.choices.some(choice => choice.id === id)) return prev;
       addLog(`🥷 Blink talent: ${talent.name}.`);
       return {
         ...prev,
@@ -2944,7 +2974,7 @@ export default function Game() {
                   <span
                     className={`px-1 py-px rounded text-[8px] font-bold border ${(player.stats.blinkStrikeCooldown ?? 0) === 0 ? 'bg-violet-500/30 text-violet-200 border-violet-400/60' : 'bg-zinc-700/40 text-zinc-400 border-zinc-600/40'}`}
                     style={blinkReadyFlash ? { animation: 'blink-cd-ready 0.7s ease-out forwards' } : blinkCdReducedFlash ? { animation: 'blink-cd-reduced 0.6s ease-out forwards' } : undefined}
-                    title={`Blink Strike — ${ninjaBlink?.phrase ?? 'strike'}. ${ninjaBlink?.progress.hudLabel ?? ''} ${ninjaBlink?.progress.nextLabel ?? ''}. Kills reduce cooldown by 1 (2 if unseen). Instakills: -2.`}
+                    title={`${ninjaBlink?.hudTitle ?? 'Blink Strike'} ${ninjaBlink?.progress.hudLabel ?? ''} ${ninjaBlink?.progress.nextLabel ?? ''}`}
                   >
                     ⚡{(player.stats.blinkStrikeCooldown ?? 0) === 0 ? 'BLINK' : player.stats.blinkStrikeCooldown}
                   </span>
@@ -3656,6 +3686,7 @@ export default function Game() {
         <BlinkTalentModal
           tierLabel={ninjaBlink.offer.tierLabel}
           choices={ninjaBlink.offer.choices}
+          note={ninjaBlink.offer.note}
           onPick={id => pickBlinkTalentRef.current(id)}
         />
       )}

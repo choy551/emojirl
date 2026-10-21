@@ -1,4 +1,4 @@
-import type { BlinkStrikeMark, BlinkTalentId, Player } from './types';
+import type { BlinkStrikeMark, BlinkTalentId, Player, PlayerStats } from './types';
 
 /**
  * Blink Strike damage and Ninja talent rules.
@@ -6,6 +6,7 @@ import type { BlinkStrikeMark, BlinkTalentId, Player } from './types';
  * Damage (before defense):
  *   effectiveCrit = clamp(5 + LCK, 0, CRIT_STAT_SOFT_CAP)
  *   percent       = 200 + round(200 × effectiveCrit / 99) // 200% at 0 CRIT, 400% at 99 CRIT
+ *   Heavier Blink shifts that line by +100: 300% at 0 CRIT, 500% at 99 CRIT
  *   M             = percent / 100
  *   raw           = round(ATK × M)
  *   if the target is unaware, raw = round(raw × 1.6)     // existing Shadow Strike
@@ -45,15 +46,22 @@ export const BLINK_TALENT_COOLDOWN_REDUCTION = 1;
 export const BLINK_TALENT_LIFESTEAL_PERCENT = 10;
 export const BLINK_TALENT_POST_BLINK_MELEE_HITS = 3;
 export const BLINK_TALENT_POST_BLINK_CD_PER_HIT = 1;
-export const BLINK_TALENT_CHAIN_BONUS = 1;
 /** Extra targets beyond the primary. 1 → Blink hits 2 targets. */
 export const BLINK_TALENT_EXTRA_TARGETS = 1;
+/** Heavier Blink shifts both ends of the 200%→400% line by this many points. */
+export const BLINK_TALENT_DAMAGE_BONUS_PERCENT = 100;
+/** Turns before Overkill can bank another instakill. Same base as Blink Strike. */
+export const BLINK_OVERKILL_COOLDOWN = BLINK_BASE_COOLDOWN;
+/** Blink Strike targeting radius, in Chebyshev tiles. */
+export const BLINK_RANGE = 6;
+/** First N offers are locked to that tier. Later offers are any skipped talent. */
+export const BLINK_TALENT_LOCKED_TIERS = 4;
 
 export type { BlinkTalentId, BlinkStrikeMark };
 
 export interface BlinkTalentDef {
   id: BlinkTalentId;
-  tier: 1 | 2 | 3;
+  tier: 1 | 2 | 3 | 4;
   name: string;
   detail: string;
 }
@@ -78,20 +86,32 @@ export const BLINK_TALENTS: readonly BlinkTalentDef[] = [
     detail: `Each of the next ${BLINK_TALENT_POST_BLINK_MELEE_HITS} melee attacks after Blink Strike reduces its cooldown by ${BLINK_TALENT_POST_BLINK_CD_PER_HIT}.`,
   },
   {
-    id: 'longer-chain',
+    id: 'heavier-blink',
     tier: 2,
-    name: 'Longer Chain',
-    detail: `Instakill chain limit +${BLINK_TALENT_CHAIN_BONUS} (one extra instant reset).`,
+    name: 'Heavier Blink',
+    detail: `Blink Strike damage and its cap are +${BLINK_TALENT_DAMAGE_BONUS_PERCENT}% (${BLINK_MULTIPLIER_MIN_PERCENT + BLINK_TALENT_DAMAGE_BONUS_PERCENT}% at 0 CRIT, ${BLINK_MULTIPLIER_MAX_PERCENT + BLINK_TALENT_DAMAGE_BONUS_PERCENT}% at ${CRIT_STAT_SOFT_CAP} CRIT).`,
+  },
+  {
+    id: 'overkill',
+    tier: 3,
+    name: 'Overkill',
+    detail: `An instakill stores damage past the victim's max HP and adds it to the next Blink that hits (10 HP struck for 30 stores +20). The store does not stack; a new proc replaces it. A miss keeps it. Banking then waits ${BLINK_OVERKILL_COOLDOWN} turns. Shorter Cooldown and Flowing Strikes shorten that wait the same way they shorten Blink's cooldown. The store can be spent during the wait.`,
+  },
+  {
+    id: 'blink-truestrike',
+    tier: 3,
+    name: 'Blink Truestrike',
+    detail: `Blink Strikes always hit and ignore God-blessed instakill immunity. With Telepathy (🔮 Crystal Ball in your bag), Blink can target enemies within ${BLINK_RANGE} tiles through walls.`,
   },
   {
     id: 'twin-strike',
-    tier: 3,
+    tier: 4,
     name: 'Twin Strike',
     detail: `Blink Strike hits ${1 + BLINK_TALENT_EXTRA_TARGETS} targets in one cast.`,
   },
   {
     id: 'endless-chain',
-    tier: 3,
+    tier: 4,
     name: 'Endless Chain',
     detail: 'Instakill chain has no limit — every instakill resets the cooldown.',
   },
@@ -99,10 +119,96 @@ export const BLINK_TALENTS: readonly BlinkTalentDef[] = [
 
 const TALENT_BY_ID = new Map(BLINK_TALENTS.map(t => [t.id, t]));
 
+/** Pre-rework T2. Replaced in place by Heavier Blink. */
+const LEGACY_LONGER_CHAIN = 'longer-chain';
+/** These were Tier 3 before the rework and are now Tier 4. */
+const LEGACY_T3_IDS = new Set<string>(['twin-strike', 'endless-chain']);
+
+export const LONGER_CHAIN_MIGRATION_LOG =
+  '🥷 Longer Chain is now Heavier Blink (+100% Blink damage and cap).';
+
+export const BLINK_T3_RESPEC_NOTE =
+  'Twin Strike and Endless Chain moved to Tier 4. Your old pick stays. Choose one new Tier 3 talent. This prompt is shown once.';
+
 export function blinkTalentById(id: BlinkTalentId): BlinkTalentDef {
   const found = TALENT_BY_ID.get(id);
   if (!found) throw new Error(`unknown blink talent ${id}`);
   return found;
+}
+
+/**
+ * Maps the removed Longer Chain id onto Heavier Blink, in the same slot.
+ * Drops any other unknown id. Duplicate ids collapse. Empty becomes undefined.
+ */
+export function migrateLegacyBlinkTalents(picked: readonly string[] | null | undefined): BlinkTalentId[] | undefined {
+  if (!Array.isArray(picked) || picked.length === 0) return undefined;
+  const kept: BlinkTalentId[] = [];
+  const seen = new Set<string>();
+  for (const id of picked) {
+    if (typeof id !== 'string') continue;
+    const mapped = id === LEGACY_LONGER_CHAIN ? 'heavier-blink' : id;
+    if (!TALENT_BY_ID.has(mapped as BlinkTalentId) || seen.has(mapped)) continue;
+    seen.add(mapped);
+    kept.push(mapped as BlinkTalentId);
+  }
+  return kept.length ? kept : undefined;
+}
+
+export function knownBlinkTalents(picked: readonly string[] | null | undefined): BlinkTalentId[] | undefined {
+  return migrateLegacyBlinkTalents(picked);
+}
+
+/** True only for a Ninja save that already owned a talent which moved from T3 to T4. */
+export function legacyBlinkRunNeedsT3Respec(
+  characterClass: unknown,
+  picked: readonly string[] | null | undefined,
+): boolean {
+  if (characterClass !== '🥷' || !Array.isArray(picked)) return false;
+  return picked.some(id => typeof id === 'string' && LEGACY_T3_IDS.has(id));
+}
+
+export interface BlinkTalentMigrationResult {
+  replacedLongerChain: boolean;
+  respecPending: boolean;
+}
+
+/**
+ * In-place v1 → v2 talent migration. Longer Chain becomes Heavier Blink for every
+ * class. A Ninja who already picked Twin Strike or Endless Chain is flagged for
+ * one new Tier 3 choice; that old pick is left in the list.
+ */
+export function applyBlinkTalentSaveMigration(raw: Record<string, unknown>): BlinkTalentMigrationResult {
+  const player = raw.player;
+  if (!player || typeof player !== 'object') {
+    return { replacedLongerChain: false, respecPending: false };
+  }
+  const record = player as Record<string, unknown>;
+  const stats = record.stats && typeof record.stats === 'object'
+    ? record.stats as Record<string, unknown>
+    : null;
+  const rawTalents = stats && Array.isArray(stats.blinkTalents)
+    ? stats.blinkTalents.filter((id): id is string => typeof id === 'string')
+    : undefined;
+  const replacedLongerChain = !!rawTalents?.includes(LEGACY_LONGER_CHAIN);
+  const respecPending = legacyBlinkRunNeedsT3Respec(record.characterClass, rawTalents);
+  if (stats && Array.isArray(stats.blinkTalents)) {
+    const next = migrateLegacyBlinkTalents(rawTalents);
+    if (next) stats.blinkTalents = next;
+    else delete stats.blinkTalents;
+  }
+  if (replacedLongerChain && record.characterClass === '🥷') {
+    const turn = typeof raw.turn === 'number' ? raw.turn : 0;
+    const prev = Array.isArray(raw.logs) ? raw.logs : [];
+    raw.logs = [
+      { id: `blink-heavier-${turn}`, text: LONGER_CHAIN_MIGRATION_LOG, turn },
+      ...prev,
+    ].slice(0, 24);
+  }
+  return { replacedLongerChain, respecPending };
+}
+
+function ownedList(picked: readonly string[] | null | undefined): BlinkTalentId[] {
+  return knownBlinkTalents(picked) ?? [];
 }
 
 /** CRIT stat shown in the HUD: 5 + LCK, soft-capped at 99. May be negative if LCK < −5. */
@@ -115,21 +221,24 @@ export function effectiveCritForBlink(crit: number): number {
   return Math.min(CRIT_STAT_SOFT_CAP, Math.max(0, crit));
 }
 
-/** Blink Strike damage percent. 200 at 0 CRIT, 400 at 99 CRIT, on the same straight line. */
-export function blinkStrikeMultiplierPercent(crit: number): number {
+/** Blink Strike damage percent. 200 at 0 CRIT, 400 at 99 CRIT. Heavier Blink shifts both ends by +100. */
+export function blinkStrikeMultiplierPercent(crit: number, talents?: readonly BlinkTalentId[]): number {
   const effective = effectiveCritForBlink(crit);
-  const span = BLINK_MULTIPLIER_MAX_PERCENT - BLINK_MULTIPLIER_MIN_PERCENT;
-  const scaled = BLINK_MULTIPLIER_MIN_PERCENT + Math.round((span * effective) / CRIT_STAT_SOFT_CAP);
-  return Math.min(BLINK_MULTIPLIER_MAX_PERCENT, Math.max(BLINK_MULTIPLIER_MIN_PERCENT, scaled));
+  const bonus = hasBlinkTalent(talents, 'heavier-blink') ? BLINK_TALENT_DAMAGE_BONUS_PERCENT : 0;
+  const min = BLINK_MULTIPLIER_MIN_PERCENT + bonus;
+  const max = BLINK_MULTIPLIER_MAX_PERCENT + bonus;
+  const span = max - min;
+  const scaled = min + Math.round((span * effective) / CRIT_STAT_SOFT_CAP);
+  return Math.min(max, Math.max(min, scaled));
 }
 
-export function blinkStrikeDamageMultiplier(crit: number): number {
-  return blinkStrikeMultiplierPercent(crit) / 100;
+export function blinkStrikeDamageMultiplier(crit: number, talents?: readonly BlinkTalentId[]): number {
+  return blinkStrikeMultiplierPercent(crit, talents) / 100;
 }
 
-export function blinkStrikeDamagePhrase(luck: number): string {
+export function blinkStrikeDamagePhrase(luck: number, talents?: readonly BlinkTalentId[]): string {
   const crit = critStat(luck);
-  const pct = blinkStrikeMultiplierPercent(crit);
+  const pct = blinkStrikeMultiplierPercent(crit, talents);
   return `${pct}% damage (CRIT ${crit}%)`;
 }
 
@@ -153,8 +262,137 @@ export function blinkMeleeChargesAfterCast(talents: readonly BlinkTalentId[] | u
 /** null means the instakill chain never caps. */
 export function blinkInstakillChainLimit(talents: readonly BlinkTalentId[] | undefined): number | null {
   if (hasBlinkTalent(talents, 'endless-chain')) return null;
-  const bonus = hasBlinkTalent(talents, 'longer-chain') ? BLINK_TALENT_CHAIN_BONUS : 0;
-  return BLINK_INSTAKILL_CHAIN_LIMIT + bonus;
+  return BLINK_INSTAKILL_CHAIN_LIMIT;
+}
+
+export function blinkIgnoresGodBlessed(talents: readonly BlinkTalentId[] | undefined): boolean {
+  return hasBlinkTalent(talents, 'blink-truestrike');
+}
+
+export function blinkStrikeAlwaysHits(talents: readonly BlinkTalentId[] | undefined): boolean {
+  return hasBlinkTalent(talents, 'blink-truestrike');
+}
+
+/** 🔮 Crystal Ball's bag passive. Equipping the ball, or leaving it in the bank, is not Telepathy. */
+export function blinkWaivesLineOfSight(
+  talents: readonly BlinkTalentId[] | undefined,
+  telepathy: boolean,
+): boolean {
+  return !!telepathy && hasBlinkTalent(talents, 'blink-truestrike');
+}
+
+export function isBlinkStrikeTarget(opts: {
+  dist: number;
+  hasLos: boolean;
+  tileVisible: boolean;
+  hostile: boolean;
+  talents: readonly BlinkTalentId[] | undefined;
+  telepathy: boolean;
+}): boolean {
+  if (!opts.hostile || opts.dist < 1 || opts.dist > BLINK_RANGE) return false;
+  if (blinkWaivesLineOfSight(opts.talents, opts.telepathy)) return true;
+  return opts.hasLos && opts.tileVisible;
+}
+
+export function blinkNoTargetLog(talents: readonly BlinkTalentId[] | undefined, telepathy: boolean): string {
+  return blinkWaivesLineOfSight(talents, telepathy)
+    ? `🥷 Blink Strike — no targets in range (${BLINK_RANGE} tiles).`
+    : `🥷 Blink Strike — no targets in range (${BLINK_RANGE} tiles, requires LOS).`;
+}
+
+export function blinkOutOfRangeLog(talents: readonly BlinkTalentId[] | undefined, telepathy: boolean): string {
+  return blinkWaivesLineOfSight(talents, telepathy)
+    ? '🥷 Blink Strike — target out of range.'
+    : '🥷 Blink Strike — target out of range or LOS broken.';
+}
+
+/** Damage past max HP. A 10 HP foe struck for 30 banks 20. */
+export function overkillExcess(damage: number, maxHp: number): number {
+  return Math.max(0, damage - Math.max(0, maxHp));
+}
+
+/** The bank is spent only when a Blink deals damage. A miss keeps the whole store. */
+export function overkillBankAfterHit(bank: number, damageDealt: number): number {
+  const stored = Math.max(0, bank);
+  if (stored <= 0 || damageDealt <= 0) return stored;
+  return 0;
+}
+
+export interface OverkillResolution {
+  bank: number;
+  cooldown: number;
+  log: string | null;
+}
+
+/**
+ * Banking is gated by the Overkill cooldown. Spending is not.
+ * One cast sums every instakill's excess into a single store and replaces
+ * whatever was still unspent. A cast that does not bank still spends one
+ * turn of an existing cooldown.
+ */
+export function resolveOverkillAfterBlink(opts: {
+  talents: readonly BlinkTalentId[] | undefined;
+  cooldown: number;
+  carriedBank: number;
+  instakillDamages: readonly { damage: number; maxHp: number }[];
+}): OverkillResolution {
+  const startCd = Math.max(0, opts.cooldown);
+  const carried = Math.max(0, opts.carriedBank);
+  if (hasBlinkTalent(opts.talents, 'overkill') && startCd === 0) {
+    const gained = opts.instakillDamages.reduce((sum, hit) => sum + overkillExcess(hit.damage, hit.maxHp), 0);
+    if (gained > 0) {
+      const cooldown = applyBlinkCooldownReduction(BLINK_OVERKILL_COOLDOWN, opts.talents);
+      return {
+        bank: gained,
+        cooldown,
+        log: `🥷 Overkill — +${gained} damage banked for the next Blink (${cooldown}t).`,
+      };
+    }
+  }
+  return { bank: carried, cooldown: startCd > 0 ? startCd - 1 : 0, log: null };
+}
+
+export function overkillStatusPhrase(stats: {
+  blinkOverkillBank?: number;
+  blinkOverkillCooldown?: number;
+}): string | null {
+  const bank = stats.blinkOverkillBank ?? 0;
+  const cd = stats.blinkOverkillCooldown ?? 0;
+  if (bank <= 0 && cd <= 0) return null;
+  if (bank > 0 && cd > 0) return `Overkill +${bank} banked · ${cd}t`;
+  if (bank > 0) return `Overkill +${bank} banked`;
+  return `Overkill ${cd}t`;
+}
+
+export function blinkStrikeHudTitle(opts: {
+  luck: number;
+  talents?: readonly BlinkTalentId[];
+  overkillBank?: number;
+  overkillCooldown?: number;
+}): string {
+  const status = overkillStatusPhrase({
+    blinkOverkillBank: opts.overkillBank,
+    blinkOverkillCooldown: opts.overkillCooldown,
+  });
+  const parts = [`Blink Strike — ${blinkStrikeDamagePhrase(opts.luck, opts.talents)}.`];
+  if (status) parts.push(status + '.');
+  if (hasBlinkTalent(opts.talents, 'blink-truestrike')) {
+    parts.push('Truestrike: always hits, ignores God-blessed. 🔮 targets through walls.');
+  }
+  parts.push('Kills reduce cooldown by 1 (2 if unseen). Instakills: -2.');
+  return parts.join(' ');
+}
+
+/** Per-turn tick for Blink Strike and Overkill. A cooldown of 0 stays 0. */
+export function tickBlinkCooldowns(stats: Player['stats']): Player['stats'] {
+  const blink = stats.blinkStrikeCooldown ?? 0;
+  const overkill = stats.blinkOverkillCooldown ?? 0;
+  if (blink <= 0 && overkill <= 0) return stats;
+  return {
+    ...stats,
+    ...(blink > 0 ? { blinkStrikeCooldown: blink - 1 } : {}),
+    ...(overkill > 0 ? { blinkOverkillCooldown: overkill - 1 } : {}),
+  };
 }
 
 export function applyBlinkCooldownReduction(turns: number, talents: readonly BlinkTalentId[] | undefined): number {
@@ -195,8 +433,18 @@ export function applyFlowingStrike(stats: Player['stats']): { stats: Player['sta
   }
   const cd = stats.blinkStrikeCooldown ?? 0;
   const nextCd = Math.max(0, cd - BLINK_TALENT_POST_BLINK_CD_PER_HIT);
-  const next = { ...stats, blinkStrikeCooldown: nextCd, blinkMeleeCdCharges: charges - 1 };
-  const log = nextCd < cd ? `🥷 Flowing Strike — Blink cooldown ${nextCd}t.` : null;
+  const okCd = stats.blinkOverkillCooldown ?? 0;
+  const nextOk = okCd > 0 ? Math.max(0, okCd - BLINK_TALENT_POST_BLINK_CD_PER_HIT) : 0;
+  const next = {
+    ...stats,
+    blinkStrikeCooldown: nextCd,
+    blinkMeleeCdCharges: charges - 1,
+    ...(okCd > 0 ? { blinkOverkillCooldown: nextOk } : {}),
+  };
+  const parts: string[] = [];
+  if (nextCd < cd) parts.push(`Blink cooldown ${nextCd}t`);
+  if (okCd > 0 && nextOk < okCd) parts.push(`Overkill ${nextOk}t`);
+  const log = parts.length ? `🥷 Flowing Strike — ${parts.join(', ')}.` : null;
   return { stats: next, log };
 }
 
@@ -204,7 +452,8 @@ export function tierLabelForOffer(offerIndex: number): string {
   if (offerIndex <= 0) return 'T1';
   if (offerIndex === 1) return 'T2';
   if (offerIndex === 2) return 'T3';
-  return 'T4+';
+  if (offerIndex === 3) return 'T4';
+  return 'T5+';
 }
 
 export function blinkTalentOffersEarned(credits: number): number {
@@ -212,27 +461,78 @@ export function blinkTalentOffersEarned(credits: number): number {
   return Math.min(BLINK_TALENTS.length, Math.floor(credits / BLINK_TALENT_CREDITS_PER_TIER));
 }
 
-/** Choices for the next unpicked offer. T1–T3 are tier-locked; later offers are any leftover talent. */
-export function blinkTalentChoices(picked: readonly BlinkTalentId[] | undefined): BlinkTalentDef[] {
-  const owned = picked ?? [];
+/** Choices for the next unpicked offer. T1–T4 are tier-locked; later offers are any leftover talent. */
+export function blinkTalentChoices(picked: readonly string[] | undefined): BlinkTalentDef[] {
+  const owned = ownedList(picked);
   if (owned.length >= BLINK_TALENTS.length) return [];
-  if (owned.length < 3) {
-    const tier = (owned.length + 1) as 1 | 2 | 3;
-    return BLINK_TALENTS.filter(t => t.tier === tier);
+  if (owned.length < BLINK_TALENT_LOCKED_TIERS) {
+    const tier = (owned.length + 1) as 1 | 2 | 3 | 4;
+    const locked = BLINK_TALENTS.filter(t => t.tier === tier && !owned.includes(t.id));
+    if (locked.length > 0) return locked;
   }
   return BLINK_TALENTS.filter(t => !owned.includes(t.id));
 }
 
 export function pendingBlinkTalentOffer(
   credits: number,
-  picked: readonly BlinkTalentId[] | undefined,
+  picked: readonly string[] | undefined,
 ): { tierLabel: string; choices: BlinkTalentDef[] } | null {
-  const owned = picked ?? [];
+  const owned = ownedList(picked);
   const earned = blinkTalentOffersEarned(credits);
   if (owned.length >= earned || owned.length >= BLINK_TALENTS.length) return null;
   const choices = blinkTalentChoices(owned);
   if (choices.length === 0) return null;
   return { tierLabel: tierLabelForOffer(owned.length), choices };
+}
+
+/** New Tier 3 pair offered once to a migrated Ninja. Null when the flag is off or both are owned. */
+export function blinkT3RespecOffer(
+  pending: boolean | undefined,
+  talents: readonly string[] | null | undefined,
+): { tierLabel: string; choices: BlinkTalentDef[]; note: string } | null {
+  if (pending !== true) return null;
+  const owned = ownedList(talents);
+  const choices = BLINK_TALENTS.filter(t => t.tier === 3 && !owned.includes(t.id));
+  if (choices.length === 0) return null;
+  return { tierLabel: 'T3', choices, note: BLINK_T3_RESPEC_NOTE };
+}
+
+export interface BlinkTalentPrompt {
+  kind: 'respec' | 'offer';
+  tierLabel: string;
+  choices: BlinkTalentDef[];
+  note?: string;
+}
+
+/** Respec wins over a normal talent offer. Only Ninjas are prompted. */
+export function blinkTalentPrompt(opts: {
+  characterClass?: string;
+  credits: number;
+  talents?: readonly string[] | null;
+  respecPending?: boolean;
+}): BlinkTalentPrompt | null {
+  if (opts.characterClass !== '🥷') return null;
+  const respec = blinkT3RespecOffer(opts.respecPending, opts.talents);
+  if (respec) return { kind: 'respec', tierLabel: respec.tierLabel, choices: respec.choices, note: respec.note };
+  const offer = pendingBlinkTalentOffer(opts.credits, opts.talents ?? undefined);
+  if (!offer) return null;
+  return { kind: 'offer', tierLabel: offer.tierLabel, choices: offer.choices };
+}
+
+/**
+ * Appends the chosen new Tier 3 and grants one tier of credits.
+ * The credit grant keeps credits % 44 and the count of unspent offers stable,
+ * so this free pick does not consume a talent the run had already earned.
+ */
+export function grantBlinkT3Respec(stats: PlayerStats, id: BlinkTalentId): PlayerStats | null {
+  const offer = blinkT3RespecOffer(true, stats.blinkTalents);
+  if (!offer?.choices.some(choice => choice.id === id)) return null;
+  const owned = ownedList(stats.blinkTalents);
+  return {
+    ...stats,
+    blinkTalents: [...owned, id],
+    blinkStrikeCredits: (stats.blinkStrikeCredits ?? 0) + BLINK_TALENT_CREDITS_PER_TIER,
+  };
 }
 
 export interface BlinkTalentProgress {
@@ -254,11 +554,11 @@ export interface BlinkTalentProgress {
 
 export function blinkTalentProgress(
   credits: number,
-  picked: readonly BlinkTalentId[] | undefined,
+  picked: readonly string[] | undefined,
 ): BlinkTalentProgress {
   const needed = BLINK_TALENT_CREDITS_PER_TIER;
   const safeCredits = Math.max(0, credits);
-  const owned = picked ?? [];
+  const owned = ownedList(picked);
   const earned = blinkTalentOffersEarned(safeCredits);
   if (owned.length >= BLINK_TALENTS.length) {
     return {
@@ -386,7 +686,10 @@ export function settleBlinkStrikeMarks(
   };
 }
 
-export function blinkStrikeRulesBlurb(luck?: number): string {
-  const live = luck == null ? '' : `Currently ${blinkStrikeDamagePhrase(luck)}. `;
-  return `${live}Damage is ${BLINK_MULTIPLIER_MIN_PERCENT}% at 0 CRIT and ${BLINK_MULTIPLIER_MAX_PERCENT}% at ${CRIT_STAT_SOFT_CAP} CRIT, rising in a straight line (about +${BLINK_MULTIPLIER_PER_CRIT}% per CRIT). Critical hits use normal crit chance and double that damage.`;
+export function blinkStrikeRulesBlurb(luck?: number, talents?: readonly BlinkTalentId[]): string {
+  const bonus = hasBlinkTalent(talents, 'heavier-blink') ? BLINK_TALENT_DAMAGE_BONUS_PERCENT : 0;
+  const min = BLINK_MULTIPLIER_MIN_PERCENT + bonus;
+  const max = BLINK_MULTIPLIER_MAX_PERCENT + bonus;
+  const live = luck == null ? '' : `Currently ${blinkStrikeDamagePhrase(luck, talents)}. `;
+  return `${live}Damage is ${min}% at 0 CRIT and ${max}% at ${CRIT_STAT_SOFT_CAP} CRIT, rising in a straight line (about +${BLINK_MULTIPLIER_PER_CRIT}% per CRIT). Critical hits use normal crit chance and double that damage.`;
 }

@@ -3,7 +3,7 @@ import { applyEquipmentAndPassives, computeNinjaEvasion, pressureForRun, playerS
 import { fencerEvasion, isArcaneCaster, isFencer } from '../../game/prestige';
 import { getCowboyUnarmedBonus } from '../../game/combat';
 import { nullMomentumPercent } from '../../game/voidDamage';
-import { blinkStrikeDamagePhrase, blinkTalentById, blinkTalentProgress } from '../../game/blinkStrike';
+import { blinkStrikeDamagePhrase, blinkTalentById, blinkTalentProgress, knownBlinkTalents, overkillStatusPhrase } from '../../game/blinkStrike';
 import { DODGE_CHANCE_CAP, softCapBonusLines, softCapTitles } from '../../game/softCap';
 import { MiniMap } from '../MiniMap';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './oneHandedLayout';
@@ -135,11 +135,12 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
 
         {player.characterClass === '🥷' && (() => {
           const progress = blinkTalentProgress(player.stats.blinkStrikeCredits ?? 0, player.stats.blinkTalents);
-          const owned = player.stats.blinkTalents ?? [];
+          const owned = knownBlinkTalents(player.stats.blinkTalents) ?? [];
+          const overkill = overkillStatusPhrase(player.stats);
           return (
             <div data-testid="stats-blink-talents" className="rounded-lg border border-violet-400/30 bg-violet-500/10 px-2 py-2 text-[11px] leading-snug">
               <div className="font-bold text-violet-200">{progress.statsLabel}</div>
-              <div className="text-muted-foreground">{progress.nextLabel} · {blinkStrikeDamagePhrase(eff.stats.luck)}</div>
+              <div className="text-muted-foreground">{progress.nextLabel} · {blinkStrikeDamagePhrase(eff.stats.luck, owned)}{overkill ? ` · ${overkill}` : ''}</div>
               {owned.length > 0 && (
                 <ul className="mt-1 space-y-0.5">
                   {owned.map(id => {

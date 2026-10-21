@@ -390,7 +390,7 @@ export default function HowToPlay({
               <div className="flex items-center gap-2">
                 <Kbd>X</Kbd>
                 <span className="text-muted-foreground">
-                  — Ninja only: activate Blink Strike (teleport and strike, 8t cooldown). {blinkStrikeRulesBlurb(blinkLuck)} Instakilling resets the cooldown to 0 — chain up to 3 instakills in a row for instant resets (talents can extend or remove that cap), then each further instakill gives a reduced 3t cooldown instead. Regular kills reduce to 7t; missing gives full 8t. The instakill chain fades back to 0 after 10 turns out of combat once it has reached 2 or more. Talents unlock every {BLINK_TALENT_CREDITS_PER_TIER} Blink credits.
+                  — Ninja only: activate Blink Strike (teleport and strike, 8t cooldown). {blinkStrikeRulesBlurb(blinkLuck, blinkTalents)} Instakilling resets the cooldown to 0 — chain up to 3 instakills in a row for instant resets (Endless Chain removes that cap), then each further instakill gives a reduced 3t cooldown instead. Regular kills reduce to 7t; missing gives full 8t. The instakill chain fades back to 0 after 10 turns out of combat once it has reached 2 or more. Talents unlock every {BLINK_TALENT_CREDITS_PER_TIER} Blink credits.
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -579,19 +579,19 @@ export default function HowToPlay({
           instakill — a fizzle or a normal hit — is worth 1 credit if that target
           dies within {BLINK_TALENT_DELAYED_KILL_TURNS} turns. Every{" "}
           {BLINK_TALENT_CREDITS_PER_TIER} credits opens a permanent pick. The first
-          three offers are tier-locked (two branches each). Later offers (T4+) let
-          you take any talent you skipped, until all six are yours.
+          four offers are tier-locked (two branches each). Later offers (T5+) let
+          you take any talent you skipped, until all eight are yours.
         </p>
         {blinkCredits != null && (
           <p className="text-xs font-semibold text-violet-200" data-testid="rtfm-blink-talents">
             {blinkTalentProgress(blinkCredits, blinkTalents).hudLabel}
             {" · "}
             {blinkTalentProgress(blinkCredits, blinkTalents).nextLabel}
-            {blinkLuck != null ? ` · ${blinkStrikeRulesBlurb(blinkLuck).split(".")[0]}.` : ""}
+            {blinkLuck != null ? ` · ${blinkStrikeRulesBlurb(blinkLuck, blinkTalents).split(".")[0]}.` : ""}
           </p>
         )}
         <div className="space-y-2">
-          {([1, 2, 3] as const).map(tier => (
+          {([1, 2, 3, 4] as const).map(tier => (
             <div key={tier} className="bg-card/50 border border-border/50 rounded-lg p-3 text-xs">
               <div className="font-bold text-violet-300 mb-1">Tier {tier}</div>
               <ul className="space-y-1">
@@ -605,7 +605,7 @@ export default function HowToPlay({
             </div>
           ))}
           <div className="bg-card/50 border border-border/50 rounded-lg p-3 text-xs">
-            <div className="font-bold text-violet-300 mb-1">T4+</div>
+            <div className="font-bold text-violet-300 mb-1">T5+</div>
             <p className="text-muted-foreground">
               Each further {BLINK_TALENT_CREDITS_PER_TIER} credits offers any talent
               from the tiers above that you have not picked yet.
@@ -1167,7 +1167,7 @@ export default function HowToPlay({
                 badge: "✨",
                 color: "bg-yellow-500/15 border-yellow-500/30 text-yellow-300",
                 label: "God-blessed",
-                desc: "Gold tint + ✨ badge. Instakill immunity: any hit that would kill it instead drops it to 1 HP, triggers an auto-hit counter for 150% damage, and inspires nearby allies to deal 125% damage on their next attack. Kill everything else first.",
+                desc: "Gold tint + ✨ badge. Instakill immunity: any hit that would kill it instead drops it to 1 HP, triggers an auto-hit counter for 150% damage, and inspires nearby allies to deal 125% damage on their next attack. Blink Truestrike ignores this. Kill everything else first.",
               },
               {
                 badge: "👻",
@@ -1331,7 +1331,7 @@ export default function HowToPlay({
                               God-blessed
                             </span>
                             <span className="text-muted-foreground">
-                              — instakill immunity
+                              — instakill immunity (Blink Truestrike ignores this)
                             </span>
                           </span>
                         )}
