@@ -13,6 +13,14 @@ import { applyInstantItemUse, canBuyAndUse } from '../../game/shopUse';
 import { applyDrinkToPlayer, pickDrink } from '../../game/drinks';
 import { GHOST_LINGER_TEXT, isVoidSoulSpend } from '../../game/voidDamage';
 import { recordHotbarSoulConsume } from '../../game/voidMeta';
+import {
+  chargeGhostUseRefusal,
+  chargeKindForEmoji,
+  consumeVoidBurdenItem,
+  isVoidBurdenActive,
+  locateVoidGhost,
+  spendChargeGhostUse,
+} from '../../game/voidCharge';
 import { recordEmojiConsume } from '../../game/meta';
 import { noteThemedHotbarConsume } from '../../game/voidAbilities';
 import { _flashSignals } from '../../game/flashSignals';
@@ -299,7 +307,51 @@ export function useItemActions(
     const item = bagItems[bagSlotIndex];
     if (!item || item.consumed) return;
     if (item.isVoidGhost) {
-      addLog(GHOST_LINGER_TEXT);
+      const kind = chargeKindForEmoji(item.emoji);
+      if (!kind || gs.player.characterClass !== '👤') {
+        addLog(GHOST_LINGER_TEXT);
+        return;
+      }
+      const ghost = locateVoidGhost(gs.player, item.emoji)?.ghost;
+      const refusal = chargeGhostUseRefusal(item, ghost);
+      if (refusal) {
+        addLog(refusal);
+        return;
+      }
+      if (kind === 'rope') {
+        setGameState(prev => {
+          if (!prev || prev.gameOver) return prev;
+          const spent = spendChargeGhostUse(prev.player, item.emoji);
+          if (!spent.ok) return prev;
+          const opened = applyRopeVault({ ...prev, player: spent.player }, null, addLog);
+          return {
+            ...opened,
+            logs: [{ id: `ghost-rope-${prev.turn}`, text: `👤 ${item.emoji} ghost opens a vault. Using it does not add Void pressure.`, turn: prev.turn }, ...opened.logs].slice(0, 24),
+          };
+        });
+        return;
+      }
+      if (gs.activeProjectile) { addLog('A projectile is already in flight!'); return; }
+      dirPickModeRef.current = kind;
+      setDirPickMode(kind);
+      addLog(`👤 ${item.emoji} ghost — pick a direction. Using it does not add Void pressure.`);
+      return;
+    }
+
+    if (gs.player.characterClass === '👤' && isVoidBurdenActive(item)) {
+      setGameState(prev => {
+        if (!prev || prev.gameOver) return prev;
+        const slotItem = buildHotbarSlots(prev.player)[bagSlotIndex];
+        if (!slotItem || !isVoidBurdenActive(slotItem)) return prev;
+        const result = consumeVoidBurdenItem(prev.player, slotItem, prev.currentFloor);
+        if (!result.removed) return prev;
+        const logs = [
+          ...result.logs.map((text, i) => ({ id: `void-unmake-${prev.turn}-${slotItem.id}-${i}`, text, turn: prev.turn })),
+          ...prev.logs,
+        ].slice(0, 24);
+        const mid = { ...prev, player: result.player, logs, turn: prev.turn + 1 };
+        return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
+      });
       return;
     }
 

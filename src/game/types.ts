@@ -166,6 +166,13 @@ export interface Equipment {
 export interface VoidGhost {
   emoji: string;
   stacks: number;
+  /**
+   * Remaining uses on a charge-item ghost (Gun, Bomb, Rope, Freeze, Boomerang).
+   * -1 is endless. Soul ghosts omit this.
+   */
+  uses?: number;
+  /** Charge cap for `uses`. -1 is endless. */
+  maxUses?: number;
 }
 
 /** Drink potency. MP and class effects scale with this, the way food healAmount scales HP. */

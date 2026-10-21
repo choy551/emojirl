@@ -71,6 +71,21 @@ describe('consume button', () => {
     expect(consumeButtonMode(true, gun)).toBe('disabled');
     expect(consumeButtonMode(true, money)).toBe('disabled');
   });
+
+  it('lets Void unmake guns and money bags', () => {
+    const asVoid = { asVoid: true };
+    expect(canConsumeBagItem(gun, asVoid)).toBe(true);
+    expect(canConsumeBagItem(money, asVoid)).toBe(true);
+    expect(canConsumeBagItem(rope, asVoid)).toBe(true);
+    expect(canConsumeBagItem(sword, asVoid)).toBe(false);
+    expect(canConsumeBagItem(quiver, asVoid)).toBe(false);
+    expect(bagDoubleTapDisposition(money, asVoid)).toBe('use');
+    expect(bagDoubleTapDisposition(gun, asVoid)).toBe('use');
+    expect(consumeButtonMode(true, gun, asVoid)).toBe('enabled');
+    expect(consumeButtonMode(true, money, asVoid)).toBe('enabled');
+    expect(mobileBagUseClosesBag(gun, asVoid)).toBe(false);
+    expect(mobileBagUseClosesBag(gun)).toBe(true);
+  });
 });
 
 describe('mobileBagUseClosesBag', () => {

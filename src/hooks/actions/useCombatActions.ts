@@ -17,6 +17,7 @@ import {
   applyEquipmentAndPassives, removeAndRefillBag, withVisibility, runEnemyTurns, applyEnemyTurns,
   handleGodBlessedImmunity, levelFromXP, livingMaxHp,
 } from '../../game/gameHelpers';
+import { spendChargeGhostByKind } from '../../game/voidCharge';
 import { applyLevelUp } from '../../game/playerTurn';
 import { creditVoidBoss } from '../../game/voidDamage';
 import { noteThemedHotbarConsume } from '../../game/voidAbilities';
@@ -52,6 +53,29 @@ export function useCombatActions(
         return prev;
       }
       const kindEmoji = kind === 'gun' ? '🔫' : kind === 'freeze' ? '❄️' : kind === 'bomb' ? '💣' : '🪃';
+      if (prev.player.characterClass === '👤') {
+        const shot = spendChargeGhostByKind(prev.player, kind);
+        if (!shot.ok) {
+          addLog(shot.refusal ?? `👤 No ${kindEmoji} ghost to spend.`);
+          return prev;
+        }
+        const throwLabel = kind === 'boomerang' ? 'throw the boomerang' : kind === 'bomb' ? 'throw the bomb' : kind === 'gun' ? 'fire the gun' : 'fire a freeze bolt';
+        const bankBoomerangs = kind === 'boomerang' ? prev.player.bank.filter(it => it.activeKind === 'boomerang' && !it.consumed).length : 0;
+        const boomerangPct = Math.round(Math.min(2.0, 1.0 + 0.25 * bankBoomerangs) * 100);
+        addLog(`${kindEmoji} You ${throwLabel}!${kind === 'boomerang' && bankBoomerangs > 0 ? ` (${boomerangPct}% ATK — ${bankBoomerangs} extra in Bank)` : ''}`);
+        if (shot.uses === 0) addLog(`👤 ${kindEmoji} ghost is spent. Consume another to recharge it.`);
+        const proj: ActiveProjectile = {
+          id: `proj-${Math.random()}`,
+          kind,
+          pos: { ...prev.player.pos },
+          dir: { x: dx, y: dy },
+          phase: 'outgoing',
+          maxRange: kind === 'boomerang' ? 5 : 8,
+          traveled: 0,
+        };
+        const midState = { ...prev, player: shot.player, activeProjectile: proj, turn: prev.turn + 1 };
+        return applyEnemyTurns(midState, runEnemyTurns(midState));
+      }
       const item = prev.player.inventory.find(it => it.activeKind === kind && !it.consumed && (it.charges === -1 || (it.charges ?? 0) > 0));
       if (!item) { addLog(`No ${kindEmoji} in inventory!`); return prev; }
       const throwLabel = kind === 'boomerang' ? 'throw the boomerang' : kind === 'bomb' ? 'throw the bomb' : kind === 'gun' ? 'fire the gun' : 'fire a freeze bolt';

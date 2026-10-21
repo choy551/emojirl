@@ -1,7 +1,7 @@
 import { Player, EmojiItem, VoidGhost } from './types';
 import type { BagPassiveSummary } from './types';
 import { STACKABLE_BAG_CAPS, isStackableBagPassive } from './passives';
-import { EMOJI_POWERS } from './emojis';
+import { ACTIVE_DROPS, EMOJI_POWERS } from './emojis';
 import { hotbarCapFor, padGhostHotbar, voidGhostCapacity } from './voidDamage';
 import { drinkEvasionBonus } from './drinks';
 import { resolveSoftCap, type SoftCapInput, type SoftCapResult } from './softCap';
@@ -214,17 +214,28 @@ export function removeAndRefillBag(
 }
 
 function ghostToDisplayItem(ghost: VoidGhost, dormant: boolean): EmojiItem {
+  const drop = ACTIVE_DROPS.find(d => d.emoji === ghost.emoji);
   const power = EMOJI_POWERS.find(e => e.emoji === ghost.emoji);
+  const maxUses = typeof ghost.maxUses === 'number' ? ghost.maxUses : drop?.charges;
+  const uses = typeof ghost.uses === 'number' ? ghost.uses : maxUses;
+  const chargeGhost = typeof uses === 'number';
+  const usesNote = !chargeGhost
+    ? ''
+    : uses === -1
+      ? ' Endless uses. Spending a use does not add Void pressure.'
+      : ` Uses ×${uses}${typeof maxUses === 'number' && maxUses >= 0 ? `/${maxUses}` : ''}. Spending a use does not add Void pressure.`;
   return {
     id: `void-ghost:${ghost.emoji}`,
     emoji: ghost.emoji,
-    name: power?.name ?? 'Ghost',
-    description: power?.description ?? 'A remembered soul.',
+    name: drop ? `${drop.name} Ghost` : (power?.name ?? 'Ghost'),
+    description: `${drop?.description ?? power?.description ?? 'A remembered soul.'}${usesNote}`,
     consumed: false,
-    bagPassive: power?.bagPassive,
+    bagPassive: drop ? undefined : power?.bagPassive,
     stackCount: Math.max(1, ghost.stacks),
     isVoidGhost: true,
     isVoidGhostDormant: dormant || undefined,
+    ...(drop?.activeKind ? { activeKind: drop.activeKind } : {}),
+    ...(chargeGhost ? { charges: uses } : {}),
   };
 }
 
@@ -288,17 +299,25 @@ export function parkVoidOverflow(player: Player): Player {
   };
 }
 
+/** Keep charge-ghost uses when a later x10 only raises the stack. */
+function ghostWithStacks(prev: VoidGhost | null | undefined, emoji: string, stacks: number): VoidGhost {
+  const next: VoidGhost = { emoji, stacks };
+  if (typeof prev?.uses === 'number') next.uses = prev.uses;
+  if (typeof prev?.maxUses === 'number') next.maxUses = prev.maxUses;
+  return next;
+}
+
 export function grantGhostStack(player: Player, emoji: string, stacks: number): Player {
   const hot = padGhostHotbar(player.ghostHotbar);
   const hi = hot.findIndex(g => g?.emoji === emoji);
   if (hi !== -1) {
-    hot[hi] = { emoji, stacks };
+    hot[hi] = ghostWithStacks(hot[hi], emoji, stacks);
     return { ...player, ghostHotbar: hot };
   }
   const bank = [...(player.ghostBank ?? [])];
   const bi = bank.findIndex(g => g.emoji === emoji);
   if (bi !== -1) {
-    bank[bi] = { emoji, stacks };
+    bank[bi] = ghostWithStacks(bank[bi], emoji, stacks);
     return { ...player, ghostHotbar: hot, ghostBank: bank };
   }
   const cells = buildHotbarSlots({ ...player, ghostHotbar: hot, ghostBank: bank });

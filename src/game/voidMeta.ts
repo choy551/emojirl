@@ -1,4 +1,5 @@
 import type { VoidGhost } from './types';
+import { ACTIVE_DROPS } from './emojis';
 import { voidGhostCapacity } from './voidDamage';
 
 const UNLOCK_KEY = 'emojirl_unlocked_void';
@@ -183,7 +184,12 @@ export function startingVoidLoadout(bossesCleared = 0): { ghostHotbar: (VoidGhos
   const ghostBank: VoidGhost[] = [];
   let placed = 0;
   for (const [emoji, v] of entries) {
+    const drop = ACTIVE_DROPS.find(d => d.emoji === emoji);
     const ghost: VoidGhost = { emoji, stacks: v.unlocks };
+    if (drop && typeof drop.charges === 'number') {
+      ghost.uses = drop.charges;
+      ghost.maxUses = drop.charges;
+    }
     if (placed < cap) {
       ghostHotbar[placed] = ghost;
       placed++;
