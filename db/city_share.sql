@@ -1,6 +1,6 @@
 -- EmojiCB shared cities. Anonymous players, no accounts.
--- Apply with: pnpm city:setup
--- Requires DATABASE_URL or POSTGRES_URL (Neon, or any Postgres).
+-- The API runs these statements on first use. pnpm city:setup applies the same file.
+-- Connection string is server-only (DATABASE_URL). Never prefix it with VITE_.
 
 CREATE TABLE IF NOT EXISTS shared_cities (
   id TEXT PRIMARY KEY,

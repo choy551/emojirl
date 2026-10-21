@@ -10,6 +10,7 @@ import {
   type SortKey,
 } from '../game/cityShareModel.ts';
 import type { CityState } from '../game/emojiCity.ts';
+import { applyCityShareSchema, schemaOnce } from './cityShareSchema.ts';
 
 export interface CityStore {
   ping(): Promise<boolean>;
@@ -30,6 +31,10 @@ export function newPublicId(): string {
   return randomBytes(9).toString('base64url');
 }
 
+/**
+ * Pooled Neon URL. Server-only: never read this from `import.meta.env` or a `VITE_` name.
+ * `DATABASE_URL_UNPOOLED` is ignored on purpose; the serverless driver uses the pooler.
+ */
 export function databaseUrl(env: NodeJS.ProcessEnv = process.env): string | null {
   const raw = (env.DATABASE_URL || env.POSTGRES_URL || '').trim();
   if (!raw || !/^postgres(ql)?:\/\//i.test(raw)) return null;
@@ -111,32 +116,39 @@ function mapRow(row: Record<string, unknown>): SharedCityRecord {
 
 export function neonCityStore(connectionString: string): CityStore {
   const sql: Sql = neon(connectionString);
+  const ensure = schemaOnce(() => applyCityShareSchema(statement => sql.query(statement)));
   return {
     async ping() {
+      await ensure();
       const rows = asRows(await sql`SELECT 1 AS ok`);
       return rows.length === 1;
     },
     async findByTokenHash(hash) {
+      await ensure();
       const rows = asRows(await sql`SELECT id, token_hash, username, city_name, grid, structures, citizens, updated_at FROM shared_cities WHERE token_hash = ${hash} LIMIT 1`);
       const row = rows[0];
       return row ? mapRow(row) : null;
     },
     async findById(id) {
+      await ensure();
       const rows = asRows(await sql`SELECT id, token_hash, username, city_name, grid, structures, citizens, updated_at FROM shared_cities WHERE id = ${id} LIMIT 1`);
       const row = rows[0];
       return row ? mapRow(row) : null;
     },
     async insert(row) {
+      await ensure();
       await sql`INSERT INTO shared_cities (id, token_hash, username, city_name, grid, structures, citizens, updated_at)
         VALUES (${row.id}, ${row.tokenHash}, ${row.username}, ${row.cityName}, ${JSON.stringify(row.grid)}::jsonb, ${row.structures}, ${row.citizens}, ${row.updatedAt}::timestamptz)`;
     },
     async update(row) {
+      await ensure();
       await sql`UPDATE shared_cities
         SET username = ${row.username}, city_name = ${row.cityName}, grid = ${JSON.stringify(row.grid)}::jsonb,
             structures = ${row.structures}, citizens = ${row.citizens}, updated_at = ${row.updatedAt}::timestamptz
         WHERE token_hash = ${row.tokenHash}`;
     },
     async list(query) {
+      await ensure();
       const cursor = query.cursor ? decodeListCursor(query) : null;
       const text = listQueryText(query.sort, query.dir, !!cursor);
       const params = cursor ? [cursor.value, cursor.id, query.limit + 1] : [query.limit + 1];
@@ -150,6 +162,7 @@ export function neonCityStore(connectionString: string): CityStore {
       return { rows: page, nextCursor };
     },
     async hitRate(subject, limit, nowMs) {
+      await ensure();
       const window = rateWindow(nowMs);
       await sql`DELETE FROM share_rate_buckets WHERE window_start < ${window - 2}`;
       const rows = asRows(await sql`INSERT INTO share_rate_buckets (subject, window_start, hits)

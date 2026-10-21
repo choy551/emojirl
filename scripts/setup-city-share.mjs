@@ -1,10 +1,12 @@
 /**
- * Create the shared-city tables.
+ * Optional manual apply of db/city_share.sql.
+ * The API already runs these CREATE TABLE/INDEX IF NOT EXISTS statements
+ * on its first request, so this command is not required after deploy.
  *
- *   DATABASE_URL=postgres://... pnpm city:setup
+ *   pnpm city:setup
  *
- * Reads DATABASE_URL, then POSTGRES_URL. A local .env.local or .env is loaded
- * when the variable is not already set. The connection string is never printed.
+ * Reads DATABASE_URL, then POSTGRES_URL, from the environment or .env.local.
+ * The connection string is never printed. DATABASE_URL_UNPOOLED is not used.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { neon } from '@neondatabase/serverless';
@@ -31,8 +33,8 @@ loadEnvFile('.env');
 
 const url = (process.env.DATABASE_URL || process.env.POSTGRES_URL || '').trim();
 if (!url || !/^postgres(ql)?:\/\//i.test(url)) {
-  console.error('Set DATABASE_URL or POSTGRES_URL to a Neon (or Postgres) connection string, then run pnpm city:setup.');
-  console.error('Vercel Marketplace → Neon (free tier) provisions DATABASE_URL on the project. Pull it with `vercel env pull .env.local`, or paste the Neon string into .env.local yourself.');
+  console.error('Set DATABASE_URL (the pooled Neon string) to apply db/city_share.sql by hand.');
+  console.error('Deployed API routes create the same tables on first use, so this command is optional.');
   process.exit(1);
 }
 

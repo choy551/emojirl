@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { emptyCity, TRAIN_EMOJI, type CityState } from '../game/emojiCity';
 import {
@@ -15,6 +15,7 @@ import {
 import { ensurePlayerToken, getSharedCity, listSharedCities, loadShareStatus, publishMyCity, PLAYER_TOKEN_KEY } from '../game/cityShareClient';
 import { handleCityShare, memoryDeps } from './cityShareHttp';
 import { databaseUrl, hashPlayerToken, listQueryText } from './cityStore';
+import { applyCityShareSchema, CITY_SHARE_SQL, cityShareStatements, schemaOnce } from './cityShareSchema';
 
 const TOKEN = 'a'.repeat(43);
 
@@ -230,5 +231,63 @@ describe('city share sql and client', () => {
     expect(app).toContain('path="/visit/:id"');
     const store = readFileSync(new URL('./cityStore.ts', import.meta.url), 'utf8');
     expect(store).toContain('@neondatabase/serverless');
+    expect(store).toContain('applyCityShareSchema');
+  });
+
+  it('creates the schema idempotently and keeps the connection string off the client', async () => {
+    const file = readFileSync(new URL('../../db/city_share.sql', import.meta.url), 'utf8');
+    expect(file).toBe(CITY_SHARE_SQL);
+    const statements = cityShareStatements();
+    expect(statements).toHaveLength(7);
+    expect(statements.every(statement => statement.startsWith('CREATE TABLE IF NOT EXISTS ') || statement.startsWith('CREATE INDEX IF NOT EXISTS '))).toBe(true);
+
+    const ran: string[] = [];
+    let runs = 0;
+    const ensure = schemaOnce(async () => {
+      runs += 1;
+      await applyCityShareSchema(async statement => { ran.push(statement); });
+    });
+    await Promise.all([ensure(), ensure()]);
+    await ensure();
+    expect(runs).toBe(1);
+    expect(ran).toEqual(statements);
+
+    let failures = 0;
+    const retry = schemaOnce(async () => {
+      failures += 1;
+      if (failures === 1) throw new Error('schema failed');
+    });
+    await expect(retry()).rejects.toThrow('schema failed');
+    await retry();
+    expect(failures).toBe(2);
+
+    expect(databaseUrl({
+      DATABASE_URL: 'postgres://pooled/db',
+      DATABASE_URL_UNPOOLED: 'postgres://direct/db',
+    })).toBe('postgres://pooled/db');
+
+    const clientFiles = ['src/pages', 'src/game', 'src/components', 'src/hooks'].flatMap(dir => listSources(dir));
+    clientFiles.push('src/App.tsx', 'src/main.tsx');
+    for (const filePath of clientFiles) {
+      const text = readFileSync(new URL(`../../${filePath}`, import.meta.url), 'utf8');
+      expect(text, filePath).not.toContain('DATABASE_URL');
+      expect(text, filePath).not.toContain('VITE_DATABASE');
+      expect(text, filePath).not.toContain('cityShareSchema');
+      expect(text, filePath).not.toContain('cityStore');
+    }
+    const vite = readFileSync(new URL('../../vite.config.ts', import.meta.url), 'utf8');
+    expect(vite).not.toContain('DATABASE_URL');
+    expect(vite).not.toContain('VITE_DATABASE');
   });
 });
+
+function listSources(dir: string): string[] {
+  const root = new URL(`../../${dir}`, import.meta.url);
+  const out: string[] = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const rel = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) out.push(...listSources(rel));
+    else if (/\.(ts|tsx)$/.test(entry.name)) out.push(rel);
+  }
+  return out;
+}
