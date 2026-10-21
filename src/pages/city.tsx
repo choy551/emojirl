@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CITY_NAME_MAX } from '../game/cityIdentity';
+import { flyoutStyle } from './cityPaletteLayout';
 import { getEnemyKillCounts } from '../game/discoveries';
 import {
   BUILDING_EXCHANGE_COST,
@@ -314,30 +315,37 @@ export default function CityPage() {
 
       <p className="text-[11px] text-muted-foreground leading-snug min-h-8" data-testid="city-note">{note}</p>
 
-      {selectedBuilding && (
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full min-h-11"
-          data-testid="raise-structure"
-          onClick={raiseStructure}
-        >
-          Raise {selectedBuilding.emoji} · {BUILDING_EXCHANGE_COST} tokens
-        </Button>
-      )}
-      <BuildPalette
-        sections={sections}
-        selected={selected}
-        onSelect={entry => {
-          const structure = entry.kind === 'token' && Boolean(buildingOf(entry.emoji));
-          if (entry.locked && !structure) {
-            setNote(entry.hint);
-            return;
-          }
-          setSelected({ kind: entry.kind, emoji: entry.emoji });
-          setNote(entry.kind === 'decor' ? `${entry.emoji} decor. Free, and it does not count.` : entry.hint);
-        }}
-      />
+      <div className="flex items-start gap-1.5">
+        {selectedBuilding && (
+          <Button
+            type="button"
+            variant="outline"
+            className="sticky top-3 z-30 h-auto min-h-11 w-14 shrink-0 flex-col gap-0 self-start whitespace-normal px-1 py-2 text-[10px] leading-tight sm:w-[5.75rem] sm:text-xs"
+            data-testid="raise-structure"
+            aria-label={`Raise ${selectedBuilding.emoji} · ${BUILDING_EXCHANGE_COST} tokens`}
+            onClick={raiseStructure}
+          >
+            <span>Raise</span>
+            <span className="text-base leading-none sm:text-lg">{selectedBuilding.emoji}</span>
+            <span className="tabular-nums">{BUILDING_EXCHANGE_COST}</span>
+          </Button>
+        )}
+        <div className="min-w-0 flex-1">
+          <BuildPalette
+            sections={sections}
+            selected={selected}
+            onSelect={entry => {
+              const structure = entry.kind === 'token' && Boolean(buildingOf(entry.emoji));
+              if (entry.locked && !structure) {
+                setNote(entry.hint);
+                return;
+              }
+              setSelected({ kind: entry.kind, emoji: entry.emoji });
+              setNote(entry.kind === 'decor' ? `${entry.emoji} decor. Free, and it does not count.` : entry.hint);
+            }}
+          />
+        </div>
+      </div>
     </div>
 
       {city && (
@@ -397,42 +405,6 @@ export default function CityPage() {
 /** District bands. Each section inside a band is still its own full-width row. */
 const PALETTE_MENU_ROWS = 5;
 
-function flyoutStyle(anchor: DOMRect): { layout: 'side' | 'sheet'; style: CSSProperties } {
-  const gap = 8;
-  const want = 384;
-  const spaceRight = window.innerWidth - anchor.right - gap;
-  const spaceLeft = anchor.left - gap;
-  const narrow = window.innerWidth < 640 || (spaceRight < 240 && spaceLeft < 240);
-  if (narrow) {
-    const top = Math.min(anchor.bottom + gap, Math.max(8, window.innerHeight - 220));
-    return {
-      layout: 'sheet',
-      style: {
-        position: 'fixed',
-        left: 8,
-        right: 8,
-        top,
-        maxHeight: Math.max(160, window.innerHeight - top - 8),
-        zIndex: 50,
-      },
-    };
-  }
-  const placeRight = spaceRight >= spaceLeft;
-  const width = Math.min(want, placeRight ? spaceRight : spaceLeft);
-  const top = Math.max(8, Math.min(anchor.top, window.innerHeight - 220));
-  return {
-    layout: 'side',
-    style: {
-      position: 'fixed',
-      top,
-      width,
-      maxHeight: Math.max(200, window.innerHeight - top - 8),
-      zIndex: 50,
-      left: placeRight ? anchor.right + gap : Math.max(8, anchor.left - gap - width),
-    },
-  };
-}
-
 function BuildPalette({
   sections,
   selected,
@@ -480,9 +452,10 @@ function BuildPalette({
   useLayoutEffect(() => {
     if (!openSection) return;
     const place = () => {
-      const box = menuRef.current?.getBoundingClientRect();
-      if (!box) return;
-      setFlyout(flyoutStyle(box));
+      const menu = menuRef.current?.getBoundingClientRect();
+      const section = rootRef.current?.querySelector(`[data-testid="palette-section-${openSection.id}"]`)?.getBoundingClientRect();
+      if (!menu) return;
+      setFlyout(flyoutStyle(section ?? menu, menu, { width: window.innerWidth, height: window.innerHeight }));
     };
     place();
     window.addEventListener('resize', place);

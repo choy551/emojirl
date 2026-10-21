@@ -934,6 +934,8 @@ describe('EmojiCB surfaces', () => {
     expect(city).not.toContain('absolute inset-x-0 top-full');
     expect(city.indexOf('data-testid="raise-structure"')).toBeLessThan(city.indexOf('data-testid="palette-menu"'));
     expect(city).toContain('data-testid="raise-structure"');
+    expect(city).toContain('sticky top-3');
+    expect(city).toContain('palette-section-${openSection.id}');
     expect(city).toContain('aria-expanded');
     expect(city).toContain('PALETTE_MENU_ROWS = 5');
     expect(city).toContain('data-testid="palette-menu"');
@@ -1011,6 +1013,7 @@ describe('EmojiCB city name and visitor', () => {
     expect(generateAnonymousName(() => 0)).toBe('BraveOtter1000');
     expect(emojiCityRulesBlurb()).toContain('defaulting to Emoji City');
     expect(emojiCityRulesBlurb()).toContain('Visit Cities and Share stay offline');
+    expect(emojiCityRulesBlurb()).toContain('The Raise button sits on the left of the menu and stays in view while the page scrolls.');
   });
 });
 
