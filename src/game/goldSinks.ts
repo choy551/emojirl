@@ -1,7 +1,7 @@
 import type { EmojiItem, EquipSlot, GameState, Player } from './types';
 import { getClassDef } from './classes';
 import { classSelectEntries, isClassUnlocked } from './classSelect';
-import { RESTAURANT_COOKED_SELL_LIMIT } from './economy';
+import { RESTAURANT_COOKED_SELL_LIMIT, slotShrineCost } from './economy';
 import { buildHotbarSlots } from './inventory';
 import { loadMeta, saveMeta } from './meta';
 import { isArcaneCaster, startFloorContract } from './prestige';
@@ -9,10 +9,10 @@ import { GENIE, GENIE_BASE_MP, HITMAN } from './prestigeConstants';
 import { mpBonusForLevel } from './progression';
 import { canEquipItem } from '../components/itemUtils';
 
-/** Once per run. D:1 is the minimum; D:26 reaches the cap. */
-export const REROLL_COST_MIN = 1500;
-export const REROLL_COST_PER_FLOOR = 60;
-export const REROLL_COST_MAX = 3000;
+/** Once per run. D:1 is the minimum; D:26 reaches the cap. Halved from 1500 / +60 / 3000. */
+export const REROLL_COST_MIN = 750;
+export const REROLL_COST_PER_FLOOR = 30;
+export const REROLL_COST_MAX = 1500;
 
 /** Rare mirror shrine. Shops always offer the same reroll. */
 export const MIRROR_MIN_FLOOR = 4;
@@ -20,18 +20,20 @@ export const MIRROR_CHANCE = 0.12;
 
 export const INSURE_MIN_SLOTS = 1;
 export const INSURE_MAX_SLOTS = 3;
-/** One hotbar emoji. D:1 is the base; growth stops at the one-emoji cap. */
-export const INSURE_ONE_BASE = 1000;
-export const INSURE_ONE_PER_FLOOR = 48;
-export const INSURE_ONE_CAP = 2200;
-/** Added once per emoji after the first. */
-export const INSURE_EXTRA_BASE = 700;
-export const INSURE_EXTRA_PER_FLOOR = 28;
-export const INSURE_BILL_CAP = 5000;
+/** One hotbar emoji. D:1 is the base; growth stops at the one-emoji cap. Halved from 1000 / +48 / 2200. */
+export const INSURE_ONE_BASE = 500;
+export const INSURE_ONE_PER_FLOOR = 24;
+export const INSURE_ONE_CAP = 1100;
+/** Added once per emoji after the first. Halved from 700 / +28. */
+export const INSURE_EXTRA_BASE = 350;
+export const INSURE_EXTRA_PER_FLOOR = 14;
+/** Halved from 5000. */
+export const INSURE_BILL_CAP = 2500;
 
-export const ROUND_COST_BASE = 500;
-export const ROUND_COST_PER_FLOOR = 60;
-export const ROUND_COST_CAP = 2000;
+/** Halved from 500 / +60 / 2000. */
+export const ROUND_COST_BASE = 250;
+export const ROUND_COST_PER_FLOOR = 30;
+export const ROUND_COST_CAP = 1000;
 export const ROUND_MOOD_BASE = 16;
 export const ROUND_MOOD_STEP = 2;
 export const ROUND_MOOD_EVERY = 5;
@@ -252,5 +254,5 @@ export function goldSinkRulesBlurb(): string {
   const deep = 26;
   const early = roundPlan(1);
   const late = roundPlan(deep);
-  return `Gold sinks. Identity Reroll 🪞: once per run, at a shop or a rare mirror (about ${Math.round(MIRROR_CHANCE * 100)}% of floors from D:${MIRROR_MIN_FLOOR}), become another unlocked class. Locked classes stay locked. Bag, hotbar, and bank stay. Cost ${rerollCost(1)} gold on D:1, plus ${REROLL_COST_PER_FLOOR} per floor after that, capped at ${rerollCost(deep)}. Vault insurance 🏦: insure ${INSURE_MIN_SLOTS}–${INSURE_MAX_SLOTS} hotbar emojis. One emoji is ${insuranceCost(1, 1)} on D:1 and ${insuranceCost(deep, 1)} on D:${deep}. Each extra emoji adds ${INSURE_EXTRA_BASE} on D:1. Three emojis on D:${deep} cost ${insuranceCost(deep, 3)}. The bill never passes ${INSURE_BILL_CAP}. If you die, those copies start the next run, once. Round for the House 🍻: at a restaurant, pay ${roundCost(1)}–${roundCost(deep)} gold. D:1 holds mood at ${early.floor} for ${early.turns} turns. D:${deep} holds mood at ${late.floor} for ${late.turns} turns. Buying a round resets the kitchen's sell count. The cooked sell cap stays ${RESTAURANT_COOKED_SELL_LIMIT}.`;
+  return `Gold sinks. Identity Reroll 🪞: once per run, at a shop or a rare mirror (about ${Math.round(MIRROR_CHANCE * 100)}% of floors from D:${MIRROR_MIN_FLOOR}), become another unlocked class. Locked classes stay locked. Bag, hotbar, and bank stay. Cost ${rerollCost(1)} gold on D:1, plus ${REROLL_COST_PER_FLOOR} per floor after that, capped at ${rerollCost(deep)}. Vault insurance 🏦: insure ${INSURE_MIN_SLOTS}–${INSURE_MAX_SLOTS} hotbar emojis. One emoji is ${insuranceCost(1, 1)} on D:1 and ${insuranceCost(deep, 1)} on D:${deep}. Each extra emoji adds ${INSURE_EXTRA_BASE} on D:1. Three emojis on D:${deep} cost ${insuranceCost(deep, 3)}. The bill never passes ${INSURE_BILL_CAP}. If you die, those copies start the next run, once. Round for the House 🍻: at a restaurant, pay ${roundCost(1)}–${roundCost(deep)} gold. D:1 holds mood at ${early.floor} for ${early.turns} turns. D:${deep} holds mood at ${late.floor} for ${late.turns} turns. Buying a round resets the kitchen's sell count. The cooked sell cap stays ${RESTAURANT_COOKED_SELL_LIMIT}. Slot Shrine 🎰: ${slotShrineCost(1)} gold on D:1, ${slotShrineCost(10)} on D:10, and ${slotShrineCost(25)} from D:25.`;
 }

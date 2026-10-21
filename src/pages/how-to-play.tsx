@@ -18,7 +18,7 @@ import {
 import { softCapRulesBlurb } from "../game/softCap";
 import { farmerRulesBlurb } from "../game/farmer";
 import { foodSinkRulesBlurb } from "../game/foodSinks";
-import { CHEF_LESSON_COST_TEXT } from "../game/economy";
+import { CHEF_LESSON_COST_TEXT, MERCHANT_BUY_PRICE_TEXT, slotShrineCost } from "../game/economy";
 import { goldSinkRulesBlurb } from "../game/goldSinks";
 import { goldSink2RulesBlurb } from "../game/goldSinks2";
 import { voidExtrasRulesBlurb } from "../game/hollowMarket";
@@ -984,7 +984,12 @@ export default function HowToPlay({
               label: "Shrine",
               desc: "Heals HP and raises max HP when stepped on (scales with floor depth). One use per shrine. Offer one food here, on a used shrine, or at a slot shrine for a floor-long ATK/DEF blessing. Offering does not spend the pray.",
             },
-            { icon: "🏪", label: "Shop", desc: "Buy emojis, equipment, and ammo with 💰 gold. Sell anything from your bag or bank for gold too. Gold services here: Identity Reroll (once per run, unlocked classes only, bag stays) and vault insurance for 1–3 hotbar emojis. Autoexplore stops here automatically." },
+            {
+              icon: "🎰",
+              label: "Slot Shrine",
+              desc: `Pay gold to spin. The spin costs ${slotShrineCost(1)} gold on D:1, ${slotShrineCost(10)} on D:10, and ${slotShrineCost(25)} from D:25. Offer one food here for a floor-long ATK/DEF blessing. Autoexplore stops here.`,
+            },
+            { icon: "🏪", label: "Shop", desc: `Buy emojis, equipment, and ammo with 💰 gold. ${MERCHANT_BUY_PRICE_TEXT} Sell anything from your bag or bank for gold too. Gold services here: Identity Reroll (once per run, unlocked classes only, bag stays) and vault insurance for 1–3 hotbar emojis. The same buy price is used at restaurants and ammo caches. Autoexplore stops here automatically.` },
             { icon: "🏪🔥", label: "Restaurant", desc: `A food-only shop. Buy and cook food, rest for +2 extra HP nearby (the low-HP rest multiplier applies to the whole rest), and sell cooked food for 250% value. Chef's Lesson improves cooked dishes for the rest of the run (more heal when eaten, more gold when sold, up to 5). ${CHEF_LESSON_COST_TEXT} Hover the lesson for your current bonuses, or tap it to pin that note — the tap does not buy. You can sell up to 5 cooked dishes — the kitchen closes after that (no more selling or cooking there), but the +2 HP/turn rest bonus remains. Round for the House spends gold for a mood floor and reopens the kitchen without raising that cap of 5. Warning: the food smell draws nearby enemies (+2 aggro range). Autoexplore stops here.` },
             { icon: "🍺", label: "Bar", desc: "Spend 15 XP for an instant HP restore from the innkeeper (overheal to 150% of max HP). Won't work if you're already overhealed or have fewer than 15 XP. Beds overheal to 200% instead, with no XP cost." },
             {
@@ -1002,7 +1007,7 @@ export default function HowToPlay({
             { icon: "⚫", label: "Obsidian", desc: "Cooled lava×water. Walkable like regular floor for you and enemies. Does not remelt." },
             { icon: "🪞", label: "Identity Mirror", desc: "A rare shrine from D:4. Offers the same once-per-run Identity Reroll as a shop: swap to another unlocked class and keep your bag, hotbar, and bank. Autoexplore stops here." },
             { icon: "📜", label: "Bounty Board", desc: "About 30% of floors. Pay a floor-scaled ante for one contract on this floor: slay a mob that is already here, stand on a 📍 mark, or survive a run of turns. Success pays a named uncommon or rare emoji. Leave the floor and an accepted bounty expires — the ante stays spent. Autoexplore stops here." },
-            { icon: "💎", label: "Vanity Flex", desc: "D:16 and deeper only, the same floors as Dungeon Pressure. Buy a trail or a title for 5,000 gold or more. Cosmetics only: no combat power. The title shows in the HUD and on the death screen, and the choice is saved with the run. Autoexplore stops here." },
+            { icon: "💎", label: "Vanity Flex", desc: "D:16 and deeper only, the same floors as Dungeon Pressure. Buy a trail or a title for 2,500 gold or more. Cosmetics only: no combat power. The title shows in the HUD and on the death screen, and the choice is saved with the run. Autoexplore stops here." },
             { icon: "☠️", label: "Blood Auction", desc: "Bid floor-scaled gold for a named rare emoji shown before you bid. Gold is spent win or lose. The HP percent is a sweetener paid only if you win, and a win never drops you below 1 HP. Autoexplore stops here." },
           ].map((t) => (
             <div
