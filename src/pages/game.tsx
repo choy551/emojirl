@@ -52,6 +52,9 @@ import { HotbarPanel } from '../components/HotbarPanel';
 import { BankPanel } from '../components/BankPanel';
 import { ShopModal } from '../components/ShopModal';
 import { FarmerTradeModal } from '../components/FarmerTradeModal';
+import { CampfireBanquetModal } from '../components/CampfireBanquetModal';
+import { ShrineOfferingModal } from '../components/ShrineOfferingModal';
+import { BANQUET_MIN_DISHES, cookedDishCount, nearCampfire, nearShrineOffer } from '../game/foodSinks';
 import { AmmoCacheModal } from '../components/AmmoCacheModal';
 import { RestaurantModal } from '../components/RestaurantModal';
 import { SlotShrineModal } from '../components/SlotShrineModal';
@@ -356,6 +359,8 @@ export default function Game() {
       { id: 'monkey', isOpen: () => !!pendingMonkeyInteraction, close: () => setPendingMonkeyInteraction(null) },
       { id: 'fairy', isOpen: () => !!pendingFairyId, close: () => setPendingFairyId(null) },
       { id: 'farmer', isOpen: () => !!pendingFarmerId, close: () => setPendingFarmerId(null) },
+      { id: 'banquet', isOpen: () => banquetOpen, close: () => setBanquetOpen(false) },
+      { id: 'offer', isOpen: () => shrineOfferOpen, close: () => setShrineOfferOpen(false) },
       { id: 'dir-pick', isOpen: () => dirPickModeRef.current !== null, close: () => { dirPickModeRef.current = null; setDirPickMode(null); } },
       { id: 'unmake', isOpen: () => unmakeTargetModeRef.current, close: () => { unmakeTargetModeRef.current = false; setUnmakeTargetMode(false); } },
       { id: 'blink', isOpen: () => blinkTargetModeRef.current, close: () => { setBlinkTargetMode(false); blinkTargetModeRef.current = false; } },
@@ -459,6 +464,12 @@ export default function Game() {
   const [pendingFarmerId, setPendingFarmerId] = useState<string | null>(null);
   const pendingFarmerRef = useRef(false);
   useEffect(() => { pendingFarmerRef.current = !!pendingFarmerId; }, [pendingFarmerId]);
+  const [banquetOpen, setBanquetOpen] = useState(false);
+  const banquetOpenRef = useRef(false);
+  useEffect(() => { banquetOpenRef.current = banquetOpen; }, [banquetOpen]);
+  const [shrineOfferOpen, setShrineOfferOpen] = useState(false);
+  const shrineOfferOpenRef = useRef(false);
+  useEffect(() => { shrineOfferOpenRef.current = shrineOfferOpen; }, [shrineOfferOpen]);
   const [pendingMonkeyInteraction, setPendingMonkeyInteraction] = useState<{ id: string; wants: string } | null>(null);
   const [pendingAdventurerInteraction, setPendingAdventurerInteraction] = useState<string | null>(null);
   const [pendingBearInteraction, setPendingBearInteraction] = useState<{ id: string; stage: 'neutral' | 'friendly'; offerId: string | null } | null>(null);
@@ -484,6 +495,8 @@ export default function Game() {
     pendingMonkeyInteraction ||
     pendingFairyId ||
     pendingFarmerId ||
+    banquetOpen ||
+    shrineOfferOpen ||
     dirPickMode ||
     unmakeTargetMode ||
     blinkTargetMode ||
@@ -1234,6 +1247,8 @@ export default function Game() {
         else setBedRestOpen(true);
         break;
       case 'cook': setTravelTarget(null); handleCook(); break;
+      case 'banquet': setTravelTarget(null); setBanquetOpen(true); break;
+      case 'offer': setTravelTarget(null); setShrineOfferOpen(true); break;
       case 'talk': {
         const gs = gameStateRef.current;
         if (gs && action.dir) {
@@ -1411,6 +1426,16 @@ export default function Game() {
       if (pendingFarmerRef.current) {
         e.preventDefault();
         if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setPendingFarmerId(null); return; }
+        return;
+      }
+      if (banquetOpenRef.current) {
+        e.preventDefault();
+        if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setBanquetOpen(false); return; }
+        return;
+      }
+      if (shrineOfferOpenRef.current) {
+        e.preventDefault();
+        if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') { setShrineOfferOpen(false); return; }
         return;
       }
 
@@ -1999,6 +2024,8 @@ export default function Game() {
     { id: 'rest', icon: '💤', label: 'Rest', active: autoRest, onUse: () => { setTravelTarget(null); setAutoExplore(false); setAutoRest(v => !v); } },
     { id: 'explore', icon: '🔭', label: 'Explore', active: autoExplore, onUse: () => { setTravelTarget(null); setAutoRest(false); setAutoExplore(v => !v); } },
     { id: 'cook', icon: '🔥', label: 'Cook', onUse: handleCook },
+    { id: 'banquet', icon: '🍽️', label: 'Banquet', detail: '3+ cooked', disabled: !nearCampfire(gameState.map, player.pos) || cookedDishCount(player) < BANQUET_MIN_DISHES, onUse: () => setBanquetOpen(true) },
+    { id: 'offer', icon: '🛕', label: 'Offer', detail: 'at shrine', disabled: !nearShrineOffer(gameState.map, player.pos), onUse: () => setShrineOfferOpen(true) },
     { id: 'closedoor', icon: '🚪', label: 'Close Door', disabled: !isAdjacentToOpenDoor, onUse: handleCloseDoor },
     { id: 'bag', icon: '🎒', label: 'Bag', onUse: () => setBankOpen(true) },
     { id: 'wait', icon: '⏳', label: 'Wait', onUse: handleManualWait },
@@ -3661,6 +3688,24 @@ export default function Game() {
         />
       )}
 
+      {banquetOpen && gameState && (
+        <CampfireBanquetModal
+          gameState={gameState}
+          setGameState={setGameState}
+          addLog={addLog}
+          onClose={() => setBanquetOpen(false)}
+        />
+      )}
+
+      {shrineOfferOpen && gameState && (
+        <ShrineOfferingModal
+          gameState={gameState}
+          setGameState={setGameState}
+          addLog={addLog}
+          onClose={() => setShrineOfferOpen(false)}
+        />
+      )}
+
       {shopOpen && gameState && (
         <ShopModal
           gameState={gameState}
@@ -3691,6 +3736,7 @@ export default function Game() {
           setGameState={setGameState}
           addLog={addLog}
           onClose={() => setSlotShrineOpen(false)}
+          onOffer={() => { setSlotShrineOpen(false); setShrineOfferOpen(true); }}
         />
       )}
 

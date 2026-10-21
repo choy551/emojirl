@@ -3,6 +3,7 @@ import { crowGoldSteal } from './economy';
 import { applyNullMomentum } from './voidDamage';
 import { blinkStrikeDamageMultiplier, critStat } from './blinkStrike';
 import { DODGE_CHANCE_CAP, effectiveCrit } from './softCap';
+import { feastDefense } from './foodSinks';
 import { fencerCritBonus, fencerEvasion, isFencer, isRoyalGuard, royalDefenseBonus, royalIncomingMult, royalMeleeMultiplier } from './prestige';
 import { FENCER_PARRY_CHANCE } from './prestigeConstants';
 
@@ -102,6 +103,7 @@ export function resolveCombat(
 ): CombatResult {
   const cls = player.characterClass;
   const mods = getMoodModifiers(opts.mood ?? 'neutral', player.stats.hp, player.stats.maxHp, opts.cowboyMoodValue);
+  const enemyDef = feastDefense(enemy);
 
   // Advantage (🎲 Dice bag passive): roll twice, take the favorable (lower) value so
   // hit/crit/dodge checks are all more likely to succeed for the player.
@@ -140,7 +142,7 @@ export function resolveCombat(
     } else {
       const raw1 = wasUnaware ? Math.round(player.stats.attack * 1.6) : player.stats.attack;
       const isCrit1 = rollCrit(newEnemyHp);
-      const dmg1 = Math.max(1, Math.round(raw1 * mods.damageMult * (isCrit1 ? 2 : 1)) - (enemy.defense ?? 0));
+      const dmg1 = Math.max(1, Math.round(raw1 * mods.damageMult * (isCrit1 ? 2 : 1)) - enemyDef);
       newEnemyHp -= dmg1;
       if (wasUnaware) {
         addLog(`🥷 Shadow Strike! ${dmg1} dmg to ${enemy.emoji} (unaware)${isCrit1 ? ' CRITICAL!' : ''}!`);
@@ -157,7 +159,7 @@ export function resolveCombat(
       } else {
         const raw2 = Math.floor((wasUnaware ? Math.round(player.stats.attack * 1.6) : player.stats.attack) * 0.65);
         const isCrit2 = rollCrit(newEnemyHp);
-        const dmg2 = Math.max(1, Math.round(raw2 * mods.damageMult * (isCrit2 ? 2 : 1)) - (enemy.defense ?? 0));
+        const dmg2 = Math.max(1, Math.round(raw2 * mods.damageMult * (isCrit2 ? 2 : 1)) - enemyDef);
         newEnemyHp -= dmg2;
         addLog(`🥷 Dual Strike! ${wasUnaware ? 'Shadow ' : ''}${dmg2} dmg${isCrit2 ? ' CRITICAL!' : ''}!`);
       }
@@ -171,7 +173,7 @@ export function resolveCombat(
       } else {
         const raw3 = Math.floor((wasUnaware ? Math.round(player.stats.attack * 1.6) : player.stats.attack) * 0.55);
         const isCrit3 = rollCrit(newEnemyHp);
-        const dmg3 = Math.max(1, Math.round(raw3 * mods.damageMult * (isCrit3 ? 2 : 1)) - (enemy.defense ?? 0));
+        const dmg3 = Math.max(1, Math.round(raw3 * mods.damageMult * (isCrit3 ? 2 : 1)) - enemyDef);
         newEnemyHp -= dmg3;
         addLog(`🥷 Off-hand slash! ${dmg3} dmg${isCrit3 ? ' CRITICAL!' : ''}!`);
       }
@@ -183,7 +185,7 @@ export function resolveCombat(
       } else {
         const raw4 = Math.floor((wasUnaware ? Math.round(player.stats.attack * 1.6) : player.stats.attack) * 0.40);
         const isCrit4 = rollCrit(newEnemyHp);
-        const dmg4 = Math.max(1, Math.round(raw4 * mods.damageMult * (isCrit4 ? 2 : 1)) - (enemy.defense ?? 0));
+        const dmg4 = Math.max(1, Math.round(raw4 * mods.damageMult * (isCrit4 ? 2 : 1)) - enemyDef);
         newEnemyHp -= dmg4;
         addLog(`🥷 Finishing strike! ${dmg4} dmg${isCrit4 ? ' CRITICAL!' : ''}!`);
       }
@@ -217,7 +219,7 @@ export function resolveCombat(
 
       const isCrit = rollCrit(newEnemyHp);
       const moodDamage = Math.round(rawDamage * mods.damageMult * (isCrit ? 2 : 1));
-      const actualDamage = Math.max(1, moodDamage - (enemy.defense ?? 0));
+      const actualDamage = Math.max(1, moodDamage - enemyDef);
       newEnemyHp = enemy.hp - actualDamage;
 
       if (opts.blinkStrike) {
@@ -239,7 +241,7 @@ export function resolveCombat(
 
       // Mood: double strike
       if (mods.doubleStrike > 0 && newEnemyHp > 0 && r() * 100 < mods.doubleStrike) {
-        const dmg2 = Math.max(1, Math.round(rawDamage * mods.damageMult) - (enemy.defense ?? 0));
+        const dmg2 = Math.max(1, Math.round(rawDamage * mods.damageMult) - enemyDef);
         newEnemyHp -= dmg2;
         addLog(`You strike again for ${dmg2}!`);
       }

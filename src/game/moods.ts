@@ -24,6 +24,8 @@ export function getMood(
   inventorySize: number,
   isCowboy = false,
   moodFloorBonus = 0,
+  /** Campfire banquet: raise effective mood, but not the ≤20% HP last stand. */
+  raisedFloor = 0,
 ): MoodType {
   const hpRatio = maxHp > 0 ? hp / maxHp : 1;
 
@@ -42,6 +44,7 @@ export function getMood(
     : +15 * ((hpRatio - 0.5) / 0.5); // 0 at 50%, +15 at 100%
 
   let effective = moodValue + hpMoodShift;
+  if (raisedFloor > 0 && hpRatio > 0.2) effective = Math.max(effective, raisedFloor);
 
   if (isCowboy) {
     // Cowboy mood floor: never drops below Happy threshold

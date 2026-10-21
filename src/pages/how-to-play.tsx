@@ -17,6 +17,7 @@ import {
 } from "../game/blinkStrike";
 import { softCapRulesBlurb } from "../game/softCap";
 import { farmerRulesBlurb } from "../game/farmer";
+import { foodSinkRulesBlurb } from "../game/foodSinks";
 import {
   getSeenEmojis,
   getSeenEnemies,
@@ -438,7 +439,7 @@ export default function HowToPlay({
             {
               icon: "🛕",
               label: "Shrine",
-              desc: "Heals HP and raises max HP when stepped on (scales with floor depth). One use per shrine.",
+              desc: "Heals HP and raises max HP when stepped on (scales with floor depth). One use per shrine. Offer one food here, on a used shrine, or at a slot shrine for a floor-long ATK/DEF blessing. Offering does not spend the pray.",
             },
             { icon: "🏪", label: "Shop", desc: "Buy emojis, equipment, and ammo with 💰 gold. Sell anything from your bag or bank for gold too. Autoexplore stops here automatically." },
             { icon: "🏪🔥", label: "Restaurant", desc: "A food-only shop. Buy and cook food, rest for +2 extra HP nearby, and sell cooked food for 250% value. Chef's Lesson improves cooked dishes for the rest of the run (more heal when eaten, more gold when sold, up to 5). The first lesson is free; later lessons cost gold. Hover the lesson for your current bonuses, or tap it to pin that note — the tap does not buy. You can sell up to 5 cooked dishes — the kitchen closes after that (no more selling or cooking there), but the +2 HP/turn rest bonus remains. Warning: the food smell draws nearby enemies (+2 aggro range). Autoexplore stops here." },
@@ -446,7 +447,7 @@ export default function HowToPlay({
             {
               icon: "🔥",
               label: "Campfire",
-              desc: "Found in forest rooms. Stand nearby and press F to cook raw food into powerful cooked versions. Resting nearby heals +2 extra HP per turn.",
+              desc: "Forest rooms always have one, and a lone fire sometimes appears on floors that have none. Stand nearby and press F to cook raw food. Dump at least 3 cooked dishes with Banquet for a full heal and a temporary mood floor. Resting nearby heals +2 extra HP per turn.",
             },
             { icon: "📦", label: "Ammo Cache", desc: "Special shop tile (📦). Re-interact (z/Enter/Space on the tile) for class-specific ammo resupply before bosses." },
             { icon: "🟦", label: "Water", desc: "Rivers, ponds, lakes, and vault moats. You cannot walk on water without a ⛵ Boat. Mermen lurk here. Flying enemies cross and stand on water freely. Lava that touches water cools the water into walkable ⚫ obsidian." },
@@ -473,6 +474,11 @@ export default function HowToPlay({
         <div className="mt-3 bg-card/50 border border-green-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
           <div className="font-bold text-green-200 mb-1">Farmer shops</div>
           {farmerRulesBlurb()}
+        </div>
+
+        <div className="mt-3 bg-card/50 border border-orange-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-orange-200 mb-1">Food sinks</div>
+          {foodSinkRulesBlurb()}
         </div>
 
         <div className="mt-3 text-xs text-muted-foreground space-y-3">

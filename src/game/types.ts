@@ -204,6 +204,31 @@ export interface Player {
   voidBossesCleared?: number;
   /** Active drink. Absent when nothing is brewing. */
   drinkBuff?: DrinkBuff;
+  /** Campfire banquet mood floor. Ticks down each turn. */
+  banquet?: BanquetBuff;
+  /** One shrine food blessing for the current floor. Cleared on descend. */
+  shrineOffering?: ShrineOffering;
+}
+
+export interface BanquetBuff {
+  /** Effective mood is at least this while the banquet lasts (above 20% HP). */
+  floor: number;
+  turnsLeft: number;
+}
+
+export interface ShrineOffering {
+  attack: number;
+  defense: number;
+  turnsNote: 'floor';
+  label: string;
+  foodEmoji: string;
+}
+
+export interface FeastBuff {
+  attack: number;
+  defense: number;
+  turnsLeft: number;
+  label: string;
 }
 
 export type ActiveKind = 'bomb' | 'gun' | 'boomerang' | 'rope' | 'freeze';
@@ -320,6 +345,10 @@ export interface Enemy {
   guardsFarmerId?: string;
   /** Emoji goods the farmer will trade for food. Empty means sold out. */
   tradeStock?: EmojiItem[];
+  /** Temporary meal buff from a Companion Feast. */
+  feastBuff?: FeastBuff;
+  /** Feasts shared. Shown in the talk dialog; each meal adds 1. */
+  loyalty?: number;
 }
 
 export interface FloatingText {

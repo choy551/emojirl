@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { GameState, Enemy, EmojiItem } from '../game/types';
 import { restoreStolenEmojis, stolenEmojiSummary, cookedEatHeal } from '../game/gameHelpers';
+import { executeFeast, feastBuffLabel, sinkFoods } from '../game/foodSinks';
 import { useDialogHotkeys } from '../hooks/useDialogHotkeys';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { FINALE_DIVE_PROMPT, FINALE_WIN_PROMPT } from '../game/finale';
@@ -305,7 +306,7 @@ interface CompanionTalkProps {
   onClose: () => void;
 }
 
-type TalkSection = 'main' | 'heal' | 'give' | 'soul';
+type TalkSection = 'main' | 'heal' | 'feast' | 'give' | 'soul';
 
 const BEHAVIOR_OPTIONS: { value: Enemy['companionBehavior']; icon: string; label: string; desc: string }[] = [
   { value: 'close',      icon: '🤝', label: 'Stay Close',    desc: 'Follow tightly, charge engaged enemies near you' },
@@ -340,6 +341,7 @@ export function CompanionTalkDialog({ gameState, setGameState, companionId, onCl
 
   // Player item pools
   const healItems = gameState.player.inventory.filter(it => !it.consumed && it.healAmount !== undefined);
+  const feastFoods = sinkFoods(gameState.player);
   const soulItems = gameState.player.inventory.filter(it =>
     !it.consumed && !it.isEquipment && !it.activeKind && it.healAmount === undefined && it.bagPassive
   );
@@ -387,6 +389,31 @@ export function CompanionTalkDialog({ gameState, setGameState, companionId, onCl
       };
     });
     setSection('main');
+  };
+
+  const handleFeast = (item: EmojiItem) => {
+    let ok = false;
+    setGameState(prev => {
+      if (!prev) return prev;
+      const comp = prev.enemies.find(e => e.id === companionId);
+      if (!comp) return prev;
+      const result = executeFeast(prev.player, comp, item.id);
+      const text = result.ok ? (result.log ?? 'Feast shared.') : (result.reason ?? 'They will not eat that.');
+      if (!result.ok || !result.player || !result.companion) {
+        return {
+          ...prev,
+          logs: [{ id: Math.random().toString(), text, turn: prev.turn }, ...prev.logs].slice(0, 24),
+        };
+      }
+      ok = true;
+      return {
+        ...prev,
+        player: result.player,
+        enemies: prev.enemies.map(e => e.id === companionId ? result.companion! : e),
+        logs: [{ id: Math.random().toString(), text, turn: prev.turn }, ...prev.logs].slice(0, 24),
+      };
+    });
+    if (ok) setSection('main');
   };
 
   const handleGiveEmoji = (item: EmojiItem) => {
@@ -463,6 +490,48 @@ export function CompanionTalkDialog({ gameState, setGameState, companionId, onCl
   // ── Render ────────────────────────────────────────────────────────────────
 
   const borderColor = companion.isFavoriteCompanion ? 'border-yellow-400/60' : 'border-cyan-400/40';
+
+  if (section === 'feast') {
+    const feast = companion.feastBuff && companion.feastBuff.turnsLeft > 0 ? companion.feastBuff : null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className={`bg-card border ${borderColor} rounded-xl p-5 shadow-2xl max-w-sm w-full mx-4 max-h-[90vh] overflow-y-auto`}>
+          <div className="text-sm font-bold text-amber-200 mb-1">🍽️ Feast with {companion.emoji} {companion.name}</div>
+          <div className="text-xs text-muted-foreground mb-3">
+            Loyalty {companion.loyalty ?? 0}
+            {feast ? ` · Feast +${feast.attack} ATK${feast.defense > 0 ? ` +${feast.defense} DEF` : ''} · ${feast.turnsLeft}t` : ''}
+          </div>
+          {feastFoods.length === 0 ? (
+            <div className="text-xs text-slate-400 italic mb-3">No food in your bag or bank. Potions and hearts are not a feast.</div>
+          ) : (
+            <div className="space-y-1.5 max-h-52 overflow-y-auto mb-3">
+              {feastFoods.map(it => {
+                const where = gameState.player.bank.some(entry => entry.id === it.id) ? 'bank' : 'bag';
+                return (
+                  <button
+                    key={it.id}
+                    type="button"
+                    className="min-h-11 w-full text-left px-3 py-2 rounded-lg border bg-amber-500/15 border-amber-500/30 text-amber-100 text-xs"
+                    onClick={() => handleFeast(it)}
+                  >
+                    <span className="font-semibold">{it.emoji} {it.name}</span>
+                    <span className="block text-[10px] text-amber-200/80">{where} · {feastBuffLabel(it)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <button
+            type="button"
+            className="min-h-11 w-full py-2 rounded-lg bg-slate-500/20 border border-slate-400/30 text-slate-300 text-xs font-semibold"
+            onClick={() => setSection('main')}
+          >
+            ← Back
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Sub-panel: heal
   if (section === 'heal') {
@@ -621,8 +690,13 @@ export function CompanionTalkDialog({ gameState, setGameState, companionId, onCl
               <span className="text-[10px] text-muted-foreground tabular-nums">{companion.hp}/{companion.maxHp}</span>
             </div>
             <div className="text-[10px] text-muted-foreground mt-0.5">
-              ATK {companion.attack} · DEF {companion.defense} · SPD {companion.speed}
+              ATK {companion.attack} · DEF {companion.defense} · SPD {companion.speed} · Loyalty {companion.loyalty ?? 0}
             </div>
+            {companion.feastBuff && companion.feastBuff.turnsLeft > 0 && (
+              <div className="text-[10px] text-amber-300 mt-0.5">
+                Feast +{companion.feastBuff.attack} ATK{companion.feastBuff.defense > 0 ? ` +${companion.feastBuff.defense} DEF` : ''} · {companion.feastBuff.turnsLeft}t
+              </div>
+            )}
           </div>
         </div>
 
@@ -668,6 +742,18 @@ export function CompanionTalkDialog({ gameState, setGameState, companionId, onCl
             {healItems.length > 0
               ? <span className="text-green-400/70 ml-1">({healItems.length} item{healItems.length !== 1 ? 's' : ''} available)</span>
               : <span className="text-slate-500 ml-1">(none in bag)</span>
+            }
+          </button>
+
+          <button
+            type="button"
+            className="min-h-11 w-full py-2 px-3 rounded-lg border bg-amber-500/15 border-amber-500/30 text-amber-200 text-xs font-semibold text-left"
+            onClick={() => setSection('feast')}
+          >
+            🍽️ Feast
+            {feastFoods.length > 0
+              ? <span className="text-amber-300/80 ml-1">({feastFoods.length} food)</span>
+              : <span className="text-slate-500 ml-1">(no food)</span>
             }
           </button>
 

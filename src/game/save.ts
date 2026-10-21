@@ -116,6 +116,8 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     ghostBank: Array.isArray(rawPlayer.ghostBank) ? (rawPlayer.ghostBank as Player['ghostBank']) : undefined,
     voidBossesCleared: (rawPlayer.voidBossesCleared as number | undefined) ?? (raw.voidBossesCleared as number | undefined) ?? 0,
     drinkBuff: rawPlayer.drinkBuff as Player['drinkBuff'],
+    banquet: rawPlayer.banquet as Player['banquet'],
+    shrineOffering: rawPlayer.shrineOffering as Player['shrineOffering'],
   };
 
   // ── GameState ─────────────────────────────────────────────────────────────

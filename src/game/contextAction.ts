@@ -2,12 +2,13 @@ import { GameState, Enemy } from './types';
 import { COOKABLE_EMOJIS } from './emojis';
 import { chebyshev } from './geo';
 import { FINALE_FLOOR } from './finaleConstants';
+import { BANQUET_MIN_DISHES, cookedDishCount, nearCampfire } from './foodSinks';
 
 export type ContextActionKind =
   | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear' | 'talk' | 'trade'
-  | 'cook' | 'close-door' | 'rest'
+  | 'cook' | 'banquet' | 'close-door' | 'rest'
   | 'open-shop' | 'open-cache' | 'open-restaurant' | 'open-slots'
-  | 'descend' | 'shrine' | 'pickup' | 'wait' | 'explore';
+  | 'descend' | 'shrine' | 'offer' | 'pickup' | 'wait' | 'explore';
 
 export interface ContextActionDescriptor {
   kind: ContextActionKind;
@@ -47,8 +48,13 @@ export function resolveContextAction(
     return { kind: 'close-door', label: 'Close', icon: '🚪' };
   }
 
+  // Campfire + enough cooked dishes -> banquet. Cook stays on F and when the pile is smaller.
+  if (nearCampfire(map, player.pos) && cookedDishCount(player) >= BANQUET_MIN_DISHES) {
+    return { kind: 'banquet', label: 'Banquet', icon: '🍽️' };
+  }
+
   // Adjacent fire/restaurant + raw food in bag -> cook.
-  const nearCook = neighbours.some(d => {
+  const nearCook = here?.type === 'campfire' || neighbours.some(d => {
     const t = tileAt(px + d.dx, py + d.dy)?.type;
     return t === 'campfire' || t === 'restaurant';
   });
@@ -94,6 +100,14 @@ export function resolveContextAction(
 
   const shrineDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'shrine');
   if (shrineDir) return { kind: 'shrine', label: 'Pray', icon: '⛩️', dir: shrineDir };
+
+  // Offering is separate from the one-use pray. A live shrine still prays first.
+  if (here?.type === 'shrine-used') return { kind: 'offer', label: 'Offer', icon: '🛕' };
+  const offerDir = neighbours.find(d => {
+    const kind = tileAt(px + d.dx, py + d.dy)?.type;
+    return kind === 'shrine-used' || kind === 'slot-shrine';
+  });
+  if (offerDir) return { kind: 'offer', label: 'Offer', icon: '🛕', dir: offerDir };
 
   const stairDir = neighbours.find(d => tileAt(px + d.dx, py + d.dy)?.type === 'stairs');
   if (stairDir) {

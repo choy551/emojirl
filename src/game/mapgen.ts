@@ -1,5 +1,6 @@
 import { MapGrid, Position, RoomTheme } from './types';
 import { placePrairie, prairieAppearsOnFloor } from './farmer';
+import { mapHasCampfire, shouldPlaceLoneCampfire } from './foodSinks';
 import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, coolLavaWaterContacts } from './lava';
 import { BED_EMOJI, BED_MAX_USES } from './tiles';
 import { FINALE_FLOOR } from './finaleConstants';
@@ -343,19 +344,24 @@ function placeTrees(map: MapGrid, room: Room) {
   }
 }
 
-function placeCampfire(map: MapGrid, room: Room) {
+/** Drop a single campfire on floor or grass. Used by forests and by the lone-fire roll. */
+export function placeLoneCampfire(map: MapGrid, room: Room): boolean {
   const cx = room.x + Math.floor(room.w / 2);
   const cy = room.y + Math.floor(room.h / 2);
-  const offsets: [number, number][] = [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1]];
+  const offsets: [number, number][] = [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [2, 0], [0, 2]];
   for (const [dx, dy] of offsets) {
     const ax = cx + dx, ay = cy + dy;
-    if (ay >= room.y + 1 && ay < room.y + room.h - 1 && ax >= room.x + 1 && ax < room.x + room.w - 1) {
-      if (map[ay][ax].type === 'floor') {
-        map[ay][ax] = { type: 'campfire', emoji: '🔥', seen: false, visible: false };
-        return;
-      }
-    }
+    if (ay < room.y || ay >= room.y + room.h || ax < room.x || ax >= room.x + room.w) continue;
+    const tile = map[ay]?.[ax];
+    if (!tile || (tile.type !== 'floor' && tile.type !== 'grass')) continue;
+    map[ay][ax] = { type: 'campfire', emoji: '🔥', seen: false, visible: false };
+    return true;
   }
+  return false;
+}
+
+function placeCampfire(map: MapGrid, room: Room) {
+  placeLoneCampfire(map, room);
 }
 
 function placeShrine(map: MapGrid, room: Room) {
@@ -953,6 +959,16 @@ export function generateMap(floor: number): { map: MapGrid; startPos: Position; 
     else if (room.theme === 'room-vault')     placeRoomVault(map, room);
     else if (room.theme === 'prairie')        placePrairie(map, room);
     // monster-den: no tile treatment — enemy packing is handled in spawning.ts
+  }
+
+  // Floors with no forest fire sometimes grow a lone campfire for banquets.
+  if (shouldPlaceLoneCampfire(mapHasCampfire(map), Math.random())) {
+    const candidates = rooms.filter((room, index) =>
+      index > 0 && index < rooms.length - 1 && (room.theme === 'normal' || room.theme === 'prairie' || room.theme === 'forest'),
+    );
+    if (candidates.length > 0) {
+      placeLoneCampfire(map, candidates[Math.floor(Math.random() * candidates.length)]);
+    }
   }
 
   // Boss floors: place an ammo cache crate in the start room so players can resupply

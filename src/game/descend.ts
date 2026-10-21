@@ -7,6 +7,7 @@ import { pressureForRun } from './progression';
 import { _flashSignals, PEACEMAKERS_LOG, tryDualGunsFanfare } from './flashSignals';
 import { FINALE_FLOOR, buildFinaleFloor, waveBeginLog } from './finale';
 import { isArcaneCaster, startFloorContract } from './prestige';
+import { clearShrineOffering } from './foodSinks';
 
 function stampDualGunsFanfare(state: GameState, prevEquipment: Player['equipment'], addLog: (text: string) => void): GameState {
   const fan = tryDualGunsFanfare({
@@ -27,7 +28,8 @@ export function descendFloor(state: GameState, addLog: (text: string) => void): 
   const prev = state;
   const nextFloor = prev.currentFloor + 1;
   const cls = prev.player.characterClass;
-  let newPlayer: Player = { ...prev.player, stats: { ...prev.player.stats } };
+  let newPlayer: Player = clearShrineOffering({ ...prev.player, stats: { ...prev.player.stats } });
+  if (prev.player.shrineOffering) addLog('🛕 The shrine blessing fades as you descend.');
   let newState: GameState = { ...prev };
 
   const enteringFinale = nextFloor === FINALE_FLOOR;
