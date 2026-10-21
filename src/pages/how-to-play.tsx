@@ -21,6 +21,7 @@ import { foodSinkRulesBlurb } from "../game/foodSinks";
 import { goldSinkRulesBlurb } from "../game/goldSinks";
 import { goldSink2RulesBlurb } from "../game/goldSinks2";
 import { voidExtrasRulesBlurb } from "../game/hollowMarket";
+import { emojiCityRulesBlurb } from "../game/emojiCity";
 import {
   getSeenEmojis,
   getSeenEnemies,
@@ -137,6 +138,10 @@ export default function HowToPlay({
           stairway opens at the north end. You can win the game there, or dive even deeper —
           from D:28 on, Dungeon Pressure is doubled on each floor.
         </p>
+        <div className="rounded-lg border border-primary/30 bg-card/50 px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-primary mb-1">EmojiCB</div>
+          {emojiCityRulesBlurb()}
+        </div>
         <p className="text-muted-foreground leading-relaxed">
           Your <strong className="text-foreground">Mood</strong> affects combat
           — a happy adventurer hits harder, dodges more, and lands crits. Taking

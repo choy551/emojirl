@@ -1,4 +1,6 @@
 import type { EmojiItem } from './types';
+import { normalizeEmojiKey } from './discoveries';
+import { normalizeCity, type CityState } from './emojiCity';
 import {
   META_SAVE_KEY,
   META_SCHEMA_VERSION,
@@ -11,6 +13,14 @@ export interface MetaSave {
   unlockedPrestige: string[];
   /** Hotbar copies waiting for the next run. Cleared when that run starts. */
   insuredCarry?: EmojiItem[];
+  /** Lifetime consumes per emoji. One consume is one EmojiCB placement token. */
+  emojiConsumes?: Record<string, number>;
+  /** EmojiCB grid. Absent until the player opens the city. */
+  city?: CityState;
+  /** Roguelike turns waiting to be simulated the next time EmojiCB opens. */
+  pendingCityTurns?: number;
+  /** City turns toward the next auto-built lot, kept across visits. */
+  cityGrowthRemainder?: number;
 }
 
 export interface KeyValueStore {
@@ -52,8 +62,25 @@ function carryItems(raw: unknown): EmojiItem[] {
   });
 }
 
+function nonNegInt(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.floor(n);
+}
+
+function countMap(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== 'object') return {};
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const n = Math.floor(Number(value));
+    if (!key || n <= 0) continue;
+    out[normalizeEmojiKey(key)] = n;
+  }
+  return out;
+}
+
 export function emptyMeta(): MetaSave {
-  return { schemaVersion: META_SCHEMA_VERSION, unlockedPrestige: [], insuredCarry: [] };
+  return { schemaVersion: META_SCHEMA_VERSION, unlockedPrestige: [], insuredCarry: [], emojiConsumes: {} };
 }
 
 export function loadMeta(): MetaSave {
@@ -68,6 +95,10 @@ export function loadMeta(): MetaSave {
       schemaVersion: META_SCHEMA_VERSION,
       unlockedPrestige: [...new Set(unlocked)],
       insuredCarry: carryItems(parsed.insuredCarry),
+      emojiConsumes: countMap(parsed.emojiConsumes),
+      city: parsed.city ? normalizeCity(parsed.city) : undefined,
+      pendingCityTurns: nonNegInt(parsed.pendingCityTurns),
+      cityGrowthRemainder: nonNegInt(parsed.cityGrowthRemainder),
     };
   } catch {
     return emptyMeta();
@@ -89,6 +120,45 @@ export function isPrestigeUnlocked(emoji: string, meta: MetaSave = loadMeta()): 
 export function isVoidUnlocked(): boolean {
   try { return store.getItem(VOID_UNLOCK_KEY) === '1'; }
   catch { return false; }
+}
+
+/** Count one lifetime consume. Spell Echo and unsold items do not call this. */
+export function recordEmojiConsume(emoji: string, n = 1): number {
+  const add = Math.max(0, Math.floor(n));
+  const key = normalizeEmojiKey(emoji);
+  const meta = loadMeta();
+  const counts = { ...(meta.emojiConsumes ?? {}) };
+  if (!key || add === 0) return counts[key] ?? 0;
+  counts[key] = (counts[key] ?? 0) + add;
+  saveMeta({ ...meta, emojiConsumes: counts });
+  return counts[key];
+}
+
+export function saveCity(city: CityState): void {
+  const meta = loadMeta();
+  saveMeta({ ...meta, city: normalizeCity(city) });
+}
+
+/** Add roguelike turns that should advance the city the next time it opens. */
+export function noteCityTurns(turns: number): number {
+  const add = Math.max(0, Math.floor(turns));
+  const meta = loadMeta();
+  const pending = meta.pendingCityTurns ?? 0;
+  if (add === 0) return pending;
+  const next = pending + add;
+  saveMeta({ ...meta, pendingCityTurns: next });
+  return next;
+}
+
+/** Store the caught-up city and clear the pending turn queue. */
+export function settleCityCatchUp(city: CityState, growthRemainder: number): void {
+  const meta = loadMeta();
+  saveMeta({
+    ...meta,
+    city: normalizeCity(city),
+    pendingCityTurns: 0,
+    cityGrowthRemainder: nonNegInt(growthRemainder),
+  });
 }
 
 /**

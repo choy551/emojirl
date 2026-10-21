@@ -62,6 +62,8 @@ import { BloodAuctionModal } from '../components/BloodAuctionModal';
 import { HollowMarketModal } from '../components/HollowMarketModal';
 import { BANQUET_MIN_DISHES, cookedDishCount, nearCampfire, nearShrineOffer } from '../game/foodSinks';
 import { stashInsuranceOnDeath, takeInsuredStartItems } from '../game/goldSinks';
+import { applyDistrictBonus, normalizeCity } from '../game/emojiCity';
+import { loadMeta, noteCityTurns } from '../game/meta';
 import { bountyProgress, grantBounty, rollBountyOffer, vanityTitleName, vanityTrailById } from '../game/goldSinks2';
 import { AmmoCacheModal } from '../components/AmmoCacheModal';
 import { RestaurantModal } from '../components/RestaurantModal';
@@ -169,6 +171,7 @@ export default function Game() {
   const explosionClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [beamTiles, setBeamTiles] = useState<Map<string, string>>(new Map());
   const gameStateRef = useRef<GameState | null>(null);
+  const cityTurnRef = useRef<number | null>(null);
   const scoreSaved = useRef(false);
   const [, navigate] = useLocation();
   const isMobile = useIsMobile();
@@ -695,6 +698,16 @@ export default function Game() {
     }
   }, [gameState?.gameOver]);
 
+  // One city turn per roguelike turn. The first sighting of a run only sets the cursor.
+  useEffect(() => {
+    if (!gameState) return;
+    const turn = gameState.turn ?? 0;
+    const prev = cityTurnRef.current;
+    cityTurnRef.current = turn;
+    if (prev == null || turn <= prev) return;
+    noteCityTurns(turn - prev);
+  }, [gameState?.turn]);
+
   // ── init ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     // If a save exists, restore it instead of generating a new run
@@ -756,6 +769,8 @@ export default function Game() {
       const added = addToPlayerBag(initialPlayer, ...carried);
       initialPlayer = { ...initialPlayer, inventory: added.inventory, bank: added.bank };
     }
+    const districtStart = applyDistrictBonus(initialPlayer, normalizeCity(loadMeta().city));
+    initialPlayer = districtStart.player;
 
     setGameState({
       schemaVersion: 1,
@@ -769,6 +784,7 @@ export default function Game() {
         { id: 'l1', text: vessel === '🤠' ? `Welcome, Cowboy. Only real Cowboys fight with their fists! Descend and collect emojis.` : vessel === '👤' ? `Welcome, The Void. Emptiness is peace — filled souls burn.` : `Welcome, ${cls.name}. Descend and collect emojis.`, turn: 1 },
         ...(openingContract.log ? [{ id: 'l1-contract', text: openingContract.log, turn: 1 }] : []),
         ...(carried.length > 0 ? [{ id: 'l1-insured', text: `🏦 Insured emojis return: ${carried.map(item => item.emoji).join(' ')}`, turn: 1 }] : []),
+        ...(districtStart.log ? [{ id: 'l1-district', text: districtStart.log, turn: 1 }] : []),
       ],
       floatingTexts: [],
       gameOver: false,
