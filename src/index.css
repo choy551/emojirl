@@ -162,3 +162,55 @@
     @apply font-mono antialiased bg-background text-foreground selection:bg-primary/30;
   }
 }
+
+.paint-box {
+  background: #c0c0c0;
+  color: #111;
+  border-top: 2px solid #fff;
+  border-left: 2px solid #fff;
+  border-right: 2px solid #404040;
+  border-bottom: 2px solid #404040;
+  box-shadow: inset 1px 1px 0 #dfdfdf, inset -1px -1px 0 #808080;
+}
+
+.paint-btn {
+  background: #c0c0c0;
+  color: #111;
+  border-top: 2px solid #fff;
+  border-left: 2px solid #fff;
+  border-right: 2px solid #404040;
+  border-bottom: 2px solid #404040;
+  box-shadow: inset 1px 1px 0 #dfdfdf;
+}
+
+.paint-btn[aria-pressed="true"],
+.paint-btn:active:not(:disabled) {
+  border-top-color: #404040;
+  border-left-color: #404040;
+  border-right-color: #fff;
+  border-bottom-color: #fff;
+  background: #b5b5b5;
+}
+
+.paint-btn:disabled {
+  color: #808080;
+}
+
+.paint-ants {
+  pointer-events: none;
+  background-image:
+    linear-gradient(90deg, #111 50%, #fff 50%),
+    linear-gradient(90deg, #111 50%, #fff 50%),
+    linear-gradient(#111 50%, #fff 50%),
+    linear-gradient(#111 50%, #fff 50%);
+  background-size: 8px 2px, 8px 2px, 2px 8px, 2px 8px;
+  background-position: 0 0, 0 100%, 0 0, 100% 0;
+  background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+  animation: paint-march 0.45s linear infinite;
+}
+
+@keyframes paint-march {
+  to {
+    background-position: 8px 0, -8px 100%, 0 -8px, 100% 8px;
+  }
+}

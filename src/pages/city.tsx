@@ -26,14 +26,10 @@ import {
   exchangeForBuilding,
   expandBlockReason,
   expandCity,
-  isDecorLot,
   normalizeCity,
   paletteMenuRows,
-  placeAt,
-  placeDecor,
   placedCount,
   placedOf,
-  removeAt,
   tickCitizens,
   totalAvailableTokens,
   TRAIN_LINE_HINT,
@@ -52,13 +48,36 @@ const CITY_TILE_MAX = '2.75rem';
 /** Smallest lot. Narrow screens shrink toward this before a horizontal scrollbar appears. */
 const CITY_TILE_MIN = '2rem';
 import { ensureCityProfile, loadMeta, replaceEmojiConsumes, saveCity, saveCityName, settleCityCatchUp } from '../game/meta';
+import {
+  applyClear,
+  applyPaste,
+  applyPlacement,
+  brushFromLot,
+  copyRect,
+  indicesInRect,
+  pointFromIndex,
+  previewPlacement,
+  pushUndo,
+  type GridRect,
+  type PaintSnapshot,
+  type Stamp,
+} from '../game/cityPaint';
+import { CityToolPalette, type CityTool } from './cityTools';
 
 export default function CityPage() {
   const [, setLocation] = useLocation();
   const [consumes, setConsumes] = useState<Record<string, number>>({});
   const [city, setCity] = useState<CityState | null>(null);
   const [selected, setSelected] = useState<PalettePick | null>(null);
-  const [note, setNote] = useState('Pick an emoji, then tap an empty lot.');
+  const [note, setNote] = useState('Pick an emoji, then drag across empty lots.');
+  const [tool, setTool] = useState<CityTool>('place');
+  const [selection, setSelection] = useState<GridRect | null>(null);
+  const [clipboard, setClipboard] = useState<Stamp | null>(null);
+  const [undoStack, setUndoStack] = useState<PaintSnapshot[]>([]);
+  const [dragAnchor, setDragAnchor] = useState<number | null>(null);
+  const [dragCurrent, setDragCurrent] = useState<number | null>(null);
+  const dragRef = useRef<{ tool: CityTool; anchor: number; current: number } | null>(null);
+  const undoRef = useRef<() => void>(() => {});
   const [away, setAway] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState('');
   const [nameError, setNameError] = useState<string | null>(null);
@@ -104,6 +123,13 @@ export default function CityPage() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        const tag = (e.target as HTMLElement | null)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        e.preventDefault();
+        undoRef.current();
+        return;
+      }
       if (e.key === 'Escape') {
         e.preventDefault();
         setLocation('/');
@@ -140,32 +166,194 @@ export default function CityPage() {
     setNote(`Expanded ${edge}. The grid is ${result.city.cols}×${result.city.rows}.`);
   };
 
-  const onLot = (index: number) => {
+  const remember = () => {
     if (!city) return;
-    const built = city.tiles[index];
-    if (built) {
-      const decor = isDecorLot(city, index);
-      const result = removeAt(city, index, killsRef.current, Math.random);
-      if (!result.ok) { setNote(result.reason ?? 'Cannot clear that lot.'); return; }
-      setCity(result.city);
-      saveCity(result.city);
-      setNote(decor ? `Cleared ${built}.` : `Refunded ${built}.`);
+    setUndoStack(stack => pushUndo(stack, { city, consumes }));
+  };
+
+  const undo = () => {
+    setUndoStack(stack => {
+      const snap = stack[stack.length - 1];
+      if (!snap) {
+        setNote('Nothing to undo.');
+        return stack;
+      }
+      setCity(snap.city);
+      setConsumes(snap.consumes);
+      saveCity(snap.city);
+      replaceEmojiConsumes(snap.consumes);
+      setNote('Undid the last edit.');
+      return stack.slice(0, -1);
+    });
+  };
+  undoRef.current = undo;
+
+  const selectionIndices = () => {
+    if (!city || !selection) return [];
+    return indicesInRect(city.cols, city.rows, { x: selection.x0, y: selection.y0 }, { x: selection.x1, y: selection.y1 });
+  };
+
+  const finishClear = (indices: number[], verb: string) => {
+    if (!city) return;
+    const result = applyClear(city, indices, killsRef.current, Math.random);
+    if (result.removed === 0) {
+      setNote('Nothing to clear.');
       return;
     }
-    if (!selected) { setNote('Pick an emoji first.'); return; }
-    if (selected.kind === 'decor') {
-      const result = placeDecor(city, index, selected.emoji);
-      if (!result.ok) { setNote(result.reason ?? 'Cannot place decor.'); return; }
-      setCity(result.city);
-      saveCity(result.city);
-      setNote(`Placed ${selected.emoji}. Decor is free.`);
-      return;
-    }
-    const result = placeAt(city, index, selected.emoji, consumes, killsRef.current, Math.random);
-    if (!result.ok) { setNote(result.reason ?? 'Cannot place.'); return; }
+    remember();
     setCity(result.city);
     saveCity(result.city);
-    setNote(`Placed ${selected.emoji}.`);
+    setNote(`${verb} ${result.removed}. Refunded ${result.refunded} token${result.refunded === 1 ? '' : 's'}.`);
+  };
+
+  const doCopy = () => {
+    if (!city || !selection) {
+      setNote('Select a region first.');
+      return;
+    }
+    const stamp = copyRect(city, selection);
+    setClipboard(stamp);
+    setNote(`Copied ${stamp.cols}×${stamp.rows}.`);
+  };
+
+  const doCut = () => {
+    if (!city || !selection) {
+      setNote('Select a region first.');
+      return;
+    }
+    const stamp = copyRect(city, selection);
+    const result = applyClear(city, selectionIndices(), killsRef.current, Math.random);
+    if (result.removed === 0) {
+      setNote('Nothing to cut.');
+      return;
+    }
+    remember();
+    setClipboard(stamp);
+    setCity(result.city);
+    saveCity(result.city);
+    setNote(`Cut ${stamp.cols}×${stamp.rows}. Refunded ${result.refunded} token${result.refunded === 1 ? '' : 's'}.`);
+  };
+
+  const doPaste = (index: number) => {
+    if (!city || !clipboard) {
+      setNote('Copy or cut a region first.');
+      return;
+    }
+    const result = applyPaste(city, clipboard, pointFromIndex(city.cols, index), consumes, killsRef.current, Math.random);
+    if (result.placed === 0) {
+      setNote('Nothing pasted. The lots are full or tokens ran out.');
+      return;
+    }
+    remember();
+    setCity(result.city);
+    saveCity(result.city);
+    setNote(`Pasted ${result.placed}.${result.skipped ? ` Skipped ${result.skipped}.` : ''}`);
+  };
+
+  const pickAt = (index: number) => {
+    if (!city) return;
+    const brush = brushFromLot(city, index);
+    if (!brush) {
+      setNote('That lot is empty.');
+      return;
+    }
+    setSelected(brush);
+    setTool('place');
+    setNote(`Brush is ${brush.emoji}${brush.kind === 'decor' ? ' decor' : ''}.`);
+  };
+
+  const finishPlace = (anchor: number, current: number) => {
+    if (!city) return;
+    if (!selected) {
+      setNote('Pick an emoji first.');
+      return;
+    }
+    const indices = indicesInRect(city.cols, city.rows, pointFromIndex(city.cols, anchor), pointFromIndex(city.cols, current));
+    const result = applyPlacement(city, selected, consumes, indices, killsRef.current, Math.random);
+    if (result.placed === 0) {
+      setNote('Nothing placed. Lots were full or tokens ran out.');
+      return;
+    }
+    remember();
+    setCity(result.city);
+    saveCity(result.city);
+    const free = selected.kind === 'decor' ? ' Decor is free.' : '';
+    setNote(`Placed ${result.placed} ${selected.emoji}.${free}${result.skipped ? ` Skipped ${result.skipped}.` : ''}`);
+  };
+
+  const lotIndexAt = (clientX: number, clientY: number): number | null => {
+    const el = document.elementFromPoint(clientX, clientY);
+    const lot = el?.closest('[data-lot]');
+    if (!lot) return null;
+    const index = Number(lot.getAttribute('data-lot'));
+    return Number.isInteger(index) ? index : null;
+  };
+
+  const onGridPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!city) return;
+    if (event.button === 1) {
+      event.preventDefault();
+      const index = lotIndexAt(event.clientX, event.clientY);
+      if (index != null) pickAt(index);
+      return;
+    }
+    if (event.button !== 0) return;
+    const index = lotIndexAt(event.clientX, event.clientY);
+    if (index == null) return;
+    if (tool === 'eyedropper') {
+      pickAt(index);
+      return;
+    }
+    if (tool === 'paste') {
+      doPaste(index);
+      return;
+    }
+    if (tool === 'place' || tool === 'select' || tool === 'delete') {
+      dragRef.current = { tool, anchor: index, current: index };
+      setDragAnchor(index);
+      setDragCurrent(index);
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+  };
+
+  const onGridPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    const index = lotIndexAt(event.clientX, event.clientY);
+    if (index == null || !dragRef.current) return;
+    dragRef.current.current = index;
+    setDragCurrent(index);
+  };
+
+  const onGridPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (!drag || !city) {
+      setDragAnchor(null);
+      setDragCurrent(null);
+      return;
+    }
+    const index = lotIndexAt(event.clientX, event.clientY) ?? drag.current;
+    if (drag.tool === 'place') finishPlace(drag.anchor, index);
+    if (drag.tool === 'select') {
+      const start = pointFromIndex(city.cols, drag.anchor);
+      const end = pointFromIndex(city.cols, index);
+      const x0 = Math.min(start.x, end.x);
+      const y0 = Math.min(start.y, end.y);
+      const x1 = Math.max(start.x, end.x);
+      const y1 = Math.max(start.y, end.y);
+      setSelection({ x0, y0, x1, y1 });
+    }
+    if (drag.tool === 'delete') {
+      finishClear(indicesInRect(city.cols, city.rows, pointFromIndex(city.cols, drag.anchor), pointFromIndex(city.cols, index)), 'Deleted');
+    }
+    setDragAnchor(null);
+    setDragCurrent(null);
+  };
+
+  const onDeleteTool = () => {
+    setTool('delete');
+    if (!selection) return;
+    finishClear(selectionIndices(), 'Deleted');
   };
 
   const commitName = () => {
@@ -177,6 +365,40 @@ export default function CityPage() {
     setNameError(null);
     setNameDraft(result.name);
   };
+
+  const placePreview = useMemo(() => {
+    if (!city || tool !== 'place' || !selected || dragAnchor == null || dragCurrent == null) return new Map<number, string>();
+    const indices = indicesInRect(
+      city.cols,
+      city.rows,
+      pointFromIndex(city.cols, dragAnchor),
+      pointFromIndex(city.cols, dragCurrent),
+    );
+    return new Map(previewPlacement(city, selected, consumes, indices).map(cell => [cell.index, cell.status]));
+  }, [city, tool, selected, dragAnchor, dragCurrent, consumes]);
+
+  const ants = useMemo(() => {
+    if (!city) return new Set<number>();
+    const rect = tool === 'select' && dragAnchor != null && dragCurrent != null
+      ? (() => {
+        const start = pointFromIndex(city.cols, dragAnchor);
+        const end = pointFromIndex(city.cols, dragCurrent);
+        return { x0: Math.min(start.x, end.x), y0: Math.min(start.y, end.y), x1: Math.max(start.x, end.x), y1: Math.max(start.y, end.y) };
+      })()
+      : selection;
+    if (!rect) return new Set<number>();
+    return new Set(indicesInRect(city.cols, city.rows, { x: rect.x0, y: rect.y0 }, { x: rect.x1, y: rect.y1 }));
+  }, [city, tool, dragAnchor, dragCurrent, selection]);
+
+  const erase = useMemo(() => {
+    if (!city || tool !== 'delete' || dragAnchor == null || dragCurrent == null) return new Set<number>();
+    return new Set(indicesInRect(
+      city.cols,
+      city.rows,
+      pointFromIndex(city.cols, dragAnchor),
+      pointFromIndex(city.cols, dragCurrent),
+    ));
+  }, [city, tool, dragAnchor, dragCurrent]);
 
   const placed = city ? placedCount(city) : 0;
   const cap = city ? citizenCapacityOf(city) : 0;
@@ -314,73 +536,105 @@ export default function CityPage() {
       )}
 
       <p className="text-[11px] text-muted-foreground leading-snug min-h-8" data-testid="city-note">{note}</p>
-
-      <BuildPalette
-        sections={sections}
-        selected={selected}
-        raise={selectedBuilding ? {
-          emoji: selectedBuilding.emoji,
-          cost: BUILDING_EXCHANGE_COST,
-          onRaise: raiseStructure,
-        } : null}
-        onSelect={entry => {
-          const structure = entry.kind === 'token' && Boolean(buildingOf(entry.emoji));
-          if (entry.locked && !structure) {
-            setNote(entry.hint);
-            return;
-          }
-          setSelected({ kind: entry.kind, emoji: entry.emoji });
-          setNote(entry.kind === 'decor' ? `${entry.emoji} decor. Free, and it does not count.` : entry.hint);
-        }}
-      />
     </div>
 
-      {city && (
-        <div className="flex w-full flex-col gap-1 px-1 sm:px-3" data-testid="city-expand">
-          <div className="flex justify-center">
-            <ExpandEdge edge="north" city={city} tokens={tokens} onExpand={onExpand} />
-          </div>
-          <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1">
-            <ExpandEdge edge="west" city={city} tokens={tokens} onExpand={onExpand} />
-            <div className="min-w-0 overflow-x-auto" data-testid="city-grid-scroll">
-        <div
-          data-testid="city-grid"
-          className="mx-auto grid w-fit min-w-min max-w-full gap-0.5"
-          style={{ gridTemplateColumns: `repeat(${city.cols}, minmax(${CITY_TILE_MIN}, ${CITY_TILE_MAX}))` }}
-        >
-          {city.tiles.map((cell, index) => {
-            const here = city.citizens.filter(c => c.y * city.cols + c.x === index);
-            return (
-              <button
-                key={index}
-                type="button"
-                data-testid={`lot-${index}`}
-                onClick={() => onLot(index)}
-                aria-label={cell ? `Remove ${cell}` : `Empty lot ${index + 1}`}
-                className="relative aspect-square w-full min-h-0 min-w-0 rounded-md border border-border/70 bg-emerald-950/30 text-xl leading-none"
-              >
-                {cell ?? <span className="text-muted-foreground/30 text-sm">·</span>}
-                {here.map(citizen => (
-                  <span
-                    key={citizen.id}
-                    data-testid={`citizen-${citizen.id}`}
-                    className="absolute bottom-0 right-0 text-[11px] leading-none"
-                  >
-                    {citizen.emoji}
-                  </span>
-                ))}
-              </button>
-            );
-          })}
-        </div>
+      <div data-testid="city-workbench" className="flex w-full flex-col gap-2 px-1 sm:px-3 lg:flex-row lg:items-start xl:pr-64">
+        <CityToolPalette
+          tool={tool}
+          canCopy={selection !== null}
+          canPaste={clipboard !== null}
+          canUndo={undoStack.length > 0}
+          onTool={next => {
+            if (next === 'delete') onDeleteTool();
+            else setTool(next);
+          }}
+          onCopy={doCopy}
+          onCut={doCut}
+          onUndo={undo}
+        />
+        {city && (
+          <div className="flex min-w-0 flex-1 flex-col gap-1" data-testid="city-expand">
+            <div className="flex justify-center">
+              <ExpandEdge edge="north" city={city} tokens={tokens} onExpand={onExpand} />
             </div>
-            <ExpandEdge edge="east" city={city} tokens={tokens} onExpand={onExpand} />
+            <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1">
+              <ExpandEdge edge="west" city={city} tokens={tokens} onExpand={onExpand} />
+              <div className="min-w-0 overflow-x-auto" data-testid="city-grid-scroll">
+                <div
+                  data-testid="city-grid"
+                  data-selection={selection ? `${selection.x0},${selection.y0},${selection.x1},${selection.y1}` : undefined}
+                  className="relative mx-auto grid w-fit min-w-min max-w-full touch-none select-none gap-0.5"
+                  style={{ gridTemplateColumns: `repeat(${city.cols}, minmax(${CITY_TILE_MIN}, ${CITY_TILE_MAX}))` }}
+                  onPointerDown={onGridPointerDown}
+                  onPointerMove={onGridPointerMove}
+                  onPointerUp={onGridPointerUp}
+                  onPointerCancel={onGridPointerUp}
+                  onMouseDown={event => { if (event.button === 1) event.preventDefault(); }}
+                >
+                  {city.tiles.map((cell, index) => {
+                    const here = city.citizens.filter(c => c.y * city.cols + c.x === index);
+                    const previewStatus = placePreview.get(index);
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        data-testid={`lot-${index}`}
+                        data-lot={index}
+                        data-preview={previewStatus}
+                        data-selected={ants.has(index) ? 'true' : undefined}
+                        aria-label={cell ? `Lot with ${cell}` : `Empty lot ${index + 1}`}
+                        className={`relative aspect-square w-full min-h-0 min-w-0 rounded-md border border-border/70 bg-emerald-950/30 text-xl leading-none ${erase.has(index) ? 'bg-red-950/50' : ''}`}
+                      >
+                        {ants.has(index) && <span className="paint-ants absolute inset-0" />}
+                        {cell ?? (previewStatus === 'place' && selected
+                          ? <span className="opacity-60" data-testid={`preview-${index}`}>{selected.emoji}</span>
+                          : <span className="text-muted-foreground/30 text-sm">·</span>)}
+                        {previewStatus === 'skip-cost' && !cell && (
+                          <span className="text-[10px] font-bold text-red-300" data-testid={`preview-skip-${index}`}>×</span>
+                        )}
+                        {here.map(citizen => (
+                          <span
+                            key={citizen.id}
+                            data-testid={`citizen-${citizen.id}`}
+                            className="absolute bottom-0 right-0 text-[11px] leading-none"
+                          >
+                            {citizen.emoji}
+                          </span>
+                        ))}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <ExpandEdge edge="east" city={city} tokens={tokens} onExpand={onExpand} />
+            </div>
+            <div className="flex justify-center">
+              <ExpandEdge edge="south" city={city} tokens={tokens} onExpand={onExpand} />
+            </div>
           </div>
-          <div className="flex justify-center">
-            <ExpandEdge edge="south" city={city} tokens={tokens} onExpand={onExpand} />
-          </div>
+        )}
+        <div className="min-w-0 w-full lg:w-80 lg:shrink-0 xl:w-96" data-testid="city-structures">
+          <BuildPalette
+            sections={sections}
+            selected={selected}
+            raise={selectedBuilding ? {
+              emoji: selectedBuilding.emoji,
+              cost: BUILDING_EXCHANGE_COST,
+              onRaise: raiseStructure,
+            } : null}
+            onSelect={entry => {
+              const structure = entry.kind === 'token' && Boolean(buildingOf(entry.emoji));
+              if (entry.locked && !structure) {
+                setNote(entry.hint);
+                return;
+              }
+              setSelected({ kind: entry.kind, emoji: entry.emoji });
+              setTool('place');
+              setNote(entry.kind === 'decor' ? `${entry.emoji} decor. Free, and it does not count.` : entry.hint);
+            }}
+          />
         </div>
-      )}
+      </div>
 
       <div className="mx-auto w-full max-w-lg px-3">
         <p className="text-[11px] text-muted-foreground leading-relaxed pb-4">{emojiCityRulesBlurb()}</p>

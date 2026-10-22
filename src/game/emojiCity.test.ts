@@ -943,7 +943,9 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('data-testid="palette-menu"');
     expect(city).toContain('overflow-x-hidden');
     expect(city).toContain("pointerType === 'mouse'");
-    expect(city).toContain('placeDecor');
+    expect(city).toContain('applyPlacement');
+    expect(city).toContain('applyPaste');
+    expect(city).toContain('brushFromLot');
     expect(city).toContain('CITY_TILE_MIN');
     expect(city).toContain('CITY_TILE_MAX');
     expect(city).toContain('minmax(${CITY_TILE_MIN}, ${CITY_TILE_MAX})');
@@ -959,6 +961,16 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('trainLineSpansCity');
     expect(city).not.toContain('fetch(');
     expect(city).toContain('data-testid="city-grid-scroll"');
+    expect(city).toContain('data-testid="city-workbench"');
+    expect(city).toContain('data-testid="city-structures"');
+    expect(city).toContain('paint-ants');
+    expect(city).toContain('button === 1');
+    const tools = readFileSync(new URL('../pages/cityTools.tsx', import.meta.url), 'utf8');
+    expect(tools).toContain('data-testid={`city-tool-${entry.id}`}');
+    for (const id of ['place', 'select', 'copy', 'cut', 'paste', 'delete', 'eyedropper', 'undo']) {
+      expect(tools).toContain(`id: '${id}'`);
+    }
+    expect(tools).toContain('paint-btn');
     expect(city).toContain('w-fit min-w-min max-w-full');
     expect(city).toContain('edge="north"');
     expect(city).toContain('expand-${edge}');
@@ -1016,6 +1028,7 @@ describe('EmojiCB city name and visitor', () => {
     expect(emojiCityRulesBlurb()).toContain('defaulting to Emoji City');
     expect(emojiCityRulesBlurb()).toContain('Visit Cities and Share stay offline');
     expect(emojiCityRulesBlurb()).toContain('The Raise button sits on the right of the section under the pointer, or the section that was last tapped.');
+    expect(emojiCityRulesBlurb()).toContain('Tools sit on the left of the map');
     expect(emojiCityRulesBlurb()).toContain('flush against the right side of that …');
   });
 });
