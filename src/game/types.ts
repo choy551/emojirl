@@ -239,6 +239,12 @@ export interface Player {
   houseRound?: BanquetBuff;
   /** Cosmetic trail and title. No combat stats. */
   vanity?: VanityLoadout;
+  /**
+   * Genie tactics. Missing means on, so older saves keep Bloodcast and Overchannel.
+   * False turns that option off for the rest of the run.
+   */
+  genieBloodcast?: boolean;
+  genieOverchannel?: boolean;
 }
 
 export type VanityTrailId = 'glitter' | 'petals' | 'prisms';

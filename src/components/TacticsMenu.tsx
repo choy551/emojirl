@@ -1,7 +1,7 @@
 import { GameState, Player } from '../game/types';
 import { applyEquipmentAndPassives } from '../game/inventory';
 import { blinkStrikeDamagePhrase, blinkStrikeHudTitle, blinkTalentById, blinkTalentProgress, knownBlinkTalents, overkillStatusPhrase } from '../game/blinkStrike';
-import { isArcaneCaster, isFencer, isHitman, isRoyalGuard } from '../game/prestige';
+import { genieBloodcastEnabled, genieOverchannelEnabled, isArcaneCaster, isFencer, isHitman, isRoyalGuard } from '../game/prestige';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -28,13 +28,14 @@ interface TacticsMenuProps {
   handleLunge: () => void;
   handleExecuteContract: () => void;
   handleGuardianStance: () => void;
+  onToggleGenieCast: (which: 'bloodcast' | 'overchannel') => void;
   onClose: () => void;
 }
 
 export function TacticsMenu({
   player, gameState, wizardTactics, blinkTurn, trailblazeTurn, yeehawTurn,
   autoStealth, rangerMode, applyWizardMode, enterBlinkTargetMode, applyNinjaMode,
-  toggleAutoStealth,   applyRangerMode, handleCowboyTactics, handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance, onClose,
+  toggleAutoStealth,   applyRangerMode, handleCowboyTactics, handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance, onToggleGenieCast, onClose,
 }: TacticsMenuProps) {
   const hand = useMobileHand();
   const dismiss = useDismissGuard(onClose);
@@ -94,6 +95,41 @@ export function TacticsMenu({
                 </button>
               );
             })()}
+            {player.characterClass === '🧞‍♀️' && (
+              <div className="space-y-1.5 pt-2 mt-2 border-t border-border/50">
+                {([
+                  { n: 5, which: 'bloodcast' as const, label: '🩸 Bloodcast', on: genieBloodcastEnabled(player), hint: 'HP for missing MP' },
+                  { n: 6, which: 'overchannel' as const, label: '🔥 Overchannel', on: genieOverchannelEnabled(player), hint: '3 MP · 150%' },
+                ]).map(({ n, which, label, on, hint }) => (
+                  <button
+                    key={which}
+                    type="button"
+                    role="switch"
+                    aria-checked={on}
+                    data-testid={`genie-${which}-toggle`}
+                    className={`min-h-11 w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${on ? 'bg-orange-500/20 text-orange-100 font-semibold' : 'bg-secondary/40 text-muted-foreground'}`}
+                    onPointerDown={e => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onToggleGenieCast(which);
+                    }}
+                    onClick={e => {
+                      if (e.detail !== 0) return;
+                      onToggleGenieCast(which);
+                    }}
+                  >
+                    <span className="font-mono text-muted-foreground w-4 shrink-0">{n}</span>
+                    <span className="flex flex-col leading-tight">
+                      <span>{label}</span>
+                      <span className="text-[10px] font-normal text-muted-foreground">{on ? hint : 'Off'}</span>
+                    </span>
+                    <span className={`ml-auto min-w-11 text-center text-[11px] font-bold rounded-full px-2 py-1 ${on ? 'bg-orange-400/30 text-orange-50' : 'bg-zinc-700/80 text-zinc-200'}`}>
+                      {on ? 'On' : 'Off'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -248,7 +284,9 @@ export function TacticsMenu({
         })()}
 
         <CloseHintButton onClose={dismiss}>
-          press number to select · ESC or T to close
+          {player.characterClass === '🧞‍♀️'
+            ? '5 Bloodcast · 6 Overchannel · ESC or T to close'
+            : 'press number to select · ESC or T to close'}
         </CloseHintButton>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { Player } from '../../game/types';
 import { applyEquipmentAndPassives } from '../../game/inventory';
 import { blinkStrikeMultiplierPercent, critStat, overkillStatusPhrase } from '../../game/blinkStrike';
-import { isArcaneCaster, isFencer, isHitman, isRoyalGuard } from '../../game/prestige';
+import { genieBloodcastEnabled, genieOverchannelEnabled, isArcaneCaster, isFencer, isHitman, isRoyalGuard } from '../../game/prestige';
 
 // Mirrors the cooldown constants in useTacticsActions.ts (BLINK_ACTIVE + BLINK_CD).
 const BLINK_TOTAL_CD = 8;
@@ -16,6 +16,8 @@ export interface AbilityDescriptor {
   disabled: boolean;
   /** True when toggled "on" (e.g. stealth active) for highlight styling. */
   active?: boolean;
+  /** 44px-tall target for a thumb. Used by Genie cast switches. */
+  roomy?: boolean;
   onUse: () => void;
 }
 
@@ -41,6 +43,7 @@ export interface ClassAbilityArgs {
   handleLunge: () => void;
   handleExecuteContract: () => void;
   handleGuardianStance: () => void;
+  toggleGenieCast?: (which: 'bloodcast' | 'overchannel') => void;
 }
 
 export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
@@ -49,11 +52,14 @@ export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
     applyWizardMode, applyRangerMode, handleCowboyTactics, handleBlinkStrike, applyNinjaMode,
     cycleVoidAttack, beginUnmake, unmakeSpent, voidAttackMode,
     handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance,
+    toggleGenieCast,
   } = args;
 
   if (isArcaneCaster(player.characterClass) && player.characterClass !== '🧙') {
     const remaining = BLINK_TOTAL_CD - (turn - blinkTurn);
     const onCd = remaining > 0 && blinkTurn > -900;
+    const bloodOn = genieBloodcastEnabled(player);
+    const overOn = genieOverchannelEnabled(player);
     return [
       {
         id: 'genie-blink', icon: '✨', label: 'Blink',
@@ -66,6 +72,22 @@ export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
         detail: wizardMode,
         disabled: false,
         onUse: () => applyWizardMode(wizardMode === 'nearest' ? 'furthest' : wizardMode === 'furthest' ? 'manual' : 'nearest'),
+      },
+      {
+        id: 'genie-bloodcast', icon: '🩸', label: 'Bloodcast',
+        detail: bloodOn ? 'On' : 'Off',
+        disabled: false,
+        active: bloodOn,
+        roomy: true,
+        onUse: () => toggleGenieCast?.('bloodcast'),
+      },
+      {
+        id: 'genie-overchannel', icon: '🔥', label: 'Overchannel',
+        detail: overOn ? 'On' : 'Off',
+        disabled: false,
+        active: overOn,
+        roomy: true,
+        onUse: () => toggleGenieCast?.('overchannel'),
       },
     ];
   }
