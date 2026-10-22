@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { MOODS } from '../game/moods';
 import { isDrinkStealthActive, playerMood } from '../game/drinks';
 import { getClassDef } from '../game/classes';
-import { classFlies, crownItem, fencerEvasion, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, startFloorContract } from '../game/prestige';
+import { classFlies, crownItem, fencerEvasion, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, startFloorContract, toggleGenieCast } from '../game/prestige';
 import { GENIE_BASE_MP } from '../game/prestigeConstants';
 import { saveScore, leaderboardEntryFromRun } from '../game/leaderboard';
 import { readVoidModeProgress, startingVoidLoadout } from '../game/voidMeta';
@@ -773,6 +773,7 @@ export default function Game() {
       ghostHotbar: voidLoad?.ghostHotbar,
       ghostBank: voidLoad?.ghostBank,
       voidBossesCleared: 0,
+      ...(isGenie(vessel) ? { genieBloodcast: true, genieOverchannel: true } : {}),
     };
     const openingContract = startFloorContract(initialPlayer);
     initialPlayer = openingContract.player;
@@ -908,6 +909,13 @@ export default function Game() {
     if (item && !item.isVoidGhost && mobileBagUseClosesBag(item, { asVoid: player?.characterClass === '👤' })) setBankOpen(false);
     handleUseSlot(slot);
   }, [gameStateRef, handleUseSlot]);
+
+  const toggleGenieCastOption = useCallback((which: 'bloodcast' | 'overchannel') => {
+    setGameState(prev => {
+      if (!prev || prev.player.characterClass !== '🧞‍♀️') return prev;
+      return { ...prev, player: toggleGenieCast(prev.player, which) };
+    });
+  }, []);
 
   // ── Blink target mode helpers ─────────────────────────────────────────────
   const exitBlinkTargetMode = useCallback(() => {
@@ -1765,6 +1773,10 @@ export default function Game() {
         if (!mState || mState.gameOver) { setTacticsMenuOpen(false); return; }
         const tCls = mState.player.characterClass;
         if (tCls === '🧙' || tCls === '🧞‍♀️') {
+          if (tCls === '🧞‍♀️' && (e.key === '5' || e.key === '6')) {
+            toggleGenieCastOption(e.key === '5' ? 'bloodcast' : 'overchannel');
+            return;
+          }
           const WM = ['nearest', 'furthest', 'manual', 'holdfire'] as const;
           const wi = parseInt(e.key) - 1;
           if (wi >= 0 && wi < WM.length) { applyWizardMode(WM[wi]); setTacticsMenuOpen(false); }
@@ -2101,7 +2113,7 @@ export default function Game() {
       window.removeEventListener('keyup', handleKeyUp);
 
     };
-  }, [handleMove, handleWait, handleUseHeal, handleUseDrink, handleCook, handleCloseDoor, handleUseSlot, handleBankMove, setAutoRest, applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, handleBlinkStrike, handleBlinkStrikeOnTarget, enterBlinkTargetMode, exitBlinkTargetMode, applyRangerMode, handleCowboyTactics, handleFireProjectile, addLog, doContextAction, shopItems, ammoCacheItems, cycleVoidAttack, beginUnmake, castUnmakeAt, exitUnmakeTargetMode]);
+  }, [handleMove, handleWait, handleUseHeal, handleUseDrink, handleCook, handleCloseDoor, handleUseSlot, handleBankMove, setAutoRest, applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, handleBlinkStrike, handleBlinkStrikeOnTarget, enterBlinkTargetMode, exitBlinkTargetMode, applyRangerMode, handleCowboyTactics, handleFireProjectile, addLog, doContextAction, shopItems, ammoCacheItems, cycleVoidAttack, beginUnmake, castUnmakeAt, exitUnmakeTargetMode, toggleGenieCastOption]);
 
   // ── render ────────────────────────────────────────────────────────────────
   if (!gameState) return <div className="p-8 text-center text-muted-foreground">Loading depths...</div>;
@@ -2205,6 +2217,7 @@ export default function Game() {
     handleLunge,
     handleExecuteContract,
     handleGuardianStance,
+    toggleGenieCast: toggleGenieCastOption,
   });
   const mobileGeneralActions: ActionItem[] = [
     { id: 'heal', icon: '❤️', label: 'Heal', onUse: handleUseHeal },
@@ -3744,6 +3757,7 @@ export default function Game() {
           handleLunge={handleLunge}
           handleExecuteContract={handleExecuteContract}
           handleGuardianStance={handleGuardianStance}
+          onToggleGenieCast={toggleGenieCastOption}
           onClose={() => setTacticsMenuOpen(false)}
         />
       )}

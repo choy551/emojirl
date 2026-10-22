@@ -18,6 +18,7 @@ export function AbilityButtons({ abilities, align }: AbilityButtonsProps) {
           disabled={a.disabled}
           className={[
             'flex items-center gap-1 px-2 py-1 rounded-lg border shadow-lg select-none touch-none',
+            a.roomy ? 'min-h-11' : '',
             'transition-transform duration-75 active:scale-90',
             a.disabled
               ? 'bg-black/30 border-white/8 text-white/35'

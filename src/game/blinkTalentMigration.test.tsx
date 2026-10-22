@@ -14,7 +14,7 @@ import {
   migrateLegacyBlinkTalents,
   pendingBlinkTalentOffer,
 } from './blinkStrike';
-import { SAVE_KEY, loadGame, saveGame } from './save';
+import { SAVE_KEY, SAVE_SCHEMA_VERSION, loadGame, saveGame } from './save';
 
 function installStorage() {
   const mem = new Map<string, string>();
@@ -92,7 +92,7 @@ describe('v1 save migration', () => {
       },
     });
     const state = loadOk();
-    expect(state.schemaVersion).toBe(2);
+    expect(state.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
     expect(state.player.stats.blinkTalents).toEqual(['shorter-cd', 'heavier-blink', 'twin-strike']);
     expect(state.blinkT3RespecPending).toBe(true);
     expect(state.logs[0]).toMatchObject({ text: LONGER_CHAIN_MIGRATION_LOG, turn: 12 });
@@ -150,7 +150,7 @@ describe('v1 save migration', () => {
     const first = loadOk();
     saveGame(first);
     const second = loadOk();
-    expect(second.schemaVersion).toBe(2);
+    expect(second.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
     expect(second.blinkT3RespecPending).toBe(true);
     expect(second.player.stats.blinkTalents).toEqual(['shorter-cd', 'heavier-blink', 'endless-chain']);
     expect(second.logs.filter(log => log.text === LONGER_CHAIN_MIGRATION_LOG)).toHaveLength(1);
@@ -188,13 +188,13 @@ describe('v1 save migration', () => {
   it('loads a v1 save whose talent list is missing or not an array', () => {
     plant({ schemaVersion: 1, player: { characterClass: '🥷', stats: { blinkTalents: 'longer-chain' } } });
     const junk = loadOk();
-    expect(junk.schemaVersion).toBe(2);
+    expect(junk.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
     expect(junk.player.stats.blinkTalents).toBeUndefined();
     expect(junk.blinkT3RespecPending).toBeUndefined();
 
     plant({ schemaVersion: 1, player: { characterClass: '🥷' } });
     const empty = loadOk();
-    expect(empty.schemaVersion).toBe(2);
+    expect(empty.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
     expect(empty.player.stats.blinkTalents).toBeUndefined();
     expect(empty.blinkT3RespecPending).toBeUndefined();
   });

@@ -11,12 +11,13 @@ export const SAVE_KEY = 'emojirl_save_v1';
  *
  * 2: Longer Chain → Heavier Blink. Ninjas who owned a moved Tier 3 talent get
  *    `blinkT3RespecPending` so the next Continue offers one new Tier 3.
+ * 3: Genie Bloodcast and Overchannel toggles. Missing flags become on.
  */
-export const SAVE_SCHEMA_VERSION = 2;
+export const SAVE_SCHEMA_VERSION = 3;
 const CURRENT_SCHEMA_VERSION = SAVE_SCHEMA_VERSION;
 
 /** Set of schema versions this build knows how to load (after migration). */
-const KNOWN_VERSIONS = new Set([1, 2]);
+const KNOWN_VERSIONS = new Set([1, 2, 3]);
 
 /**
  * Runs in-place migrations on the raw parsed JSON object so that
@@ -55,6 +56,14 @@ function normalizeVoidSlotBurden(raw: unknown): Player['voidSlotBurden'] {
   return rows;
 }
 
+function migrateGenieCastToggles(raw: Record<string, unknown>): void {
+  const player = raw.player;
+  if (!player || typeof player !== 'object') return;
+  const record = player as Record<string, unknown>;
+  if (typeof record.genieBloodcast !== 'boolean') record.genieBloodcast = true;
+  if (typeof record.genieOverchannel !== 'boolean') record.genieOverchannel = true;
+}
+
 /** Index 0 migrates schema 1 → 2. Later steps append in order. */
 const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
   raw => {
@@ -62,6 +71,7 @@ const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
     if (migrated.respecPending) raw.blinkT3RespecPending = true;
     else delete raw.blinkT3RespecPending;
   },
+  migrateGenieCastToggles,
 ];
 
 function migrateRaw(raw: Record<string, unknown>): void {
@@ -144,6 +154,8 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     insurance: rawPlayer.insurance as Player['insurance'],
     houseRound: rawPlayer.houseRound as Player['houseRound'],
     vanity: normalizeVanity(rawPlayer.vanity),
+    genieBloodcast: rawPlayer.genieBloodcast === false ? false : true,
+    genieOverchannel: rawPlayer.genieOverchannel === false ? false : true,
   };
 
   // ── GameState ─────────────────────────────────────────────────────────────

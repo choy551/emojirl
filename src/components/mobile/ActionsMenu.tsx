@@ -9,6 +9,8 @@ export interface ActionItem {
   detail?: string;
   disabled?: boolean;
   active?: boolean;
+  /** 44px-tall target for a thumb. */
+  roomy?: boolean;
   onUse: () => void;
 }
 
@@ -33,6 +35,7 @@ function ActionTile({ item, onClose }: { item: ActionItem; onClose: () => void }
       disabled={item.disabled}
       className={[
         'flex flex-col items-center justify-center gap-0.5 py-2.5 rounded-xl border select-none touch-none',
+        item.roomy ? 'min-h-11' : '',
         'transition-transform duration-75 active:scale-90',
         item.disabled
           ? 'bg-black/30 border-white/10 text-white/35'
@@ -82,7 +85,7 @@ export function ActionsMenu({ general, abilities, onOpenTactics, onOpenGoto, onC
               {abilities.map(a => (
                 <ActionTile
                   key={a.id}
-                  item={{ id: a.id, icon: a.icon, label: a.label, detail: a.detail, disabled: a.disabled, active: a.active, onUse: a.onUse }}
+                  item={{ id: a.id, icon: a.icon, label: a.label, detail: a.detail, disabled: a.disabled, active: a.active, roomy: a.roomy, onUse: a.onUse }}
                   onClose={closeSheet}
                 />
               ))}

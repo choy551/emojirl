@@ -210,6 +210,24 @@ export function bloodcastHpAllowed(hp: number, maxHp: number): boolean {
   return hp / maxHp >= GENIE_BLOODCAST_MIN_HP_FRACTION;
 }
 
+/** Missing flags stay on. Older saves and new runs both start with both enabled. */
+export function genieBloodcastEnabled(player: Pick<Player, 'genieBloodcast'>): boolean {
+  return player.genieBloodcast !== false;
+}
+
+export function genieOverchannelEnabled(player: Pick<Player, 'genieOverchannel'>): boolean {
+  return player.genieOverchannel !== false;
+}
+
+export function toggleGenieCast(player: Player, which: 'bloodcast' | 'overchannel'): Player {
+  if (which === 'bloodcast') return { ...player, genieBloodcast: !genieBloodcastEnabled(player) };
+  return { ...player, genieOverchannel: !genieOverchannelEnabled(player) };
+}
+
+export function bloodcastOffLog(): string {
+  return `🧞‍♀️ Fireball needs ${GENIE_FIREBALL_MP} MP. Bloodcast is off.`;
+}
+
 export function planGenieCast(player: Player): CastPayment {
   const mp = player.stats.mana ?? 0;
   const hp = player.stats.hp;
@@ -217,7 +235,8 @@ export function planGenieCast(player: Player): CastPayment {
   const none: CastPayment = { canCast: false, mpSpent: 0, hpSpent: 0, damageMult: 1, kind: 'none' };
   const overSpell = GENIE_FIREBALL_MP + GENIE_OVERCHANNEL_EXTRA_MP;
   const baseSpell = GENIE_FIREBALL_MP;
-  if (level >= GENIE_OVERCHANNEL_LEVEL && mp >= overSpell) {
+  const overOn = genieOverchannelEnabled(player) && level >= GENIE_OVERCHANNEL_LEVEL;
+  if (overOn && mp >= overSpell) {
     return {
       canCast: true,
       mpSpent: overSpell,
@@ -229,6 +248,9 @@ export function planGenieCast(player: Player): CastPayment {
   if (mp >= baseSpell) {
     return { canCast: true, mpSpent: baseSpell, hpSpent: 0, damageMult: 1, kind: 'fireball' };
   }
+  if (!genieBloodcastEnabled(player)) {
+    return { ...none, blockReason: bloodcastOffLog() };
+  }
   if (level < GENIE_OVERCHANNEL_LEVEL) return none;
 
   if (!bloodcastHpAllowed(hp, player.stats.maxHp)) {
@@ -238,10 +260,12 @@ export function planGenieCast(player: Player): CastPayment {
     };
   }
 
-  const attempts: { spell: number; mult: number; kind: CastPayment['kind'] }[] = [
-    { spell: overSpell, mult: GENIE_OVERCHANNEL_MULT, kind: 'overchannel' },
-    { spell: baseSpell, mult: 1, kind: 'bloodcast' },
-  ];
+  const attempts: { spell: number; mult: number; kind: CastPayment['kind'] }[] = overOn
+    ? [
+        { spell: overSpell, mult: GENIE_OVERCHANNEL_MULT, kind: 'overchannel' },
+        { spell: baseSpell, mult: 1, kind: 'bloodcast' },
+      ]
+    : [{ spell: baseSpell, mult: 1, kind: 'bloodcast' }];
   let lethalCost = 0;
   for (const attempt of attempts) {
     const hpSpent = bloodcastHpCost(attempt.spell, mp);
