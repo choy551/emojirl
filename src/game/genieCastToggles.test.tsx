@@ -48,7 +48,7 @@ afterEach(() => {
   localStorage.clear();
 });
 
-function player(partial: Partial<Player> & { characterClass: string }): Player {
+function player(partial: Omit<Partial<Player>, 'stats'> & { characterClass: string; stats?: Partial<Player['stats']> }): Player {
   return {
     pos: { x: 1, y: 0 },
     emoji: partial.characterClass,
