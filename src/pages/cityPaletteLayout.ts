@@ -12,22 +12,28 @@ export interface FlyoutViewport {
   height: number;
 }
 
+/** Long enough to cross from the … into the panel, short enough to feel snappy. */
+export const FLYOUT_CLOSE_MS = 200;
+
 /**
- * Side panels line up with the section row. Sheets still hang from the whole menu,
- * which is the phone behavior.
+ * Side panels sit flush against the right edge of the row's …, lined up with that row.
+ * A narrow viewport, or a menu with no room on its right, still uses the phone sheet.
  */
 export function flyoutStyle(
   section: FlyoutRect,
   menu: FlyoutRect,
   viewport: FlyoutViewport,
+  dots?: FlyoutRect,
 ): { layout: 'side' | 'sheet'; style: CSSProperties } {
-  const gap = 8;
   const margin = 8;
   const want = 384;
-  const spaceRight = viewport.width - menu.right - gap;
-  const spaceLeft = menu.left - gap;
-  const narrow = viewport.width < 640 || (spaceRight < 240 && spaceLeft < 240);
+  const minSide = 160;
+  const anchor = dots ?? section;
+  const left = anchor.right;
+  const spaceRight = viewport.width - margin - left;
+  const narrow = viewport.width < 640 || spaceRight < minSide;
   if (narrow) {
+    const gap = 8;
     const top = Math.min(menu.bottom + gap, Math.max(margin, viewport.height - 220));
     return {
       layout: 'sheet',
@@ -41,23 +47,28 @@ export function flyoutStyle(
       },
     };
   }
-  const placeRight = spaceRight >= spaceLeft;
-  const width = Math.min(want, placeRight ? spaceRight : spaceLeft);
-  const minHeight = 180;
+  const edge = viewport.height - margin;
   let top = section.top;
-  if (viewport.height - margin - top < minHeight) {
-    top = Math.max(margin, viewport.height - margin - minHeight);
-  }
   if (top < margin) top = margin;
+  // Near the bottom of the screen, grow the panel upward so it still meets the ….
+  if (edge - anchor.top < 160) {
+    top = Math.max(margin, Math.min(top, anchor.top, edge - 180));
+  }
+  if (top > anchor.top) top = Math.max(margin, anchor.top);
+  const dotsMid = (anchor.top + anchor.bottom) / 2;
+  const coverBottom = Math.min(viewport.height, dotsMid + 6);
+  const minBox = Math.max(48, coverBottom - top);
+  const maxBox = Math.max(minBox, edge - top);
   return {
     layout: 'side',
     style: {
       position: 'fixed',
       top,
-      width,
-      maxHeight: Math.max(minHeight, viewport.height - top - margin),
+      left,
+      width: Math.min(want, spaceRight),
+      minHeight: minBox,
+      maxHeight: maxBox,
       zIndex: 50,
-      left: placeRight ? menu.right + gap : Math.max(margin, menu.left - gap - width),
     },
   };
 }
