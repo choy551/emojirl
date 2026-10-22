@@ -47,25 +47,27 @@ export function flyoutStyle(
       },
     };
   }
-  const width = Math.min(want, spaceRight);
-  const minHeight = 180;
+  const edge = viewport.height - margin;
   let top = section.top;
   if (top < margin) top = margin;
-  if (viewport.height - margin - top < minHeight) {
-    top = Math.max(margin, viewport.height - margin - minHeight);
+  // Near the bottom of the screen, grow the panel upward so it still meets the ….
+  if (edge - anchor.top < 160) {
+    top = Math.max(margin, Math.min(top, anchor.top, edge - 180));
   }
-  // If the clamp lifted the panel off the …, drop it back onto that button.
-  if (top > anchor.bottom) {
-    top = Math.max(margin, Math.min(anchor.top, viewport.height - margin - minHeight));
-  }
+  if (top > anchor.top) top = Math.max(margin, anchor.top);
+  const dotsMid = (anchor.top + anchor.bottom) / 2;
+  const coverBottom = Math.min(viewport.height, dotsMid + 6);
+  const minBox = Math.max(48, coverBottom - top);
+  const maxBox = Math.max(minBox, edge - top);
   return {
     layout: 'side',
     style: {
       position: 'fixed',
       top,
       left,
-      width,
-      maxHeight: Math.max(minHeight, viewport.height - margin - top),
+      width: Math.min(want, spaceRight),
+      minHeight: minBox,
+      maxHeight: maxBox,
       zIndex: 50,
     },
   };

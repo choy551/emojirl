@@ -28,12 +28,30 @@ describe('flyoutStyle', () => {
     const section: FlyoutRect = { top: 760, right: 540, bottom: 808, left: 48 };
     const placed = flyoutStyle(section, menu, desktop);
     const top = placed.style.top as number;
+    const minHeight = placed.style.minHeight as number;
     const maxHeight = placed.style.maxHeight as number;
+    const mid = (section.top + section.bottom) / 2;
     expect(placed.layout).toBe('side');
     expect(placed.style.left).toBe(section.right);
-    expect(top).toBe(desktop.height - 8 - 180);
+    expect(top).toBeLessThanOrEqual(section.top);
+    expect(top + minHeight).toBeGreaterThanOrEqual(Math.min(desktop.height, mid));
     expect(top).toBeGreaterThanOrEqual(8);
-    expect(top + maxHeight).toBeLessThanOrEqual(desktop.height - 8);
+    expect(top + maxHeight).toBeLessThanOrEqual(desktop.height);
+  });
+
+  it('still meets the … when that row is at the bottom of the viewport', () => {
+    const section: FlyoutRect = { top: 868, right: 869, bottom: 912, left: 395 };
+    const dots: FlyoutRect = { top: 880, right: 869, bottom: 912, left: 837 };
+    const tallMenu: FlyoutRect = { top: 621, right: 876, bottom: 1159, left: 388 };
+    const placed = flyoutStyle(section, tallMenu, { width: 1280, height: 900 }, dots);
+    const top = placed.style.top as number;
+    const minHeight = placed.style.minHeight as number;
+    const mid = (dots.top + dots.bottom) / 2;
+    expect(placed.layout).toBe('side');
+    expect(placed.style.left).toBe(dots.right);
+    expect(top).toBeLessThanOrEqual(dots.top);
+    expect(top + minHeight).toBeGreaterThanOrEqual(Math.min(900, mid));
+    expect(top + minHeight).toBeLessThanOrEqual(900);
   });
 
   it('pins a side panel to the top margin when the row has scrolled off', () => {
