@@ -1,7 +1,7 @@
 import { Player } from '../../game/types';
 import { applyEquipmentAndPassives } from '../../game/inventory';
 import { blinkStrikeMultiplierPercent, critStat, overkillStatusPhrase } from '../../game/blinkStrike';
-import { genieBloodcastEnabled, genieOverchannelEnabled, isArcaneCaster, isFencer, isHitman, isRoyalGuard } from '../../game/prestige';
+import { genieBloodcastEnabled, genieOverchannelEnabled, genieSafeFireballEnabled, isArcaneCaster, isFencer, isHitman, isRoyalGuard, type GenieCastToggle } from '../../game/prestige';
 
 // Mirrors the cooldown constants in useTacticsActions.ts (BLINK_ACTIVE + BLINK_CD).
 const BLINK_TOTAL_CD = 8;
@@ -43,7 +43,7 @@ export interface ClassAbilityArgs {
   handleLunge: () => void;
   handleExecuteContract: () => void;
   handleGuardianStance: () => void;
-  toggleGenieCast?: (which: 'bloodcast' | 'overchannel') => void;
+  toggleGenieCast?: (which: GenieCastToggle) => void;
 }
 
 export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
@@ -60,6 +60,7 @@ export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
     const onCd = remaining > 0 && blinkTurn > -900;
     const bloodOn = genieBloodcastEnabled(player);
     const overOn = genieOverchannelEnabled(player);
+    const safeOn = genieSafeFireballEnabled(player);
     return [
       {
         id: 'genie-blink', icon: '✨', label: 'Blink',
@@ -88,6 +89,14 @@ export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
         active: overOn,
         roomy: true,
         onUse: () => toggleGenieCast?.('overchannel'),
+      },
+      {
+        id: 'genie-safe', icon: '🛡️', label: 'Safe',
+        detail: safeOn ? 'On' : 'Off',
+        disabled: false,
+        active: safeOn,
+        roomy: true,
+        onUse: () => toggleGenieCast?.('safe'),
       },
     ];
   }

@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { MOODS } from '../game/moods';
 import { isDrinkStealthActive, playerMood } from '../game/drinks';
 import { getClassDef } from '../game/classes';
-import { classFlies, crownItem, fencerEvasion, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, startFloorContract, toggleGenieCast } from '../game/prestige';
+import { classFlies, crownItem, fencerEvasion, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, startFloorContract, toggleGenieCast, type GenieCastToggle } from '../game/prestige';
 import { GENIE_BASE_MP } from '../game/prestigeConstants';
 import { saveScore, leaderboardEntryFromRun } from '../game/leaderboard';
 import { readVoidModeProgress, startingVoidLoadout } from '../game/voidMeta';
@@ -773,7 +773,7 @@ export default function Game() {
       ghostHotbar: voidLoad?.ghostHotbar,
       ghostBank: voidLoad?.ghostBank,
       voidBossesCleared: 0,
-      ...(isGenie(vessel) ? { genieBloodcast: true, genieOverchannel: true } : {}),
+      ...(isGenie(vessel) ? { genieBloodcast: true, genieOverchannel: true, genieSafeFireball: false } : {}),
     };
     const openingContract = startFloorContract(initialPlayer);
     initialPlayer = openingContract.player;
@@ -910,7 +910,7 @@ export default function Game() {
     handleUseSlot(slot);
   }, [gameStateRef, handleUseSlot]);
 
-  const toggleGenieCastOption = useCallback((which: 'bloodcast' | 'overchannel') => {
+  const toggleGenieCastOption = useCallback((which: GenieCastToggle) => {
     setGameState(prev => {
       if (!prev || prev.player.characterClass !== '🧞‍♀️') return prev;
       return { ...prev, player: toggleGenieCast(prev.player, which) };
@@ -1773,8 +1773,8 @@ export default function Game() {
         if (!mState || mState.gameOver) { setTacticsMenuOpen(false); return; }
         const tCls = mState.player.characterClass;
         if (tCls === '🧙' || tCls === '🧞‍♀️') {
-          if (tCls === '🧞‍♀️' && (e.key === '5' || e.key === '6')) {
-            toggleGenieCastOption(e.key === '5' ? 'bloodcast' : 'overchannel');
+          if (tCls === '🧞‍♀️' && (e.key === '5' || e.key === '6' || e.key === '7')) {
+            toggleGenieCastOption(e.key === '5' ? 'bloodcast' : e.key === '6' ? 'overchannel' : 'safe');
             return;
           }
           const WM = ['nearest', 'furthest', 'manual', 'holdfire'] as const;

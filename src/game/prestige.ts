@@ -219,9 +219,17 @@ export function genieOverchannelEnabled(player: Pick<Player, 'genieOverchannel'>
   return player.genieOverchannel !== false;
 }
 
-export function toggleGenieCast(player: Player, which: 'bloodcast' | 'overchannel'): Player {
+/** Missing means off. Older saves keep the reckless fireball. */
+export function genieSafeFireballEnabled(player: Pick<Player, 'genieSafeFireball'>): boolean {
+  return player.genieSafeFireball === true;
+}
+
+export type GenieCastToggle = 'bloodcast' | 'overchannel' | 'safe';
+
+export function toggleGenieCast(player: Player, which: GenieCastToggle): Player {
   if (which === 'bloodcast') return { ...player, genieBloodcast: !genieBloodcastEnabled(player) };
-  return { ...player, genieOverchannel: !genieOverchannelEnabled(player) };
+  if (which === 'overchannel') return { ...player, genieOverchannel: !genieOverchannelEnabled(player) };
+  return { ...player, genieSafeFireball: !genieSafeFireballEnabled(player) };
 }
 
 export function bloodcastOffLog(): string {

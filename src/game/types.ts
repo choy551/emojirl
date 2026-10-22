@@ -245,6 +245,10 @@ export interface Player {
    */
   genieBloodcast?: boolean;
   genieOverchannel?: boolean;
+  /**
+   * Safe fireballs. Missing means off. True refuses a cast whose 3×3 contains the Genie.
+   */
+  genieSafeFireball?: boolean;
 }
 
 export type VanityTrailId = 'glitter' | 'petals' | 'prisms';

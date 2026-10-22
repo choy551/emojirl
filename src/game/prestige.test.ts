@@ -195,16 +195,16 @@ describe('prestige kits', () => {
     expect(selfSplashDamage(blast)).toBe(Math.max(1, Math.round(blast * GENIE_SELF_SPLASH)));
   });
 
-  it('hits the 3×3 and splashes the caster', () => {
-    const map = floorMap();
-    const center = foe({ id: 'mid', pos: { x: 4, y: 0 }, hp: 40, maxHp: 40, defense: 0 });
-    const beside = foe({ id: 'side', pos: { x: 5, y: 0 }, hp: 30, maxHp: 30 });
-    const far = foe({ id: 'far', pos: { x: 0, y: 0 }, hp: 30, maxHp: 30 });
-    const caster = player({ characterClass: GENIE, pos: { x: 1, y: 0 }, stats: { mana: 6, maxMana: 6, hp: 20, maxHp: 20, attack: 8, defense: 0, speed: 1, evasion: 0, luck: 0, level: 1, xp: 0, moodValue: 0, gold: 0 } });
+  it('hits the 3×3 and splashes the caster only inside that square', () => {
+    const map: MapGrid = [Array.from({ length: 8 }, () => ({ type: 'floor' as const, emoji: '⬜', seen: true, visible: true }))];
+    const center = foe({ id: 'mid', pos: { x: 3, y: 0 }, hp: 40, maxHp: 40, defense: 0 });
+    const beside = foe({ id: 'side', pos: { x: 4, y: 0 }, hp: 30, maxHp: 30 });
+    const outside = foe({ id: 'far', pos: { x: 7, y: 0 }, hp: 30, maxHp: 30 });
+    const caster = player({ characterClass: GENIE, pos: { x: 0, y: 0 }, stats: { mana: 6, maxMana: 6, hp: 20, maxHp: 20, attack: 8, defense: 0, speed: 1, evasion: 0, luck: 0, level: 1, xp: 0, moodValue: 0, gold: 0 } });
     const logs: string[] = [];
     const volley = resolveGenieFireball({
       player: caster,
-      enemies: [center, beside, far],
+      enemies: [center, beside, outside],
       map,
       mode: 'nearest',
       manualTargetId: null,
@@ -214,14 +214,31 @@ describe('prestige kits', () => {
     });
     expect(volley.cast).toBe(true);
     expect(volley.player.stats.mana).toBe(6 - GENIE_FIREBALL_MP);
-    expect(volley.player.stats.hp).toBeLessThan(20);
+    expect(volley.player.stats.hp).toBe(20);
     expect(volley.enemies.find(e => e.id === 'mid')!.hp).toBeLessThan(40);
     expect(volley.enemies.find(e => e.id === 'side')!.hp).toBeLessThan(30);
     expect(volley.enemies.find(e => e.id === 'far')!.hp).toBe(30);
     expect(logs.some(l => l.includes('Fireball'))).toBe(true);
-    expect(logs.some(l => l.includes('Bloodcast'))).toBe(false);
+    expect(logs.some(l => l.includes('Splash'))).toBe(false);
+    expect(volley.floats.some(f => f.id.startsWith('splash'))).toBe(false);
+
     const splash = selfSplashDamage(fireballBlastDamage(8, 0, 1));
-    expect(volley.player.stats.hp).toBe(20 - splash);
+    const adjacentLogs: string[] = [];
+    const adjacent = resolveGenieFireball({
+      player: player({ characterClass: GENIE, pos: { x: 2, y: 0 }, stats: { mana: 6, maxMana: 6, hp: 20, maxHp: 20, attack: 8, defense: 0, speed: 1, evasion: 0, luck: 0, level: 1, xp: 0, moodValue: 0, gold: 0 } }),
+      enemies: [foe({ id: 'mid', pos: { x: 3, y: 0 }, hp: 40, maxHp: 40, defense: 0 })],
+      map,
+      mode: 'nearest',
+      manualTargetId: null,
+      turn: 2,
+      floor: 1,
+      addLog: (t) => adjacentLogs.push(t),
+    });
+    expect(adjacent.cast).toBe(true);
+    expect(adjacent.player.stats.hp).toBe(20 - splash);
+    expect(adjacent.enemies[0].hp).toBeLessThan(40);
+    expect(adjacentLogs.some(l => l.includes(`Splash ${splash}`))).toBe(true);
+    expect(adjacent.floats.some(f => f.text === `-${splash}`)).toBe(true);
   });
 
   it('bloodcasts only missing MP, ignores attack, and refuses low or lethal HP', () => {
@@ -292,9 +309,13 @@ describe('prestige kits', () => {
     });
     const paidSplash = selfSplashDamage(fireballBlastDamage(30, 0, GENIE_OVERCHANNEL_MULT));
     expect(paid.cast).toBe(true);
-    expect(paid.player.stats.hp).toBe(20 - 6 - paidSplash);
+    expect(paid.player.stats.hp).toBe(20 - 6);
+    expect(paid.player.pos).toEqual({ x: 1, y: 0 });
+    expect(paidSplash).toBeGreaterThan(0);
     expect(paidLogs.some(l => l.includes('6 HP'))).toBe(true);
+    expect(paidLogs.some(l => l.includes('Splash'))).toBe(false);
     expect(paid.floats.some(f => f.text === '-6')).toBe(true);
+    expect(paid.floats.some(f => f.id.startsWith('splash'))).toBe(false);
 
     const detail = CHARACTER_CLASSES[GENIE].passives.find(p => p.label === 'Overchannel / Bloodcast')?.detail ?? '';
     expect(detail).toContain('2 HP per missing MP');

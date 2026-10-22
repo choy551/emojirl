@@ -1049,7 +1049,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           floor: prev.currentFloor,
           addLog,
         });
-        if (volley.cast) {
+        if (volley.cast || volley.meleeFallback) {
           newPlayer = volley.player;
           newState.enemies = volley.enemies;
           newState.items = [...newState.items, ...volley.items];
@@ -1247,7 +1247,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           floor: prev.currentFloor,
           addLog,
         });
-        if (volley.cast) {
+        if (volley.cast || volley.meleeFallback) {
           waitPlayer = volley.player;
           waitEnemies = volley.enemies;
           waitItems = [...waitItems, ...volley.items];
