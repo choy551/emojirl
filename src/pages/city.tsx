@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CITY_NAME_MAX } from '../game/cityIdentity';
-import { flyoutStyle } from './cityPaletteLayout';
+import { FLYOUT_CLOSE_MS, flyoutStyle } from './cityPaletteLayout';
 import { getEnemyKillCounts } from '../game/discoveries';
 import {
   BUILDING_EXCHANGE_COST,
@@ -315,37 +315,24 @@ export default function CityPage() {
 
       <p className="text-[11px] text-muted-foreground leading-snug min-h-8" data-testid="city-note">{note}</p>
 
-      <div className="flex items-start gap-1.5">
-        {selectedBuilding && (
-          <Button
-            type="button"
-            variant="outline"
-            className="sticky top-3 z-30 h-auto min-h-11 w-14 shrink-0 flex-col gap-0 self-start whitespace-normal px-1 py-2 text-[10px] leading-tight sm:w-[5.75rem] sm:text-xs"
-            data-testid="raise-structure"
-            aria-label={`Raise ${selectedBuilding.emoji} · ${BUILDING_EXCHANGE_COST} tokens`}
-            onClick={raiseStructure}
-          >
-            <span>Raise</span>
-            <span className="text-base leading-none sm:text-lg">{selectedBuilding.emoji}</span>
-            <span className="tabular-nums">{BUILDING_EXCHANGE_COST}</span>
-          </Button>
-        )}
-        <div className="min-w-0 flex-1">
-          <BuildPalette
-            sections={sections}
-            selected={selected}
-            onSelect={entry => {
-              const structure = entry.kind === 'token' && Boolean(buildingOf(entry.emoji));
-              if (entry.locked && !structure) {
-                setNote(entry.hint);
-                return;
-              }
-              setSelected({ kind: entry.kind, emoji: entry.emoji });
-              setNote(entry.kind === 'decor' ? `${entry.emoji} decor. Free, and it does not count.` : entry.hint);
-            }}
-          />
-        </div>
-      </div>
+      <BuildPalette
+        sections={sections}
+        selected={selected}
+        raise={selectedBuilding ? {
+          emoji: selectedBuilding.emoji,
+          cost: BUILDING_EXCHANGE_COST,
+          onRaise: raiseStructure,
+        } : null}
+        onSelect={entry => {
+          const structure = entry.kind === 'token' && Boolean(buildingOf(entry.emoji));
+          if (entry.locked && !structure) {
+            setNote(entry.hint);
+            return;
+          }
+          setSelected({ kind: entry.kind, emoji: entry.emoji });
+          setNote(entry.kind === 'decor' ? `${entry.emoji} decor. Free, and it does not count.` : entry.hint);
+        }}
+      />
     </div>
 
       {city && (
@@ -408,10 +395,12 @@ const PALETTE_MENU_ROWS = 5;
 function BuildPalette({
   sections,
   selected,
+  raise,
   onSelect,
 }: {
   sections: PaletteSection[];
   selected: PalettePick | null;
+  raise: { emoji: string; cost: number; onRaise: () => void } | null;
   onSelect: (entry: PaletteEntry) => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -420,10 +409,13 @@ function BuildPalette({
   const closeTimer = useRef<number | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+  const [tappedRow, setTappedRow] = useState<string | null>(null);
   const [flyout, setFlyout] = useState<{ layout: 'side' | 'sheet'; style: CSSProperties } | null>(null);
   const rows = paletteMenuRows(sections);
   const openId = pinned ?? hovered;
   const openSection = sections.find(section => section.id === openId) ?? null;
+  const raiseRow = hoveredRow ?? openId ?? tappedRow;
 
   const clearClose = () => {
     if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
@@ -435,7 +427,7 @@ function BuildPalette({
   };
   const scheduleClose = () => {
     clearClose();
-    closeTimer.current = window.setTimeout(() => setHovered(null), 140);
+    closeTimer.current = window.setTimeout(() => setHovered(null), FLYOUT_CLOSE_MS);
   };
 
   useEffect(() => () => clearClose(), []);
@@ -454,8 +446,9 @@ function BuildPalette({
     const place = () => {
       const menu = menuRef.current?.getBoundingClientRect();
       const section = rootRef.current?.querySelector(`[data-testid="palette-section-${openSection.id}"]`)?.getBoundingClientRect();
+      const dots = rootRef.current?.querySelector(`[data-testid="palette-more-${openSection.id}"]`)?.getBoundingClientRect();
       if (!menu) return;
-      setFlyout(flyoutStyle(section ?? menu, menu, { width: window.innerWidth, height: window.innerHeight }));
+      setFlyout(flyoutStyle(section ?? menu, menu, { width: window.innerWidth, height: window.innerHeight }, dots ?? undefined));
     };
     place();
     window.addEventListener('resize', place);
@@ -492,11 +485,18 @@ function BuildPalette({
               section={section}
               selected={selected}
               open={openId === section.id}
+              raise={raiseRow === section.id ? raise : null}
               onSelect={onSelect}
               onPointerDown={event => { pointerRef.current = event.pointerType; }}
               onDotsEnter={event => { if (event.pointerType === 'mouse') holdOpen(section.id); }}
               onDotsLeave={event => { if (event.pointerType === 'mouse') scheduleClose(); }}
               onDotsClick={event => togglePinned(section.id, event)}
+              onRowEnter={event => { if (event.pointerType === 'mouse') setHoveredRow(section.id); }}
+              onRowLeave={event => {
+                if (event.pointerType !== 'mouse') return;
+                setHoveredRow(current => current === section.id ? null : current);
+              }}
+              onRowTap={() => setTappedRow(section.id)}
             />
           );
           return (
@@ -552,36 +552,64 @@ function PaletteStrip({
   section,
   selected,
   open,
+  raise,
   onSelect,
   onPointerDown,
   onDotsEnter,
   onDotsLeave,
   onDotsClick,
+  onRowEnter,
+  onRowLeave,
+  onRowTap,
 }: {
   section: PaletteSection;
   selected: PalettePick | null;
   open: boolean;
+  raise: { emoji: string; cost: number; onRaise: () => void } | null;
   onSelect: (entry: PaletteEntry) => void;
   onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onDotsEnter: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onDotsLeave: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onDotsClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onRowEnter: (event: ReactPointerEvent<HTMLElement>) => void;
+  onRowLeave: (event: ReactPointerEvent<HTMLElement>) => void;
+  onRowTap: () => void;
 }) {
   return (
     <section
       data-testid={`palette-section-${section.id}`}
       aria-label={section.label}
       className="relative flex w-full min-w-0 items-start gap-1"
+      onPointerEnter={onRowEnter}
+      onPointerLeave={onRowLeave}
+      onPointerDown={onRowTap}
     >
       <div className="flex w-[7.25rem] shrink-0 items-center gap-0.5 pt-2">
         {section.badge && <span className="shrink-0 text-base leading-none" aria-hidden="true">{section.badge}</span>}
         <span className="min-w-0 truncate text-[10px] font-semibold">{section.label}</span>
       </div>
-      <div className="flex min-w-0 flex-1 flex-nowrap gap-1 overflow-hidden pr-8">
+      <div className={`flex min-w-0 flex-1 flex-nowrap gap-1 overflow-hidden ${raise ? 'pr-[6.75rem]' : 'pr-8'}`}>
         {section.entries.map(entry => (
           <PaletteChoice key={`${entry.kind}-${entry.emoji}`} entry={entry} selected={selected} onSelect={onSelect} />
         ))}
       </div>
+      {raise && (
+        <Button
+          type="button"
+          variant="outline"
+          className="absolute right-8 top-1/2 z-20 h-8 min-h-0 -translate-y-1/2 gap-0.5 whitespace-nowrap px-1.5 text-[10px] shadow-sm"
+          data-testid="raise-structure"
+          aria-label={`Raise ${raise.emoji} · ${raise.cost} tokens`}
+          onClick={event => {
+            event.stopPropagation();
+            raise.onRaise();
+          }}
+        >
+          <span>Raise</span>
+          <span className="text-sm leading-none">{raise.emoji}</span>
+          <span className="tabular-nums">{raise.cost}</span>
+        </Button>
+      )}
       <button
         type="button"
         data-testid={`palette-more-${section.id}`}
@@ -592,7 +620,7 @@ function PaletteStrip({
         onPointerEnter={onDotsEnter}
         onPointerLeave={onDotsLeave}
         onClick={onDotsClick}
-        className="absolute bottom-0 right-0 z-10 flex h-8 w-8 items-end justify-end text-lg font-black leading-none text-purple-400"
+        className="absolute bottom-0 right-0 z-30 flex h-8 w-8 items-end justify-end text-lg font-black leading-none text-purple-400"
       >
         …
       </button>

@@ -12,22 +12,28 @@ export interface FlyoutViewport {
   height: number;
 }
 
+/** Long enough to cross from the … into the panel, short enough to feel snappy. */
+export const FLYOUT_CLOSE_MS = 200;
+
 /**
- * Side panels line up with the section row. Sheets still hang from the whole menu,
- * which is the phone behavior.
+ * Side panels sit flush against the right edge of the row's …, lined up with that row.
+ * A narrow viewport, or a menu with no room on its right, still uses the phone sheet.
  */
 export function flyoutStyle(
   section: FlyoutRect,
   menu: FlyoutRect,
   viewport: FlyoutViewport,
+  dots?: FlyoutRect,
 ): { layout: 'side' | 'sheet'; style: CSSProperties } {
-  const gap = 8;
   const margin = 8;
   const want = 384;
-  const spaceRight = viewport.width - menu.right - gap;
-  const spaceLeft = menu.left - gap;
-  const narrow = viewport.width < 640 || (spaceRight < 240 && spaceLeft < 240);
+  const minSide = 160;
+  const anchor = dots ?? section;
+  const left = anchor.right;
+  const spaceRight = viewport.width - margin - left;
+  const narrow = viewport.width < 640 || spaceRight < minSide;
   if (narrow) {
+    const gap = 8;
     const top = Math.min(menu.bottom + gap, Math.max(margin, viewport.height - 220));
     return {
       layout: 'sheet',
@@ -41,23 +47,26 @@ export function flyoutStyle(
       },
     };
   }
-  const placeRight = spaceRight >= spaceLeft;
-  const width = Math.min(want, placeRight ? spaceRight : spaceLeft);
+  const width = Math.min(want, spaceRight);
   const minHeight = 180;
   let top = section.top;
+  if (top < margin) top = margin;
   if (viewport.height - margin - top < minHeight) {
     top = Math.max(margin, viewport.height - margin - minHeight);
   }
-  if (top < margin) top = margin;
+  // If the clamp lifted the panel off the …, drop it back onto that button.
+  if (top > anchor.bottom) {
+    top = Math.max(margin, Math.min(anchor.top, viewport.height - margin - minHeight));
+  }
   return {
     layout: 'side',
     style: {
       position: 'fixed',
       top,
+      left,
       width,
-      maxHeight: Math.max(minHeight, viewport.height - top - margin),
+      maxHeight: Math.max(minHeight, viewport.height - margin - top),
       zIndex: 50,
-      left: placeRight ? menu.right + gap : Math.max(margin, menu.left - gap - width),
     },
   };
 }
