@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AbilityButtons } from '../components/mobile/AbilityButtons';
 import { ActionsMenu } from '../components/mobile/ActionsMenu';
 import { getClassAbilities, type ClassAbilityArgs } from '../components/mobile/classAbilities';
@@ -11,10 +11,12 @@ import {
   bloodcastOffLog,
   genieBloodcastEnabled,
   genieOverchannelEnabled,
+  genieSafeFireballEnabled,
   planGenieCast,
   toggleGenieCast,
+  type GenieCastToggle,
 } from './prestige';
-import { resolveGenieFireball } from './prestigeCast';
+import { resolveGenieFireball, safeFireballLog, safeFireballResponse, tileInFireball } from './prestigeCast';
 import {
   GENIE,
   GENIE_FIREBALL_MP,
@@ -92,7 +94,7 @@ function loadOk() {
   return loaded.state;
 }
 
-function abilityArgs(p: Player, toggle?: (which: 'bloodcast' | 'overchannel') => void): ClassAbilityArgs {
+function abilityArgs(p: Player, toggle?: (which: GenieCastToggle) => void): ClassAbilityArgs {
   const noop = () => {};
   return {
     player: p,
@@ -223,6 +225,7 @@ describe('genie cast toggles', () => {
     const fresh = player({ characterClass: GENIE });
     expect(genieBloodcastEnabled(fresh)).toBe(true);
     expect(genieOverchannelEnabled(fresh)).toBe(true);
+    expect(genieSafeFireballEnabled(fresh)).toBe(false);
     const bloodOff = toggleGenieCast(fresh, 'bloodcast');
     expect(bloodOff.genieBloodcast).toBe(false);
     expect(genieOverchannelEnabled(bloodOff)).toBe(true);
@@ -230,6 +233,9 @@ describe('genie cast toggles', () => {
     const overOff = toggleGenieCast(fresh, 'overchannel');
     expect(overOff.genieOverchannel).toBe(false);
     expect(genieBloodcastEnabled(overOff)).toBe(true);
+    const safeOn = toggleGenieCast(fresh, 'safe');
+    expect(safeOn.genieSafeFireball).toBe(true);
+    expect(toggleGenieCast(safeOn, 'safe').genieSafeFireball).toBe(false);
   });
 
   it('migrates older saves to both on and keeps an explicit off', () => {
@@ -238,12 +244,14 @@ describe('genie cast toggles', () => {
     expect(fromV1.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
     expect(fromV1.player.genieBloodcast).toBe(true);
     expect(fromV1.player.genieOverchannel).toBe(true);
+    expect(fromV1.player.genieSafeFireball).toBe(false);
 
     plant({ schemaVersion: 2, player: { characterClass: '🧞‍♀️' } });
     const fromV2 = loadOk();
-    expect(fromV2.schemaVersion).toBe(3);
+    expect(fromV2.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
     expect(fromV2.player.genieBloodcast).toBe(true);
     expect(fromV2.player.genieOverchannel).toBe(true);
+    expect(fromV2.player.genieSafeFireball).toBe(false);
 
     plant({
       schemaVersion: 2,
@@ -271,17 +279,35 @@ describe('genie cast toggles', () => {
     const scrubbed = loadOk();
     expect(scrubbed.player.genieBloodcast).toBe(true);
     expect(scrubbed.player.genieOverchannel).toBe(false);
+    expect(scrubbed.player.genieSafeFireball).toBe(false);
+
+    plant({
+      schemaVersion: 3,
+      player: { characterClass: '🧞‍♀️', genieSafeFireball: true },
+    });
+    const keptSafe = loadOk();
+    expect(keptSafe.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
+    expect(keptSafe.player.genieSafeFireball).toBe(true);
+    saveGame(keptSafe);
+    expect(loadOk().player.genieSafeFireball).toBe(true);
   });
 
   it('renders tappable On/Off switches in the genie tactics menu and on mobile', () => {
     const onHtml = tacticsHtml(player({ characterClass: GENIE, genieBloodcast: true, genieOverchannel: true }));
     expect(onHtml).toContain('data-testid="genie-bloodcast-toggle"');
     expect(onHtml).toContain('data-testid="genie-overchannel-toggle"');
+    expect(onHtml).toContain('data-testid="genie-safe-toggle"');
     expect(onHtml).toContain('role="switch"');
     expect(onHtml).toContain('aria-checked="true"');
+    expect(onHtml).toContain('aria-checked="false"');
     expect(onHtml).toContain('min-h-11');
     expect(onHtml).toContain('>On<');
-    expect(onHtml).toContain('5 Bloodcast · 6 Overchannel · ESC or T to close');
+    expect(onHtml).toContain('>Off<');
+    expect(onHtml).toContain('5 Bloodcast · 6 Overchannel · 7 Safe · ESC or T to close');
+
+    const allOn = tacticsHtml(player({ characterClass: GENIE, genieBloodcast: true, genieOverchannel: true, genieSafeFireball: true }));
+    expect(allOn).toContain('data-testid="genie-safe-toggle"');
+    expect(allOn).not.toContain('aria-checked="false"');
 
     const offHtml = tacticsHtml(player({ characterClass: GENIE, genieBloodcast: false, genieOverchannel: false }));
     expect(offHtml).toContain('aria-checked="false"');
@@ -292,16 +318,20 @@ describe('genie cast toggles', () => {
     expect(wizardHtml).not.toContain('genie-bloodcast-toggle');
     expect(wizardHtml).not.toContain('5 Bloodcast');
 
-    let which: 'bloodcast' | 'overchannel' | null = null;
+    let which: GenieCastToggle | null = null;
     const abilities = getClassAbilities(abilityArgs(player({ characterClass: GENIE }), (picked) => { which = picked; }));
     const blood = abilities.find(a => a.id === 'genie-bloodcast');
     const over = abilities.find(a => a.id === 'genie-overchannel');
+    const safe = abilities.find(a => a.id === 'genie-safe');
     expect(blood).toMatchObject({ detail: 'On', active: true, roomy: true, disabled: false });
     expect(over).toMatchObject({ detail: 'On', active: true, roomy: true });
+    expect(safe).toMatchObject({ detail: 'Off', active: false, roomy: true, label: 'Safe' });
     blood?.onUse();
     expect(which).toBe('bloodcast');
     over?.onUse();
     expect(which).toBe('overchannel');
+    safe?.onUse();
+    expect(which).toBe('safe');
 
     const offAbilities = getClassAbilities(abilityArgs(player({
       characterClass: GENIE,
@@ -326,12 +356,68 @@ describe('genie cast toggles', () => {
     }));
     expect(sheet).toContain('Bloodcast');
     expect(sheet).toContain('Overchannel');
+    expect(sheet).toContain('>Safe<');
     expect(sheet).toContain('min-h-11');
 
     const detail = CHARACTER_CLASSES[GENIE].passives.find(p => p.label === 'Overchannel / Bloodcast')?.detail ?? '';
     expect(detail).toContain('Both start on');
     expect(detail).toContain('spends no HP');
+    const fireball = CHARACTER_CLASSES[GENIE].passives.find(p => p.label === 'Fireball')?.detail ?? '';
+    expect(fireball).toContain('inside that 3×3');
+    expect(fireball).toContain('starts off');
+    expect(fireball).not.toContain('even at range');
     const manual = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
-    expect(manual).toContain('5 toggles Bloodcast and 6 toggles Overchannel (both start on)');
+    expect(manual).toContain('5 toggles Bloodcast and 6 toggles Overchannel (both start on). 7 toggles Safe fireballs (starts off)');
+  });
+
+  it('melees instead of splashing when Safe fireballs is on', () => {
+    expect(tileInFireball({ x: 3, y: 0 }, { x: 0, y: 0 })).toBe(false);
+    expect(tileInFireball({ x: 3, y: 0 }, { x: 2, y: 0 })).toBe(true);
+    expect(safeFireballResponse({ x: 0, y: 0 }, { x: 3, y: 0 }, true)).toBe('cast');
+    expect(safeFireballResponse({ x: 2, y: 0 }, { x: 3, y: 0 }, false)).toBe('cast');
+    expect(safeFireballResponse({ x: 2, y: 0 }, { x: 3, y: 0 }, true)).toBe('melee');
+    expect(safeFireballResponse({ x: 3, y: 0 }, { x: 3, y: 0 }, true)).toBe('block');
+    expect(safeFireballLog(false)).toContain('splash would hit you');
+    expect(safeFireballLog(false)).not.toContain('Melee');
+
+    const map: MapGrid = [Array.from({ length: 8 }, () => ({ type: 'floor' as const, emoji: '⬜', seen: true, visible: true }))];
+    const stats = { mana: 6, maxMana: 6, hp: 20, maxHp: 20, attack: 8, defense: 0, speed: 1, evasion: 0, luck: 0, level: 1, xp: 0, moodValue: 0, gold: 0 };
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+    const logs: string[] = [];
+    const melee = resolveGenieFireball({
+      player: player({ characterClass: GENIE, pos: { x: 3, y: 0 }, genieSafeFireball: true, stats }),
+      enemies: [{ ...foe(), pos: { x: 4, y: 0 } }],
+      map,
+      mode: 'nearest',
+      manualTargetId: null,
+      turn: 5,
+      floor: 1,
+      addLog: (text) => logs.push(text),
+    });
+    random.mockRestore();
+    expect(melee.cast).toBe(false);
+    expect(melee.meleeFallback).toBe(true);
+    expect(melee.player.stats.mana).toBe(6);
+    expect(melee.enemies[0].hp).toBeLessThan(40);
+    expect(logs).toContain(safeFireballLog(true));
+    expect(logs.some(line => line.includes('Fireball'))).toBe(false);
+
+    const held: string[] = [];
+    const blocked = resolveGenieFireball({
+      player: player({ characterClass: GENIE, pos: { x: 4, y: 0 }, genieSafeFireball: true, stats }),
+      enemies: [{ ...foe(), pos: { x: 4, y: 0 } }],
+      map,
+      mode: 'nearest',
+      manualTargetId: null,
+      turn: 6,
+      floor: 1,
+      addLog: (text) => held.push(text),
+    });
+    expect(blocked.cast).toBe(false);
+    expect(blocked.meleeFallback).toBeUndefined();
+    expect(blocked.player.stats.hp).toBe(20);
+    expect(blocked.player.stats.mana).toBe(6);
+    expect(blocked.enemies[0].hp).toBe(40);
+    expect(held).toEqual([safeFireballLog(false)]);
   });
 });

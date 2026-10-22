@@ -378,7 +378,7 @@ export default function HowToPlay({
                 • <strong>Ranger 🧝</strong>: 1 ranged / 2 melee / 3 flee (Trailblaze)<br />
                 • <strong>Cowboy 🤠</strong>: 1 yeehaw tactics (special flavor/ability)<br />
                 • <strong>The Void 👤</strong>: <em>t</em> cycles Melee → Ranger autos → Wizard autos (locked styles are skipped, with a progress line such as “Wizard autos: 4/10 magic emoji”). Ranger autos unlock after 10 ranged emoji (bows, arrows, guns, bullets, boomerangs). Wizard autos unlock after 10 magic emoji (potions, crystals, stars, spellbooks, wands). <em>U</em> aims Unmake.<br />
-                • <strong>Genie 🧞‍♀️</strong>: same aim keys as the Wizard; 4 is Blink. 5 toggles Bloodcast and 6 toggles Overchannel (both start on). Fireball replaces the bolt.<br />
+                • <strong>Genie 🧞‍♀️</strong>: same aim keys as the Wizard; 4 is Blink. 5 toggles Bloodcast and 6 toggles Overchannel (both start on). 7 toggles Safe fireballs (starts off). Fireball replaces the bolt.<br />
                 • <strong>Fencer 🤺</strong>: 1 Backdash / 2 Lunge (X lunges)<br />
                 • <strong>Levitating Hitman 🕴️</strong>: 1 Execute Contract (X) / 2 stealth<br />
                 • <strong>Royal Guard 💂</strong>: 1 ranged / 2 melee / 4 Guardian Stance (X)
