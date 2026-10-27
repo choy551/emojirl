@@ -101,7 +101,7 @@ export function CityToolPalette({
   onUndo: () => void;
 }) {
   return (
-    <div data-testid="city-tools" className="paint-box grid grid-cols-8 gap-1 p-1 lg:sticky lg:top-3 lg:grid-cols-2 lg:self-start" aria-label="City tools">
+    <div data-testid="city-tools" className="paint-box grid grid-cols-8 gap-1 p-1 lg:grid-cols-2" aria-label="City tools">
       {TOOLS.map(entry => {
         const pressed = !entry.action && tool === entry.id;
         const disabled = (entry.id === 'copy' || entry.id === 'cut') ? !canCopy

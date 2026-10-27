@@ -54,7 +54,9 @@ import {
   applyPlacement,
   brushFromLot,
   copyRect,
+  ERASE_LONG_PRESS_MS,
   indicesInRect,
+  longPressMoved,
   pointFromIndex,
   previewPlacement,
   pushUndo,
@@ -76,7 +78,9 @@ export default function CityPage() {
   const [undoStack, setUndoStack] = useState<PaintSnapshot[]>([]);
   const [dragAnchor, setDragAnchor] = useState<number | null>(null);
   const [dragCurrent, setDragCurrent] = useState<number | null>(null);
-  const dragRef = useRef<{ tool: CityTool; anchor: number; current: number } | null>(null);
+  const [erasing, setErasing] = useState(false);
+  const dragRef = useRef<{ tool: CityTool | 'erase'; anchor: number; current: number } | null>(null);
+  const pressRef = useRef<{ x: number; y: number; timer: number } | null>(null);
   const undoRef = useRef<() => void>(() => {});
   const [away, setAway] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState('');
@@ -289,17 +293,46 @@ export default function CityPage() {
     return Number.isInteger(index) ? index : null;
   };
 
+  const clearLongPress = () => {
+    if (!pressRef.current) return;
+    window.clearTimeout(pressRef.current.timer);
+    pressRef.current = null;
+  };
+
+  const beginDrag = (kind: CityTool | 'erase', index: number, event: ReactPointerEvent<HTMLDivElement>) => {
+    dragRef.current = { tool: kind, anchor: index, current: index };
+    setErasing(kind === 'erase');
+    setDragAnchor(index);
+    setDragCurrent(index);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
   const onGridPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!city) return;
+    if (event.button === 1 || event.button === 2) event.preventDefault();
     if (event.button === 1) {
-      event.preventDefault();
       const index = lotIndexAt(event.clientX, event.clientY);
       if (index != null) pickAt(index);
       return;
     }
-    if (event.button !== 0) return;
     const index = lotIndexAt(event.clientX, event.clientY);
     if (index == null) return;
+    if (event.button === 2) {
+      beginDrag('erase', index, event);
+      return;
+    }
+    if (event.button !== 0) return;
+    if (event.pointerType === 'touch') {
+      const timer = window.setTimeout(() => {
+        pressRef.current = null;
+        if (!dragRef.current) return;
+        dragRef.current.tool = 'erase';
+        setErasing(true);
+      }, ERASE_LONG_PRESS_MS);
+      pressRef.current = { x: event.clientX, y: event.clientY, timer };
+      beginDrag(tool, index, event);
+      return;
+    }
     if (tool === 'eyedropper') {
       pickAt(index);
       return;
@@ -308,15 +341,11 @@ export default function CityPage() {
       doPaste(index);
       return;
     }
-    if (tool === 'place' || tool === 'select' || tool === 'delete') {
-      dragRef.current = { tool, anchor: index, current: index };
-      setDragAnchor(index);
-      setDragCurrent(index);
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
+    if (tool === 'place' || tool === 'select' || tool === 'delete') beginDrag(tool, index, event);
   };
 
   const onGridPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (pressRef.current && longPressMoved(pressRef.current, { x: event.clientX, y: event.clientY })) clearLongPress();
     if (!dragRef.current) return;
     const index = lotIndexAt(event.clientX, event.clientY);
     if (index == null || !dragRef.current) return;
@@ -325,29 +354,36 @@ export default function CityPage() {
   };
 
   const onGridPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    clearLongPress();
     const drag = dragRef.current;
     dragRef.current = null;
+    setErasing(false);
     if (!drag || !city) {
       setDragAnchor(null);
       setDragCurrent(null);
       return;
     }
     const index = lotIndexAt(event.clientX, event.clientY) ?? drag.current;
-    if (drag.tool === 'place') finishPlace(drag.anchor, index);
-    if (drag.tool === 'select') {
+    if (drag.tool === 'erase' || drag.tool === 'delete') {
+      finishClear(indicesInRect(city.cols, city.rows, pointFromIndex(city.cols, drag.anchor), pointFromIndex(city.cols, index)), 'Deleted');
+    } else if (drag.tool === 'place') finishPlace(drag.anchor, index);
+    else if (drag.tool === 'select') {
       const start = pointFromIndex(city.cols, drag.anchor);
       const end = pointFromIndex(city.cols, index);
-      const x0 = Math.min(start.x, end.x);
-      const y0 = Math.min(start.y, end.y);
-      const x1 = Math.max(start.x, end.x);
-      const y1 = Math.max(start.y, end.y);
-      setSelection({ x0, y0, x1, y1 });
-    }
-    if (drag.tool === 'delete') {
-      finishClear(indicesInRect(city.cols, city.rows, pointFromIndex(city.cols, drag.anchor), pointFromIndex(city.cols, index)), 'Deleted');
-    }
+      setSelection({
+        x0: Math.min(start.x, end.x),
+        y0: Math.min(start.y, end.y),
+        x1: Math.max(start.x, end.x),
+        y1: Math.max(start.y, end.y),
+      });
+    } else if (drag.tool === 'eyedropper') pickAt(index);
+    else if (drag.tool === 'paste') doPaste(index);
     setDragAnchor(null);
     setDragCurrent(null);
+  };
+
+  const onGridContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
   };
 
   const onDeleteTool = () => {
@@ -367,7 +403,7 @@ export default function CityPage() {
   };
 
   const placePreview = useMemo(() => {
-    if (!city || tool !== 'place' || !selected || dragAnchor == null || dragCurrent == null) return new Map<number, string>();
+    if (!city || erasing || tool !== 'place' || !selected || dragAnchor == null || dragCurrent == null) return new Map<number, string>();
     const indices = indicesInRect(
       city.cols,
       city.rows,
@@ -375,11 +411,11 @@ export default function CityPage() {
       pointFromIndex(city.cols, dragCurrent),
     );
     return new Map(previewPlacement(city, selected, consumes, indices).map(cell => [cell.index, cell.status]));
-  }, [city, tool, selected, dragAnchor, dragCurrent, consumes]);
+  }, [city, erasing, tool, selected, dragAnchor, dragCurrent, consumes]);
 
   const ants = useMemo(() => {
     if (!city) return new Set<number>();
-    const rect = tool === 'select' && dragAnchor != null && dragCurrent != null
+    const rect = !erasing && tool === 'select' && dragAnchor != null && dragCurrent != null
       ? (() => {
         const start = pointFromIndex(city.cols, dragAnchor);
         const end = pointFromIndex(city.cols, dragCurrent);
@@ -388,17 +424,17 @@ export default function CityPage() {
       : selection;
     if (!rect) return new Set<number>();
     return new Set(indicesInRect(city.cols, city.rows, { x: rect.x0, y: rect.y0 }, { x: rect.x1, y: rect.y1 }));
-  }, [city, tool, dragAnchor, dragCurrent, selection]);
+  }, [city, erasing, tool, dragAnchor, dragCurrent, selection]);
 
   const erase = useMemo(() => {
-    if (!city || tool !== 'delete' || dragAnchor == null || dragCurrent == null) return new Set<number>();
+    if (!city || dragAnchor == null || dragCurrent == null || (!erasing && tool !== 'delete')) return new Set<number>();
     return new Set(indicesInRect(
       city.cols,
       city.rows,
       pointFromIndex(city.cols, dragAnchor),
       pointFromIndex(city.cols, dragCurrent),
     ));
-  }, [city, tool, dragAnchor, dragCurrent]);
+  }, [city, erasing, tool, dragAnchor, dragCurrent]);
 
   const placed = city ? placedCount(city) : 0;
   const cap = city ? citizenCapacityOf(city) : 0;
@@ -407,8 +443,8 @@ export default function CityPage() {
   const standings = city ? districtStandings(city) : [];
 
   return (
-    <div className="min-h-screen w-full">
-    <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-3 py-3">
+    <div data-testid="city-workbench" className="grid min-h-screen w-full grid-cols-1 items-start gap-2 px-1 py-3 sm:px-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:grid-rows-[auto_auto_auto] lg:px-3 xl:pr-64">
+    <div className="mx-auto flex w-full max-w-lg flex-col gap-3 max-lg:order-1 lg:col-start-2 lg:row-start-1 lg:mx-0 lg:max-w-none">
       <div className="flex items-center gap-2">
         <Link href="/">
           <Button variant="ghost" size="icon" className="min-h-11 min-w-11" aria-label="Back to home" data-testid="city-back">
@@ -538,7 +574,7 @@ export default function CityPage() {
       <p className="text-[11px] text-muted-foreground leading-snug min-h-8" data-testid="city-note">{note}</p>
     </div>
 
-      <div data-testid="city-workbench" className="flex w-full flex-col gap-2 px-1 sm:px-3 lg:flex-row lg:items-start xl:pr-64">
+        <div className="max-lg:order-2 lg:col-start-1 lg:row-span-full lg:sticky lg:top-3 lg:self-start">
         <CityToolPalette
           tool={tool}
           canCopy={selection !== null}
@@ -552,8 +588,9 @@ export default function CityPage() {
           onCut={doCut}
           onUndo={undo}
         />
+        </div>
         {city && (
-          <div className="flex min-w-0 flex-1 flex-col gap-1" data-testid="city-expand">
+          <div className="flex min-w-0 flex-col gap-1 max-lg:order-3 lg:col-start-2 lg:row-start-2" data-testid="city-expand">
             <div className="flex justify-center">
               <ExpandEdge edge="north" city={city} tokens={tokens} onExpand={onExpand} />
             </div>
@@ -569,7 +606,8 @@ export default function CityPage() {
                   onPointerMove={onGridPointerMove}
                   onPointerUp={onGridPointerUp}
                   onPointerCancel={onGridPointerUp}
-                  onMouseDown={event => { if (event.button === 1) event.preventDefault(); }}
+                  onContextMenu={onGridContextMenu}
+                  onMouseDown={event => { if (event.button === 1 || event.button === 2) event.preventDefault(); }}
                 >
                   {city.tiles.map((cell, index) => {
                     const here = city.citizens.filter(c => c.y * city.cols + c.x === index);
@@ -613,7 +651,7 @@ export default function CityPage() {
             </div>
           </div>
         )}
-        <div className="min-w-0 w-full lg:w-80 lg:shrink-0 xl:w-96" data-testid="city-structures">
+        <div className="min-w-0 w-full max-lg:order-4 lg:col-start-3 lg:row-span-full lg:sticky lg:top-3 lg:max-h-[calc(100dvh-1.5rem)] lg:w-80 lg:self-start lg:overflow-y-auto xl:w-96" data-testid="city-structures">
           <BuildPalette
             sections={sections}
             selected={selected}
@@ -634,9 +672,8 @@ export default function CityPage() {
             }}
           />
         </div>
-      </div>
 
-      <div className="mx-auto w-full max-w-lg px-3">
+      <div className="mx-auto w-full max-w-lg max-lg:order-5 lg:col-start-2 lg:row-start-3 lg:mx-0 lg:max-w-none">
         <p className="text-[11px] text-muted-foreground leading-relaxed pb-4">{emojiCityRulesBlurb()}</p>
       </div>
     </div>

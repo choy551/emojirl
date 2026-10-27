@@ -64,6 +64,21 @@ export function rectFromPoints(a: GridPoint, b: GridPoint): GridRect {
   };
 }
 
+/** Hold still this long on a touch screen before a drag becomes an erase stroke. */
+export const ERASE_LONG_PRESS_MS = 450;
+/** Movement past this cancels the long-press so a normal place or select drag can continue. */
+export const ERASE_MOVE_SLOP_PX = 12;
+
+export function longPressMoved(
+  start: { x: number; y: number },
+  point: { x: number; y: number },
+  slop = ERASE_MOVE_SLOP_PX,
+): boolean {
+  const dx = point.x - start.x;
+  const dy = point.y - start.y;
+  return dx * dx + dy * dy > slop * slop;
+}
+
 /** Row-major indices inside the rectangle, clipped to the grid. A 1-wide or 1-tall rect is a column or row. */
 export function indicesInRect(cols: number, rows: number, a: GridPoint, b: GridPoint): number[] {
   const rect = rectFromPoints(a, b);

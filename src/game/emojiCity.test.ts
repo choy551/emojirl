@@ -963,6 +963,13 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('data-testid="city-grid-scroll"');
     expect(city).toContain('data-testid="city-workbench"');
     expect(city).toContain('data-testid="city-structures"');
+    expect(city).toContain('lg:grid-rows-[auto_auto_auto]');
+    expect(city).toContain('lg:row-span-full');
+    expect(city).toContain('lg:sticky lg:top-3 lg:max-h-[calc(100dvh-1.5rem)]');
+    expect(city).toContain('onContextMenu={onGridContextMenu}');
+    expect(city).toContain('button === 2');
+    expect(city).toContain('ERASE_LONG_PRESS_MS');
+    expect(city).toContain("drag.tool === 'erase'");
     expect(city).toContain('paint-ants');
     expect(city).toContain('button === 1');
     const tools = readFileSync(new URL('../pages/cityTools.tsx', import.meta.url), 'utf8');
