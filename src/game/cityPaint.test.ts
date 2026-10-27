@@ -6,7 +6,9 @@ import {
   applyPlacement,
   brushFromLot,
   copyRect,
+  ERASE_MOVE_SLOP_PX,
   indicesInRect,
+  longPressMoved,
   previewPlacement,
   pushUndo,
   rectFromPoints,
@@ -110,6 +112,23 @@ describe('city paint clipboard', () => {
     expect(brushFromLot(city, 2)).toEqual({ kind: 'decor', emoji: '🚗' });
     expect(brushFromLot(city, 3)).toEqual({ kind: 'token', emoji: '🏠' });
     expect(brushFromLot(city, 4)).toBeNull();
+  });
+
+  it('erases a right-click rectangle and refunds buildings, not decor', () => {
+    const consumes = { '🏠': 2 };
+    let city = placeAt(emptyCity(), 0, '🏠', consumes, {}, () => 0).city;
+    city = placeDecor(city, 1, '🌲').city;
+    city = placeAt(city, 8, '🏠', consumes, {}, () => 0).city;
+    const indices = indicesInRect(8, 8, { x: 0, y: 0 }, { x: 1, y: 1 });
+    const cleared = applyClear(city, indices, {}, () => 0);
+    expect(indices).toEqual([0, 1, 8, 9]);
+    expect(cleared.removed).toBe(3);
+    expect(cleared.refunded).toBe(2);
+    expect(cleared.city.tiles[0]).toBeNull();
+    expect(cleared.city.tiles[1]).toBeNull();
+    expect(availableTokens(consumes['🏠']!, placedOf(cleared.city, '🏠'))).toBe(2);
+    expect(longPressMoved({ x: 0, y: 0 }, { x: ERASE_MOVE_SLOP_PX, y: 0 })).toBe(false);
+    expect(longPressMoved({ x: 0, y: 0 }, { x: ERASE_MOVE_SLOP_PX + 1, y: 0 })).toBe(true);
   });
 
   it('keeps an undo snapshot of the city before the edit', () => {
