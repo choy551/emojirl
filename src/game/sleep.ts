@@ -80,7 +80,7 @@ export function applyBedRest(player: Player): Player {
     trailblazerCooldown: 0,
     stats: {
       ...player.stats,
-      hp: Math.floor(maxHp * BED_OVERHEAL_MULT),
+      hp: Math.max(player.stats.hp, Math.floor(maxHp * BED_OVERHEAL_MULT)),
       overhealDecayTick: 0,
       blinkStrikeCooldown: 0,
       blinkOverkillCooldown: 0,

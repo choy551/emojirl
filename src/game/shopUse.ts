@@ -2,7 +2,7 @@ import { Enemy, EmojiItem, FloatingText, GameState, Player } from './types';
 import type { SoulEffect } from './emojis';
 import { EMOJI_POWERS, getRandomEmojiPower } from './emojis';
 import { rollKillDrop } from './dropTable';
-import { addToPlayerBag, activeKindLabel, computeBagPassives, livingMaxHp, playerSoftCap } from './inventory';
+import { addToPlayerBag, activeKindLabel, applyPlayerHeal, applySoulHp, computeBagPassives, healHp, livingMaxHp, playerSoftCap } from './inventory';
 import { markEnemySeen, markEnemyKilled, markEmojiSeen } from './discoveries';
 import { moodMax, levelFromXP, hpBonusForLevel } from './progression';
 import { creditVoidBoss } from './voidDamage';
@@ -135,7 +135,7 @@ export function applyInstantItemUse(
     const amount = cookedEatHeal(item, s.chefLessonCount ?? 0, pool);
     const stats = { ...s.player.stats };
     const wasLow = stats.hp / pool <= 0.3;
-    stats.hp = Math.min(pool, stats.hp + amount);
+    stats.hp = healHp(stats.hp, pool, amount);
     stats.moodValue = Math.min(moodMax(cls), stats.moodValue + (wasLow ? 40 : 10));
     log(wasLow
       ? `${item.emoji} ${item.name}: +${amount} HP — relief floods through you! Mood surges!`
@@ -152,10 +152,11 @@ export function applyInstantItemUse(
 
   const stats = { ...s.player.stats };
   if (effect) {
-    if (effect.hpBonus)      stats.hp        = Math.min(stats.maxHp + (effect.maxHpBonus ?? 0), stats.hp + effect.hpBonus);
-    if (effect.maxHpBonus)   stats.maxHp     = stats.maxHp + effect.maxHpBonus;
+    const souled = applySoulHp({ ...s.player, stats }, effect);
+    stats.hp = souled.stats.hp;
+    stats.maxHp = souled.stats.maxHp;
+    stats.defense = souled.stats.defense;
     if (effect.attackBonus)  stats.attack    = stats.attack  + effect.attackBonus;
-    if (effect.defenseBonus) stats.defense   = stats.defense + effect.defenseBonus;
     if (effect.speedBonus)   stats.speed     = (stats.speed   ?? 0) + effect.speedBonus;
     if (effect.evasionBonus) stats.evasion   = (stats.evasion ?? 0) + effect.evasionBonus;
     if (effect.luckBonus)    stats.luck      = (stats.luck    ?? 0) + effect.luckBonus;
@@ -214,16 +215,25 @@ export function applyInstantItemUse(
       const newMaxHp = newPlayer.stats.maxHp + hpInc;
       const lvlEmoji = { ...getRandomEmojiPower(), id: `zap-lvl-${Math.random()}`, consumed: false };
       markEmojiSeen(lvlEmoji.emoji);
+      let drafted = newPlayer;
       if (opts.source === 'bag') {
         const { inventory: _inv, bank: _bnk, nonStackableBanked: _nsbZ, duplicateActiveBanked: _dabZ } = addToPlayerBag(newPlayer, lvlEmoji);
         _nsbZ.forEach(i => log(`Extra ${i.emoji} → Bank (already carried)`));
         _dabZ.forEach(i => log(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
-        newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, level: newLevel, maxHp: newMaxHp, hp: newMaxHp, moodValue: Math.min(moodMax(cls), newPlayer.stats.moodValue + 30) }, inventory: _inv, bank: _bnk };
+        drafted = { ...newPlayer, inventory: _inv, bank: _bnk };
         log(`✨ Level ${newLevel}! Full heal! +${hpInc} max HP! Got ${lvlEmoji.emoji}!`);
       } else {
-        newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, level: newLevel, maxHp: newMaxHp, hp: newMaxHp, moodValue: Math.min(moodMax(cls), newPlayer.stats.moodValue + 30) } };
         log(`✨ Level ${newLevel}! Full heal! +${hpInc} max HP!`);
       }
+      newPlayer = applyPlayerHeal({
+        ...drafted,
+        stats: {
+          ...drafted.stats,
+          level: newLevel,
+          maxHp: newMaxHp,
+          moodValue: Math.min(moodMax(cls), drafted.stats.moodValue + 30),
+        },
+      });
     }
     newEnemies = s.enemies.filter(e => e.id !== target.id);
     newPlayer = opts.applyMonkeyDropOnKill(target, newPlayer);

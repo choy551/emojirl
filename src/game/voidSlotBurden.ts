@@ -1,5 +1,5 @@
 import type { Player } from './types';
-import { buildHotbarSlots, livingMaxHp } from './inventory';
+import { buildHotbarSlots, healHp, livingMaxHp } from './inventory';
 import { voidClassTurnDamage } from './voidDamage';
 
 export interface VoidSlotBurdenRow {
@@ -58,7 +58,8 @@ export interface VoidSlotReclaim {
 
 /**
  * Half the pressure this hotbar item's slot has dealt, rounded down.
- * The heal cannot raise HP above max HP. Items that are not in a pressure slot reclaim nothing.
+ * The heal fills toward the living pool (base max HP plus DEF overflow) and never lowers HP.
+ * Items that are not in a pressure slot reclaim nothing.
  */
 export function reclaimVoidSlotPressure(player: Player, item: { id: string; emoji: string }): VoidSlotReclaim {
   if (player.characterClass !== '👤') return { player, heal: 0, log: null };
@@ -68,12 +69,12 @@ export function reclaimVoidSlotPressure(player: Player, item: { id: string; emoj
   const dealt = synced.voidSlotBurden?.[idx]?.dealt ?? 0;
   const maxHp = livingMaxHp(synced);
   const raw = Math.min(maxHp, Math.floor(Math.max(0, dealt) / 2));
-  const heal = Math.min(raw, Math.max(0, maxHp - synced.stats.hp));
-  const hp = Math.min(maxHp, synced.stats.hp + heal);
+  const hp = healHp(synced.stats.hp, maxHp, raw);
+  const heal = hp - synced.stats.hp;
   return {
-    player: { ...synced, stats: { ...synced.stats, hp } },
+    player: hp === synced.stats.hp ? synced : { ...synced, stats: { ...synced.stats, hp } },
     heal,
-    log: `👤 Released ${item.emoji}, reclaimed ${heal} HP`,
+    log: heal > 0 ? `👤 Released ${item.emoji}, reclaimed ${heal} HP` : null,
   };
 }
 

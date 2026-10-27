@@ -7,7 +7,7 @@ import { isStackableBagPassive } from '../../game/passives';
 import {
   moodMax, refillBagFromBank, removeAndRefillBag, takeOneMatchingFromBank,
   tickActiveBuffs, withVisibility, runEnemyTurns, applyEnemyTurns, getItemBuyPrice, cookedEatHeal,
-  buildHotbarSlots, grantGhostStack, livingMaxHp,
+  buildHotbarSlots, grantGhostStack, livingMaxHp, healHp,
 } from '../../game/gameHelpers';
 import { applyInstantItemUse, canBuyAndUse } from '../../game/shopUse';
 import { applyDrinkToPlayer, pickDrink } from '../../game/drinks';
@@ -219,7 +219,7 @@ export function useItemActions(
       const amount = cookedEatHeal(item, prev.chefLessonCount ?? 0, pool);
       const wasLow = stats.hp / pool <= 0.3;
 
-      stats.hp = Math.min(pool, stats.hp + amount);
+      stats.hp = healHp(stats.hp, pool, amount);
       // Tick active buffs each time food is used (costs 1 turn)
       Object.assign(stats, tickActiveBuffs(stats));
 

@@ -20,10 +20,10 @@ import {
   moodMax, chebyshev, hasLOS, hasLOSBetween, VISION_RADIUS,
   eagleEyeRange, PLAYER_PASSABLE_TILES, playerBagPassives,
   applyEquipmentAndPassives, withVisibility, runEnemyTurns, applyEnemyTurns, tickActiveBuffs,
-  addToPlayerBag, levelFromXP, livingMaxHp, playerSoftCap,
+  addToPlayerBag, levelFromXP, livingMaxHp, playerSoftCap, healHp, applyShrineBlessing,
   mpBonusForLevel, computeNinjaEvasion, getRandomCowboyFlavor, handleGodBlessedImmunity,
   _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG, restoreStolenEmojis, stolenEmojiSummary,
-  applyBedRest, simulateSleep, SLEEP_TURNS, BED_OVERHEAL_MULT,
+  applyBedRest, simulateSleep, SLEEP_TURNS,
   evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
 } from '../game/gameHelpers';
 import { lightningArcDamage } from '../game/passives';
@@ -814,18 +814,20 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
         const vampCount = _meleePassives.vampiricStrike || 0;
         const pool = livingMaxHp(newPlayer);
-        if (vampCount > 0 && meleeDmgToEnemy > 0 && newPlayer.stats.hp < pool) {
-          newPlayer.stats.hp = Math.min(pool, newPlayer.stats.hp + vampCount);
+        if (vampCount > 0 && meleeDmgToEnemy > 0) {
+          newPlayer.stats.hp = healHp(newPlayer.stats.hp, pool, vampCount);
         }
-        if (_meleePassives.healOnKill > 0 && combatResult.enemyDied && newPlayer.stats.hp < pool) {
-          const mushHeal = Math.min(_meleePassives.healOnKill, pool - newPlayer.stats.hp);
-          newPlayer.stats.hp += mushHeal;
-          addLog(`🍄 Heal on kill! +${mushHeal} HP`);
+        if (_meleePassives.healOnKill > 0 && combatResult.enemyDied) {
+          const before = newPlayer.stats.hp;
+          newPlayer.stats.hp = healHp(before, pool, _meleePassives.healOnKill);
+          const mushHeal = newPlayer.stats.hp - before;
+          if (mushHeal > 0) addLog(`🍄 Heal on kill! +${mushHeal} HP`);
         }
         const dodgeCount = _meleePassives.dodgeHeal || 0;
-        if (dodgeCount > 0 && combatResult.dodged && newPlayer.stats.hp < pool) {
-          newPlayer.stats.hp = Math.min(pool, newPlayer.stats.hp + dodgeCount);
-          addLog(`🦋 Dodge heals! +${dodgeCount} HP`);
+        if (dodgeCount > 0 && combatResult.dodged) {
+          const before = newPlayer.stats.hp;
+          newPlayer.stats.hp = healHp(before, pool, dodgeCount);
+          if (newPlayer.stats.hp > before) addLog(`🦋 Dodge heals! +${dodgeCount} HP`);
         }
         if (_meleePassives.thorns > 0 && meleeDmgToPlayer > 0) {
           const thornIdx = newEnemies.findIndex(e => e.id === enemy.id);
@@ -950,23 +952,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
       if (tile.type === 'shrine') {
         const shrineAmt = 2 + Math.floor((prev.currentFloor - 1) / 2);
-        const oldMaxHp = newPlayer.stats.maxHp;
-        const currentOverheal = Math.max(0, newPlayer.stats.hp - oldMaxHp);
-        if (isArcaneCaster(cls)) {
-          // Arcane shrine gives +max MP and a plain +HP heal (no +max HP, no overheal).
-          // Heal up to maxHp, but never strip an existing overheal buffer (e.g. from the 🍺 bar).
-          const pool = livingMaxHp(newPlayer);
-          const healedHp = Math.max(newPlayer.stats.hp, Math.min(pool, newPlayer.stats.hp + shrineAmt));
-          const newMaxMana = (newPlayer.stats.maxMana ?? 4) + 1;
-          newPlayer.stats = { ...newPlayer.stats, hp: healedHp, maxMana: newMaxMana, mana: newMaxMana };
-        } else {
-          const newMaxHp = oldMaxHp + shrineAmt;
-          // Preserve any existing overheal buffer from bar (hp - oldMax) on top of the new max.
-          // Also apply the shrine's +shrineAmt heal effect without letting the max increase "eat" the buffer.
-          const shrineHealTarget = newPlayer.stats.hp + shrineAmt;
-          const healedHp = Math.max(shrineHealTarget, newMaxHp + currentOverheal);
-          newPlayer.stats = { ...newPlayer.stats, maxHp: newMaxHp, hp: healedHp };
-        }
+        newPlayer = applyShrineBlessing(newPlayer, shrineAmt, isArcaneCaster(cls));
         const newMap = newState.map.map((row, my) =>
           row.map((t, mx) =>
             mx === newPos.x && my === newPos.y
@@ -990,7 +976,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             // Already overhealed — don't charge XP or re-apply.
             addLog(`🍺 Innkeeper: You're already overhealed — come back when it fades!`);
           } else if (newPlayer.stats.xp >= cost) {
-            const overhealHp = Math.floor(pool * 1.5);
+            const overhealHp = Math.max(newPlayer.stats.hp, Math.floor(pool * 1.5));
             const isWizard = isArcaneCaster(newPlayer.characterClass);
             newPlayer.stats = {
               ...newPlayer.stats,
@@ -1212,7 +1198,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       const totalHeal = restHealAmount({ hp: stats.hp, maxHp: pool, waveRegen: regen, campfire: onCampfire });
       const atFull = stats.hp >= pool;
       if (!atFull) {
-        stats.hp = Math.min(pool, stats.hp + totalHeal);
+        stats.hp = healHp(stats.hp, pool, totalHeal);
         stats.moodValue = Math.min(moodMax(cls), stats.moodValue + 2);
       }
       // Tick down active food buffs each turn
@@ -1436,7 +1422,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       };
       const { state, wokeBy, turnsSlept } = simulateSleep(rested, SLEEP_TURNS);
       if (wokeBy) return withVisibility(state);
-      const overhealHp = Math.floor(livingMaxHp(state.player) * BED_OVERHEAL_MULT);
+      const overhealHp = state.player.stats.hp;
       const mpMsg = isArcaneCaster(state.player.characterClass) ? ' MP full.' : '';
       const left = check.usesLeft - 1;
       const usesMsg = left <= 0 ? ' The bed is worn out.' : ` (${left} rest${left === 1 ? '' : 's'} left)`;
