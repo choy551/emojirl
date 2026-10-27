@@ -23,7 +23,7 @@ import {
   addToPlayerBag, levelFromXP, livingMaxHp, playerSoftCap, healHp, applyShrineBlessing,
   mpBonusForLevel, computeNinjaEvasion, getRandomCowboyFlavor, handleGodBlessedImmunity,
   _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG, restoreStolenEmojis, stolenEmojiSummary,
-  applyBedRest, simulateSleep, SLEEP_TURNS, BED_OVERHEAL_MULT,
+  applyBedRest, simulateSleep, SLEEP_TURNS,
   evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
 } from '../game/gameHelpers';
 import { lightningArcDamage } from '../game/passives';
