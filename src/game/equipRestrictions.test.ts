@@ -286,7 +286,8 @@ describe('invalid gear on load', () => {
     });
     const state = loadOk();
     expect(state.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
-    expect(state.schemaVersion).toBe(5);
+    expect(state.schemaVersion).toBe(6);
+    expect(state.scoreInvalid).toBe(false);
     expect(state.player.equipment.mainHand).toBeUndefined();
     expect(state.player.equipment.offHand).toBeUndefined();
     expect(state.player.equipment.body?.id).toBe('helm');
@@ -314,6 +315,44 @@ describe('invalid gear on load', () => {
     const text = state.logs.map(log => log.text).join('\n');
     expect(text).toContain("Revolver doesn't fit a Ranger — moved to the Bag.");
     expect(text).toContain("Arcane Parasol doesn't fit a Ranger — Bag full, moved to the Bank.");
+  });
+
+  it('migrates a schema 5 save and keeps its high-score flag', () => {
+    plant({
+      schemaVersion: 5,
+      scoreInvalid: true,
+      player: {
+        characterClass: RANGER,
+        stats: { gold: 40 },
+        inventory: [],
+        bank: [],
+        equipment: { mainHand: gun },
+      },
+    });
+    const cheated = loadOk();
+    expect(cheated.schemaVersion).toBe(6);
+    expect(cheated.scoreInvalid).toBe(true);
+    expect(cheated.player.stats.gold).toBe(40);
+    expect(cheated.player.equipment.mainHand).toBeUndefined();
+    expect(cheated.player.inventory.map(item => item.id)).toEqual(['gun']);
+
+    plant({
+      schemaVersion: 5,
+      scoreInvalid: false,
+      player: {
+        characterClass: RANGER,
+        stats: {},
+        inventory: [soul('keep')],
+        bank: [],
+        equipment: { offHand: staff },
+      },
+    });
+    const eligible = loadOk();
+    expect(eligible.schemaVersion).toBe(6);
+    expect(eligible.scoreInvalid).toBe(false);
+    expect(eligible.player.equipment.offHand).toBeUndefined();
+    expect(eligible.player.inventory.map(item => item.id)).toEqual(['keep', 'wand']);
+    expect(eligible.player.bank).toEqual([]);
   });
 
   it('leaves a royal guard bow in the off hand alone', () => {

@@ -506,6 +506,11 @@ export interface GameState {
    * pick stays (it is Tier 4 now). Cleared when Overkill or Blink Truestrike is chosen.
    */
   blinkT3RespecPending?: boolean;
+  /**
+   * Set after a confirmed cheat (`/impulse101`, `/877cashnow`).
+   * Missing or false keeps the run eligible for the high score log.
+   */
+  scoreInvalid?: boolean;
 }
 
 export interface BossrushState {
