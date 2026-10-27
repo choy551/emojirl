@@ -6,6 +6,7 @@ import { isStackableBagPassive } from '../../game/passives';
 import {
   moodMax, levelFromXP, addToPlayerBag, activeKindLabel, sortBagSlots, buildHotbarSlots, computeBagPassives,
   isNonStackableBagPassiveDuplicate, isActiveKindDuplicate, runEnemyTurns, applyEnemyTurns, cookedEatHeal, livingMaxHp,
+  healHp, applySoulHp,
 } from '../../game/gameHelpers';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 import { _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../../game/flashSignals';
@@ -105,7 +106,7 @@ export function useInventoryActions(
         if (stats.hp >= pool) { addLog('Already at full HP.'); return prev; }
         const amount = cookedEatHeal(item, prev.chefLessonCount ?? 0, pool);
         const wasLow = stats.hp / pool <= 0.3;
-        stats.hp = Math.min(pool, stats.hp + amount);
+        stats.hp = healHp(stats.hp, pool, amount);
         stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + (wasLow ? 40 : 10));
         addLog(wasLow
           ? `${item.emoji} ${item.name}: +${amount} HP — relief floods through you! Mood surges!`
@@ -130,10 +131,11 @@ export function useInventoryActions(
         if (!anyVisible) { addLog(`${item.emoji} No visible enemies to strike!`); return prev; }
       }
       if (effect) {
-        if (effect.hpBonus)      stats.hp        = Math.min(stats.maxHp + (effect.maxHpBonus ?? 0), stats.hp + effect.hpBonus);
-        if (effect.maxHpBonus)   stats.maxHp     = stats.maxHp + effect.maxHpBonus;
+        const souled = applySoulHp({ ...prev.player, stats }, effect);
+        stats.hp = souled.stats.hp;
+        stats.maxHp = souled.stats.maxHp;
+        stats.defense = souled.stats.defense;
         if (effect.attackBonus)  stats.attack    = stats.attack  + effect.attackBonus;
-        if (effect.defenseBonus) stats.defense   = stats.defense + effect.defenseBonus;
         if (effect.speedBonus)   stats.speed     = (stats.speed   ?? 0) + effect.speedBonus;
         if (effect.evasionBonus) stats.evasion   = (stats.evasion ?? 0) + effect.evasionBonus;
         if (effect.luckBonus)    stats.luck      = (stats.luck    ?? 0) + effect.luckBonus;

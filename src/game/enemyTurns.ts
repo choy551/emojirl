@@ -1,6 +1,6 @@
 import { Enemy, EmojiItem, GameState, Position, FloatingText, PlacedBomb, ActiveProjectile } from './types';
 import { chebyshev } from './geo';
-import { applyEquipmentAndPassives, addToPlayerBag, playerBagPassives, parkVoidOverflow, countVoidPressureSlots } from './inventory';
+import { applyEquipmentAndPassives, addToPlayerBag, playerBagPassives, parkVoidOverflow, countVoidPressureSlots, healHp } from './inventory';
 import { applyNullMomentum, applyVoidPressureTick, creditVoidBoss, occupiedGhosts, voidClassTurnDamage, voidDamageFor, voidGhostCapacity, VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from './voidDamage';
 import { applyEntropicTithe, type GhostKillEffect } from './voidAbilities';
 import { unlockVoidClass } from './voidMeta';
@@ -208,12 +208,15 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   }
   const regen = _freezePassives.combatRegen || 0;
   const poolMaxHp = effectivePlayer.stats.maxHp;
-  if (regen > 0 && playerHp < poolMaxHp) {
-    playerHp = Math.min(poolMaxHp, playerHp + regen);
+  if (regen > 0) {
+    playerHp = healHp(playerHp, poolMaxHp, regen);
   }
-  if (_freezePassives.regeneration > 0 && state.turn % Math.max(1, 6 - _freezePassives.regeneration) === 0 && playerHp < poolMaxHp) {
-    playerHp = Math.min(poolMaxHp, playerHp + 1);
-    log('💊 You regenerate! (+1 HP)');
+  if (_freezePassives.regeneration > 0 && state.turn % Math.max(1, 6 - _freezePassives.regeneration) === 0) {
+    const nextHp = healHp(playerHp, poolMaxHp, 1);
+    if (nextHp > playerHp) {
+      playerHp = nextHp;
+      log('💊 You regenerate! (+1 HP)');
+    }
   }
   if (player.characterClass === '👤') {
     const ignored = voidPressureIgnoredSlots(player);

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { GameState, Enemy, EmojiItem } from '../game/types';
 import { restoreStolenEmojis, stolenEmojiSummary, cookedEatHeal } from '../game/gameHelpers';
+import { applyPlayerHeal } from '../game/inventory';
 import { executeFeast, feastBuffLabel, sinkFoods } from '../game/foodSinks';
 import { useDialogHotkeys } from '../hooks/useDialogHotkeys';
 import { useDismissGuard } from '../hooks/useDismissGuard';
@@ -124,7 +125,7 @@ export function FairyInteractionDialog({ gameState, setGameState, fairyId, onClo
       if (!prev) return prev;
       return {
         ...prev,
-        player: { ...prev.player, stats: { ...prev.player.stats, hp: prev.player.stats.maxHp } },
+        player: applyPlayerHeal(prev.player),
         enemies: prev.enemies.filter(e => e.id !== fairyId),
         logs: [{ id: Math.random().toString(), text: `🧚‍♀️ ${fairy.name} heals you to full HP! ✨`, turn: prev.turn }, ...prev.logs].slice(0, 24),
       };

@@ -21,7 +21,7 @@ import { markEnemyKilled } from '../../game/discoveries';
 import {
   moodMax, chebyshev, hasLOSBetween, PLAYER_PASSABLE_TILES, playerBagPassives,
   applyEquipmentAndPassives, removeAndRefillBag, withVisibility, runEnemyTurns, applyEnemyTurns,
-  handleGodBlessedImmunity, levelFromXP, livingMaxHp,
+  handleGodBlessedImmunity, levelFromXP, livingMaxHp, healHp,
 } from '../../game/gameHelpers';
 import { spendChargeGhostByKind } from '../../game/voidCharge';
 import { applyLevelUp } from '../../game/playerTurn';
@@ -297,10 +297,11 @@ export function useCombatActions(
 
     const heal = runningHp > 0 ? blinkLifestealHeal(totalDmg, talents) : 0;
     const pool = livingMaxHp(prev.player);
-    if (heal > 0 && runningHp < pool) {
-      const gained = Math.min(heal, pool - runningHp);
+    if (heal > 0) {
+      const nextHp = healHp(runningHp, pool, heal);
+      const gained = nextHp - runningHp;
       if (gained > 0) {
-        runningHp += gained;
+        runningHp = nextHp;
         addLog(`🥷 Blink lifesteal +${gained} HP.`);
         blinkFloats.push({ id: `blink-ls-${prev.turn}`, pos: { ...blinkPos }, text: `+${gained}`, color: '#f472b6', life: 2 });
       }

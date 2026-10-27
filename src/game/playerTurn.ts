@@ -1,7 +1,7 @@
 import { Player, FloatingText, Position } from './types';
 import { getRandomEmojiPower } from './emojis';
 import { markEmojiSeen } from './discoveries';
-import { addToPlayerBag, activeKindLabel, livingMaxHp } from './inventory';
+import { addToPlayerBag, activeKindLabel, applyPlayerHeal, livingMaxHp } from './inventory';
 import { moodMax, hpBonusForLevel, mpBonusForLevel } from './progression';
 import { isArcaneCaster } from './prestige';
 
@@ -89,12 +89,17 @@ export function applyLevelUp(
   nonStackableBanked.forEach(i => addLog(`Extra ${i.emoji} → Bank (already carried)`));
   duplicateActiveBanked.forEach(i => addLog(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
 
-  let result: Player = {
+  let result = applyPlayerHeal({
     ...player,
-    stats: { ...player.stats, level: newLevel, maxHp: newMaxHp, hp: newMaxHp, moodValue: Math.min(moodMax(player.characterClass), player.stats.moodValue + 30) },
+    stats: {
+      ...player.stats,
+      level: newLevel,
+      maxHp: newMaxHp,
+      moodValue: Math.min(moodMax(player.characterClass), player.stats.moodValue + 30),
+    },
     inventory,
     bank,
-  };
+  });
   addLog(`✨ Level ${newLevel}! Full heal! +${hpIncrease} max HP! Got ${newEmoji.emoji}!`);
 
   if (isArcaneCaster(player.characterClass)) {

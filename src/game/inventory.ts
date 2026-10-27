@@ -448,6 +448,66 @@ export function livingMaxHp(player: Player): number {
   return playerSoftCap(player).maxHp;
 }
 
+/**
+ * Raise `current` toward `pool`. Omit `amount` to fill the pool.
+ * A heal never lowers HP, including true overheal above the pool.
+ */
+export function healHp(current: number, pool: number, amount?: number): number {
+  if (amount === undefined) return Math.max(current, pool);
+  if (!(amount > 0)) return current;
+  return Math.max(current, Math.min(pool, current + amount));
+}
+
+/** Heal toward livingMaxHp (base max HP plus DEF overflow). Never lowers HP. */
+export function applyPlayerHeal(player: Player, amount?: number): Player {
+  const hp = healHp(player.stats.hp, livingMaxHp(player), amount);
+  if (hp === player.stats.hp) return player;
+  return { ...player, stats: { ...player.stats, hp } };
+}
+
+/**
+ * Soul consumes bump base max HP and DEF first, then heal `hpBonus` toward the
+ * new living pool. Clamping to the base max would wipe DEF overflow.
+ */
+export function applySoulHp(
+  player: Player,
+  effect: { hpBonus?: number; maxHpBonus?: number; defenseBonus?: number },
+): Player {
+  let stats = player.stats;
+  if (effect.maxHpBonus) stats = { ...stats, maxHp: stats.maxHp + effect.maxHpBonus };
+  if (effect.defenseBonus) stats = { ...stats, defense: stats.defense + effect.defenseBonus };
+  if (effect.hpBonus) {
+    const hp = healHp(stats.hp, livingMaxHp({ ...player, stats }), effect.hpBonus);
+    if (hp !== stats.hp) stats = { ...stats, hp };
+  }
+  if (stats === player.stats) return player;
+  return { ...player, stats };
+}
+
+/**
+ * Non-arcane shrines raise base max HP and fill to the new living pool, keeping
+ * HP that was already above the old living pool. Arcane shrines add a plain HP
+ * heal up to that pool and +1 max MP. Neither path lowers HP.
+ */
+export function applyShrineBlessing(player: Player, shrineAmt: number, arcane: boolean): Player {
+  const amount = Math.max(0, Math.floor(shrineAmt));
+  if (arcane) {
+    const hp = healHp(player.stats.hp, livingMaxHp(player), amount);
+    const newMaxMana = (player.stats.maxMana ?? 4) + 1;
+    return {
+      ...player,
+      stats: { ...player.stats, hp, maxMana: newMaxMana, mana: newMaxMana },
+    };
+  }
+  const overheal = Math.max(0, player.stats.hp - livingMaxHp(player));
+  const bumped: Player = {
+    ...player,
+    stats: { ...player.stats, maxHp: player.stats.maxHp + amount },
+  };
+  const hp = Math.max(bumped.stats.hp, livingMaxHp(bumped) + overheal);
+  return { ...bumped, stats: { ...bumped.stats, hp } };
+}
+
 export function applyEquipmentAndPassives(player: Player): Player {
   const raw = rawCombatStats(player);
   const caps = resolveSoftCap(raw);
