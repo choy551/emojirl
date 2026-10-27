@@ -1001,23 +1001,6 @@ describe('EmojiCB surfaces', () => {
   });
 });
 
-describe('EmojiCB drag highlight', () => {
-  it('clears a place or erase drag when the pointer or touch releases, and keeps the Select marquee', () => {
-    const city = readFileSync(new URL('../pages/city.tsx', import.meta.url), 'utf8');
-    for (const type of ['pointerup', 'mouseup', 'touchend', 'touchcancel']) {
-      expect(city).toContain(`window.addEventListener('${type}'`);
-      expect(city).toContain(`window.removeEventListener('${type}'`);
-    }
-    const end = city.slice(city.indexOf('const endDragAt'), city.indexOf('const onGridContextMenu'));
-    expect(end).toContain('if (!drag) return');
-    expect(end).toContain('setDragAnchor(null)');
-    expect(end).toContain('setDragCurrent(null)');
-    expect(end).toContain("drag.tool === 'select'");
-    expect(end).toContain('setSelection({');
-    expect(end).not.toContain('setSelection(null)');
-  });
-});
-
 describe('EmojiCB city name and visitor', () => {
   it('accepts a short name, rejects symbols, and persists it with the visitor name', () => {
     expect(normalizeCityName('   ')).toEqual({ ok: true, name: CITY_NAME_DEFAULT });

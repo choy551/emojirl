@@ -82,7 +82,6 @@ export default function CityPage() {
   const [dragCurrent, setDragCurrent] = useState<number | null>(null);
   const [erasing, setErasing] = useState(false);
   const dragRef = useRef<{ tool: CityTool | 'erase'; anchor: number; current: number } | null>(null);
-  const endDragAtRef = useRef<(clientX: number, clientY: number) => void>(() => {});
   const pressRef = useRef<{ x: number; y: number; timer: number } | null>(null);
   const undoRef = useRef<() => void>(() => {});
   const [away, setAway] = useState<string | null>(null);
@@ -363,18 +362,17 @@ export default function CityPage() {
     setDragCurrent(index);
   };
 
-  const endDragAt = (clientX: number, clientY: number) => {
-    const drag = dragRef.current;
-    if (!drag) return;
-    dragRef.current = null;
+  const onGridPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     clearLongPress();
+    const drag = dragRef.current;
+    dragRef.current = null;
     setErasing(false);
-    if (!city) {
+    if (!drag || !city) {
       setDragAnchor(null);
       setDragCurrent(null);
       return;
     }
-    const index = lotIndexAt(clientX, clientY) ?? drag.current;
+    const index = lotIndexAt(event.clientX, event.clientY) ?? drag.current;
     if (drag.tool === 'erase' || drag.tool === 'delete') {
       finishClear(indicesInRect(city.cols, city.rows, pointFromIndex(city.cols, drag.anchor), pointFromIndex(city.cols, index)), 'Deleted');
     } else if (drag.tool === 'place') finishPlace(drag.anchor, index);
@@ -391,33 +389,6 @@ export default function CityPage() {
     else if (drag.tool === 'paste') doPaste(index);
     setDragAnchor(null);
     setDragCurrent(null);
-  };
-  endDragAtRef.current = endDragAt;
-
-  useEffect(() => {
-    const onRelease = (event: Event) => {
-      if ('changedTouches' in event) {
-        const touch = (event as TouchEvent).changedTouches[0];
-        endDragAtRef.current(touch?.clientX ?? -1, touch?.clientY ?? -1);
-        return;
-      }
-      const point = event as MouseEvent;
-      endDragAtRef.current(point.clientX, point.clientY);
-    };
-    window.addEventListener('pointerup', onRelease);
-    window.addEventListener('mouseup', onRelease);
-    window.addEventListener('touchend', onRelease);
-    window.addEventListener('touchcancel', onRelease);
-    return () => {
-      window.removeEventListener('pointerup', onRelease);
-      window.removeEventListener('mouseup', onRelease);
-      window.removeEventListener('touchend', onRelease);
-      window.removeEventListener('touchcancel', onRelease);
-    };
-  }, []);
-
-  const onGridPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    endDragAt(event.clientX, event.clientY);
   };
 
   const onGridContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
