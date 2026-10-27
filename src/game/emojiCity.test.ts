@@ -934,6 +934,10 @@ describe('EmojiCB surfaces', () => {
     expect(city).not.toContain('absolute inset-x-0 top-full');
     expect(city).toContain('data-testid="raise-structure"');
     expect(city).toContain('hoveredRow ?? openId ?? tappedRow');
+    expect(city).toContain('raisePlace');
+    expect(city).toContain('raiseFlyoutFrame');
+    expect(city).not.toContain('pr-[6.75rem]');
+    expect(city).not.toContain('absolute right-8 top-1/2');
     expect(city).toContain('palette-more-${openSection.id}');
     expect(city).toContain('FLYOUT_CLOSE_MS');
     expect(city).not.toContain('sticky top-3');
