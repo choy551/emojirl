@@ -60,38 +60,46 @@ export default function VisitCityPage() {
         )}
 
         {city && (
-          <>
-            <p className="text-xs text-muted-foreground" data-testid="visit-counts">
-              {city.structures} structures · {city.citizens} citizens
-            </p>
-            <div className="min-w-0 overflow-x-auto" data-testid="visit-grid-scroll">
-              <div
-                data-testid="visit-grid"
-                className="mx-auto grid w-fit min-w-min max-w-full gap-0.5"
-                style={{ gridTemplateColumns: `repeat(${city.grid.cols}, minmax(${TILE_MIN}, ${TILE_MAX}))` }}
-              >
-                {city.grid.tiles.map((cell, index) => {
-                  const here = city.grid.citizens.filter(citizen => citizen.y * city.grid.cols + citizen.x === index);
-                  return (
-                    <div
-                      key={index}
-                      data-testid={`visit-lot-${index}`}
-                      aria-label={cell ? cell : `Empty lot ${index + 1}`}
-                      className="relative aspect-square w-full min-h-0 min-w-0 rounded-md border border-border/70 bg-emerald-950/30 text-xl leading-none"
-                    >
-                      {cell ?? <span className="text-sm text-muted-foreground/30">·</span>}
-                      {here.map(citizen => (
-                        <span key={citizen.id} className="absolute bottom-0 right-0 text-[11px] leading-none">{citizen.emoji}</span>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground">This city is read only.</p>
-          </>
+          <p className="text-xs text-muted-foreground" data-testid="visit-counts">
+            {city.structures} structures · {city.citizens} citizens
+          </p>
         )}
       </div>
+
+      {city && (
+        <div className="w-full px-1 pb-3 sm:px-3" data-testid="visit-map">
+          <div className="min-w-0 overflow-x-auto" data-testid="visit-grid-scroll">
+            <div
+              data-testid="visit-grid"
+              className="mx-auto grid w-fit min-w-min max-w-full gap-0.5"
+              style={{ gridTemplateColumns: `repeat(${city.grid.cols}, minmax(${TILE_MIN}, ${TILE_MAX}))` }}
+            >
+              {city.grid.tiles.map((cell, index) => {
+                const here = city.grid.citizens.filter(citizen => citizen.y * city.grid.cols + citizen.x === index);
+                return (
+                  <div
+                    key={index}
+                    data-testid={`visit-lot-${index}`}
+                    aria-label={cell ? cell : `Empty lot ${index + 1}`}
+                    className="relative aspect-square w-full min-h-0 min-w-0 rounded-md border border-border/70 bg-emerald-950/30 text-xl leading-none"
+                  >
+                    {cell ?? <span className="text-sm text-muted-foreground/30">·</span>}
+                    {here.map(citizen => (
+                      <span key={citizen.id} className="absolute bottom-0 right-0 text-[11px] leading-none">{citizen.emoji}</span>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {city && (
+        <div className="mx-auto w-full max-w-lg px-3 pb-4">
+          <p className="text-[11px] text-muted-foreground">This city is read only.</p>
+        </div>
+      )}
     </div>
   );
 }

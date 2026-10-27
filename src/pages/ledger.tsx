@@ -122,28 +122,30 @@ export default function LedgerPage() {
                 <thead className="bg-card text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     {COLUMNS.map(column => (
-                      <th key={column.key} scope="col" className="px-3 py-2 font-semibold">
-                        <span className="mr-1">{column.label}</span>
-                        <button
-                          type="button"
-                          className="min-h-11 min-w-8 px-1"
-                          aria-label={`Sort ${column.label} ascending`}
-                          aria-pressed={sort === column.key && dir === 'asc'}
-                          data-testid={`sort-${column.key}-asc`}
-                          onClick={() => { setSort(column.key); setDir('asc'); }}
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          className="min-h-11 min-w-8 px-1"
-                          aria-label={`Sort ${column.label} descending`}
-                          aria-pressed={sort === column.key && dir === 'desc'}
-                          data-testid={`sort-${column.key}-desc`}
-                          onClick={() => { setSort(column.key); setDir('desc'); }}
-                        >
-                          ↓
-                        </button>
+                      <th key={column.key} scope="col" className="whitespace-nowrap px-3 py-2 align-middle font-semibold">
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                          <span>{column.label}</span>
+                          <button
+                            type="button"
+                            className="inline-flex min-h-11 min-w-8 items-center justify-center px-1"
+                            aria-label={`Sort ${column.label} ascending`}
+                            aria-pressed={sort === column.key && dir === 'asc'}
+                            data-testid={`sort-${column.key}-asc`}
+                            onClick={() => { setSort(column.key); setDir('asc'); }}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex min-h-11 min-w-8 items-center justify-center px-1"
+                            aria-label={`Sort ${column.label} descending`}
+                            aria-pressed={sort === column.key && dir === 'desc'}
+                            data-testid={`sort-${column.key}-desc`}
+                            onClick={() => { setSort(column.key); setDir('desc'); }}
+                          >
+                            ↓
+                          </button>
+                        </span>
                       </th>
                     ))}
                   </tr>

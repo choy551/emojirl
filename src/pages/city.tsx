@@ -1,11 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CITY_NAME_MAX } from '../game/cityIdentity';
-import { FLYOUT_CLOSE_MS, flyoutStyle } from './cityPaletteLayout';
+import { FLYOUT_CLOSE_MS, flyoutStyle, raiseFlyoutFrame, raisePlace } from './cityPaletteLayout';
 import { getEnemyKillCounts } from '../game/discoveries';
 import {
   BUILDING_EXCHANGE_COST,
@@ -759,15 +759,20 @@ function BuildPalette({
   const menuRef = useRef<HTMLDivElement>(null);
   const pointerRef = useRef('');
   const closeTimer = useRef<number | null>(null);
+  const rowClose = useRef<number | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [tappedRow, setTappedRow] = useState<string | null>(null);
   const [flyout, setFlyout] = useState<{ layout: 'side' | 'sheet'; style: CSSProperties } | null>(null);
+  const [beside, setBeside] = useState<CSSProperties | null>(null);
   const rows = paletteMenuRows(sections);
   const openId = pinned ?? hovered;
   const openSection = sections.find(section => section.id === openId) ?? null;
   const raiseRow = hoveredRow ?? openId ?? tappedRow;
+  const flyoutFrame = openSection && flyout
+    ? raiseFlyoutFrame(flyout.style, flyout.layout, window.innerHeight, raise !== null)
+    : null;
 
   const clearClose = () => {
     if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
@@ -781,8 +786,23 @@ function BuildPalette({
     clearClose();
     closeTimer.current = window.setTimeout(() => setHovered(null), FLYOUT_CLOSE_MS);
   };
+  const holdRow = (id: string) => {
+    if (rowClose.current !== null) window.clearTimeout(rowClose.current);
+    rowClose.current = null;
+    setHoveredRow(id);
+  };
+  const scheduleRowClose = (id: string) => {
+    if (rowClose.current !== null) window.clearTimeout(rowClose.current);
+    rowClose.current = window.setTimeout(() => {
+      rowClose.current = null;
+      setHoveredRow(current => current === id ? null : current);
+    }, FLYOUT_CLOSE_MS);
+  };
 
-  useEffect(() => () => clearClose(), []);
+  useEffect(() => () => {
+    clearClose();
+    if (rowClose.current !== null) window.clearTimeout(rowClose.current);
+  }, []);
 
   useEffect(() => {
     if (!pinned) return;
@@ -811,6 +831,30 @@ function BuildPalette({
     };
   }, [openSection]);
 
+  useLayoutEffect(() => {
+    if (!raise || !raiseRow || openSection) {
+      setBeside(null);
+      return;
+    }
+    const place = () => {
+      const menu = menuRef.current?.getBoundingClientRect();
+      const section = rootRef.current?.querySelector(`[data-testid="palette-section-${raiseRow}"]`)?.getBoundingClientRect();
+      if (!menu || !section) {
+        setBeside(null);
+        return;
+      }
+      const placed = raisePlace(section, menu, { width: window.innerWidth, height: window.innerHeight });
+      setBeside(placed.mode === 'beside' ? placed.style ?? null : null);
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [raise, raiseRow, openSection]);
+
   const togglePinned = (id: string, event: ReactMouseEvent<HTMLButtonElement>) => {
     const fineHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     if (event.detail !== 0 && fineHover && pointerRef.current === 'mouse') return;
@@ -837,16 +881,20 @@ function BuildPalette({
               section={section}
               selected={selected}
               open={openId === section.id}
-              raise={raiseRow === section.id ? raise : null}
+              raiseBelow={raise && raiseRow === section.id && !openSection && !beside ? (
+                <div className="flex justify-end">
+                  <RaiseControl raise={raise} place="below" />
+                </div>
+              ) : null}
               onSelect={onSelect}
               onPointerDown={event => { pointerRef.current = event.pointerType; }}
               onDotsEnter={event => { if (event.pointerType === 'mouse') holdOpen(section.id); }}
               onDotsLeave={event => { if (event.pointerType === 'mouse') scheduleClose(); }}
               onDotsClick={event => togglePinned(section.id, event)}
-              onRowEnter={event => { if (event.pointerType === 'mouse') setHoveredRow(section.id); }}
+              onRowEnter={event => { if (event.pointerType === 'mouse') holdRow(section.id); }}
               onRowLeave={event => {
                 if (event.pointerType !== 'mouse') return;
-                setHoveredRow(current => current === section.id ? null : current);
+                scheduleRowClose(section.id);
               }}
               onRowTap={() => setTappedRow(section.id)}
             />
@@ -863,18 +911,36 @@ function BuildPalette({
           );
         })}
       </div>
-      {openSection && flyout && (
+      {raise && beside && raiseRow && !openSection && (
+        <RaiseControl
+          raise={raise}
+          style={beside}
+          place="beside"
+          onPointerEnter={event => { if (event.pointerType === 'mouse') holdRow(raiseRow); }}
+          onPointerLeave={event => { if (event.pointerType === 'mouse') scheduleRowClose(raiseRow); }}
+        />
+      )}
+      {openSection && flyout && flyoutFrame && (
+        <div
+          style={flyoutFrame.frame}
+          onPointerEnter={event => { if (event.pointerType === 'mouse' && openId) holdOpen(openId); }}
+          onPointerLeave={event => { if (event.pointerType === 'mouse') scheduleClose(); }}
+        >
+          {raise && flyoutFrame.parkAbove && (
+            <RaiseControl raise={raise} className="absolute bottom-full left-0" place="above" />
+          )}
         <div
           role="dialog"
           aria-label={openSection.label}
           data-testid="palette-flyout"
           data-section={openSection.id}
           data-layout={flyout.layout}
-          style={flyout.style}
-          onPointerEnter={event => { if (event.pointerType === 'mouse' && openId) holdOpen(openId); }}
-          onPointerLeave={event => { if (event.pointerType === 'mouse') scheduleClose(); }}
+          style={flyoutFrame.panel}
           className="overflow-y-auto rounded-lg border border-border bg-popover p-2 shadow-lg"
         >
+          {raise && !flyoutFrame.parkAbove && (
+            <RaiseControl raise={raise} className="mb-1.5" place="inside" />
+          )}
           <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold">
             {openSection.badge && <span aria-hidden="true">{openSection.badge}</span>}
             <span>{openSection.label}</span>
@@ -895,8 +961,47 @@ function BuildPalette({
             ))}
           </div>
         </div>
+        </div>
       )}
     </div>
+  );
+}
+
+function RaiseControl({
+  raise,
+  className = '',
+  style,
+  place,
+  onPointerEnter,
+  onPointerLeave,
+}: {
+  raise: { emoji: string; cost: number; onRaise: () => void };
+  className?: string;
+  style?: CSSProperties;
+  place: 'beside' | 'above' | 'inside' | 'below';
+  onPointerEnter?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onPointerLeave?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      style={style}
+      data-raise={place}
+      className={`h-8 min-h-0 gap-0.5 whitespace-nowrap px-1.5 text-[10px] shadow-sm ${className}`}
+      data-testid="raise-structure"
+      aria-label={`Raise ${raise.emoji} · ${raise.cost} tokens`}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
+      onClick={event => {
+        event.stopPropagation();
+        raise.onRaise();
+      }}
+    >
+      <span>Raise</span>
+      <span className="text-sm leading-none">{raise.emoji}</span>
+      <span className="tabular-nums">{raise.cost}</span>
+    </Button>
   );
 }
 
@@ -904,7 +1009,7 @@ function PaletteStrip({
   section,
   selected,
   open,
-  raise,
+  raiseBelow,
   onSelect,
   onPointerDown,
   onDotsEnter,
@@ -917,7 +1022,7 @@ function PaletteStrip({
   section: PaletteSection;
   selected: PalettePick | null;
   open: boolean;
-  raise: { emoji: string; cost: number; onRaise: () => void } | null;
+  raiseBelow: ReactNode;
   onSelect: (entry: PaletteEntry) => void;
   onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onDotsEnter: (event: ReactPointerEvent<HTMLButtonElement>) => void;
@@ -931,51 +1036,37 @@ function PaletteStrip({
     <section
       data-testid={`palette-section-${section.id}`}
       aria-label={section.label}
-      className="relative flex w-full min-w-0 items-start gap-1"
+      className="flex w-full min-w-0 flex-col gap-1"
       onPointerEnter={onRowEnter}
       onPointerLeave={onRowLeave}
       onPointerDown={onRowTap}
     >
-      <div className="flex w-[7.25rem] shrink-0 items-center gap-0.5 pt-2">
-        {section.badge && <span className="shrink-0 text-base leading-none" aria-hidden="true">{section.badge}</span>}
-        <span className="min-w-0 truncate text-[10px] font-semibold">{section.label}</span>
-      </div>
-      <div className={`flex min-w-0 flex-1 flex-nowrap gap-1 overflow-hidden ${raise ? 'pr-[6.75rem]' : 'pr-8'}`}>
-        {section.entries.map(entry => (
-          <PaletteChoice key={`${entry.kind}-${entry.emoji}`} entry={entry} selected={selected} onSelect={onSelect} />
-        ))}
-      </div>
-      {raise && (
-        <Button
+      <div className="relative flex w-full min-w-0 items-start gap-1">
+        <div className="flex w-[7.25rem] shrink-0 items-center gap-0.5 pt-2">
+          {section.badge && <span className="shrink-0 text-base leading-none" aria-hidden="true">{section.badge}</span>}
+          <span className="min-w-0 truncate text-[10px] font-semibold">{section.label}</span>
+        </div>
+        <div className="flex min-w-0 flex-1 flex-nowrap gap-1 overflow-hidden pr-8">
+          {section.entries.map(entry => (
+            <PaletteChoice key={`${entry.kind}-${entry.emoji}`} entry={entry} selected={selected} onSelect={onSelect} />
+          ))}
+        </div>
+        <button
           type="button"
-          variant="outline"
-          className="absolute right-8 top-1/2 z-20 h-8 min-h-0 -translate-y-1/2 gap-0.5 whitespace-nowrap px-1.5 text-[10px] shadow-sm"
-          data-testid="raise-structure"
-          aria-label={`Raise ${raise.emoji} · ${raise.cost} tokens`}
-          onClick={event => {
-            event.stopPropagation();
-            raise.onRaise();
-          }}
+          data-testid={`palette-more-${section.id}`}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          aria-label={`Show all ${section.label}`}
+          onPointerDown={onPointerDown}
+          onPointerEnter={onDotsEnter}
+          onPointerLeave={onDotsLeave}
+          onClick={onDotsClick}
+          className="absolute bottom-0 right-0 z-30 flex h-8 w-8 items-end justify-end text-lg font-black leading-none text-purple-400"
         >
-          <span>Raise</span>
-          <span className="text-sm leading-none">{raise.emoji}</span>
-          <span className="tabular-nums">{raise.cost}</span>
-        </Button>
-      )}
-      <button
-        type="button"
-        data-testid={`palette-more-${section.id}`}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        aria-label={`Show all ${section.label}`}
-        onPointerDown={onPointerDown}
-        onPointerEnter={onDotsEnter}
-        onPointerLeave={onDotsLeave}
-        onClick={onDotsClick}
-        className="absolute bottom-0 right-0 z-30 flex h-8 w-8 items-end justify-end text-lg font-black leading-none text-purple-400"
-      >
-        …
-      </button>
+          …
+        </button>
+      </div>
+      {raiseBelow}
     </section>
   );
 }

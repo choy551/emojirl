@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FLYOUT_CLOSE_MS, flyoutStyle, type FlyoutRect } from './cityPaletteLayout';
+import { FLYOUT_CLOSE_MS, RAISE_BUTTON_HEIGHT, flyoutStyle, raiseFlyoutFrame, raisePlace, type FlyoutRect } from './cityPaletteLayout';
 
 const menu: FlyoutRect = { top: 120, right: 540, bottom: 980, left: 48 };
 const desktop = { width: 1280, height: 800 };
@@ -81,6 +81,45 @@ describe('flyoutStyle', () => {
     expect(placed.style.right).toBe(8);
     expect(placed.style.top).toBe(Math.min(phoneMenu.bottom + 8, Math.max(8, phone.height - 220)));
     expect(placed.style.top).not.toBe(section.top);
+  });
+
+  it('parks Raise beside the menu, and under the row when the menu fills the screen', () => {
+    const section: FlyoutRect = { top: 240, right: 900, bottom: 284, left: 520 };
+    const wideMenu: FlyoutRect = { top: 120, right: 900, bottom: 860, left: 520 };
+    const beside = raisePlace(section, wideMenu, { width: 1440, height: 900 });
+    expect(beside.mode).toBe('beside');
+    expect(beside.style?.left).toBe(wideMenu.right + 6);
+    expect(beside.style?.top).toBe(section.top + (44 - RAISE_BUTTON_HEIGHT) / 2);
+    expect((beside.style?.left as number)).toBeGreaterThanOrEqual(wideMenu.right);
+
+    const phoneMenu: FlyoutRect = { top: 400, right: 382, bottom: 1400, left: 8 };
+    const phoneSection: FlyoutRect = { top: 720, right: 382, bottom: 764, left: 8 };
+    expect(raisePlace(phoneSection, phoneMenu, { width: 390, height: 844 }).mode).toBe('below');
+  });
+
+  it('hangs Raise on the flyout top and shifts a sheet down so it clears the menu', () => {
+    const side = flyoutStyle(
+      { top: 240, right: 900, bottom: 284, left: 520 },
+      { top: 120, right: 908, bottom: 860, left: 520 },
+      { width: 1440, height: 900 },
+      { top: 252, right: 900, bottom: 284, left: 868 },
+    );
+    const hung = raiseFlyoutFrame(side.style, side.layout, 900, true);
+    expect(hung.parkAbove).toBe(true);
+    expect(hung.frame.top).toBe(side.style.top);
+    expect((hung.frame.top as number)).toBeGreaterThanOrEqual(8 + RAISE_BUTTON_HEIGHT);
+
+    const sheet = flyoutStyle(
+      { top: 720, right: 370, bottom: 764, left: 16 },
+      { top: 180, right: 374, bottom: 700, left: 16 },
+      { width: 390, height: 844 },
+      { top: 732, right: 370, bottom: 764, left: 338 },
+    );
+    const shifted = raiseFlyoutFrame(sheet.style, sheet.layout, 844, true);
+    expect(sheet.layout).toBe('sheet');
+    expect(shifted.frame.top).toBe((sheet.style.top as number) + RAISE_BUTTON_HEIGHT);
+    expect(shifted.parkAbove).toBe(true);
+    expect(shifted.frame.left).toBe(8);
   });
 
   it('waits briefly before closing so the pointer can reach the panel', () => {
