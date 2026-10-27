@@ -11,6 +11,50 @@ import { withVisibility } from './vision';
 export const QUIT_CONFIRM_TEXT = 'Are you sure you want to Quit without Saving?';
 export const CHEAT_CONFIRM_TEXT = 'This will invalidate the run for high scores. Continue?';
 
+/** Prompt row: 0.5rem padding, 44px field, 0.5rem padding, plus the 1px top border. */
+export const DEV_CONSOLE_STRIP = 'calc(3.75rem + 1px)';
+/** Clear gap so the prompt sits under the combat log and covers none of its lines. */
+export const DEV_CONSOLE_GAP = '0.25rem';
+
+export function isBlankConsoleDraft(draft: string): boolean {
+  return draft.trim() === '';
+}
+
+export interface ConsoleStripPlacement {
+  bottom: string;
+  height: string;
+  left: string;
+  right: string;
+}
+
+/**
+ * Stacks the prompt in its own row directly under the combat log.
+ * The log's bottom edge is the top of that row, on desktop and mobile.
+ */
+export function consoleStack(opts: {
+  consoleOpen: boolean;
+  mobile: boolean;
+  oneHanded: boolean;
+  thumbSide: 'left' | 'right';
+  chromeBottom: string;
+}): { logBottom: string; bar: ConsoleStripPlacement | null } {
+  const restBottom = opts.mobile
+    ? (opts.oneHanded ? 'max(0.4rem, env(safe-area-inset-bottom, 0px))' : opts.chromeBottom)
+    : '1rem';
+  const horizontal = !opts.mobile
+    ? { left: '0.75rem', right: '0.75rem' }
+    : opts.oneHanded
+      ? (opts.thumbSide === 'left'
+          ? { left: '9.25rem', right: '0.5rem' }
+          : { left: '0.5rem', right: '9.25rem' })
+      : { left: '0.5rem', right: '0.5rem' };
+  if (!opts.consoleOpen) return { logBottom: restBottom, bar: null };
+  return {
+    logBottom: `calc(${restBottom} + ${DEV_CONSOLE_STRIP} + ${DEV_CONSOLE_GAP})`,
+    bar: { bottom: restBottom, height: DEV_CONSOLE_STRIP, ...horizontal },
+  };
+}
+
 export const DEV_CONSOLE_HELP = [
   '/help — list console commands',
   '/quit — end the run without saving and record a death',

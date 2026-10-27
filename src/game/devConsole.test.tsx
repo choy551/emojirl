@@ -5,18 +5,22 @@ import { EMOJI_POWERS } from './emojis';
 import { SAVE_KEY, SAVE_SCHEMA_VERSION, loadGame } from './save';
 import {
   CHEAT_CONFIRM_TEXT,
+  DEV_CONSOLE_GAP,
   DEV_CONSOLE_HELP,
+  DEV_CONSOLE_STRIP,
   QUIT_CONFIRM_TEXT,
   appendDevLogs,
   applyConfirmedCheat,
   applyQuit,
   applyStuck,
+  consoleStack,
   devConsoleOpensOnEnter,
+  isBlankConsoleDraft,
   parseDevCommand,
   scoreCountsForLeaderboard,
   type DevConsoleEnterBlockers,
 } from './devConsole';
-import { DevConsoleConfirm } from '../components/DevConsole';
+import { DevConsoleBar, DevConsoleConfirm } from '../components/DevConsole';
 
 function floor(w: number, h: number): Tile[][] {
   return Array.from({ length: h }, () =>
@@ -92,6 +96,57 @@ describe('dev console Enter', () => {
     ] as const) {
       expect(devConsoleOpensOnEnter({ ...idleEnter, [flag]: true })).toBe(false);
     }
+  });
+
+  it('treats a blank prompt as a close, and keeps a command', () => {
+    expect(isBlankConsoleDraft('')).toBe(true);
+    expect(isBlankConsoleDraft('   ')).toBe(true);
+    expect(isBlankConsoleDraft('/help')).toBe(false);
+  });
+});
+
+describe('console strip under the combat log', () => {
+  const chrome = 'calc(10rem + env(safe-area-inset-bottom, 0px))';
+
+  function expectClearOfLog(opts: Parameters<typeof consoleStack>[0]) {
+    const placed = consoleStack({ ...opts, consoleOpen: true });
+    expect(placed.bar).not.toBeNull();
+    expect(placed.bar!.height).toBe(DEV_CONSOLE_STRIP);
+    expect(placed.logBottom).toBe(`calc(${placed.bar!.bottom} + ${DEV_CONSOLE_STRIP} + ${DEV_CONSOLE_GAP})`);
+    expect(placed.logBottom).not.toBe(placed.bar!.bottom);
+  }
+
+  it('reserves a row under the desktop log', () => {
+    const closed = consoleStack({ consoleOpen: false, mobile: false, oneHanded: false, thumbSide: 'right', chromeBottom: chrome });
+    expect(closed.bar).toBeNull();
+    expect(closed.logBottom).toBe('1rem');
+    expectClearOfLog({ consoleOpen: true, mobile: false, oneHanded: false, thumbSide: 'right', chromeBottom: chrome });
+    const open = consoleStack({ consoleOpen: true, mobile: false, oneHanded: false, thumbSide: 'right', chromeBottom: chrome });
+    expect(open.bar).toMatchObject({ left: '0.75rem', right: '0.75rem', bottom: '1rem' });
+  });
+
+  it('reserves a row under the mobile log, including one-handed', () => {
+    expectClearOfLog({ consoleOpen: true, mobile: true, oneHanded: false, thumbSide: 'right', chromeBottom: chrome });
+    const twoHand = consoleStack({ consoleOpen: true, mobile: true, oneHanded: false, thumbSide: 'right', chromeBottom: chrome });
+    expect(twoHand.bar).toMatchObject({ bottom: chrome, left: '0.5rem', right: '0.5rem' });
+
+    const oneHand = consoleStack({ consoleOpen: true, mobile: true, oneHanded: true, thumbSide: 'left', chromeBottom: chrome });
+    expect(oneHand.logBottom).toBe(`calc(${oneHand.bar!.bottom} + ${DEV_CONSOLE_STRIP} + ${DEV_CONSOLE_GAP})`);
+    expect(oneHand.bar).toMatchObject({ left: '9.25rem', right: '0.5rem' });
+  });
+
+  it('places the prompt in that row instead of over the viewport bottom', () => {
+    const html = renderToStaticMarkup(
+      <DevConsoleBar
+        placement={{ bottom: '1rem', height: DEV_CONSOLE_STRIP, left: '0.75rem', right: '0.75rem' }}
+        onSubmit={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(html).toContain('style="bottom:1rem;height:');
+    expect(html).toContain(`height:${DEV_CONSOLE_STRIP}`);
+    expect(html).not.toContain('inset-x-0');
+    expect(html).not.toContain('bottom-0');
   });
 });
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDialogHotkeys } from '../hooks/useDialogHotkeys';
+import { isBlankConsoleDraft, type ConsoleStripPlacement } from '../game/devConsole';
 
 export function DevConsoleButton({ onOpen }: { onOpen: () => void }) {
   return (
@@ -15,16 +16,35 @@ export function DevConsoleButton({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-export function DevConsoleBar({ onSubmit, onClose }: { onSubmit: (raw: string) => void; onClose: () => void }) {
+export function DevConsoleBar({
+  onSubmit,
+  onClose,
+  placement,
+}: {
+  onSubmit: (raw: string) => void;
+  onClose: () => void;
+  placement: ConsoleStripPlacement;
+}) {
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
   return (
     <form
-      className="fixed inset-x-0 bottom-0 z-[70] border-t border-border bg-black/90 p-2"
-      style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}
+      className="fixed z-30 box-border flex items-center border-t border-border bg-black/90 px-2"
+      style={{
+        bottom: placement.bottom,
+        height: placement.height,
+        left: placement.left,
+        right: placement.right,
+        paddingTop: '0.5rem',
+        paddingBottom: '0.5rem',
+      }}
       onSubmit={(e) => {
         e.preventDefault();
+        if (isBlankConsoleDraft(draft)) {
+          onClose();
+          return;
+        }
         onSubmit(draft);
         setDraft('');
       }}
@@ -39,7 +59,8 @@ export function DevConsoleBar({ onSubmit, onClose }: { onSubmit: (raw: string) =
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
           e.stopPropagation();
-          if (e.key === 'Escape') {
+          const enter = e.key === 'Enter' || e.code === 'NumpadEnter';
+          if (e.key === 'Escape' || (enter && isBlankConsoleDraft(draft))) {
             e.preventDefault();
             onClose();
           }
