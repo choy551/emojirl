@@ -25,6 +25,7 @@ import { reclaimVoidSlotPressure, releaseVoidSlotBurden } from '../../game/voidS
 import { recordRunEmojiConsume } from '../../game/meta';
 import { noteThemedHotbarConsume } from '../../game/voidAbilities';
 import { _flashSignals } from '../../game/flashSignals';
+import { placeSealedVaultStairs, priorPassableKeys, reachesPriorFloor } from '../../game/ropeVault';
 import type { GameRefs, GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 
 function noteFullCity(state: GameState, notice: string | null, id: string): GameState {
@@ -77,6 +78,7 @@ export function applyRopeVault(
     return { ...prev, player: newPlayer, items: [...prev.items, ...rewards] };
   }
 
+  const priorFloor = priorPassableKeys(map);
   for (let ry = vaultY; ry < vaultY + vh; ry++) {
     for (let rx = vaultX; rx < vaultX + vw; rx++) {
       map[ry][rx] = { type: 'floor', emoji: '⬜', seen: true, visible: true };
@@ -122,6 +124,14 @@ export function applyRopeVault(
     }
   }
 
+  const vaultCenter = { x: midX, y: midY };
+  let sealedLog: string | null = null;
+  if (!reachesPriorFloor(map, vaultCenter, priorFloor)) {
+    placeSealedVaultStairs(map, vaultX, vaultY, vaultCenter);
+    sealedLog = '🪢 The vault is sealed off — a 🕳️ opens in the floor.';
+    addLog(sealedLog);
+  }
+
   newPlayer.pos = { x: midX, y: midY };
   newPlayer = spendRope(newPlayer);
 
@@ -149,7 +159,18 @@ export function applyRopeVault(
     addLog(`🪢 You descend into a hidden vault! Treasure awaits…`);
   }
 
-  const midState = { ...prev, player: newPlayer, map, items: newItems, logs: [...newLogs, ...prev.logs].slice(0, 24), turn: prev.turn + 1 };
+  const midState = {
+    ...prev,
+    player: newPlayer,
+    map,
+    items: newItems,
+    logs: [
+      ...(sealedLog ? [{ id: `vault-sealed-${prev.turn}`, text: sealedLog, turn: prev.turn }] : []),
+      ...newLogs,
+      ...prev.logs,
+    ].slice(0, 24),
+    turn: prev.turn + 1,
+  };
   const withVis = withVisibility(midState);
   return applyEnemyTurns(withVis, runEnemyTurns(withVis));
 }

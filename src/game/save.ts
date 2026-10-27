@@ -13,12 +13,13 @@ export const SAVE_KEY = 'emojirl_save_v1';
  *    `blinkT3RespecPending` so the next Continue offers one new Tier 3.
  * 3: Genie Bloodcast and Overchannel toggles. Missing flags become on.
  * 4: Genie Safe fireballs. Missing flag becomes off.
+ * 5: scoreInvalid. Missing flag stays eligible for high scores.
  */
-export const SAVE_SCHEMA_VERSION = 4;
+export const SAVE_SCHEMA_VERSION = 5;
 const CURRENT_SCHEMA_VERSION = SAVE_SCHEMA_VERSION;
 
 /** Set of schema versions this build knows how to load (after migration). */
-const KNOWN_VERSIONS = new Set([1, 2, 3, 4]);
+const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5]);
 
 /**
  * Runs in-place migrations on the raw parsed JSON object so that
@@ -72,6 +73,10 @@ function migrateGenieSafeFireball(raw: Record<string, unknown>): void {
   if (typeof record.genieSafeFireball !== 'boolean') record.genieSafeFireball = false;
 }
 
+function migrateScoreInvalid(raw: Record<string, unknown>): void {
+  if (raw.scoreInvalid !== true) raw.scoreInvalid = false;
+}
+
 /** Index 0 migrates schema 1 → 2. Later steps append in order. */
 const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
   raw => {
@@ -81,6 +86,7 @@ const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
   },
   migrateGenieCastToggles,
   migrateGenieSafeFireball,
+  migrateScoreInvalid,
 ];
 
 function migrateRaw(raw: Record<string, unknown>): void {
@@ -215,6 +221,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     hollowUsedFloor:          typeof raw.hollowUsedFloor === 'number' ? raw.hollowUsedFloor : undefined,
     bounty:                   normalizeBounty(raw.bounty),
     blinkT3RespecPending:     raw.blinkT3RespecPending === true ? true : undefined,
+    scoreInvalid:             raw.scoreInvalid === true,
   };
 }
 

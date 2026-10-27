@@ -23,6 +23,21 @@ import { getClassDef } from '../game/classes';
 import { classFlies, crownItem, fencerEvasion, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, startFloorContract, toggleGenieCast, type GenieCastToggle } from '../game/prestige';
 import { GENIE_BASE_MP } from '../game/prestigeConstants';
 import { saveScore, leaderboardEntryFromRun } from '../game/leaderboard';
+import {
+  CHEAT_CONFIRM_TEXT,
+  DEV_CONSOLE_HELP,
+  QUIT_CONFIRM_TEXT,
+  appendDevLogs,
+  applyConfirmedCheat,
+  applyQuit,
+  applyStuck,
+  devConsoleOpensOnEnter,
+  isConsoleOpenKey,
+  parseDevCommand,
+  scoreCountsForLeaderboard,
+  standingOnInteractTile,
+} from '../game/devConsole';
+import { DevConsoleBar, DevConsoleButton, DevConsoleConfirm } from '../components/DevConsole';
 import { readVoidModeProgress, startingVoidLoadout } from '../game/voidMeta';
 import { VOID_DEATH_TEXT, VOID_UNLOCK_TEXT, nullMomentumPercent } from '../game/voidDamage';
 import { nextVoidAttackMode, resolveUnmake, voidAttackModeLabel, type VoidAttackMode } from '../game/voidAbilities';
@@ -297,6 +312,10 @@ export default function Game() {
   const [logOpen, setLogOpen] = useState(false);
   const logOpenRef = useRef(false);
   useEffect(() => { logOpenRef.current = logOpen; }, [logOpen]);
+  const [devConsoleOpen, setDevConsoleOpen] = useState(false);
+  const devConsoleOpenRef = useRef(false);
+  useEffect(() => { devConsoleOpenRef.current = devConsoleOpen; }, [devConsoleOpen]);
+  const [devConfirm, setDevConfirm] = useState<null | 'quit' | 'impulse101' | 'cash'>(null);
   const [pauseMenuOpen, setPauseMenuOpen] = useState(false);
   const pauseMenuOpenRef = useRef(false);
   useEffect(() => { pauseMenuOpenRef.current = pauseMenuOpen; }, [pauseMenuOpen]);
@@ -603,6 +622,7 @@ export default function Game() {
     optionsOpen ||
     showRTFM ||
     pauseMenuOpen ||
+    devConsoleOpen ||
     !!blinkPromptFor(gameState)
   );
   const blockingOverlayOpenRef = useRef(false);
@@ -698,8 +718,35 @@ export default function Game() {
   function saveCurrentScore(state: GameState) {
     if (scoreSaved.current) return;
     scoreSaved.current = true;
+    if (!scoreCountsForLeaderboard(state)) return;
     const cls = getClassDef(state.player.characterClass);
     saveScore(leaderboardEntryFromRun(state, cls.name, Date.now()));
+  }
+
+  function submitDevConsole(raw: string) {
+    const parsed = parseDevCommand(raw);
+    if (parsed.kind === 'quit' || parsed.kind === 'impulse101' || parsed.kind === 'cash') {
+      setDevConfirm(parsed.kind);
+      return;
+    }
+    setGameState(prev => {
+      if (!prev) return prev;
+      if (parsed.kind === 'stuck') return applyStuck(prev);
+      if (parsed.kind === 'help') return appendDevLogs(prev, DEV_CONSOLE_HELP);
+      return appendDevLogs(prev, ['Unknown command. Type /help.']);
+    });
+  }
+
+  function confirmDevConsole() {
+    const kind = devConfirm;
+    if (!kind) return;
+    setGameState(prev => {
+      if (!prev) return prev;
+      if (kind === 'quit') return applyQuit(prev);
+      return applyConfirmedCheat(prev, kind);
+    });
+    setDevConfirm(null);
+    setDevConsoleOpen(false);
   }
 
   useEffect(() => {
@@ -1536,6 +1583,16 @@ export default function Game() {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (devConsoleOpenRef.current) {
+        const fromConsole = e.target instanceof HTMLElement && e.target.id === 'dev-console';
+        if (fromConsole) return;
+        e.preventDefault();
+        if (e.key === 'Escape') {
+          setDevConsoleOpen(false);
+          setDevConfirm(null);
+        }
+        return;
+      }
       const talentOffer = blinkPromptFor(gameStateRef.current);
       if (talentOffer) {
         e.preventDefault();
@@ -2081,6 +2138,26 @@ export default function Game() {
       if (logOpenRef.current && e.key !== 'Escape') {
         e.preventDefault();
         return;
+      }
+
+      if (isConsoleOpenKey(e)) {
+        const gsNow = gameStateRef.current;
+        const tileNow = gsNow ? gsNow.map[gsNow.player.pos.y]?.[gsNow.player.pos.x] : undefined;
+        if (devConsoleOpensOnEnter({
+          bagOpen: bankOpenRef.current,
+          blinkTarget: blinkTargetModeRef.current,
+          unmakeTarget: unmakeTargetModeRef.current,
+          interactTile: standingOnInteractTile(tileNow),
+          logOpen: logOpenRef.current,
+          menuOpen: blockingOverlayOpenRef.current,
+          directionPick: !!dirPickModeRef.current,
+          consoleOpen: devConsoleOpenRef.current,
+          gameOver: !!gsNow?.gameOver,
+        })) {
+          e.preventDefault();
+          setDevConsoleOpen(true);
+          return;
+        }
       }
 
       // Use bag slot: digit 1–9, main keyboard only
@@ -3591,6 +3668,9 @@ export default function Game() {
           }}
           title="Click or press / to open full log"
         >
+          {isMobile && !devConsoleOpen && !gameState.gameOver && (
+            <DevConsoleButton onOpen={() => setDevConsoleOpen(true)} />
+          )}
           {gameState.logs.slice(0, 8).reverse().map((log, i) => (
             <div
               key={log.id}
@@ -3601,6 +3681,21 @@ export default function Game() {
           <span className={`absolute top-1 right-1.5 select-none pointer-events-none ${isMobile ? 'text-[8px] text-muted-foreground/40' : 'text-[9px] text-muted-foreground/30'}`}>/ log</span>
         </div>
       </div>
+
+      {devConsoleOpen && !devConfirm && (
+        <DevConsoleBar
+          onSubmit={submitDevConsole}
+          onClose={() => { setDevConsoleOpen(false); setDevConfirm(null); }}
+        />
+      )}
+      {devConfirm && (
+        <DevConsoleConfirm
+          text={devConfirm === 'quit' ? QUIT_CONFIRM_TEXT : CHEAT_CONFIRM_TEXT}
+          yesLabel={devConfirm === 'quit' ? 'Quit without Saving' : 'Invalidate and continue'}
+          onYes={confirmDevConsole}
+          onNo={() => setDevConfirm(null)}
+        />
+      )}
 
       {/* Full Combat Log Modal */}
       {logOpen && (
