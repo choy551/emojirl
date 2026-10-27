@@ -1001,20 +1001,33 @@ describe('EmojiCB surfaces', () => {
   });
 });
 
-describe('EmojiCB drag highlight', () => {
-  it('clears a place or erase drag when the pointer or touch releases, and keeps the Select marquee', () => {
+describe('EmojiCB select marquee', () => {
+  it('clears the marquee when the selection is finished and keeps the clipboard for paste', () => {
     const city = readFileSync(new URL('../pages/city.tsx', import.meta.url), 'utf8');
-    for (const type of ['pointerup', 'mouseup', 'touchend', 'touchcancel']) {
-      expect(city).toContain(`window.addEventListener('${type}'`);
-      expect(city).toContain(`window.removeEventListener('${type}'`);
-    }
-    const end = city.slice(city.indexOf('const endDragAt'), city.indexOf('const onGridContextMenu'));
-    expect(end).toContain('if (!drag) return');
-    expect(end).toContain('setDragAnchor(null)');
-    expect(end).toContain('setDragCurrent(null)');
-    expect(end).toContain("drag.tool === 'select'");
-    expect(end).toContain('setSelection({');
-    expect(end).not.toContain('setSelection(null)');
+    const copy = city.slice(city.indexOf('const doCopy'), city.indexOf('const doCut'));
+    const cut = city.slice(city.indexOf('const doCut'), city.indexOf('const doPaste'));
+    expect(copy).toContain('setClipboard(stamp)');
+    expect(copy).toContain('setSelection(null)');
+    expect(copy.indexOf('setClipboard(stamp)')).toBeLessThan(copy.indexOf('setSelection(null)'));
+    expect(cut).toContain("setNote('Nothing to cut.')");
+    expect(cut.indexOf("setNote('Nothing to cut.')")).toBeLessThan(cut.indexOf('setSelection(null)'));
+    expect(cut).toContain('setClipboard(stamp)');
+    expect(city).not.toContain('setClipboard(null)');
+
+    const choose = city.slice(city.indexOf('const chooseTool'), city.indexOf('const finishClear'));
+    expect(choose).toContain('if (next !== tool) setSelection(null)');
+
+    const keys = city.slice(city.indexOf("e.key === 'Escape'"), city.indexOf('window.addEventListener(\'keydown\''));
+    expect(keys).toContain('setSelection(null)');
+    expect(keys.indexOf('setSelection(null)')).toBeLessThan(keys.indexOf("setLocation('/')"));
+
+    expect(city).toContain("document.addEventListener('pointerdown'");
+    expect(city).toContain('city-tool-copy');
+    expect(city).toContain('city-tool-cut');
+    expect(city).toContain('city-tool-delete');
+    const outside = city.slice(city.indexOf('const onPointerDown'), city.indexOf("document.addEventListener('pointerdown'"));
+    expect(outside).toContain('setSelection(null)');
+    expect(outside).toContain('selection.x0');
   });
 });
 

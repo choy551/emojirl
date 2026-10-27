@@ -82,7 +82,6 @@ export default function CityPage() {
   const [dragCurrent, setDragCurrent] = useState<number | null>(null);
   const [erasing, setErasing] = useState(false);
   const dragRef = useRef<{ tool: CityTool | 'erase'; anchor: number; current: number } | null>(null);
-  const endDragAtRef = useRef<(clientX: number, clientY: number) => void>(() => {});
   const pressRef = useRef<{ x: number; y: number; timer: number } | null>(null);
   const undoRef = useRef<() => void>(() => {});
   const [away, setAway] = useState<string | null>(null);
@@ -146,12 +145,35 @@ export default function CityPage() {
       }
       if (e.key === 'Escape') {
         e.preventDefault();
+        if (selection) {
+          setSelection(null);
+          return;
+        }
         setLocation('/');
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [setLocation]);
+  }, [selection, setLocation]);
+
+  useEffect(() => {
+    if (!selection || !city) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const el = event.target instanceof Element ? event.target : null;
+      if (el?.closest('[data-testid="city-tool-copy"], [data-testid="city-tool-cut"], [data-testid="city-tool-delete"]')) return;
+      const lot = el?.closest('[data-lot]');
+      if (lot) {
+        const index = Number(lot.getAttribute('data-lot'));
+        if (Number.isInteger(index)) {
+          const point = pointFromIndex(city.cols, index);
+          if (point.x >= selection.x0 && point.x <= selection.x1 && point.y >= selection.y0 && point.y <= selection.y1) return;
+        }
+      }
+      setSelection(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [selection, city]);
 
   const sections = useMemo(
     () => (city ? buildPaletteSections(consumes, city) : []),
@@ -207,6 +229,11 @@ export default function CityPage() {
     return indicesInRect(city.cols, city.rows, { x: selection.x0, y: selection.y0 }, { x: selection.x1, y: selection.y1 });
   };
 
+  const chooseTool = (next: CityTool) => {
+    if (next !== tool) setSelection(null);
+    setTool(next);
+  };
+
   const finishClear = (indices: number[], verb: string) => {
     if (!city) return;
     const result = applyClear(city, indices, killsRef.current, Math.random);
@@ -227,6 +254,7 @@ export default function CityPage() {
     }
     const stamp = copyRect(city, selection);
     setClipboard(stamp);
+    setSelection(null);
     setNote(`Copied ${stamp.cols}×${stamp.rows}.`);
   };
 
@@ -245,6 +273,7 @@ export default function CityPage() {
     setClipboard(stamp);
     setCity(result.city);
     saveCity(result.city);
+    setSelection(null);
     setNote(`Cut ${stamp.cols}×${stamp.rows}. Refunded ${result.refunded} token${result.refunded === 1 ? '' : 's'}.`);
   };
 
@@ -272,7 +301,7 @@ export default function CityPage() {
       return;
     }
     setSelected(brush);
-    setTool('place');
+    chooseTool('place');
     setNote(`Brush is ${brush.emoji}${brush.kind === 'decor' ? ' decor' : ''}.`);
   };
 
@@ -363,18 +392,17 @@ export default function CityPage() {
     setDragCurrent(index);
   };
 
-  const endDragAt = (clientX: number, clientY: number) => {
-    const drag = dragRef.current;
-    if (!drag) return;
-    dragRef.current = null;
+  const onGridPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     clearLongPress();
+    const drag = dragRef.current;
+    dragRef.current = null;
     setErasing(false);
-    if (!city) {
+    if (!drag || !city) {
       setDragAnchor(null);
       setDragCurrent(null);
       return;
     }
-    const index = lotIndexAt(clientX, clientY) ?? drag.current;
+    const index = lotIndexAt(event.clientX, event.clientY) ?? drag.current;
     if (drag.tool === 'erase' || drag.tool === 'delete') {
       finishClear(indicesInRect(city.cols, city.rows, pointFromIndex(city.cols, drag.anchor), pointFromIndex(city.cols, index)), 'Deleted');
     } else if (drag.tool === 'place') finishPlace(drag.anchor, index);
@@ -392,42 +420,17 @@ export default function CityPage() {
     setDragAnchor(null);
     setDragCurrent(null);
   };
-  endDragAtRef.current = endDragAt;
-
-  useEffect(() => {
-    const onRelease = (event: Event) => {
-      if ('changedTouches' in event) {
-        const touch = (event as TouchEvent).changedTouches[0];
-        endDragAtRef.current(touch?.clientX ?? -1, touch?.clientY ?? -1);
-        return;
-      }
-      const point = event as MouseEvent;
-      endDragAtRef.current(point.clientX, point.clientY);
-    };
-    window.addEventListener('pointerup', onRelease);
-    window.addEventListener('mouseup', onRelease);
-    window.addEventListener('touchend', onRelease);
-    window.addEventListener('touchcancel', onRelease);
-    return () => {
-      window.removeEventListener('pointerup', onRelease);
-      window.removeEventListener('mouseup', onRelease);
-      window.removeEventListener('touchend', onRelease);
-      window.removeEventListener('touchcancel', onRelease);
-    };
-  }, []);
-
-  const onGridPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    endDragAt(event.clientX, event.clientY);
-  };
 
   const onGridContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
     event.preventDefault();
   };
 
   const onDeleteTool = () => {
+    const indices = selectionIndices();
     setTool('delete');
-    if (!selection) return;
-    finishClear(selectionIndices(), 'Deleted');
+    setSelection(null);
+    if (indices.length === 0) return;
+    finishClear(indices, 'Deleted');
   };
 
   const onShare = async () => {
@@ -672,7 +675,7 @@ export default function CityPage() {
           canUndo={undoStack.length > 0}
           onTool={next => {
             if (next === 'delete') onDeleteTool();
-            else setTool(next);
+            else chooseTool(next);
           }}
           onCopy={doCopy}
           onCut={doCut}
@@ -757,7 +760,7 @@ export default function CityPage() {
                 return;
               }
               setSelected({ kind: entry.kind, emoji: entry.emoji });
-              setTool('place');
+              chooseTool('place');
               setNote(entry.kind === 'decor' ? `${entry.emoji} decor. Free, and it does not count.` : entry.hint);
             }}
           />
