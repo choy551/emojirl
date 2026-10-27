@@ -1001,6 +1001,36 @@ describe('EmojiCB surfaces', () => {
   });
 });
 
+describe('EmojiCB select marquee', () => {
+  it('clears the marquee when the selection is finished and keeps the clipboard for paste', () => {
+    const city = readFileSync(new URL('../pages/city.tsx', import.meta.url), 'utf8');
+    const copy = city.slice(city.indexOf('const doCopy'), city.indexOf('const doCut'));
+    const cut = city.slice(city.indexOf('const doCut'), city.indexOf('const doPaste'));
+    expect(copy).toContain('setClipboard(stamp)');
+    expect(copy).toContain('setSelection(null)');
+    expect(copy.indexOf('setClipboard(stamp)')).toBeLessThan(copy.indexOf('setSelection(null)'));
+    expect(cut).toContain("setNote('Nothing to cut.')");
+    expect(cut.indexOf("setNote('Nothing to cut.')")).toBeLessThan(cut.indexOf('setSelection(null)'));
+    expect(cut).toContain('setClipboard(stamp)');
+    expect(city).not.toContain('setClipboard(null)');
+
+    const choose = city.slice(city.indexOf('const chooseTool'), city.indexOf('const finishClear'));
+    expect(choose).toContain('if (next !== tool) setSelection(null)');
+
+    const keys = city.slice(city.indexOf("e.key === 'Escape'"), city.indexOf('window.addEventListener(\'keydown\''));
+    expect(keys).toContain('setSelection(null)');
+    expect(keys.indexOf('setSelection(null)')).toBeLessThan(keys.indexOf("setLocation('/')"));
+
+    expect(city).toContain("document.addEventListener('pointerdown'");
+    expect(city).toContain('city-tool-copy');
+    expect(city).toContain('city-tool-cut');
+    expect(city).toContain('city-tool-delete');
+    const outside = city.slice(city.indexOf('const onPointerDown'), city.indexOf("document.addEventListener('pointerdown'"));
+    expect(outside).toContain('setSelection(null)');
+    expect(outside).toContain('selection.x0');
+  });
+});
+
 describe('EmojiCB city name and visitor', () => {
   it('accepts a short name, rejects symbols, and persists it with the visitor name', () => {
     expect(normalizeCityName('   ')).toEqual({ ok: true, name: CITY_NAME_DEFAULT });

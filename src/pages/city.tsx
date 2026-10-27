@@ -145,12 +145,35 @@ export default function CityPage() {
       }
       if (e.key === 'Escape') {
         e.preventDefault();
+        if (selection) {
+          setSelection(null);
+          return;
+        }
         setLocation('/');
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [setLocation]);
+  }, [selection, setLocation]);
+
+  useEffect(() => {
+    if (!selection || !city) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const el = event.target instanceof Element ? event.target : null;
+      if (el?.closest('[data-testid="city-tool-copy"], [data-testid="city-tool-cut"], [data-testid="city-tool-delete"]')) return;
+      const lot = el?.closest('[data-lot]');
+      if (lot) {
+        const index = Number(lot.getAttribute('data-lot'));
+        if (Number.isInteger(index)) {
+          const point = pointFromIndex(city.cols, index);
+          if (point.x >= selection.x0 && point.x <= selection.x1 && point.y >= selection.y0 && point.y <= selection.y1) return;
+        }
+      }
+      setSelection(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [selection, city]);
 
   const sections = useMemo(
     () => (city ? buildPaletteSections(consumes, city) : []),
@@ -206,6 +229,11 @@ export default function CityPage() {
     return indicesInRect(city.cols, city.rows, { x: selection.x0, y: selection.y0 }, { x: selection.x1, y: selection.y1 });
   };
 
+  const chooseTool = (next: CityTool) => {
+    if (next !== tool) setSelection(null);
+    setTool(next);
+  };
+
   const finishClear = (indices: number[], verb: string) => {
     if (!city) return;
     const result = applyClear(city, indices, killsRef.current, Math.random);
@@ -226,6 +254,7 @@ export default function CityPage() {
     }
     const stamp = copyRect(city, selection);
     setClipboard(stamp);
+    setSelection(null);
     setNote(`Copied ${stamp.cols}×${stamp.rows}.`);
   };
 
@@ -244,6 +273,7 @@ export default function CityPage() {
     setClipboard(stamp);
     setCity(result.city);
     saveCity(result.city);
+    setSelection(null);
     setNote(`Cut ${stamp.cols}×${stamp.rows}. Refunded ${result.refunded} token${result.refunded === 1 ? '' : 's'}.`);
   };
 
@@ -271,7 +301,7 @@ export default function CityPage() {
       return;
     }
     setSelected(brush);
-    setTool('place');
+    chooseTool('place');
     setNote(`Brush is ${brush.emoji}${brush.kind === 'decor' ? ' decor' : ''}.`);
   };
 
@@ -396,9 +426,11 @@ export default function CityPage() {
   };
 
   const onDeleteTool = () => {
+    const indices = selectionIndices();
     setTool('delete');
-    if (!selection) return;
-    finishClear(selectionIndices(), 'Deleted');
+    setSelection(null);
+    if (indices.length === 0) return;
+    finishClear(indices, 'Deleted');
   };
 
   const onShare = async () => {
@@ -643,7 +675,7 @@ export default function CityPage() {
           canUndo={undoStack.length > 0}
           onTool={next => {
             if (next === 'delete') onDeleteTool();
-            else setTool(next);
+            else chooseTool(next);
           }}
           onCopy={doCopy}
           onCut={doCut}
@@ -728,7 +760,7 @@ export default function CityPage() {
                 return;
               }
               setSelected({ kind: entry.kind, emoji: entry.emoji });
-              setTool('place');
+              chooseTool('place');
               setNote(entry.kind === 'decor' ? `${entry.emoji} decor. Free, and it does not count.` : entry.hint);
             }}
           />
