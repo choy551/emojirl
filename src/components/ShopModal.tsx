@@ -6,7 +6,7 @@ import { isStackableBagPassive } from '../game/passives';
 import { canBuyAndUse } from '../game/shopUse';
 import { insuranceCost, rerollCost } from '../game/goldSinks';
 import { drinkEffectForClass } from '../game/drinks';
-import { canEquipItem } from './itemUtils';
+import { canEquipItem, emptyLegalEquipSlot } from './itemUtils';
 import { RarityLabel } from './RarityLabel';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -108,8 +108,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                           return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, bank: [...prev.player.bank, boughtItem] } };
                         }
                         if (boughtItem.isEquipment) {
-                          const slots = (boughtItem.equipSlots ?? []) as EquipSlot[];
-                          const emptySlot = slots.find(s => !prev.player.equipment[s]);
+                          const emptySlot = emptyLegalEquipSlot(boughtItem, prev.player.characterClass, prev.player.equipment);
                           if (emptySlot) {
                             autoEquippedSlot = emptySlot;
                             const nextEquipment = { ...prev.player.equipment, [emptySlot]: boughtItem };

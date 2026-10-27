@@ -7,7 +7,7 @@ import { loadMeta, saveMeta } from './meta';
 import { isArcaneCaster, startFloorContract } from './prestige';
 import { GENIE, GENIE_BASE_MP, HITMAN } from './prestigeConstants';
 import { mpBonusForLevel } from './progression';
-import { canEquipItem } from '../components/itemUtils';
+import { canEquipInSlot } from '../components/itemUtils';
 
 /** Once per run. D:1 is the minimum; D:26 reaches the cap. Halved from 1500 / +60 / 3000. */
 export const REROLL_COST_MIN = 750;
@@ -153,7 +153,7 @@ export function executeIdentityReroll(player: Player, floor: number, nextClass: 
   const equipment = { ...player.equipment };
   (Object.keys(equipment) as EquipSlot[]).forEach(slot => {
     const item = equipment[slot];
-    if (item && !canEquipItem(item, nextClass)) {
+    if (item && !canEquipInSlot(item, nextClass, slot)) {
       bank.push(item);
       delete equipment[slot];
     }

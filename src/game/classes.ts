@@ -90,6 +90,7 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
       { label: 'Sharpshooter', detail: 'Shoot from range (costs 1 ammo). First shot on a fresh enemy deals +50% damage. Without ammo, melee falls back to 70% damage instead of full.' },
       { label: 'Trailblazer', detail: 'Ranged range starts at 4 and grows +1 every 3 levels. Vision radius also grows +1 every 3 levels. When an enemy steps into melee range, you instantly spring one tile away for free.' },
       { label: 'Survivalist', detail: '50% chance each ranged attack saves your ammo (no consumption). Enemies are ~35% more likely to drop ammo from all sources.' },
+      { label: 'Armory', detail: 'Main hand takes bows. Off hand takes arrows or swords. Guns, staves, and shields do not fit.' },
     ],
   },
   '🤠': {

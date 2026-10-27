@@ -1,5 +1,5 @@
 import { Player, EmojiItem, EquipSlot } from '../game/types';
-import { canEquipItem, equipRestrictionReason } from './itemUtils';
+import { canEquipInSlot, canEquipItem, equipRestrictionReason, legalEquipSlots, preferredEquipSlot } from './itemUtils';
 import { RarityLabel } from './RarityLabel';
 import { rarityTooltipSuffix } from '../game/dropTable';
 
@@ -44,8 +44,7 @@ export function EquipmentTab({
   return (
     <div className="space-y-3">
       {selectedItem && selectedItem.isEquipment && (() => {
-        const siSlots = (selectedItem.equipSlots ?? []) as EquipSlot[];
-        const compSlot = siSlots.find(s => player.equipment[s]) ?? siSlots[0];
+        const compSlot = preferredEquipSlot(selectedItem, player.characterClass, player.equipment);
         const currentlyEquipped = compSlot ? player.equipment[compSlot] : undefined;
         const newB = selectedItem.equipBonus ?? {};
         const curB = currentlyEquipped?.equipBonus ?? {};
@@ -95,10 +94,10 @@ export function EquipmentTab({
       <div className="grid grid-cols-1 gap-2">
         {SLOTS.map(({ key, label, icon }) => {
           const equipped = player.equipment[key];
-          const canEquipSelected = selectedItemId ? (() => {
-            const si = [...player.inventory, ...player.bank].find(i => i.id === selectedItemId);
-            return si?.equipSlots?.includes(key) ?? false;
-          })() : false;
+          const slotPick = selectedItem?.isEquipment ? selectedItem : undefined;
+          const canEquipSelected = slotPick ? canEquipInSlot(slotPick, player.characterClass, key) : false;
+          const slotBlocked = !!slotPick && !canEquipSelected;
+          const slotReason = slotBlocked ? equipRestrictionReason(slotPick, player.characterClass, key) : '';
           const bonusStr = equipped
             ? Object.entries(equipped.equipBonus ?? {})
                 .filter(([, v]) => (v ?? 0) !== 0)
@@ -108,22 +107,39 @@ export function EquipmentTab({
           return (
             <div
               key={key}
+              role="button"
+              tabIndex={0}
+              data-testid={`equip-slot-${key}`}
+              aria-disabled={slotBlocked}
               onClick={() => {
-                if (selectedItemId && canEquipSelected) {
-                  onEquip(selectedItemId, key);
-                  onSelectItem(null);
+                if (slotPick) {
+                  onEquip(slotPick.id, key);
+                  if (canEquipSelected) onSelectItem(null);
                 } else if (equipped) {
                   onUnequip(key);
                 }
               }}
-              {...(equipped ? itemInspectProps(equipped) : {})}
-              className={`flex items-center gap-3 rounded-lg border p-2.5 transition-all cursor-pointer
+              onKeyDown={e => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                e.stopPropagation();
+                if (slotPick) {
+                  onEquip(slotPick.id, key);
+                  if (canEquipSelected) onSelectItem(null);
+                } else if (equipped) {
+                  onUnequip(key);
+                }
+              }}
+              {...(equipped && !slotPick ? itemInspectProps(equipped) : {})}
+              className={`flex items-center gap-3 rounded-lg border p-2.5 min-h-11 transition-all cursor-pointer touch-manipulation
                 ${canEquipSelected
                   ? 'border-green-400 bg-green-900/20 hover:bg-green-900/40 shadow-[0_0_6px_rgba(74,222,128,0.3)]'
-                  : equipped
-                    ? 'border-amber-600/50 bg-amber-900/10 hover:bg-amber-900/20'
-                    : 'border-border/30 bg-black/10 hover:border-border/60'}`}
-              title={equipped ? `${equipped.name}: click to unequip` : canEquipSelected ? 'Click to equip' : `${label} slot (empty)`}
+                  : slotBlocked
+                    ? 'grayscale opacity-60 border-border/40 bg-black/30'
+                    : equipped
+                      ? 'border-amber-600/50 bg-amber-900/10 hover:bg-amber-900/20'
+                      : 'border-border/30 bg-black/10 hover:border-border/60'}`}
+              title={slotBlocked ? slotReason : equipped ? `${equipped.name}: click to unequip` : canEquipSelected ? 'Click to equip' : `${label} slot (empty)`}
             >
               <div className="text-2xl w-10 h-10 flex items-center justify-center rounded bg-black/30 border border-border/20 shrink-0">
                 {equipped ? equipped.emoji : icon}
@@ -136,10 +152,13 @@ export function EquipmentTab({
                     {bonusStr && <div className="text-[10px] text-emerald-400/80 mt-0.5">{bonusStr}</div>}
                   </>
                 ) : (
-                  <div className="text-sm text-muted-foreground/30 italic">{canEquipSelected ? '← click to equip' : 'Empty'}</div>
+                  <div className="text-sm text-muted-foreground/30 italic">{canEquipSelected ? '← tap to equip' : 'Empty'}</div>
+                )}
+                {slotBlocked && (
+                  <p className="text-[11px] leading-snug text-muted-foreground line-clamp-2">{slotReason}</p>
                 )}
               </div>
-              {equipped && <span className="text-[10px] text-muted-foreground/30 shrink-0">unequip</span>}
+              {equipped && !slotPick && <span className="text-[10px] text-muted-foreground/30 shrink-0">unequip</span>}
             </div>
           );
         })}
@@ -148,46 +167,57 @@ export function EquipmentTab({
       {allItems.length > 0 && (
         <div className="mt-2">
           <div className="text-xs text-muted-foreground/50 mb-1.5 font-medium">Equipment in bag / bank</div>
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="flex flex-col gap-1.5">
             {allItems.map((item, eqIdx) => {
               const isSelected = selectedItemId === item.id;
               const canEquip = canEquipItem(item, player.characterClass);
+              const legal = legalEquipSlots(item, player.characterClass);
               const restrictionMsg = !canEquip ? equipRestrictionReason(item, player.characterClass) : '';
+              const choosesHand = canEquip && legal.length > 1;
               return (
                 <button
                   key={item.id}
+                  type="button"
+                  data-testid={`equip-option-${item.id}`}
+                  aria-disabled={!canEquip}
                   onClick={() => {
-                    if (!canEquip) return;
-                    const slots = (item.equipSlots ?? []) as EquipSlot[];
-                    const emptySlot = slots.find(s => !player.equipment[s]);
-                    const targetSlot = emptySlot ?? slots[0];
-                    if (targetSlot) {
-                      onEquip(item.id, targetSlot);
-                      onSelectItem(null);
-                    } else {
-                      onSelectItem(isSelected ? null : item.id);
+                    if (!canEquip) {
+                      const blocked = (item.equipSlots?.[0] as EquipSlot | undefined) ?? 'mainHand';
+                      onEquip(item.id, blocked);
+                      return;
                     }
+                    if (choosesHand && !isSelected) {
+                      onSelectItem(item.id);
+                      return;
+                    }
+                    const targetSlot = preferredEquipSlot(item, player.characterClass, player.equipment);
+                    if (!targetSlot) return;
+                    onEquip(item.id, targetSlot);
+                    onSelectItem(null);
                   }}
                   {...itemInspectProps(item)}
-                  title={canEquip ? `${item.name}: ${item.description}${rarityTooltipSuffix(item)} — click to equip` : `🚫 ${restrictionMsg}`}
-                  className={`relative aspect-square rounded border flex items-center justify-center text-xl transition-all
+                  title={canEquip ? `${item.name}: ${item.description}${rarityTooltipSuffix(item)} — tap to equip` : restrictionMsg}
+                  className={`min-h-11 w-full flex items-center gap-3 rounded-lg border px-2.5 py-2 text-left touch-manipulation transition-all
                     ${focusedBagIdx === eqIdx ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-black/50' : ''}
                     ${!canEquip
-                      ? 'border-red-600/60 bg-red-950/40 cursor-not-allowed opacity-70'
+                      ? 'grayscale opacity-60 border-border/40 bg-black/25 cursor-not-allowed'
                       : isSelected
-                        ? 'border-green-400 bg-green-900/30 scale-105 shadow-[0_0_8px_rgba(74,222,128,0.4)] cursor-pointer'
-                        : 'border-amber-600/30 bg-card hover:border-amber-400 hover:scale-105 active:scale-95 cursor-pointer'}`}
+                        ? 'border-green-400 bg-green-900/30 shadow-[0_0_8px_rgba(74,222,128,0.4)] cursor-pointer'
+                        : 'border-amber-600/30 bg-card hover:border-amber-400 active:scale-[0.99] cursor-pointer'}`}
                 >
-                  {item.emoji}
-                  {!canEquip
-                    ? <span className="absolute bottom-0.5 right-0.5 text-[8px] leading-none">🚫</span>
-                    : <span className="absolute bottom-0.5 right-0.5 text-[8px] leading-none opacity-60">⚔️</span>
-                  }
+                  <span className="text-2xl w-10 h-10 shrink-0 flex items-center justify-center rounded bg-black/30 border border-border/20">{item.emoji}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-foreground truncate">{item.name}</span>
+                    {!canEquip && (
+                      <span className="block text-[11px] leading-snug text-muted-foreground line-clamp-2">{restrictionMsg}</span>
+                    )}
+                  </span>
+                  <span className="text-[10px] shrink-0 text-muted-foreground/70">{!canEquip ? 'Locked' : choosesHand && !isSelected ? 'Choose' : 'Equip'}</span>
                 </button>
               );
             })}
           </div>
-          <p className="text-[10px] text-muted-foreground/40 mt-1.5">Click to auto-equip · or select then click a slot for manual control.</p>
+          <p className="text-[10px] text-muted-foreground/40 mt-1.5">Tap to equip. A piece that fits both hands asks you to tap a slot. Grey rows do not fit this class — the reason is on the row, and a tap logs it.</p>
         </div>
       )}
       {allItems.length === 0 && !Object.values(player.equipment).some(Boolean) && (

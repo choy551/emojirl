@@ -20,6 +20,7 @@ import { farmerRulesBlurb } from "../game/farmer";
 import { foodSinkRulesBlurb } from "../game/foodSinks";
 import { CHEF_LESSON_COST_TEXT, MERCHANT_BUY_PRICE_TEXT, slotShrineCost } from "../game/economy";
 import { GENIE_BLOODCAST_HP_PER_MP, GENIE_BLOODCAST_MIN_HP_FRACTION, GENIE_FIREBALL_MP, GENIE_OVERCHANNEL_LEVEL } from "../game/prestigeConstants";
+import { classWeaponRulesBlurb } from "../components/itemUtils";
 import { goldSinkRulesBlurb } from "../game/goldSinks";
 import { goldSink2RulesBlurb } from "../game/goldSinks2";
 import { voidExtrasRulesBlurb } from "../game/hollowMarket";
@@ -508,6 +509,10 @@ export default function HowToPlay({
           Ranger autos are the Ranger’s directional shot and spend ammo. Wizard autos use the Wizard’s nearest / furthest / manual targeting and do not spend mana.
           Press <em>U</em> for Unmake, once per floor.
         </p>
+        <div className="mb-3 bg-card/50 border border-border/50 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
+          <div className="font-bold text-foreground mb-1">Weapon restrictions</div>
+          {classWeaponRulesBlurb()}
+        </div>
         <div className="mb-3 bg-card/50 border border-violet-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
           <div className="font-bold text-violet-200 mb-1">The Void — Hollow Market and grace</div>
           {voidExtrasRulesBlurb()}

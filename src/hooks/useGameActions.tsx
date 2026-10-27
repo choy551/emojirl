@@ -27,7 +27,7 @@ import {
   evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
 } from '../game/gameHelpers';
 import { lightningArcDamage } from '../game/passives';
-import { canEquipItem } from '../components/itemUtils';
+import { canEquipItem, emptyLegalEquipSlot } from '../components/itemUtils';
 import { creditVoidBoss } from '../game/voidDamage';
 import { applyEntropicTithe } from '../game/voidAbilities';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
@@ -429,7 +429,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                 const isUnequippable = pickedUp.isEquipment && !canEquipItem(pickedUp, bumpedPlayer.characterClass);
                 if (pickedUp.isEquipment) {
                   const autoSlot = !isUnequippable
-                    ? (pickedUp.equipSlots ?? []).find(s => !bumpedPlayer.equipment[s as import('../game/types').EquipSlot])
+                    ? emptyLegalEquipSlot(pickedUp, bumpedPlayer.characterClass, bumpedPlayer.equipment)
                     : undefined;
                   if (autoSlot) {
                     bumpedPlayer = { ...bumpedPlayer, equipment: { ...bumpedPlayer.equipment, [autoSlot]: pickedUp } };
@@ -879,7 +879,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const isUnequippable = pickedUp.isEquipment && !canEquipItem(pickedUp, newPlayer.characterClass);
           if (pickedUp.isEquipment) {
             const autoSlot = !isUnequippable
-              ? (pickedUp.equipSlots ?? []).find(s => !newPlayer.equipment[s as import('../game/types').EquipSlot])
+              ? emptyLegalEquipSlot(pickedUp, newPlayer.characterClass, newPlayer.equipment)
               : undefined;
             if (autoSlot) {
               newPlayer = { ...newPlayer, equipment: { ...newPlayer.equipment, [autoSlot]: pickedUp } };
@@ -917,7 +917,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               const isUnequippableMagnet = pickedUp.isEquipment && !canEquipItem(pickedUp, newPlayer.characterClass);
               if (pickedUp.isEquipment) {
                 const autoSlotMagnet = !isUnequippableMagnet
-                  ? (pickedUp.equipSlots ?? []).find(s => !newPlayer.equipment[s as import('../game/types').EquipSlot])
+                  ? emptyLegalEquipSlot(pickedUp, newPlayer.characterClass, newPlayer.equipment)
                   : undefined;
                 if (autoSlotMagnet) {
                   newPlayer = { ...newPlayer, equipment: { ...newPlayer.equipment, [autoSlotMagnet]: pickedUp } };
