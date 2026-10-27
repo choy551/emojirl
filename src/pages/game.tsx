@@ -90,7 +90,7 @@ import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionD
 import { TacticsMenu } from '../components/TacticsMenu';
 import { GoToMenu } from '../components/GoToMenu';
 import { EquipmentTab } from '../components/EquipmentTab';
-import { canEquipItem } from '../components/itemUtils';
+import { preferredEquipSlot } from '../components/itemUtils';
 import { RightSidebar } from '../components/RightSidebar';
 import {
   chebyshev, playerBagPassives, applyEquipmentAndPassives, computeNinjaEvasion, livingMaxHp, playerSoftCap, addToPlayerBag,
@@ -1786,10 +1786,9 @@ export default function Game() {
               ...gs.player.bank.filter(i => i.isEquipment && !i.consumed),
             ];
             const item = allEqItems[idx];
-            if (!item || !canEquipItem(item, gs.player.characterClass)) return;
-            const slots = (item.equipSlots ?? []) as EquipSlot[];
-            const emptySlot = slots.find(s => !gs.player.equipment[s]);
-            const targetSlot = emptySlot ?? slots[0];
+            if (!item) return;
+            const targetSlot = preferredEquipSlot(item, gs.player.characterClass, gs.player.equipment)
+              ?? (item.equipSlots?.[0] as EquipSlot | undefined);
             if (targetSlot) { handleEquip(item.id, targetSlot); setSelectedItemId(null); }
             else { setSelectedItemId(selId === item.id ? null : item.id); }
           }

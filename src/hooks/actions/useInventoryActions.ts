@@ -9,6 +9,7 @@ import {
 } from '../../game/gameHelpers';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 import { _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../../game/flashSignals';
+import { canEquipInSlot, equipRestrictionReason } from '../../components/itemUtils';
 import { applyDrinkToPlayer } from '../../game/drinks';
 import { creditVoidBoss, hotbarCapFor } from '../../game/voidDamage';
 
@@ -204,19 +205,10 @@ export function useInventoryActions(
       const bankIdx = player.bank.findIndex(i => i.id === itemId);
       const item = invIdx >= 0 ? player.inventory[invIdx] : bankIdx >= 0 ? player.bank[bankIdx] : null;
       if (!item || !item.isEquipment) return prev;
-      if (!item.equipSlots?.includes(slot)) { addLog(`${item.emoji} can't go in ${slot} slot.`); return prev; }
-
       const cls = player.characterClass;
-      if (item.specialAmmoKind && cls !== '🧝') { addLog(`${item.emoji} Special arrows are Ranger-only.`); return prev; }
-      if ((slot === 'mainHand' || slot === 'offHand') && item.weaponKind) {
-        if (cls === '🧙' && item.weaponKind !== 'staff') { addLog(`🧙 Wizard main/off-hand: staves & wands only.`); return prev; }
-        if (cls === '🥷' && item.weaponKind !== 'blade') { addLog(`🥷 Ninja main/off-hand: blades only.`); return prev; }
-        if (cls === '🧝' && slot === 'mainHand' && !['bow', 'gun'].includes(item.weaponKind)) { addLog(`🧝 Ranger main hand: bow or gun only.`); return prev; }
-        if (cls === '🤠' && item.weaponKind !== 'gun') { addLog(`🤠 Only real Cowboys fight with their fists!`); return prev; }
-      }
-      if (item.armorKind === 'shield' && slot !== 'offHand') { addLog(`Shield goes in the off-hand slot.`); return prev; }
-      if (item.armorKind && (slot === 'mainHand' || slot === 'offHand') && item.armorKind !== 'shield' && cls !== '🤠') {
-        addLog(`Armor goes in the Body slot.`); return prev;
+      if (!canEquipInSlot(item, cls, slot)) {
+        addLog(equipRestrictionReason(item, cls, slot));
+        return prev;
       }
 
       let newInv = [...player.inventory];

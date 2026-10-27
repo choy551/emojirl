@@ -4,7 +4,7 @@ import { getItemBuyPrice, getItemSellValue, addToPlayerBag, pickBestDishesToSell
 import { RESTAURANT_COOKED_SELL_LIMIT } from '../game/economy';
 import { executeHouseRound, roundCost, roundPlan } from '../game/goldSinks';
 import { goldWithLuck } from '../game/softCap';
-import { canEquipItem } from './itemUtils';
+import { canEquipItem, emptyLegalEquipSlot } from './itemUtils';
 import { RarityLabel } from './RarityLabel';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -90,8 +90,7 @@ export function RestaurantModal({
                           return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, bank: [...prev.player.bank, boughtItem] } };
                         }
                         if (boughtItem.isEquipment) {
-                          const slots = (boughtItem.equipSlots ?? []) as EquipSlot[];
-                          const emptySlot = slots.find(s => !prev.player.equipment[s]);
+                          const emptySlot = emptyLegalEquipSlot(boughtItem, prev.player.characterClass, prev.player.equipment);
                           if (emptySlot) {
                             restAutoEquippedSlot = emptySlot;
                             const nextEquipment = { ...prev.player.equipment, [emptySlot]: boughtItem };

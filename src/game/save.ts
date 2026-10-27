@@ -2,6 +2,7 @@ import { GameState, Player, PlayerStats, EmojiItem, Equipment } from './types';
 import { applyBlinkTalentSaveMigration, knownBlinkTalents } from './blinkStrike';
 import { applySoulCatalogCopy } from './emojis';
 import { normalizeBounty, normalizeVanity } from './goldSinks2';
+import { applyEquipmentRestrictionMigration } from '../components/itemUtils';
 
 export const SAVE_KEY = 'emojirl_save_v1';
 
@@ -14,12 +15,14 @@ export const SAVE_KEY = 'emojirl_save_v1';
  * 3: Genie Bloodcast and Overchannel toggles. Missing flags become on.
  * 4: Genie Safe fireballs. Missing flag becomes off.
  * 5: scoreInvalid. Missing flag stays eligible for high scores.
+ * 6: Class weapon locks. Gear the class cannot wear in that slot moves to the
+ *    Bag, or to the Bank when the Bag is full. Runs after the score flag.
  */
-export const SAVE_SCHEMA_VERSION = 5;
+export const SAVE_SCHEMA_VERSION = 6;
 const CURRENT_SCHEMA_VERSION = SAVE_SCHEMA_VERSION;
 
 /** Set of schema versions this build knows how to load (after migration). */
-const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5]);
+const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6]);
 
 /**
  * Runs in-place migrations on the raw parsed JSON object so that
@@ -87,6 +90,7 @@ const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
   migrateGenieCastToggles,
   migrateGenieSafeFireball,
   migrateScoreInvalid,
+  applyEquipmentRestrictionMigration,
 ];
 
 function migrateRaw(raw: Record<string, unknown>): void {
