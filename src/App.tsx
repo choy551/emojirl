@@ -8,6 +8,8 @@ import Home from "@/pages/home";
 import Game from "@/pages/game";
 import HowToPlay from "@/pages/how-to-play";
 import CityPage from "@/pages/city";
+import LedgerPage from "@/pages/ledger";
+import VisitCityPage from "@/pages/visitCity";
 import Privacy from "@/pages/privacy";
 
 const queryClient = new QueryClient();
@@ -19,6 +21,8 @@ function Router() {
       <Route path="/game" component={Game} />
       <Route path="/how-to-play">{() => <HowToPlay />}</Route>
       <Route path="/city" component={CityPage} />
+      <Route path="/ledger" component={LedgerPage} />
+      <Route path="/visit/:id" component={VisitCityPage} />
       <Route path="/privacy" component={Privacy} />
       <Route component={NotFound} />
     </Switch>

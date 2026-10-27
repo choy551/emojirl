@@ -11,6 +11,14 @@ dist
 dist-ssr
 *.local
 
+# secrets — connection strings stay out of git
+.env
+.env.*
+!.env.example
+
+# generated serverless bundle
+api/cityShareBundle.js
+
 # misc
 .DS_Store
 *.pem
