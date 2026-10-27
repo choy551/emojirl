@@ -31,6 +31,7 @@ import {
   applyConfirmedCheat,
   applyQuit,
   applyStuck,
+  consoleStack,
   devConsoleOpensOnEnter,
   isConsoleOpenKey,
   parseDevCommand,
@@ -2890,6 +2891,13 @@ export default function Game() {
   const chromeBottom = oneHanded
     ? 'calc(13.5rem + env(safe-area-inset-bottom, 0px))'
     : 'calc(10rem + env(safe-area-inset-bottom, 0px))';
+  const consoleLayout = consoleStack({
+    consoleOpen: devConsoleOpen && !devConfirm,
+    mobile: isMobile,
+    oneHanded,
+    thumbSide,
+    chromeBottom,
+  });
 
   return (
     <MobileHandContext.Provider value={hand}>
@@ -3648,22 +3656,20 @@ export default function Game() {
           className={`overflow-hidden flex flex-col justify-end gap-0.5 cursor-pointer transition-colors ${
             isMobile
               ? `fixed z-30 bg-black/45 border border-border/40 p-1.5 rounded-lg ${oneHanded ? '' : 'left-2 right-2 h-[4.25rem]'}`
-              : 'absolute left-3 right-3 bottom-4 h-36 bg-black/60 border border-border/60 p-3 rounded-lg hover:border-border/90'
+              : 'absolute left-3 right-3 h-36 bg-black/60 border border-border/60 p-3 rounded-lg hover:border-border/90'
           }`}
           style={{
             maskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)',
             WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 14%)',
+            bottom: consoleLayout.logBottom,
             ...(isMobile && oneHanded
               ? {
-                  bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))',
                   height: '12.5rem',
                   ...(thumbSide === 'left'
                     ? { left: '9.25rem', right: '0.5rem' }
                     : { right: '9.25rem', left: '0.5rem' }),
                 }
-              : isMobile
-                ? { bottom: chromeBottom }
-                : {}),
+              : {}),
           }}
           title="Click or press / to open full log"
         >
@@ -3681,8 +3687,9 @@ export default function Game() {
         </div>
       </div>
 
-      {devConsoleOpen && !devConfirm && (
+      {consoleLayout.bar && (
         <DevConsoleBar
+          placement={consoleLayout.bar}
           onSubmit={submitDevConsole}
           onClose={() => { setDevConsoleOpen(false); setDevConfirm(null); }}
         />
