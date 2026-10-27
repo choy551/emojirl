@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import * as emojis from './emojis';
 import type { EmojiItem, Player, PlayerStats } from './types';
 import {
   applyPlayerHeal,
@@ -85,8 +86,14 @@ describe('Cute Fairy full heal', () => {
 
 describe('applyLevelUp full heal', () => {
   it('fills to the new living pool after the base max HP bump', () => {
+    vi.spyOn(emojis, 'getRandomEmojiPower').mockReturnValue({
+      emoji: '🪨',
+      name: 'Pebble',
+      description: 'none',
+    });
     const log = vi.fn();
     const full = applyLevelUp(alex(ALEX_POOL), 1, 2, log);
+    expect(full.inventory[0]?.emoji).toBe('🪨');
     expect(full.stats.maxHp).toBe(588);
     expect(livingMaxHp(full)).toBe(822);
     expect(full.stats.hp).toBe(822);
