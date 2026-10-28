@@ -4,7 +4,7 @@ import {
   type SortDir,
   type SortKey,
 } from './cityShareModel';
-import type { CityState } from './emojiCity';
+import { normalizeCity, type CityState } from './emojiCity';
 
 export const PLAYER_TOKEN_KEY = 'emojirl_player_token';
 
@@ -135,7 +135,8 @@ export async function getSharedCity(id: string, fetchImpl: FetchLike = fetch): P
     if (!res.ok || !city || typeof city !== 'object') {
       return { online: true, ok: false, status: res.status, error: typeof body.error === 'string' ? body.error : 'No city with that id.' };
     }
-    return { online: true, ok: true, city: city as SharedCityView };
+    const row = city as SharedCityView;
+    return { online: true, ok: true, city: { ...row, grid: normalizeCity(row.grid) } };
   } catch {
     return { online: false, error: ONLINE_UNAVAILABLE };
   }

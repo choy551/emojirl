@@ -1,4 +1,4 @@
-export type CityTool = 'place' | 'select' | 'paste' | 'delete' | 'eyedropper';
+export type CityTool = 'place' | 'select' | 'paste' | 'delete' | 'eyedropper' | 'pass';
 
 interface ToolButton {
   id: CityTool | 'copy' | 'cut' | 'undo';
@@ -14,6 +14,7 @@ const TOOLS: ToolButton[] = [
   { id: 'paste', label: 'Paste' },
   { id: 'delete', label: 'Delete' },
   { id: 'eyedropper', label: 'Eyedropper' },
+  { id: 'pass', label: 'Passability' },
   { id: 'undo', label: 'Undo', action: true },
 ];
 
@@ -71,6 +72,14 @@ function ToolIcon({ id }: { id: ToolButton['id'] }) {
       <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
         <path {...common} d="M10 2l4 4-6 6H4V8l6-6z" />
         <path {...common} d="M3 13l2-2" />
+      </svg>
+    );
+  }
+  if (id === 'pass') {
+    return (
+      <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
+        <rect {...common} x="3" y="3" width="10" height="10" />
+        <path {...common} d="M5 11L11 5" />
       </svg>
     );
   }

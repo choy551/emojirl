@@ -31,8 +31,10 @@ import {
   districtPickerLine,
   districtStandings,
   districtTileWeight,
+  DEFAULT_BLOCKED_TYPES,
   emptyCity,
   isDecorEmoji,
+  lotUnpassable,
   isDecorLot,
   normalizeCity,
   emojiCityRulesBlurb,
@@ -48,8 +50,10 @@ import {
   placedCount,
   placedOf,
   removeAt,
+  setSquarePass,
   syncCitizens,
   tickCitizens,
+  toggleBlockedType,
   tokensForEmoji,
   tokensGrantedForRunConsume,
   totalAvailableTokens,
@@ -426,7 +430,7 @@ describe('EmojiCB districts', () => {
   });
 
   it('migrates a v1 meta save and scores every district on the old grid', () => {
-    expect(META_SCHEMA_VERSION).toBe(3);
+    expect(META_SCHEMA_VERSION).toBe(4);
     const store = memoryStore();
     setMetaStore(store);
     const tiles = Array.from({ length: 10 }, (_, i) => (i < 4 ? '🗡️' : i < 8 ? '⛩️' : '🏰'));
@@ -449,7 +453,9 @@ describe('EmojiCB districts', () => {
     }));
 
     const meta = loadMeta();
-    expect(meta.schemaVersion).toBe(3);
+    expect(meta.schemaVersion).toBe(4);
+    expect(meta.city?.blockedTypes).toEqual([...DEFAULT_BLOCKED_TYPES]);
+    expect(meta.city?.passOverride.every(flag => flag === null)).toBe(true);
     expect(meta.unlockedPrestige).toEqual([GENIE]);
     expect(meta.insuredCarry?.map(item => item.id)).toEqual(['a']);
     expect(meta.emojiConsumes).toEqual({ '🗡️': 4, '⛩️': 4 });
@@ -473,7 +479,7 @@ describe('EmojiCB districts', () => {
 
     saveMeta(meta);
     const raw = JSON.parse(store.getItem(META_SAVE_KEY) ?? '{}') as Record<string, unknown>;
-    expect(raw.schemaVersion).toBe(3);
+    expect(raw.schemaVersion).toBe(4);
     expect((raw.city as { cols: number; rows: number }).cols).toBe(CITY_COLS);
     expect((raw.city as { cols: number; rows: number }).rows).toBe(CITY_ROWS);
     expect(raw.activeDistrict).toBeUndefined();
@@ -482,7 +488,7 @@ describe('EmojiCB districts', () => {
 
     store.setItem(META_SAVE_KEY, '{');
     expect(loadMeta().unlockedPrestige).toEqual([]);
-    expect(loadMeta().schemaVersion).toBe(3);
+    expect(loadMeta().schemaVersion).toBe(4);
 
     store.setItem(META_SAVE_KEY, JSON.stringify({
       schemaVersion: 99,
@@ -696,7 +702,8 @@ describe('EmojiCB expansion', () => {
       city: { tiles, citizens: [{ id: 'c-1', emoji: '🧟', x: 1, y: 1 }], nextId: 2 },
     }));
     const loaded = loadMeta();
-    expect(loaded.schemaVersion).toBe(3);
+    expect(loaded.schemaVersion).toBe(4);
+    expect(loaded.city?.blockedTypes).toEqual([...DEFAULT_BLOCKED_TYPES]);
     expect(loaded.city?.cols).toBe(8);
     expect(loaded.city?.rows).toBe(8);
     expect(loaded.city?.tiles[9]).toBe('🗼');
@@ -716,7 +723,7 @@ describe('EmojiCB expansion', () => {
     expect(again.emojiConsumes?.['🍎']).toBeUndefined();
     expect(again.emojiConsumes?.['🗼']).toBe(1);
     const raw = JSON.parse(store.getItem(META_SAVE_KEY) ?? '{}') as { schemaVersion: number; city: { cols: number; rows: number } };
-    expect(raw.schemaVersion).toBe(3);
+    expect(raw.schemaVersion).toBe(4);
     expect(raw.city.cols).toBe(9);
     expect(raw.city.rows).toBe(8);
 
@@ -979,7 +986,7 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('button === 1');
     const tools = readFileSync(new URL('../pages/cityTools.tsx', import.meta.url), 'utf8');
     expect(tools).toContain('data-testid={`city-tool-${entry.id}`}');
-    for (const id of ['place', 'select', 'copy', 'cut', 'paste', 'delete', 'eyedropper', 'undo']) {
+    for (const id of ['place', 'select', 'copy', 'cut', 'paste', 'delete', 'eyedropper', 'pass', 'undo']) {
       expect(tools).toContain(`id: '${id}'`);
     }
     expect(tools).toContain('paint-btn');
@@ -1001,6 +1008,51 @@ describe('EmojiCB surfaces', () => {
   });
 });
 
+describe('EmojiCB passability', () => {
+  it('blocks orange and blue by default, lets a square override the type, and keeps citizens out', () => {
+    const fresh = emptyCity();
+    fresh.tiles[1] = '🟧';
+    fresh.tiles[2] = '🟦';
+    fresh.tiles[3] = '🟩';
+    expect(lotUnpassable(fresh, 1)).toBe(true);
+    expect(lotUnpassable(fresh, 2)).toBe(true);
+    expect(lotUnpassable(fresh, 3)).toBe(false);
+    expect(fresh.blockedTypes).toEqual([...DEFAULT_BLOCKED_TYPES]);
+
+    const legacy = normalizeCity({ tiles: ['🟧', '🏠'], citizens: [], nextId: 1 });
+    expect(legacy.blockedTypes).toEqual([...DEFAULT_BLOCKED_TYPES]);
+    expect(legacy.passOverride.every(flag => flag === null)).toBe(true);
+    expect(lotUnpassable(legacy, 0)).toBe(true);
+    expect(lotUnpassable(legacy, 1)).toBe(false);
+    const clearedTypes = normalizeCity({ ...legacy, blockedTypes: [] });
+    expect(lotUnpassable(clearedTypes, 0)).toBe(false);
+
+    const opened = toggleBlockedType(fresh, '🟧');
+    expect(lotUnpassable(opened, 1)).toBe(false);
+    expect(lotUnpassable(opened, 2)).toBe(true);
+    const houseBlocked = toggleBlockedType(opened, '🟩');
+    expect(lotUnpassable(houseBlocked, 3)).toBe(true);
+
+    const square = setSquarePass(fresh, [1, 3], false);
+    expect(lotUnpassable(square, 1)).toBe(false);
+    expect(lotUnpassable(setSquarePass(square, [3], true), 3)).toBe(true);
+    expect(lotUnpassable(setSquarePass(square, [1], null), 1)).toBe(true);
+
+    fresh.citizens = [{ id: 'a', emoji: '🧟', x: 0, y: 0 }];
+    expect(tickCitizens(fresh, () => 0).citizens[0]).toMatchObject({ x: 0, y: 0 });
+    const openedWalk = toggleBlockedType(fresh, '🟧');
+    expect(tickCitizens(openedWalk, () => 0).citizens[0]).toMatchObject({ x: 1, y: 0 });
+    const blockedHouse = setSquarePass(openedWalk, [1], true);
+    blockedHouse.tiles[1] = '🟩';
+    expect(tickCitizens(blockedHouse, () => 0).citizens[0]).toMatchObject({ x: 0, y: 0 });
+
+    const grown = expandCity(setSquarePass(fresh, [0], true), 'north', { '🍎': 10 });
+    expect(grown.ok).toBe(true);
+    expect(grown.city.passOverride[grown.city.cols]).toBe(true);
+    expect(grown.city.passOverride[0]).toBeNull();
+  });
+});
+
 describe('EmojiCB select marquee', () => {
   it('clears the marquee when the selection is finished and keeps the clipboard for paste', () => {
     const city = readFileSync(new URL('../pages/city.tsx', import.meta.url), 'utf8');
@@ -1015,7 +1067,7 @@ describe('EmojiCB select marquee', () => {
     expect(city).not.toContain('setClipboard(null)');
 
     const choose = city.slice(city.indexOf('const chooseTool'), city.indexOf('const finishClear'));
-    expect(choose).toContain('if (next !== tool) setSelection(null)');
+    expect(choose).toContain("if (next !== tool && next !== 'select' && next !== 'pass') setSelection(null)");
 
     const keys = city.slice(city.indexOf("e.key === 'Escape'"), city.indexOf('window.addEventListener(\'keydown\''));
     expect(keys).toContain('setSelection(null)');
@@ -1057,7 +1109,7 @@ describe('EmojiCB city name and visitor', () => {
     settleCityCatchUp(emptyCity(), 2);
     expect(loadMeta().cityName).toBe('Dockside');
     expect(loadMeta().anonymousName).toBe('BraveOtter1000');
-    expect(loadMeta().schemaVersion).toBe(3);
+    expect(loadMeta().schemaVersion).toBe(4);
 
     saveMeta({ ...loadMeta(), anonymousName: 'not-a-name', cityName: '🏙️' });
     const replaced = ensureCityProfile(() => 0.5);

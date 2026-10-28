@@ -98,6 +98,30 @@ describe('city share http', () => {
     const body = await fetched.json() as { city: { grid: { tiles: (string | null)[] }; tokenHash?: string } };
     expect(body.city.grid.tiles[body.city.grid.tiles.length > 8 ? 8 : 0]).toBe('🏠');
     expect(body.city.tokenHash).toBeUndefined();
+    const grid = body.city.grid as { blockedTypes?: string[] };
+    expect(grid.blockedTypes).toContain('🟧');
+    expect(grid.blockedTypes).toContain('🟦');
+
+    const old = spannedCity();
+    const { blockedTypes, passOverride, ...legacy } = old;
+    void blockedTypes;
+    void passOverride;
+    await deps.store.insert({
+      id: 'legacycity01',
+      tokenHash: 'legacy-token',
+      username: 'BraveOtter1000',
+      cityName: 'Old Yard',
+      structures: 0,
+      citizens: 0,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      grid: legacy as CityState,
+    });
+    const visited = await handleCityShare(new Request('http://local/api/cities/legacycity01'), deps);
+    const oldBody = await visited.json() as { city: { grid: { blockedTypes: string[]; passOverride: (boolean | null)[]; tiles: (string | null)[] } } };
+    expect(oldBody.city.grid.blockedTypes).toContain('🟧');
+    expect(oldBody.city.grid.blockedTypes).toContain('🟦');
+    expect(oldBody.city.grid.passOverride.every(flag => flag === null)).toBe(true);
+    expect(oldBody.city.grid.tiles).toEqual(old.tiles);
     expect(await (await handleCityShare(new Request('http://local/api/cities/nope'), deps)).status).toBe(404);
 
     const empty = await handleCityShare(new Request('http://local/api/cities', { method: 'POST', body: '' }), deps);
