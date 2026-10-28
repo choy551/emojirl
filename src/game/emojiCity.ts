@@ -1,4 +1,20 @@
 import { normalizeEmojiKey } from './discoveries';
+import {
+  allHoods,
+  canGrowEdge,
+  childRect,
+  expandCompactHoods,
+  extraHoods,
+  growthBlocked,
+  hoodAt,
+  hoodById,
+  hoodIsMaxed,
+  isCompactCity,
+  NEIGHBORHOOD_COST,
+  ORIGIN_ID,
+  spawnBlocked,
+  type Neighborhood,
+} from './neighborhoods';
 import { knownEmojiName } from './emojis';
 import { BUILDING_EXCHANGE_COST, BUILDINGS, STRUCTURE_FLOOR_CHANCE, STRUCTURE_SELL_VALUE, STRUCTURE_SURVEY_MOOD, buildingOf } from './cityBuildings';
 import { DROP_RARITIES, FULL_GRID_RARITY_TOKENS, RARITY_LABEL } from './dropTable';
@@ -80,28 +96,30 @@ export interface TrainSpan {
  * A gap, a shorter line, or a side that grew past the line all fail.
  * Rows are checked first.
  */
-export function spanningTrainLine(city: CityState): TrainSpan | null {
-  const grid = normalizeCity(city);
-  const { cols, rows, tiles } = grid;
-  const isTrain = (index: number) => {
-    const cell = tiles[index];
-    return !!cell && isTrainEmoji(cell);
-  };
+function spanInGrid(cols: number, rows: number, tiles: readonly (string | null)[]): TrainSpan | null {
   for (let y = 0; y < rows; y++) {
     let full = cols > 0;
     for (let x = 0; x < cols; x++) {
-      if (!isTrain(y * cols + x)) { full = false; break; }
+      const cell = tiles[y * cols + x];
+      if (!cell || !isTrainEmoji(cell)) { full = false; break; }
     }
     if (full) return { axis: 'row', index: y };
   }
   for (let x = 0; x < cols; x++) {
     let full = rows > 0;
     for (let y = 0; y < rows; y++) {
-      if (!isTrain(y * cols + x)) { full = false; break; }
+      const cell = tiles[y * cols + x];
+      if (!cell || !isTrainEmoji(cell)) { full = false; break; }
     }
     if (full) return { axis: 'column', index: x };
   }
   return null;
+}
+
+export function spanningTrainLine(city: CityState): TrainSpan | null {
+  const grid = normalizeCity(city);
+  return spanInGrid(grid.cols, grid.rows, grid.tiles)
+    ?? (grid.neighborhoods ?? []).reduce<TrainSpan | null>((found, hood) => found ?? spanInGrid(hood.cols, hood.rows, hood.tiles), null);
 }
 
 export function trainLineSpansCity(city: CityState): boolean {
@@ -214,6 +232,8 @@ export interface CityState {
   blockedTypes: string[];
   /** Per-lot override. true blocks, false allows, null follows the emoji type. */
   passOverride: (boolean | null)[];
+  /** Grids beside the origin. The origin itself stays in the fields above. */
+  neighborhoods?: Neighborhood[];
 }
 
 export interface CityEdit {
@@ -261,6 +281,22 @@ function gridOf(city: CityState): { cols: number; rows: number; size: number } {
 export function normalizeCity(raw: unknown): CityState {
   const blank = emptyCity();
   if (!raw || typeof raw !== 'object') return blank;
+  if (isCompactCity(raw)) {
+    const expanded = expandCompactHoods(raw);
+    const origin = expanded.hoods.find(hood => hood.id === ORIGIN_ID) ?? expanded.hoods[0];
+    if (!origin) return blank;
+    return normalizeCity({
+      cols: origin.cols,
+      rows: origin.rows,
+      tiles: origin.tiles,
+      decor: origin.decor,
+      passOverride: origin.passOverride,
+      blockedTypes: origin.blockedTypes,
+      citizens: expanded.citizens,
+      nextId: expanded.nextId,
+      neighborhoods: expanded.hoods.filter(hood => hood.id !== origin.id),
+    });
+  }
   const src = raw as Partial<CityState>;
   const cols = storedDim(src.cols) ?? CITY_COLS;
   const rows = storedDim(src.rows) ?? CITY_ROWS;
@@ -280,6 +316,7 @@ export function normalizeCity(raw: unknown): CityState {
       decor[i] = src.decor[i] === true && !!tiles[i] && isDecorEmoji(tiles[i]!);
     }
   }
+  const neighborhoods = readNeighborhoods(src.neighborhoods);
   const citizens: CityCitizen[] = [];
   if (Array.isArray(src.citizens)) {
     for (const entry of src.citizens) {
@@ -288,7 +325,9 @@ export function normalizeCity(raw: unknown): CityState {
       if (typeof row.emoji !== 'string' || typeof row.x !== 'number' || typeof row.y !== 'number') continue;
       const x = Math.floor(row.x);
       const y = Math.floor(row.y);
-      if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
+      const insideOrigin = x >= 0 && y >= 0 && x < cols && y < rows;
+      const insideHood = neighborhoods.some(hood => x >= hood.ox && y >= hood.oy && x < hood.ox + hood.cols && y < hood.oy + hood.rows);
+      if (!insideOrigin && !insideHood) continue;
       citizens.push({
         id: typeof row.id === 'string' && row.id ? row.id : `c-${citizens.length + 1}`,
         emoji: normalizeEmojiKey(row.emoji),
@@ -298,7 +337,48 @@ export function normalizeCity(raw: unknown): CityState {
     }
   }
   const nextId = typeof src.nextId === 'number' && src.nextId > 0 ? Math.floor(src.nextId) : citizens.length + 1;
-  return { tiles, citizens, nextId, cols, rows, decor, blockedTypes: readBlockedTypes(src.blockedTypes), passOverride: readPassOverride(src.passOverride, size) };
+  return {
+    tiles,
+    citizens,
+    nextId,
+    cols,
+    rows,
+    decor,
+    blockedTypes: readBlockedTypes(src.blockedTypes),
+    passOverride: readPassOverride(src.passOverride, size),
+    neighborhoods,
+  };
+}
+
+function readNeighborhoods(raw: unknown): Neighborhood[] {
+  if (!Array.isArray(raw)) return [];
+  const hoods: Neighborhood[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const row = entry as Partial<Neighborhood>;
+    const cols = storedDim(row.cols);
+    const rows = storedDim(row.rows);
+    if (!cols || !rows || row.id === ORIGIN_ID) continue;
+    const size = cols * rows;
+    const tiles = Array.from({ length: size }, (_, index) => {
+      const cell = row.tiles?.[index];
+      return typeof cell === 'string' && cell.length > 0 ? normalizeEmojiKey(cell) : null;
+    });
+    const decor = Array.from({ length: size }, (_, index) => row.decor?.[index] === true && !!tiles[index] && isDecorEmoji(tiles[index]!));
+    hoods.push({
+      id: typeof row.id === 'string' && row.id ? row.id : `hood-${hoods.length + 1}`,
+      ox: Math.floor(row.ox ?? 0),
+      oy: Math.floor(row.oy ?? 0),
+      cols,
+      rows,
+      faces: row.faces === 'north' || row.faces === 'south' || row.faces === 'east' || row.faces === 'west' ? row.faces : null,
+      tiles,
+      decor,
+      passOverride: readPassOverride(row.passOverride, size),
+      blockedTypes: readBlockedTypes(row.blockedTypes),
+    });
+  }
+  return hoods;
 }
 
 function readBlockedTypes(raw: unknown): string[] {
@@ -359,8 +439,8 @@ export function tokensForEmoji(consumes: number): number {
 /** True when every lot is occupied. Decor counts. A missing city is an empty grid. */
 export function cityGridIsFull(city: CityState | null | undefined): boolean {
   if (!city) return false;
-  const tiles = normalizeCity(city).tiles;
-  return tiles.length > 0 && tiles.every(cell => !!cell);
+  const hoods = allHoods(normalizeCity(city));
+  return hoods.length > 0 && hoods.every(hood => hood.tiles.length > 0 && hood.tiles.every(cell => !!cell));
 }
 
 /**
@@ -386,8 +466,20 @@ export function fullCityConsumeNotice(emoji: string, copies: number, tokens: num
   return `🏙️ City is full. ${key}${times} became ${tokens} ${word}.`;
 }
 
+function eachLot(city: CityState, visit: (cell: string | null, index: number, hood: Neighborhood) => void) {
+  for (const hood of allHoods(city)) {
+    for (let index = 0; index < hood.tiles.length; index++) visit(hood.tiles[index] ?? null, index, hood);
+  }
+}
+
+function hoodDecor(hood: Neighborhood, index: number): boolean {
+  return hood.decor?.[index] === true && !!hood.tiles[index] && isDecorEmoji(hood.tiles[index]!);
+}
+
 export function placedCount(city: CityState): number {
-  return city.tiles.reduce((n, cell) => n + (cell ? 1 : 0), 0);
+  let count = 0;
+  eachLot(city, cell => { if (cell) count += 1; });
+  return count;
 }
 
 export function isDecorLot(city: CityState, index: number): boolean {
@@ -397,7 +489,11 @@ export function isDecorLot(city: CityState, index: number): boolean {
 /** Token placements of one emoji. Decor copies do not spend or refund a token. */
 export function placedOf(city: CityState, emoji: string): number {
   const key = normalizeEmojiKey(emoji);
-  return city.tiles.reduce((n, cell, index) => n + (cell === key && !isDecorLot(city, index) ? 1 : 0), 0);
+  let count = 0;
+  eachLot(city, (cell, index, hood) => {
+    if (cell === key && !hoodDecor(hood, index)) count += 1;
+  });
+  return count;
 }
 
 /** Tokens still unspent. Placed copies are the spent tokens; removing a lot refunds one. */
@@ -408,7 +504,7 @@ export function availableTokens(consumes: number, placed: number): number {
 export function totalAvailableTokens(consumes: Record<string, number>, city: CityState): number {
   const keys = new Set<string>([
     ...Object.keys(consumes),
-    ...city.tiles.filter((cell): cell is string => !!cell),
+    ...allHoods(city).flatMap(hood => hood.tiles.filter((cell): cell is string => !!cell)),
   ]);
   let total = 0;
   for (const emoji of keys) total += availableTokens(consumes[emoji] ?? 0, placedOf(city, emoji));
@@ -463,7 +559,10 @@ export function lotHousing(emoji: string | null): number {
 
 /** Citizens from housing weight, still one arrival per CITIZEN_TILES lots. */
 export function citizenCapacityOf(city: CityState): number {
-  const weight = city.tiles.reduce((sum, cell, index) => sum + (isDecorLot(city, index) ? 0 : lotHousing(cell)), 0);
+  let weight = 0;
+  eachLot(city, (cell, index, hood) => {
+    if (!hoodDecor(hood, index)) weight += lotHousing(cell);
+  });
   return Math.floor(weight / CITIZEN_TILES);
 }
 
@@ -474,8 +573,8 @@ export function supplyPalette(consumes: Record<string, number>, city: CityState)
 export function paletteEmojis(consumes: Record<string, number>, city: CityState): string[] {
   const keys = new Set<string>();
   for (const [emoji, n] of Object.entries(consumes)) if (n > 0) keys.add(normalizeEmojiKey(emoji));
-  city.tiles.forEach((cell, index) => {
-    if (cell && !isDecorLot(city, index)) keys.add(cell);
+  eachLot(city, (cell, index, hood) => {
+    if (cell && !hoodDecor(hood, index)) keys.add(cell);
   });
   return [...keys].sort((a, b) => (consumes[b] ?? 0) - (consumes[a] ?? 0) || a.localeCompare(b));
 }
@@ -499,25 +598,28 @@ function cellIndex(cols: number, x: number, y: number): number {
 
 /** Keep citizens up to capacity. Newcomers are weighted by lifetime kills and stand on open lots. */
 export function syncCitizens(city: CityState, kills: Record<string, number>, rng: () => number = Math.random): CityState {
-  const { cols, rows, size } = gridOf(city);
+  const { cols, rows } = gridOf(city);
   const cap = citizenCapacityOf(city);
   const citizens = city.citizens.slice(0, cap);
-  const occupied = new Set(citizens.map(c => cellIndex(cols, c.x, c.y)));
+  const occupied = new Set(citizens.map(citizen => `${citizen.x},${citizen.y}`));
   let nextId = city.nextId;
   while (citizens.length < cap) {
     const emoji = pickWeightedCitizen(kills, rng);
     if (!emoji) break;
-    const open: number[] = [];
-    for (let i = 0; i < size; i++) if (!occupied.has(i)) open.push(i);
+    const open: { x: number; y: number }[] = [];
+    for (const hood of allHoods(city)) {
+      for (let y = 0; y < hood.rows; y++) {
+        for (let x = 0; x < hood.cols; x++) {
+          const wx = hood.ox + x;
+          const wy = hood.oy + y;
+          if (!occupied.has(`${wx},${wy}`)) open.push({ x: wx, y: wy });
+        }
+      }
+    }
     if (open.length === 0) break;
-    const index = open[Math.min(open.length - 1, Math.floor(rng() * open.length))]!;
-    occupied.add(index);
-    citizens.push({
-      id: `c-${nextId}`,
-      emoji,
-      x: index % cols,
-      y: Math.floor(index / cols),
-    });
+    const spot = open[Math.min(open.length - 1, Math.floor(rng() * open.length))]!;
+    occupied.add(`${spot.x},${spot.y}`);
+    citizens.push({ id: `c-${nextId}`, emoji, x: spot.x, y: spot.y });
     nextId += 1;
   }
   return { ...city, cols, rows, citizens, nextId };
@@ -603,6 +705,15 @@ function escapeCacheKeyOf(city: CityState): string {
     else if (flag === false) packed += '0';
     else packed += city.tiles[i] ?? '.';
   }
+  for (const hood of extraHoods(city)) {
+    packed += `|${hood.id}:${hood.ox},${hood.oy},${hood.cols}x${hood.rows},${hood.blockedTypes.join(',')}|`;
+    for (let i = 0; i < hood.tiles.length; i++) {
+      const flag = hood.passOverride?.[i];
+      if (flag === true) packed += '1';
+      else if (flag === false) packed += '0';
+      else packed += hood.tiles[i] ?? '.';
+    }
+  }
   return packed;
 }
 
@@ -676,7 +787,144 @@ function cachedEscapeStep(
 }
 
 /** One orthogonal step per citizen. They stay put at the map edge or on another citizen. */
+function worldBlocked(city: CityState, x: number, y: number): boolean {
+  const lot = hoodAt(city, x, y);
+  if (!lot) return true;
+  const override = lot.hood.passOverride?.[lot.index];
+  if (override === true) return true;
+  if (override === false) return false;
+  const emoji = lot.hood.tiles[lot.index];
+  if (!emoji) return false;
+  return (lot.hood.blockedTypes ?? DEFAULT_BLOCKED_TYPES).includes(normalizeEmojiKey(emoji));
+}
+
+function tickAcrossHoods(city: CityState, rng: () => number): CityState {
+  const occupied = new Set(city.citizens.map(citizen => `${citizen.x},${citizen.y}`));
+  const cap = allHoods(city).reduce((sum, hood) => sum + hood.tiles.length, 0);
+  const citizens = city.citizens.map(citizen => {
+    if (worldBlocked(city, citizen.x, citizen.y) && hoodAt(city, citizen.x, citizen.y)) {
+      const out = worldEscape(city, citizen.x, citizen.y, occupied, cap);
+      if (!out) return citizen;
+      occupied.delete(`${citizen.x},${citizen.y}`);
+      occupied.add(`${out.x},${out.y}`);
+      return { ...citizen, x: out.x, y: out.y };
+    }
+    const step = STEPS[Math.min(STEPS.length - 1, Math.floor(rng() * STEPS.length))]!;
+    const x = citizen.x + step.x;
+    const y = citizen.y + step.y;
+    if (!hoodAt(city, x, y) || occupied.has(`${x},${y}`) || worldBlocked(city, x, y)) return citizen;
+    occupied.delete(`${citizen.x},${citizen.y}`);
+    occupied.add(`${x},${y}`);
+    return { ...citizen, x, y };
+  });
+  return { ...city, citizens };
+}
+
+function worldEscape(
+  city: CityState,
+  x: number,
+  y: number,
+  occupied: Set<string>,
+  cap: number,
+): { x: number; y: number } | null {
+  const queue = [{ x, y }];
+  const prev = new Map<string, string>();
+  const seen = new Set([`${x},${y}`]);
+  let found: { x: number; y: number } | null = null;
+  for (let head = 0; head < queue.length && !found && head < cap; head++) {
+    const here = queue[head]!;
+    for (const step of STEPS) {
+      const nx = here.x + step.x;
+      const ny = here.y + step.y;
+      const key = `${nx},${ny}`;
+      if (seen.has(key) || occupied.has(key) || !hoodAt(city, nx, ny)) continue;
+      seen.add(key);
+      prev.set(key, `${here.x},${here.y}`);
+      if (!worldBlocked(city, nx, ny)) {
+        found = { x: nx, y: ny };
+        break;
+      }
+      queue.push({ x: nx, y: ny });
+    }
+  }
+  if (!found) return null;
+  let key = `${found.x},${found.y}`;
+  const start = `${x},${y}`;
+  for (let guard = 0; guard < cap && prev.get(key) !== start; guard++) {
+    const prior = prev.get(key);
+    if (!prior) return null;
+    key = prior;
+  }
+  if (prev.get(key) !== start) return null;
+  const [sx, sy] = key.split(',');
+  return { x: Number(sx), y: Number(sy) };
+}
+
+export function placeInHood(
+  city: CityState,
+  hoodId: string,
+  index: number,
+  emoji: string,
+  consumes: Record<string, number>,
+  kills: Record<string, number>,
+  rng: () => number = Math.random,
+): CityEdit {
+  if (hoodId === ORIGIN_ID) return placeAt(city, index, emoji, consumes, kills, rng);
+  const hood = (city.neighborhoods ?? []).find(item => item.id === hoodId);
+  if (!hood || !Number.isInteger(index) || index < 0 || index >= hood.tiles.length) {
+    return { ok: false, city, reason: 'That lot is outside the city.' };
+  }
+  if (hood.tiles[index]) return { ok: false, city, reason: 'That lot is already built.' };
+  const key = normalizeEmojiKey(emoji);
+  if (availableTokens(consumes[key] ?? 0, placedOf(city, key)) <= 0) {
+    return { ok: false, city, reason: 'No tokens for that emoji.' };
+  }
+  const tiles = hood.tiles.slice();
+  tiles[index] = key;
+  const decor = hood.decor.slice();
+  decor[index] = false;
+  return { ok: true, city: syncCitizens(replaceHood(city, { ...hood, tiles, decor }), kills, rng) };
+}
+
+export function removeInHood(
+  city: CityState,
+  hoodId: string,
+  index: number,
+  kills: Record<string, number>,
+  rng: () => number = Math.random,
+): CityEdit {
+  if (hoodId === ORIGIN_ID) return removeAt(city, index, kills, rng);
+  const hood = (city.neighborhoods ?? []).find(item => item.id === hoodId);
+  if (!hood || !Number.isInteger(index) || index < 0 || index >= hood.tiles.length) {
+    return { ok: false, city, reason: 'That lot is outside the city.' };
+  }
+  if (!hood.tiles[index]) return { ok: false, city, reason: 'That lot is empty.' };
+  const tiles = hood.tiles.slice();
+  tiles[index] = null;
+  const decor = hood.decor.slice();
+  decor[index] = false;
+  const passOverride = hood.passOverride.slice();
+  passOverride[index] = null;
+  return { ok: true, city: syncCitizens(replaceHood(city, { ...hood, tiles, decor, passOverride }), kills, rng) };
+}
+
+export function decorInHood(city: CityState, hoodId: string, index: number, emoji: string): CityEdit {
+  if (hoodId === ORIGIN_ID) return placeDecor(city, index, emoji);
+  const hood = (city.neighborhoods ?? []).find(item => item.id === hoodId);
+  if (!isDecorEmoji(emoji)) return { ok: false, city, reason: 'That is not decor.' };
+  if (!hood || !Number.isInteger(index) || index < 0 || index >= hood.tiles.length) {
+    return { ok: false, city, reason: 'That lot is outside the city.' };
+  }
+  if (hood.tiles[index]) return { ok: false, city, reason: 'That lot is already built.' };
+  const tiles = hood.tiles.slice();
+  tiles[index] = normalizeEmojiKey(emoji);
+  const decor = hood.decor.slice();
+  decor[index] = true;
+  return { ok: true, city: replaceHood(city, { ...hood, tiles, decor }) };
+}
+
 export function tickCitizens(city: CityState, rng: () => number = Math.random): CityState {
+  if (extraHoods(city).length > 0) return tickAcrossHoods(city, rng);
   const { cols, rows } = gridOf(city);
   const occupied = new Set(city.citizens.map(c => cellIndex(cols, c.x, c.y)));
   let escapeKey: string | null = null;
@@ -1018,14 +1266,13 @@ export function districtCounts(city: CityState): Record<DistrictId, number> {
 export function districtStandings(city: CityState): DistrictStanding[] {
   const counts: Record<DistrictId, number> = { thieves: 0, arcane: 0, saloon: 0, grove: 0, void: 0 };
   const weights: Record<DistrictId, number> = { thieves: 0, arcane: 0, saloon: 0, grove: 0, void: 0 };
-  for (let index = 0; index < city.tiles.length; index++) {
-    const cell = city.tiles[index];
-    if (!cell || isDecorLot(city, index)) continue;
+  eachLot(city, (cell, index, hood) => {
+    if (!cell || hoodDecor(hood, index)) return;
     const style = classifyEmoji(cell);
-    if (!style) continue;
+    if (!style) return;
     counts[style.id] += 1;
     weights[style.id] += buildingOf(cell)?.housing ?? 1;
-  }
+  });
   return DISTRICTS.map(style => {
     const count = counts[style.id];
     const weight = weights[style.id];
@@ -1307,9 +1554,118 @@ export function expandCity(
   if (normalized.tiles.length !== normalized.cols * normalized.rows) {
     return { ok: false, city, consumes, reason: 'That city grid is the wrong size.' };
   }
+  const origin = { id: ORIGIN_ID, ox: 0, oy: 0, cols: normalized.cols, rows: normalized.rows, faces: null, tiles: [], decor: [], passOverride: [], blockedTypes: [] };
+  if (growthBlocked(normalized, origin, edge)) {
+    return { ok: false, city, consumes, reason: 'That side is already a neighborhood.' };
+  }
   const paid = spendSpareTokens(consumes, normalized, CITY_EXPAND_COST);
   if (!paid.ok) return { ok: false, city, consumes, reason: `Need ${CITY_EXPAND_COST} tokens` };
-  return { ok: true, city: shiftGrid(normalized, edge), consumes: paid.consumes };
+  const shifted = shiftGrid(normalized, edge);
+  const neighborhoods = (normalized.neighborhoods ?? []).map(hood => (
+    edge === 'north' ? { ...hood, oy: hood.oy + 1 } : edge === 'west' ? { ...hood, ox: hood.ox + 1 } : hood
+  ));
+  return { ok: true, city: { ...shifted, neighborhoods }, consumes: paid.consumes };
+}
+
+export function expandNeighborhood(
+  city: CityState,
+  hoodId: string,
+  edge: CityEdge,
+  consumes: Record<string, number>,
+): { ok: boolean; city: CityState; consumes: Record<string, number>; reason?: string } {
+  if (hoodId === ORIGIN_ID) return expandCity(city, edge, consumes);
+  const normalized = normalizeCity(city);
+  const hood = (normalized.neighborhoods ?? []).find(item => item.id === hoodId);
+  if (!hood) return { ok: false, city, consumes, reason: 'That neighborhood is missing.' };
+  if (!canGrowEdge(hood, edge)) return { ok: false, city, consumes, reason: 'That side faces the parent neighborhood.' };
+  const span = edge === 'east' || edge === 'west' ? hood.cols : hood.rows;
+  if (span >= CITY_DIM_MAX) return { ok: false, city, consumes, reason: 'This edge cannot grow further.' };
+  if (growthBlocked(normalized, hood, edge)) return { ok: false, city, consumes, reason: 'That side is already a neighborhood.' };
+  if (totalAvailableTokens(consumes, normalized) < CITY_EXPAND_COST) {
+    return { ok: false, city, consumes, reason: `Need ${CITY_EXPAND_COST} tokens` };
+  }
+  const paid = spendSpareTokens(consumes, normalized, CITY_EXPAND_COST);
+  if (!paid.ok) return { ok: false, city, consumes, reason: `Need ${CITY_EXPAND_COST} tokens` };
+  return { ok: true, city: replaceHood(normalized, growHood(hood, edge)), consumes: paid.consumes };
+}
+
+export function spawnNeighborhood(
+  city: CityState,
+  hoodId: string,
+  edge: CityEdge,
+  consumes: Record<string, number>,
+): { ok: boolean; city: CityState; consumes: Record<string, number>; reason?: string } {
+  const normalized = normalizeCity(city);
+  const parent = hoodById(normalized, hoodId);
+  if (!parent) return { ok: false, city, consumes, reason: 'That neighborhood is missing.' };
+  if (!hoodIsMaxed(parent, CITY_DIM_MAX)) return { ok: false, city, consumes, reason: 'This neighborhood has to reach max size first.' };
+  if (!canGrowEdge(parent, edge)) return { ok: false, city, consumes, reason: 'That side faces the parent neighborhood.' };
+  if (spawnBlocked(normalized, parent, edge)) return { ok: false, city, consumes, reason: 'That side is already a neighborhood.' };
+  if (totalAvailableTokens(consumes, normalized) < NEIGHBORHOOD_COST) {
+    return { ok: false, city, consumes, reason: `Need ${NEIGHBORHOOD_COST} tokens` };
+  }
+  const paid = spendSpareTokens(consumes, normalized, NEIGHBORHOOD_COST);
+  if (!paid.ok) return { ok: false, city, consumes, reason: `Need ${NEIGHBORHOOD_COST} tokens` };
+  const child = childRect(parent, edge, CITY_COLS);
+  child.id = `hood-${extraHoods(normalized).length + 1}-${edge}`;
+  child.blockedTypes = [...DEFAULT_BLOCKED_TYPES];
+  return {
+    ok: true,
+    city: { ...normalized, neighborhoods: [...extraHoods(normalized), child] },
+    consumes: paid.consumes,
+  };
+}
+
+function replaceHood(city: CityState, hood: Neighborhood): CityState {
+  if (hood.id === ORIGIN_ID) {
+    return { ...city, cols: hood.cols, rows: hood.rows, tiles: hood.tiles, decor: hood.decor, passOverride: hood.passOverride, blockedTypes: hood.blockedTypes };
+  }
+  return { ...city, neighborhoods: [...extraHoods(city).filter(item => item.id !== hood.id), hood] };
+}
+
+function growHood(hood: Neighborhood, edge: CityEdge): Neighborhood {
+  const nextTiles: (string | null)[] = [];
+  const nextDecor: boolean[] = [];
+  const nextPass: (boolean | null)[] = [];
+  if (edge === 'north' || edge === 'south') {
+    const rows = hood.rows + 1;
+    const yOffset = edge === 'north' ? 1 : 0;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < hood.cols; x++) {
+        const fromY = y - yOffset;
+        const from = fromY * hood.cols + x;
+        const inside = fromY >= 0 && fromY < hood.rows;
+        nextTiles.push(inside ? hood.tiles[from] ?? null : null);
+        nextDecor.push(inside ? hood.decor[from] === true : false);
+        nextPass.push(inside && (hood.passOverride[from] === true || hood.passOverride[from] === false) ? hood.passOverride[from] : null);
+      }
+    }
+    return { ...hood, rows, oy: edge === 'north' ? hood.oy - 1 : hood.oy, tiles: nextTiles, decor: nextDecor, passOverride: nextPass };
+  }
+  const cols = hood.cols + 1;
+  const xOffset = edge === 'west' ? 1 : 0;
+  for (let y = 0; y < hood.rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const fromX = x - xOffset;
+      const from = y * hood.cols + fromX;
+      const inside = fromX >= 0 && fromX < hood.cols;
+      nextTiles.push(inside ? hood.tiles[from] ?? null : null);
+      nextDecor.push(inside ? hood.decor[from] === true : false);
+      nextPass.push(inside && (hood.passOverride[from] === true || hood.passOverride[from] === false) ? hood.passOverride[from] : null);
+    }
+  }
+  return { ...hood, cols, ox: edge === 'west' ? hood.ox - 1 : hood.ox, tiles: nextTiles, decor: nextDecor, passOverride: nextPass };
+}
+
+export function editHoodLot(
+  city: CityState,
+  hoodId: string,
+  index: number,
+  edit: (hood: Neighborhood) => Neighborhood,
+): CityState {
+  const hood = hoodById(city, hoodId);
+  if (!hood || index < 0 || index >= hood.tiles.length) return city;
+  return replaceHood(city, edit(hood));
 }
 
 export function awaySummary(turns: number, citizensGained: number): string {

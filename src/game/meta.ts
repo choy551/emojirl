@@ -116,6 +116,8 @@ function countMap(raw: unknown): Record<string, number> {
  * v2 → v3: a city without cols and rows is the original 8×8. Stored dimensions are kept.
  * v3 → v4: a city without passability rules blocks orange and blue squares and
  * leaves every square on the type rule. A saved list, including an empty one, is kept.
+ * v4 → v5: the saved grid is the origin neighborhood. Extra neighborhoods are a
+ * separate list. A missing list means the city is only the origin.
  * City name, visitor name, and the city desk (tool, brush, marquee, clipboard)
  * are optional. A missing desk restores as the place tool. Invalid values are
  * dropped and filled later by ensureCityProfile, without a schema bump.

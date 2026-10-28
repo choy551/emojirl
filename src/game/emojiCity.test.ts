@@ -40,6 +40,7 @@ import {
   emojiCityRulesBlurb,
   expandBlockReason,
   expandCity,
+  expandNeighborhood,
   fullCityConsumeNotice,
   scaledBonusAmount,
   paletteEmojis,
@@ -51,6 +52,7 @@ import {
   placedOf,
   removeAt,
   setSquarePass,
+  spawnNeighborhood,
   syncCitizens,
   tickCitizens,
   toggleBlockedType,
@@ -66,6 +68,7 @@ import {
 } from './emojiCity';
 import { CITY_NAME_DEFAULT, CITY_NAME_MAX, generateAnonymousName, isAnonymousName, normalizeCityName } from './cityIdentity';
 import { GRID_JSON_MAX } from './cityShareModel';
+import { compactCity, NEIGHBORHOOD_COST } from './neighborhoods';
 import { fitZoom, stepZoom, ZOOM_MAX, ZOOM_MIN } from '../pages/cityZoom';
 import { BUILDINGS } from './cityBuildings';
 import { DROP_RARITIES, FULL_GRID_RARITY_TOKENS } from './dropTable';
@@ -432,7 +435,7 @@ describe('EmojiCB districts', () => {
   });
 
   it('migrates a v1 meta save and scores every district on the old grid', () => {
-    expect(META_SCHEMA_VERSION).toBe(4);
+    expect(META_SCHEMA_VERSION).toBe(5);
     const store = memoryStore();
     setMetaStore(store);
     const tiles = Array.from({ length: 10 }, (_, i) => (i < 4 ? '🗡️' : i < 8 ? '⛩️' : '🏰'));
@@ -455,7 +458,7 @@ describe('EmojiCB districts', () => {
     }));
 
     const meta = loadMeta();
-    expect(meta.schemaVersion).toBe(4);
+    expect(meta.schemaVersion).toBe(5);
     expect(meta.city?.blockedTypes).toEqual([...DEFAULT_BLOCKED_TYPES]);
     expect(meta.city?.passOverride.every(flag => flag === null)).toBe(true);
     expect(meta.unlockedPrestige).toEqual([GENIE]);
@@ -481,7 +484,7 @@ describe('EmojiCB districts', () => {
 
     saveMeta(meta);
     const raw = JSON.parse(store.getItem(META_SAVE_KEY) ?? '{}') as Record<string, unknown>;
-    expect(raw.schemaVersion).toBe(4);
+    expect(raw.schemaVersion).toBe(5);
     expect((raw.city as { cols: number; rows: number }).cols).toBe(CITY_COLS);
     expect((raw.city as { cols: number; rows: number }).rows).toBe(CITY_ROWS);
     expect(raw.activeDistrict).toBeUndefined();
@@ -490,7 +493,7 @@ describe('EmojiCB districts', () => {
 
     store.setItem(META_SAVE_KEY, '{');
     expect(loadMeta().unlockedPrestige).toEqual([]);
-    expect(loadMeta().schemaVersion).toBe(4);
+    expect(loadMeta().schemaVersion).toBe(5);
 
     store.setItem(META_SAVE_KEY, JSON.stringify({
       schemaVersion: 99,
@@ -704,7 +707,7 @@ describe('EmojiCB expansion', () => {
       city: { tiles, citizens: [{ id: 'c-1', emoji: '🧟', x: 1, y: 1 }], nextId: 2 },
     }));
     const loaded = loadMeta();
-    expect(loaded.schemaVersion).toBe(4);
+    expect(loaded.schemaVersion).toBe(5);
     expect(loaded.city?.blockedTypes).toEqual([...DEFAULT_BLOCKED_TYPES]);
     expect(loaded.city?.cols).toBe(8);
     expect(loaded.city?.rows).toBe(8);
@@ -725,7 +728,7 @@ describe('EmojiCB expansion', () => {
     expect(again.emojiConsumes?.['🍎']).toBeUndefined();
     expect(again.emojiConsumes?.['🗼']).toBe(1);
     const raw = JSON.parse(store.getItem(META_SAVE_KEY) ?? '{}') as { schemaVersion: number; city: { cols: number; rows: number } };
-    expect(raw.schemaVersion).toBe(4);
+    expect(raw.schemaVersion).toBe(5);
     expect(raw.city.cols).toBe(9);
     expect(raw.city.rows).toBe(8);
 
@@ -994,7 +997,7 @@ describe('EmojiCB surfaces', () => {
     expect(tools).toContain('paint-btn');
     expect(city).toContain('w-fit min-w-min max-w-full');
     expect(city).toContain('edge="north"');
-    expect(city).toContain('expand-${edge}');
+    expect(city).toContain('expand-${hoodId}-${edge}');
     expect(city).toContain('expandBlockReason');
     expect(city).toContain('title={hint}');
     expect(game).toContain('noteCityTurns');
@@ -1132,6 +1135,147 @@ describe('EmojiCB max size and zoom', () => {
   });
 });
 
+describe('EmojiCB neighborhoods', () => {
+  it('spawns an 8×8 neighborhood only from a maxed edge and does not spend tokens on a failure', () => {
+    const small = emptyCity();
+    const denied = spawnNeighborhood(small, 'origin', 'east', { '🍎': 20 });
+    expect(denied.ok).toBe(false);
+    expect(denied.consumes).toEqual({ '🍎': 20 });
+    expect(denied.city.neighborhoods ?? []).toHaveLength(0);
+
+    const city = emptyCity();
+    city.cols = CITY_DIM_MAX;
+    city.rows = CITY_DIM_MAX;
+    const lots = CITY_DIM_MAX * CITY_DIM_MAX;
+    city.tiles = Array.from({ length: lots }, () => null);
+    city.decor = Array.from({ length: lots }, () => false);
+    city.passOverride = Array.from({ length: lots }, () => null);
+    const broke = spawnNeighborhood(city, 'origin', 'east', { '🍎': NEIGHBORHOOD_COST - 1 });
+    expect(broke.ok).toBe(false);
+    expect(broke.consumes).toEqual({ '🍎': NEIGHBORHOOD_COST - 1 });
+
+    const spawned = spawnNeighborhood(city, 'origin', 'east', { '🍎': NEIGHBORHOOD_COST });
+    expect(spawned.ok).toBe(true);
+    const child = spawned.city.neighborhoods?.[0];
+    expect(child).toMatchObject({ ox: CITY_DIM_MAX, oy: 0, cols: 8, rows: 8, faces: 'west' });
+    expect(spawned.consumes['🍎']).toBeUndefined();
+
+    const towardParent = expandNeighborhood(spawned.city, child!.id, 'west', { '🍎': 10 });
+    expect(towardParent.ok).toBe(false);
+    expect(towardParent.consumes).toEqual({ '🍎': 10 });
+    expect(towardParent.city.neighborhoods?.[0]?.cols).toBe(8);
+
+    const outward = expandNeighborhood(spawned.city, child!.id, 'east', { '🍎': 10 });
+    expect(outward.ok).toBe(true);
+    expect(outward.city.neighborhoods?.[0]?.cols).toBe(9);
+    expect(outward.city.citizens).toEqual([]);
+
+    const crowded = spawnNeighborhood(spawned.city, 'origin', 'east', { '🍎': NEIGHBORHOOD_COST });
+    expect(crowded.ok).toBe(false);
+    expect(crowded.consumes).toEqual({ '🍎': NEIGHBORHOOD_COST });
+    expect(crowded.city.neighborhoods).toHaveLength(1);
+
+    const early = spawnNeighborhood(spawned.city, child!.id, 'east', { '🍎': NEIGHBORHOOD_COST });
+    expect(early.ok).toBe(false);
+    expect(early.consumes).toEqual({ '🍎': NEIGHBORHOOD_COST });
+    expect(early.city.neighborhoods).toHaveLength(1);
+
+    const walked = tickCitizens({
+      ...spawned.city,
+      citizens: [{ id: 'a', emoji: '🧟', x: CITY_DIM_MAX - 1, y: 0 }],
+    }, () => 0);
+    expect(walked.citizens[0]).toMatchObject({ x: CITY_DIM_MAX, y: 0 });
+
+    const legacy = normalizeCity({ cols: 8, rows: 8, tiles: ['🏠'], citizens: [], nextId: 1 });
+    expect(legacy.tiles[0]).toBe('🏠');
+    expect(legacy.neighborhoods ?? []).toHaveLength(0);
+    const packed = compactCity(spawned.city);
+    const reloaded = normalizeCity(packed);
+    expect(reloaded.neighborhoods?.[0]?.faces).toBe('west');
+    expect(reloaded.cols).toBe(CITY_DIM_MAX);
+    expect(JSON.stringify(packed).length).toBeLessThanOrEqual(GRID_JSON_MAX);
+  });
+
+  it('keeps attached neighborhoods aligned when the origin grows, and loads an older save as the origin', () => {
+    const city = emptyCity();
+    const emptyLots = Array.from({ length: 64 }, () => null as string | null);
+    city.neighborhoods = [{
+      id: 'hood-1-east',
+      ox: CITY_COLS,
+      oy: 0,
+      cols: CITY_COLS,
+      rows: CITY_ROWS,
+      faces: 'west',
+      tiles: emptyLots,
+      decor: Array.from({ length: 64 }, () => false),
+      passOverride: Array.from({ length: 64 }, () => null),
+      blockedTypes: ['🟧', '🟦'],
+    }];
+    city.citizens = [{ id: 'a', emoji: '🧟', x: CITY_COLS, y: 0 }];
+    const north = expandCity(city, 'north', { '🍎': 10 });
+    expect(north.ok).toBe(true);
+    expect(north.city.neighborhoods?.[0]).toMatchObject({ ox: CITY_COLS, oy: 1 });
+    expect(north.city.citizens[0]).toMatchObject({ x: CITY_COLS, y: 1 });
+    expect(north.consumes['🍎']).toBeUndefined();
+
+    const toward = expandNeighborhood(north.city, 'hood-1-east', 'west', { '🍎': 10 });
+    expect(toward.ok).toBe(false);
+    expect(toward.consumes).toEqual({ '🍎': 10 });
+
+    const store = memoryStore();
+    setMetaStore(store);
+    saveCity(north.city);
+    expect(loadMeta().city?.neighborhoods?.[0]?.oy).toBe(1);
+    store.setItem(META_SAVE_KEY, JSON.stringify({
+      schemaVersion: 4,
+      emojiConsumes: {},
+      city: { cols: 8, rows: 8, tiles: ['🏠'], citizens: [], nextId: 1 },
+    }));
+    const legacy = loadMeta();
+    expect(legacy.schemaVersion).toBe(5);
+    expect(legacy.city?.tiles[0]).toBe('🏠');
+    expect(legacy.city?.neighborhoods ?? []).toHaveLength(0);
+  });
+
+  it('fits a block-painted neighborhood cluster in the share limit', () => {
+    const dim = CITY_DIM_MAX;
+    const emojis = ['🏠', '🏰', '🌲', '🛣️', '🏭', '🏢', '🌳', '🛤️'];
+    const lots = dim * dim;
+    const hood = (id: string, ox: number, oy: number, faces: 'north' | 'south' | 'east' | 'west' | null, phase: number, alternating: boolean) => ({
+      id,
+      ox,
+      oy,
+      cols: dim,
+      rows: dim,
+      faces,
+      tiles: Array.from({ length: lots }, (_, index) => emojis[(alternating ? index : Math.floor(index / 8) + phase) % emojis.length] ?? null),
+      decor: Array.from({ length: lots }, () => false),
+      passOverride: Array.from({ length: lots }, () => null as boolean | null),
+      blockedTypes: ['🟧', '🟦'],
+    });
+    const citizens = Array.from({ length: 400 }, (_, index) => ({ id: `c-${index}`, emoji: '🧟', x: index % dim, y: Math.floor(index / dim) }));
+    const cluster = (alternating: boolean) => compactCity({
+      ...hood('origin', 0, 0, null, 0, alternating),
+      neighborhoods: [
+        hood('hood-e', dim, 0, 'west', 1, alternating),
+        hood('hood-w', -dim, 0, 'east', 2, alternating),
+        hood('hood-s', 0, dim, 'north', 3, alternating),
+        hood('hood-n', 0, -dim, 'south', 4, alternating),
+      ],
+      citizens,
+      nextId: 401,
+    });
+    const blocky = JSON.stringify(cluster(false));
+    const alternating = JSON.stringify(cluster(true));
+    expect(blocky.length).toBeLessThanOrEqual(GRID_JSON_MAX);
+    expect(alternating.length).toBeGreaterThan(GRID_JSON_MAX);
+    const loaded = normalizeCity(cluster(false));
+    expect(loaded.neighborhoods).toHaveLength(4);
+    expect(loaded.citizens).toHaveLength(400);
+    expect(loaded.tiles[0]).toBe('🏠');
+  });
+});
+
 describe('EmojiCB refresh', () => {
   it('reloads placements, passability, name, tokens, size, citizens, tool, and brush', () => {
     const store = memoryStore();
@@ -1255,7 +1399,7 @@ describe('EmojiCB city name and visitor', () => {
     settleCityCatchUp(emptyCity(), 2);
     expect(loadMeta().cityName).toBe('Dockside');
     expect(loadMeta().anonymousName).toBe('BraveOtter1000');
-    expect(loadMeta().schemaVersion).toBe(4);
+    expect(loadMeta().schemaVersion).toBe(5);
 
     saveMeta({ ...loadMeta(), anonymousName: 'not-a-name', cityName: '🏙️' });
     const replaced = ensureCityProfile(() => 0.5);

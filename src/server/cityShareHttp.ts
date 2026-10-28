@@ -10,7 +10,8 @@ import {
   validatePublish,
   type SharedCityRecord,
 } from '../game/cityShareModel.ts';
-import { normalizeCity } from '../game/emojiCity.ts';
+import { normalizeCity, type CityState } from '../game/emojiCity.ts';
+import { compactCity } from '../game/neighborhoods.ts';
 import { databaseUrl, hashPlayerToken, memoryCityStore, neonCityStore, newPublicId, type CityStore } from './cityStore.ts';
 
 export { ONLINE_UNAVAILABLE };
@@ -62,7 +63,7 @@ function publicCity(row: SharedCityRecord, withGrid: boolean) {
     citizens: row.citizens,
     updatedAt: row.updatedAt,
   };
-  return withGrid ? { ...base, grid: normalizeCity(row.grid) } : base;
+  return withGrid ? { ...base, grid: compactCity(normalizeCity(row.grid)) as unknown as CityState } : base;
 }
 
 async function allowRead(store: CityStore, request: Request, now: number): Promise<Response | null> {
@@ -149,7 +150,7 @@ async function publishCity(request: Request, deps: CityShareDeps): Promise<Respo
       ...existing,
       username: validated.value.username,
       cityName: validated.value.cityName,
-      grid: validated.value.city,
+      grid: compactCity(validated.value.city) as unknown as CityState,
       structures: validated.value.structures,
       citizens: validated.value.citizens,
       updatedAt,
@@ -168,7 +169,7 @@ async function publishCity(request: Request, deps: CityShareDeps): Promise<Respo
       tokenHash,
       username: validated.value.username,
       cityName: validated.value.cityName,
-      grid: validated.value.city,
+      grid: compactCity(validated.value.city) as unknown as CityState,
       structures: validated.value.structures,
       citizens: validated.value.citizens,
       updatedAt,
@@ -181,7 +182,7 @@ async function publishCity(request: Request, deps: CityShareDeps): Promise<Respo
       if (!raced) throw err;
       raced.username = validated.value.username;
       raced.cityName = validated.value.cityName;
-      raced.grid = validated.value.city;
+      raced.grid = compactCity(validated.value.city) as unknown as CityState;
       raced.structures = validated.value.structures;
       raced.citizens = validated.value.citizens;
       raced.updatedAt = updatedAt;

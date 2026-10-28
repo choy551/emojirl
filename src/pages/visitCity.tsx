@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getSharedCity, type SharedCityView } from '../game/cityShareClient';
 import { ONLINE_UNAVAILABLE } from '../game/cityShareModel';
+import { allHoods, worldBounds } from '../game/neighborhoods';
 
 const TILE_MAX = '2.75rem';
 const TILE_MIN = '2rem';
@@ -69,28 +70,7 @@ export default function VisitCityPage() {
       {city && (
         <div className="w-full px-1 pb-3 sm:px-3" data-testid="visit-map">
           <div className="min-w-0 overflow-x-auto" data-testid="visit-grid-scroll">
-            <div
-              data-testid="visit-grid"
-              className="mx-auto grid w-fit min-w-min max-w-full gap-0.5"
-              style={{ gridTemplateColumns: `repeat(${city.grid.cols}, minmax(${TILE_MIN}, ${TILE_MAX}))` }}
-            >
-              {city.grid.tiles.map((cell, index) => {
-                const here = city.grid.citizens.filter(citizen => citizen.y * city.grid.cols + citizen.x === index);
-                return (
-                  <div
-                    key={index}
-                    data-testid={`visit-lot-${index}`}
-                    aria-label={cell ? cell : `Empty lot ${index + 1}`}
-                    className="relative aspect-square w-full min-h-0 min-w-0 rounded-md border border-border/70 bg-emerald-950/30 text-xl leading-none"
-                  >
-                    {cell ?? <span className="text-sm text-muted-foreground/30">·</span>}
-                    {here.map(citizen => (
-                      <span key={citizen.id} className="absolute bottom-0 right-0 text-[11px] leading-none">{citizen.emoji}</span>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
+            <VisitWorld grid={city.grid} />
           </div>
         </div>
       )}
@@ -100,6 +80,55 @@ export default function VisitCityPage() {
           <p className="text-[11px] text-muted-foreground">This city is read only.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function VisitWorld({ grid }: { grid: SharedCityView['grid'] }) {
+  const bounds = worldBounds(grid);
+  const spanX = Math.max(1, bounds.maxX - bounds.minX);
+  const spanY = Math.max(1, bounds.maxY - bounds.minY);
+  const step = `(${TILE_MAX} + 0.125rem)`;
+  return (
+    <div
+      data-testid="visit-grid"
+      className="relative mx-auto w-fit min-w-min max-w-full"
+      style={{
+        width: `calc(${spanX} * ${step} - 0.125rem)`,
+        height: `calc(${spanY} * ${step} - 0.125rem)`,
+      }}
+    >
+      {allHoods(grid).map(hood => (
+        <div
+          key={hood.id}
+          data-testid={`visit-neighborhood-${hood.id}`}
+          className="absolute grid w-fit gap-0.5"
+          style={{
+            left: `calc(${hood.ox - bounds.minX} * ${step})`,
+            top: `calc(${hood.oy - bounds.minY} * ${step})`,
+            gridTemplateColumns: `repeat(${hood.cols}, minmax(${TILE_MIN}, ${TILE_MAX}))`,
+          }}
+        >
+          {hood.tiles.map((cell, index) => {
+            const lx = index % hood.cols;
+            const ly = Math.floor(index / hood.cols);
+            const here = grid.citizens.filter(citizen => citizen.x === hood.ox + lx && citizen.y === hood.oy + ly);
+            return (
+              <div
+                key={`${hood.id}-${index}`}
+                data-testid={hood.id === 'origin' ? `visit-lot-${index}` : `visit-lot-${hood.id}-${index}`}
+                aria-label={cell ? cell : `Empty lot ${index + 1}`}
+                className="relative aspect-square min-h-0 min-w-0 rounded-md border border-border/70 bg-emerald-950/30 text-xl leading-none"
+              >
+                {cell ?? <span className="text-sm text-muted-foreground/30">·</span>}
+                {here.map(citizen => (
+                  <span key={citizen.id} className="absolute bottom-0 right-0 text-[11px] leading-none">{citizen.emoji}</span>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
