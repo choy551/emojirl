@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CITY_NAME_MAX, normalizeCityName } from '../game/cityIdentity';
 import { FLYOUT_CLOSE_MS, flyoutStyle, raiseFlyoutFrame, raisePlace } from './cityPaletteLayout';
+import { fitZoom, stepZoom } from './cityZoom';
 import { getEnemyKillCounts } from '../game/discoveries';
 import {
   BUILDING_EXCHANGE_COST,
@@ -94,6 +95,12 @@ export default function CityPage() {
   const [erasing, setErasing] = useState(false);
   const [passMode, setPassMode] = useState<'type' | 'square'>('type');
   const [passSquare, setPassSquare] = useState<boolean | null>(true);
+  const [zoom, setZoom] = useState(1);
+  const [gridBox, setGridBox] = useState({ w: 0, h: 0 });
+  const [portWidth, setPortWidth] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const panRef = useRef<{ pointerId: number; x: number; y: number; left: number; top: number } | null>(null);
   const dragRef = useRef<{ tool: CityTool | 'erase'; anchor: number; current: number } | null>(null);
   const pressRef = useRef<{ x: number; y: number; timer: number } | null>(null);
   const undoRef = useRef<() => void>(() => {});
@@ -237,6 +244,22 @@ export default function CityPage() {
     return () => window.clearInterval(id);
   }, []);
 
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    const grid = gridRef.current;
+    if (!scroller || !grid) return;
+    const measure = () => {
+      const width = scroller.clientWidth;
+      setPortWidth(prev => prev === width ? prev : width);
+      const next = { w: grid.offsetWidth, h: grid.offsetHeight };
+      setGridBox(prev => prev.w === next.w && prev.h === next.h ? prev : next);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, [city?.cols, city?.rows, portWidth]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
@@ -263,7 +286,7 @@ export default function CityPage() {
     if (!selection || !city) return;
     const onPointerDown = (event: PointerEvent) => {
       const el = event.target instanceof Element ? event.target : null;
-      if (el?.closest('[data-testid="city-tool-copy"], [data-testid="city-tool-cut"], [data-testid="city-tool-delete"], [data-testid="city-tool-pass"], [data-testid="pass-options"]')) return;
+      if (el?.closest('[data-testid="city-tool-copy"], [data-testid="city-tool-cut"], [data-testid="city-tool-delete"], [data-testid="city-tool-pass"], [data-testid="pass-options"], [data-testid="city-tool-zoom"], [data-testid="zoom-options"]')) return;
       const lot = el?.closest('[data-lot]');
       if (lot) {
         const index = Number(lot.getAttribute('data-lot'));
@@ -340,7 +363,7 @@ export default function CityPage() {
   };
 
   const chooseTool = (next: CityTool) => {
-    if (next !== tool && next !== 'select' && next !== 'pass') setSelection(null);
+    if (next !== tool && next !== 'select' && next !== 'pass' && next !== 'zoom') setSelection(null);
     setTool(next);
   };
 
@@ -505,6 +528,7 @@ export default function CityPage() {
       return;
     }
     if (event.button !== 0) return;
+    if (tool === 'zoom') return;
     if (tool === 'pass') {
       applyPassAt(index);
       return;
@@ -829,6 +853,18 @@ export default function CityPage() {
           onCut={doCut}
           onUndo={undo}
         />
+        {tool === 'zoom' && (
+          <div data-testid="zoom-options" className="paint-box mt-1 grid grid-cols-3 gap-1 p-1" aria-label="Zoom">
+            <button type="button" className="paint-btn h-9 text-sm font-bold" data-testid="zoom-out" aria-label="Zoom out" onClick={() => setZoom(scale => stepZoom(scale, 'out'))}>−</button>
+            <button type="button" className="paint-btn h-9 text-[10px] font-bold" data-testid="zoom-fit" aria-label="Fit the whole city" onClick={() => {
+              const scroller = scrollRef.current;
+              const grid = gridRef.current;
+              if (!scroller || !grid) return;
+              setZoom(fitZoom(scroller.clientWidth, scroller.clientHeight, grid.offsetWidth, grid.offsetHeight));
+            }}>Fit</button>
+            <button type="button" className="paint-btn h-9 text-sm font-bold" data-testid="zoom-in" aria-label="Zoom in" onClick={() => setZoom(scale => stepZoom(scale, 'in'))}>+</button>
+          </div>
+        )}
         {tool === 'pass' && (
           <div data-testid="pass-options" className="paint-box mt-1 grid grid-cols-2 gap-1 p-1" aria-label="Passability">
             <button type="button" className="paint-btn h-9 text-[10px] font-bold" data-testid="pass-mode-type" aria-pressed={passMode === 'type'} onClick={() => setPassMode('type')}>Type</button>
@@ -850,12 +886,33 @@ export default function CityPage() {
             </div>
             <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1">
               <ExpandEdge edge="west" city={city} tokens={tokens} onExpand={onExpand} />
-              <div className="min-w-0 overflow-x-auto" data-testid="city-grid-scroll">
+              <div
+                ref={scrollRef}
+                className="min-h-0 min-w-0 max-h-[70dvh] overflow-auto"
+                data-testid="city-grid-scroll"
+                onPointerDown={event => {
+                  if (tool !== 'zoom' || event.button !== 0) return;
+                  const scroller = event.currentTarget;
+                  panRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: scroller.scrollLeft, top: scroller.scrollTop };
+                  scroller.setPointerCapture(event.pointerId);
+                }}
+                onPointerMove={event => {
+                  const pan = panRef.current;
+                  if (!pan || pan.pointerId !== event.pointerId) return;
+                  event.currentTarget.scrollLeft = pan.left - (event.clientX - pan.x);
+                  event.currentTarget.scrollTop = pan.top - (event.clientY - pan.y);
+                }}
+                onPointerUp={event => { if (panRef.current?.pointerId === event.pointerId) panRef.current = null; }}
+                onPointerCancel={event => { if (panRef.current?.pointerId === event.pointerId) panRef.current = null; }}
+              >
+                <div className="relative mx-auto" style={gridBox.w > 0 ? { width: gridBox.w * zoom, height: gridBox.h * zoom } : undefined}>
                 <div
+                  ref={gridRef}
                   data-testid="city-grid"
+                  data-zoom={zoom}
                   data-selection={selection ? `${selection.x0},${selection.y0},${selection.x1},${selection.y1}` : undefined}
-                  className="relative mx-auto grid w-fit min-w-min max-w-full touch-none select-none gap-0.5"
-                  style={{ gridTemplateColumns: `repeat(${city.cols}, minmax(${CITY_TILE_MIN}, ${CITY_TILE_MAX}))` }}
+                  className={`${gridBox.w > 0 ? 'absolute top-0 left-0' : 'relative'} grid w-fit min-w-min max-w-full touch-none select-none gap-0.5`}
+                  style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', maxWidth: portWidth > 0 ? portWidth : undefined, gridTemplateColumns: `repeat(${city.cols}, minmax(${CITY_TILE_MIN}, ${CITY_TILE_MAX}))` }}
                   onPointerDown={onGridPointerDown}
                   onPointerMove={onGridPointerMove}
                   onPointerUp={onGridPointerUp}
@@ -900,6 +957,7 @@ export default function CityPage() {
                       </button>
                     );
                   })}
+                </div>
                 </div>
               </div>
               <ExpandEdge edge="east" city={city} tokens={tokens} onExpand={onExpand} />
@@ -1325,6 +1383,18 @@ function ExpandEdge({
   onExpand: (edge: CityEdge) => void;
 }) {
   const blocked = expandBlockReason(city, edge, tokens);
+  if (blocked === 'This edge cannot grow further.') {
+    return (
+      <div
+        data-testid={`expand-${edge}`}
+        data-max-size="true"
+        aria-label="Max size"
+        className="flex h-11 w-9 items-center justify-center px-0.5 text-center text-[9px] font-bold leading-tight text-muted-foreground sm:w-11"
+      >
+        Max size
+      </div>
+    );
+  }
   const hint = blocked ?? `Expand ${edge} for ${CITY_EXPAND_COST} tokens`;
   const Icon = EDGE_ICON[edge];
   return (

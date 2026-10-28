@@ -42,7 +42,7 @@ export interface MetaSave {
 }
 
 export interface CityDesk {
-  tool: 'place' | 'select' | 'paste' | 'delete' | 'eyedropper' | 'pass';
+  tool: 'place' | 'select' | 'paste' | 'delete' | 'eyedropper' | 'pass' | 'zoom';
   brush: PaintBrush | null;
   selection: GridRect | null;
   clipboard: Stamp | null;
@@ -236,7 +236,7 @@ export function replaceEmojiConsumes(counts: Record<string, number>): Record<str
   return emojiConsumes;
 }
 
-const CITY_DESK_TOOLS = new Set<CityDesk['tool']>(['place', 'select', 'paste', 'delete', 'eyedropper', 'pass']);
+const CITY_DESK_TOOLS = new Set<CityDesk['tool']>(['place', 'select', 'paste', 'delete', 'eyedropper', 'pass', 'zoom']);
 
 export function emptyCityDesk(): CityDesk {
   return { tool: 'place', brush: null, selection: null, clipboard: null, passMode: 'type', passSquare: true };
