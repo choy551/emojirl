@@ -1051,6 +1051,36 @@ describe('EmojiCB passability', () => {
     expect(grown.city.passOverride[grown.city.cols]).toBe(true);
     expect(grown.city.passOverride[0]).toBeNull();
   });
+
+  it('walks a trapped citizen to the nearest passable square, one step at a time', () => {
+    const city = emptyCity();
+    city.tiles[0] = '🟧';
+    city.tiles[1] = '🟧';
+    city.tiles[city.cols] = '🟧';
+    city.citizens = [{ id: 'a', emoji: '🧟', x: 0, y: 0 }];
+    const first = tickCitizens(city, () => 0.99);
+    expect(first.citizens[0]).toMatchObject({ x: 1, y: 0 });
+    expect(lotUnpassable(first, 1)).toBe(true);
+    const second = tickCitizens(first, () => 0.99);
+    expect(second.citizens[0]).toMatchObject({ x: 2, y: 0 });
+    expect(lotUnpassable(second, 2)).toBe(false);
+    const wandered = tickCitizens(second, () => 0);
+    expect(wandered.citizens[0]).toMatchObject({ x: 3, y: 0 });
+
+    const sealed = setSquarePass(emptyCity(), Array.from({ length: CITY_SIZE }, (_, index) => index), true);
+    sealed.citizens = [{ id: 'a', emoji: '🧟', x: 1, y: 1 }];
+    expect(tickCitizens(sealed, () => 0).citizens[0]).toMatchObject({ x: 1, y: 1 });
+
+    const shared = setSquarePass(emptyCity(), Array.from({ length: CITY_SIZE }, (_, index) => index), true);
+    shared.passOverride[1] = false;
+    shared.citizens = [
+      { id: 'a', emoji: '🧟', x: 0, y: 0 },
+      { id: 'b', emoji: '🦇', x: 2, y: 0 },
+    ];
+    const raced = tickCitizens(shared, () => 0);
+    expect(raced.citizens[0]).toMatchObject({ x: 1, y: 0 });
+    expect(raced.citizens[1]).toMatchObject({ x: 2, y: 0 });
+  });
 });
 
 describe('EmojiCB select marquee', () => {
