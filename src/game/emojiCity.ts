@@ -585,17 +585,67 @@ function decorFlags(city: CityState): boolean[] {
   return decor;
 }
 
+/**
+ * First step toward the nearest passable lot. Passability is ignored on the way,
+ * so a citizen can cross blocked lots to get out. Other citizens still block the path.
+ * Returns null when every passable lot is missing or already taken.
+ */
+function firstEscapeStep(
+  city: CityState,
+  cols: number,
+  rows: number,
+  x: number,
+  y: number,
+  occupied: Set<number>,
+): { x: number; y: number } | null {
+  const start = y * cols + x;
+  const prev = new Map<number, number>();
+  const seen = new Set<number>([start]);
+  const queue = [start];
+  let found = -1;
+  for (let head = 0; head < queue.length && found < 0; head++) {
+    const here = queue[head]!;
+    const hx = here % cols;
+    const hy = Math.floor(here / cols);
+    for (const step of STEPS) {
+      const nx = hx + step.x;
+      const ny = hy + step.y;
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+      const next = ny * cols + nx;
+      if (seen.has(next) || occupied.has(next)) continue;
+      seen.add(next);
+      prev.set(next, here);
+      if (!lotUnpassable(city, next)) {
+        found = next;
+        break;
+      }
+      queue.push(next);
+    }
+  }
+  if (found < 0) return null;
+  let at = found;
+  while (prev.get(at) !== start) at = prev.get(at)!;
+  return { x: at % cols, y: Math.floor(at / cols) };
+}
+
 /** One orthogonal step per citizen. They stay put at the map edge or on another citizen. */
 export function tickCitizens(city: CityState, rng: () => number = Math.random): CityState {
   const { cols, rows } = gridOf(city);
   const occupied = new Set(city.citizens.map(c => cellIndex(cols, c.x, c.y)));
   const citizens = city.citizens.map(citizen => {
+    const here = cellIndex(cols, citizen.x, citizen.y);
+    if (lotUnpassable(city, here)) {
+      const out = firstEscapeStep(city, cols, rows, citizen.x, citizen.y, occupied);
+      if (!out) return citizen;
+      occupied.delete(here);
+      occupied.add(cellIndex(cols, out.x, out.y));
+      return { ...citizen, x: out.x, y: out.y };
+    }
     const step = STEPS[Math.min(STEPS.length - 1, Math.floor(rng() * STEPS.length))]!;
     const x = citizen.x + step.x;
     const y = citizen.y + step.y;
     if (x < 0 || y < 0 || x >= cols || y >= rows) return citizen;
     const next = cellIndex(cols, x, y);
-    const here = cellIndex(cols, citizen.x, citizen.y);
     if (occupied.has(next) || lotUnpassable(city, next)) return citizen;
     occupied.delete(here);
     occupied.add(next);
