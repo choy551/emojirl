@@ -1,5 +1,6 @@
 import type { EmojiItem } from './types';
 import { CITY_NAME_DEFAULT, generateAnonymousName, isAnonymousName, normalizeCityName } from './cityIdentity';
+import type { GridRect, PaintBrush, Stamp } from './cityPaint';
 import { normalizeEmojiKey } from './discoveries';
 import { fullGridTokensPerConsume, type DropIdentity } from './dropTable';
 import {
@@ -36,6 +37,17 @@ export interface MetaSave {
   cityName?: string;
   /** Reddit-style visitor name, generated once on this device. */
   anonymousName?: string;
+  /** Tool, brush, marquee, and clipboard. Missing on older saves. */
+  cityDesk?: CityDesk;
+}
+
+export interface CityDesk {
+  tool: 'place' | 'select' | 'paste' | 'delete' | 'eyedropper' | 'pass';
+  brush: PaintBrush | null;
+  selection: GridRect | null;
+  clipboard: Stamp | null;
+  passMode: 'type' | 'square';
+  passSquare: boolean | null;
 }
 
 export interface KeyValueStore {
@@ -104,8 +116,9 @@ function countMap(raw: unknown): Record<string, number> {
  * v2 → v3: a city without cols and rows is the original 8×8. Stored dimensions are kept.
  * v3 → v4: a city without passability rules blocks orange and blue squares and
  * leaves every square on the type rule. A saved list, including an empty one, is kept.
- * City name and visitor name are optional. Invalid values are dropped and filled
- * later by ensureCityProfile, without a schema bump.
+ * City name, visitor name, and the city desk (tool, brush, marquee, clipboard)
+ * are optional. A missing desk restores as the place tool. Invalid values are
+ * dropped and filled later by ensureCityProfile, without a schema bump.
  */
 export function migrateMetaRaw(raw: Record<string, unknown>): void {
   const version = typeof raw.schemaVersion === 'number' && Number.isFinite(raw.schemaVersion)
@@ -149,6 +162,7 @@ export function loadMeta(): MetaSave {
       cityGrowthRemainder: nonNegInt(parsed.cityGrowthRemainder),
       cityName: readCityName(parsed.cityName),
       anonymousName: isAnonymousName(parsed.anonymousName) ? parsed.anonymousName : undefined,
+      cityDesk: normalizeCityDesk(parsed.cityDesk),
     };
   } catch {
     return emptyMeta();
@@ -220,6 +234,59 @@ export function replaceEmojiConsumes(counts: Record<string, number>): Record<str
   const emojiConsumes = countMap(counts);
   saveMeta({ ...meta, emojiConsumes });
   return emojiConsumes;
+}
+
+const CITY_DESK_TOOLS = new Set<CityDesk['tool']>(['place', 'select', 'paste', 'delete', 'eyedropper', 'pass']);
+
+export function emptyCityDesk(): CityDesk {
+  return { tool: 'place', brush: null, selection: null, clipboard: null, passMode: 'type', passSquare: true };
+}
+
+function readDeskRect(raw: unknown): GridRect | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  const nums = [row.x0, row.y0, row.x1, row.y1].map(value => (
+    typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : Number.NaN
+  ));
+  if (nums.some(value => !Number.isInteger(value) || value < 0 || value > 64)) return null;
+  const [x0, y0, x1, y1] = nums as [number, number, number, number];
+  if (x0 > x1 || y0 > y1) return null;
+  return { x0, y0, x1, y1 };
+}
+
+/** Older saves omit the desk. A bad tool or stamp is dropped instead of failing the load. */
+export function normalizeCityDesk(raw: unknown): CityDesk {
+  const desk = emptyCityDesk();
+  if (!raw || typeof raw !== 'object') return desk;
+  const src = raw as Record<string, unknown>;
+  if (typeof src.tool === 'string' && CITY_DESK_TOOLS.has(src.tool as CityDesk['tool'])) desk.tool = src.tool as CityDesk['tool'];
+  if (src.brush && typeof src.brush === 'object') {
+    const brush = src.brush as Record<string, unknown>;
+    if ((brush.kind === 'token' || brush.kind === 'decor') && typeof brush.emoji === 'string' && brush.emoji.length > 0 && brush.emoji.length <= 32) {
+      desk.brush = { kind: brush.kind, emoji: brush.emoji };
+    }
+  }
+  desk.selection = readDeskRect(src.selection);
+  if (src.clipboard && typeof src.clipboard === 'object') {
+    const clip = src.clipboard as Record<string, unknown>;
+    const cols = typeof clip.cols === 'number' ? Math.floor(clip.cols) : 0;
+    const rows = typeof clip.rows === 'number' ? Math.floor(clip.rows) : 0;
+    if (cols >= 1 && rows >= 1 && cols <= 32 && rows <= 32 && Array.isArray(clip.cells) && clip.cells.length === cols * rows) {
+      desk.clipboard = {
+        cols,
+        rows,
+        cells: clip.cells.map(cell => {
+          if (!cell || typeof cell !== 'object') return { emoji: null, decor: false };
+          const row = cell as Record<string, unknown>;
+          const emoji = typeof row.emoji === 'string' && row.emoji.length > 0 && row.emoji.length <= 32 ? row.emoji : null;
+          return { emoji, decor: row.decor === true && !!emoji };
+        }),
+      };
+    }
+  }
+  if (src.passMode === 'square') desk.passMode = 'square';
+  if (src.passSquare === true || src.passSquare === false || src.passSquare === null) desk.passSquare = src.passSquare;
+  return desk;
 }
 
 function readCityName(raw: unknown): string | undefined {

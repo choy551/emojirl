@@ -4,7 +4,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { CITY_NAME_MAX } from '../game/cityIdentity';
+import { CITY_NAME_MAX, normalizeCityName } from '../game/cityIdentity';
 import { FLYOUT_CLOSE_MS, flyoutStyle, raiseFlyoutFrame, raisePlace } from './cityPaletteLayout';
 import { getEnemyKillCounts } from '../game/discoveries';
 import {
@@ -46,13 +46,21 @@ import {
 
 type PalettePick = { kind: 'token' | 'decor'; emoji: string };
 
+/** Wait this long after the last edit, then write the city. Hide and unload flush sooner. */
+const CITY_AUTOSAVE_MS = 300;
+
+function selectionFits(selection: { x0: number; y0: number; x1: number; y1: number }, cols: number, rows: number): boolean {
+  return selection.x0 >= 0 && selection.y0 >= 0 && selection.x1 < cols && selection.y1 < rows
+    && selection.x0 <= selection.x1 && selection.y0 <= selection.y1;
+}
+
 /** Lot size when the page has room. The grid widens at this size as columns are added. */
 const CITY_TILE_MAX = '2.75rem';
 /** Smallest lot. Narrow screens shrink toward this before a horizontal scrollbar appears. */
 const CITY_TILE_MIN = '2rem';
 import { ensurePlayerToken, loadShareStatus, publishMyCity } from '../game/cityShareClient';
 import { ONLINE_UNAVAILABLE } from '../game/cityShareModel';
-import { ensureCityProfile, loadMeta, replaceEmojiConsumes, saveCity, saveCityName, settleCityCatchUp } from '../game/meta';
+import { ensureCityProfile, loadMeta, replaceEmojiConsumes, saveCity, saveCityName, saveMeta, settleCityCatchUp, type CityDesk } from '../game/meta';
 import {
   applyClear,
   applyPaste,
@@ -98,6 +106,52 @@ export default function CityPage() {
   const [shareNote, setShareNote] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const killsRef = useRef<Record<string, number>>({});
+  const deskReady = useRef(false);
+  const deskRef = useRef({
+    city: null as CityState | null,
+    consumes,
+    tool,
+    selected,
+    selection,
+    clipboard,
+    passMode,
+    passSquare,
+    nameDraft,
+  });
+  const flushCityRef = useRef(() => {});
+  deskRef.current = {
+    city: city ?? deskRef.current.city,
+    consumes,
+    tool,
+    selected,
+    selection,
+    clipboard,
+    passMode,
+    passSquare,
+    nameDraft,
+  };
+  flushCityRef.current = () => {
+    if (!deskReady.current) return;
+    const desk = deskRef.current;
+    if (!desk.city) return;
+    const meta = loadMeta();
+    const named = normalizeCityName(desk.nameDraft);
+    const cityDesk: CityDesk = {
+      tool: desk.tool,
+      brush: desk.selected,
+      selection: desk.selection,
+      clipboard: desk.clipboard,
+      passMode: desk.passMode,
+      passSquare: desk.passSquare,
+    };
+    saveMeta({
+      ...meta,
+      city: desk.city,
+      emojiConsumes: desk.consumes,
+      cityName: named.ok ? named.name : meta.cityName,
+      cityDesk,
+    });
+  };
 
   useEffect(() => {
     const profile = ensureCityProfile();
@@ -118,13 +172,56 @@ export default function CityPage() {
     setConsumes(counts);
     setCity(caught.city);
     if (caught.turns > 0) setAway(awaySummary(caught.turns, caught.citizensGained));
+    const desk = meta.cityDesk;
     const first = buildPaletteSections(counts, caught.city)
       .flatMap(section => section.entries)
       .find(entry => entry.kind === 'token' && !entry.locked);
-    setSelected(first ? { kind: 'token', emoji: first.emoji } : null);
+    const brush = desk?.brush ?? (first ? { kind: 'token' as const, emoji: first.emoji } : null);
+    const restoredSelection = desk?.selection && selectionFits(desk.selection, caught.city.cols, caught.city.rows) ? desk.selection : null;
+    const restoredTool = desk?.tool ?? 'place';
+    setSelected(brush);
+    setTool(restoredTool);
+    setSelection(restoredSelection);
+    setClipboard(desk?.clipboard ?? null);
+    setPassMode(desk?.passMode ?? 'type');
+    setPassSquare(desk?.passSquare === false || desk?.passSquare === null ? desk.passSquare : true);
+    deskRef.current = {
+      city: caught.city,
+      consumes: counts,
+      tool: restoredTool,
+      selected: brush,
+      selection: restoredSelection,
+      clipboard: desk?.clipboard ?? null,
+      passMode: desk?.passMode ?? 'type',
+      passSquare: desk?.passSquare === false || desk?.passSquare === null ? desk.passSquare : true,
+      nameDraft: profile.cityName,
+    };
+    deskReady.current = true;
     let cancel = false;
     loadShareStatus().then(status => { if (!cancel) setOnline(status.online); });
     return () => { cancel = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!deskReady.current || !city) return;
+    const id = window.setTimeout(() => flushCityRef.current(), CITY_AUTOSAVE_MS);
+    return () => window.clearTimeout(id);
+  }, [city, consumes, tool, selected, selection, clipboard, passMode, passSquare, nameDraft]);
+
+  useEffect(() => {
+    const flush = () => flushCityRef.current();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      flush();
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, []);
 
   useEffect(() => {
@@ -132,6 +229,7 @@ export default function CityPage() {
       setCity(prev => {
         if (!prev) return prev;
         const next = tickCitizens(prev, Math.random);
+        deskRef.current.city = next;
         saveCity(next);
         return next;
       });
@@ -190,8 +288,7 @@ export default function CityPage() {
     if (!city || !selectedBuilding) return;
     const result = exchangeForBuilding(consumes, city, selectedBuilding.emoji);
     if (!result.ok) { setNote(result.reason ?? 'Cannot raise that structure.'); return; }
-    const saved = replaceEmojiConsumes(result.consumes);
-    setConsumes(saved);
+    const saved = storeConsumes(result.consumes);
     const left = availableTokens(saved[selectedBuilding.emoji] ?? 0, placedOf(city, selectedBuilding.emoji));
     setNote(`Raised ${selectedBuilding.emoji} ${selectedBuilding.name}. ${left} token${left === 1 ? '' : 's'} ready to place.`);
   };
@@ -200,10 +297,8 @@ export default function CityPage() {
     if (!city) return;
     const result = expandCity(city, edge, consumes);
     if (!result.ok) { setNote(result.reason ?? 'Cannot expand.'); return; }
-    const saved = replaceEmojiConsumes(result.consumes);
-    setConsumes(saved);
-    setCity(result.city);
-    saveCity(result.city);
+    storeConsumes(result.consumes);
+    storeCity(result.city);
     setNote(`Expanded ${edge}. The grid is ${result.city.cols}×${result.city.rows}.`);
   };
 
@@ -219,15 +314,25 @@ export default function CityPage() {
         setNote('Nothing to undo.');
         return stack;
       }
-      setCity(snap.city);
-      setConsumes(snap.consumes);
-      saveCity(snap.city);
-      replaceEmojiConsumes(snap.consumes);
+      storeCity(snap.city);
+      storeConsumes(snap.consumes);
       setNote('Undid the last edit.');
       return stack.slice(0, -1);
     });
   };
   undoRef.current = undo;
+
+  const storeCity = (next: CityState) => {
+    deskRef.current.city = next;
+    saveCity(next);
+    setCity(next);
+  };
+  const storeConsumes = (next: Record<string, number>) => {
+    const saved = replaceEmojiConsumes(next);
+    deskRef.current.consumes = saved;
+    setConsumes(saved);
+    return saved;
+  };
 
   const selectionIndices = () => {
     if (!city || !selection) return [];
@@ -247,8 +352,7 @@ export default function CityPage() {
       return;
     }
     remember();
-    setCity(result.city);
-    saveCity(result.city);
+    storeCity(result.city);
     setNote(`${verb} ${result.removed}. Refunded ${result.refunded} token${result.refunded === 1 ? '' : 's'}.`);
   };
 
@@ -276,8 +380,7 @@ export default function CityPage() {
     }
     remember();
     setClipboard(stamp);
-    setCity(result.city);
-    saveCity(result.city);
+    storeCity(result.city);
     setSelection(null);
     setNote(`Cut ${stamp.cols}×${stamp.rows}. Refunded ${result.refunded} token${result.refunded === 1 ? '' : 's'}.`);
   };
@@ -293,8 +396,7 @@ export default function CityPage() {
       return;
     }
     remember();
-    setCity(result.city);
-    saveCity(result.city);
+    storeCity(result.city);
     setNote(`Pasted ${result.placed}.${result.skipped ? ` Skipped ${result.skipped}.` : ''}`);
   };
 
@@ -323,8 +425,7 @@ export default function CityPage() {
       return;
     }
     remember();
-    setCity(result.city);
-    saveCity(result.city);
+    storeCity(result.city);
     const free = selected.kind === 'decor' ? ' Decor is free.' : '';
     setNote(`Placed ${result.placed} ${selected.emoji}.${free}${result.skipped ? ` Skipped ${result.skipped}.` : ''}`);
   };
@@ -366,15 +467,13 @@ export default function CityPage() {
       }
       const next = toggleBlockedType(city, emoji);
       remember();
-      setCity(next);
-      saveCity(next);
+      storeCity(next);
       setNote(`${emoji} is ${next.blockedTypes.includes(emoji) ? 'unpassable' : 'passable'} for wandering citizens.`);
       return;
     }
     const next = setSquarePass(city, [index], passSquare);
     remember();
-    setCity(next);
-    saveCity(next);
+    storeCity(next);
     setNote(passNote(passSquare, 1));
   };
 
@@ -387,8 +486,7 @@ export default function CityPage() {
     const indices = selectionIndices();
     const next = setSquarePass(city, indices, value);
     remember();
-    setCity(next);
-    saveCity(next);
+    storeCity(next);
     setNote(passNote(value, indices.length));
   };
 
