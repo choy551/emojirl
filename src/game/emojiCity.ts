@@ -12,7 +12,8 @@ export const CITY_ROWS = 8;
 /** Unspent placement tokens charged to add one row or one column. */
 export const CITY_EXPAND_COST = 10;
 /** Largest side length a save or an expansion may reach. */
-export const CITY_DIM_MAX = 32;
+/** Largest side that still shares under GRID_JSON_MAX with margin. See the payload test. */
+export const CITY_DIM_MAX = 48;
 /** One wandering citizen per this many placed tiles. */
 export const CITIZEN_TILES = 5;
 /** Citizens attempt one step on this interval while the city screen is open. */
@@ -590,6 +591,21 @@ function decorFlags(city: CityState): boolean[] {
  * so a citizen can cross blocked lots to get out. Other citizens still block the path.
  * Returns null when every passable lot is missing or already taken.
  */
+let escapeCacheKey = '';
+const escapeCache = new Map<number, { x: number; y: number } | null>();
+
+function escapeCacheKeyOf(city: CityState): string {
+  const over = city.passOverride;
+  let packed = `${city.cols}x${city.rows}|${city.blockedTypes.join(',')}|`;
+  for (let i = 0; i < city.tiles.length; i++) {
+    const flag = over?.[i];
+    if (flag === true) packed += '1';
+    else if (flag === false) packed += '0';
+    else packed += city.tiles[i] ?? '.';
+  }
+  return packed;
+}
+
 function firstEscapeStep(
   city: CityState,
   cols: number,
@@ -603,7 +619,8 @@ function firstEscapeStep(
   const seen = new Set<number>([start]);
   const queue = [start];
   let found = -1;
-  for (let head = 0; head < queue.length && found < 0; head++) {
+  const cap = cols * rows;
+  for (let head = 0; head < queue.length && found < 0 && head < cap; head++) {
     const here = queue[head]!;
     const hx = here % cols;
     const hy = Math.floor(here / cols);
@@ -624,18 +641,50 @@ function firstEscapeStep(
   }
   if (found < 0) return null;
   let at = found;
-  while (prev.get(at) !== start) at = prev.get(at)!;
+  for (let guard = 0; guard < cap && prev.get(at) !== start; guard++) {
+    const prior = prev.get(at);
+    if (prior == null) return null;
+    at = prior;
+  }
+  if (prev.get(at) !== start) return null;
   return { x: at % cols, y: Math.floor(at / cols) };
+}
+
+function cachedEscapeStep(
+  city: CityState,
+  cols: number,
+  rows: number,
+  x: number,
+  y: number,
+  occupied: Set<number>,
+  key: string,
+): { x: number; y: number } | null {
+  if (key !== escapeCacheKey) {
+    escapeCacheKey = key;
+    escapeCache.clear();
+  }
+  const start = y * cols + x;
+  let step = escapeCache.get(start);
+  if (step === undefined) {
+    step = firstEscapeStep(city, cols, rows, x, y, new Set());
+    escapeCache.set(start, step);
+  }
+  if (step && occupied.has(step.y * cols + step.x)) {
+    return firstEscapeStep(city, cols, rows, x, y, occupied);
+  }
+  return step;
 }
 
 /** One orthogonal step per citizen. They stay put at the map edge or on another citizen. */
 export function tickCitizens(city: CityState, rng: () => number = Math.random): CityState {
   const { cols, rows } = gridOf(city);
   const occupied = new Set(city.citizens.map(c => cellIndex(cols, c.x, c.y)));
+  let escapeKey: string | null = null;
   const citizens = city.citizens.map(citizen => {
     const here = cellIndex(cols, citizen.x, citizen.y);
     if (lotUnpassable(city, here)) {
-      const out = firstEscapeStep(city, cols, rows, citizen.x, citizen.y, occupied);
+      escapeKey ??= escapeCacheKeyOf(city);
+      const out = cachedEscapeStep(city, cols, rows, citizen.x, citizen.y, occupied, escapeKey);
       if (!out) return citizen;
       occupied.delete(here);
       occupied.add(cellIndex(cols, out.x, out.y));

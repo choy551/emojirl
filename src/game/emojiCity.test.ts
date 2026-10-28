@@ -65,6 +65,8 @@ import {
   trainLineStatusLabel,
 } from './emojiCity';
 import { CITY_NAME_DEFAULT, CITY_NAME_MAX, generateAnonymousName, isAnonymousName, normalizeCityName } from './cityIdentity';
+import { GRID_JSON_MAX } from './cityShareModel';
+import { fitZoom, stepZoom, ZOOM_MAX, ZOOM_MIN } from '../pages/cityZoom';
 import { BUILDINGS } from './cityBuildings';
 import { DROP_RARITIES, FULL_GRID_RARITY_TOKENS } from './dropTable';
 import { emptyCityDesk, ensureCityProfile, loadMeta, normalizeCityDesk, noteCityTurns, recordEmojiConsume, recordPrestigeWin, recordRunEmojiConsume, replaceEmojiConsumes, saveCity, saveCityName, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
@@ -986,7 +988,7 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('button === 1');
     const tools = readFileSync(new URL('../pages/cityTools.tsx', import.meta.url), 'utf8');
     expect(tools).toContain('data-testid={`city-tool-${entry.id}`}');
-    for (const id of ['place', 'select', 'copy', 'cut', 'paste', 'delete', 'eyedropper', 'pass', 'undo']) {
+    for (const id of ['place', 'select', 'copy', 'cut', 'paste', 'delete', 'eyedropper', 'pass', 'zoom', 'undo']) {
       expect(tools).toContain(`id: '${id}'`);
     }
     expect(tools).toContain('paint-btn');
@@ -1083,6 +1085,53 @@ describe('EmojiCB passability', () => {
   });
 });
 
+describe('EmojiCB max size and zoom', () => {
+  it('labels a maxed edge and keeps a full max city inside the share limit', () => {
+    const page = readFileSync(new URL('../pages/city.tsx', import.meta.url), 'utf8');
+    expect(page).toContain('Max size');
+    expect(page).toContain('data-max-size="true"');
+    expect(page).toContain("blocked === 'This edge cannot grow further.'");
+    expect(CITY_DIM_MAX).toBeGreaterThan(32);
+
+    const placeable = [
+      ...DECOR,
+      ...BUILDINGS.map(building => building.emoji),
+      ...DISTRICTS.flatMap(district => [...district.emoji]),
+    ];
+    const worst = placeable.reduce((best, emoji) => emoji.length > best.length ? emoji : best);
+    const lots = CITY_DIM_MAX * CITY_DIM_MAX;
+    const city = normalizeCity({
+      cols: CITY_DIM_MAX,
+      rows: CITY_DIM_MAX,
+      tiles: Array.from({ length: lots }, () => worst),
+      decor: Array.from({ length: lots }, () => false),
+      passOverride: Array.from({ length: lots }, () => false),
+      blockedTypes: [worst],
+      citizens: [],
+      nextId: 1,
+    });
+    expect(city.cols).toBe(CITY_DIM_MAX);
+    expect(city.tiles.every(cell => cell === worst)).toBe(true);
+    expect(city.passOverride.every(flag => flag === false)).toBe(true);
+    const payload = JSON.stringify(city);
+    const margin = 6 * 1024;
+    expect(payload.length).toBeLessThanOrEqual(GRID_JSON_MAX - margin);
+    expect(JSON.stringify(city.tiles).length).toBeLessThanOrEqual(GRID_JSON_MAX - margin);
+
+    expect(page).toContain('data-testid="zoom-in"');
+    expect(page).toContain('data-testid="zoom-out"');
+    expect(page).toContain('data-testid="zoom-fit"');
+    expect(page).toContain('overflow-auto');
+    expect(page).toContain('scrollLeft');
+    expect(fitZoom(400, 300, 800, 600)).toBe(0.5);
+    expect(fitZoom(1000, 800, 200, 100)).toBe(1);
+    expect(stepZoom(1, 'in')).toBeGreaterThan(1);
+    expect(stepZoom(1, 'out')).toBeLessThan(1);
+    expect(stepZoom(ZOOM_MAX, 'in')).toBe(ZOOM_MAX);
+    expect(stepZoom(ZOOM_MIN, 'out')).toBe(ZOOM_MIN);
+  });
+});
+
 describe('EmojiCB refresh', () => {
   it('reloads placements, passability, name, tokens, size, citizens, tool, and brush', () => {
     const store = memoryStore();
@@ -1164,7 +1213,7 @@ describe('EmojiCB select marquee', () => {
     expect(city).not.toContain('setClipboard(null)');
 
     const choose = city.slice(city.indexOf('const chooseTool'), city.indexOf('const finishClear'));
-    expect(choose).toContain("if (next !== tool && next !== 'select' && next !== 'pass') setSelection(null)");
+    expect(choose).toContain("if (next !== tool && next !== 'select' && next !== 'pass' && next !== 'zoom') setSelection(null)");
 
     const keys = city.slice(city.indexOf("e.key === 'Escape'"), city.indexOf('window.addEventListener(\'keydown\''));
     expect(keys).toContain('setSelection(null)');
