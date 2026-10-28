@@ -67,7 +67,7 @@ import {
 import { CITY_NAME_DEFAULT, CITY_NAME_MAX, generateAnonymousName, isAnonymousName, normalizeCityName } from './cityIdentity';
 import { BUILDINGS } from './cityBuildings';
 import { DROP_RARITIES, FULL_GRID_RARITY_TOKENS } from './dropTable';
-import { ensureCityProfile, loadMeta, noteCityTurns, recordEmojiConsume, recordPrestigeWin, recordRunEmojiConsume, replaceEmojiConsumes, saveCity, saveCityName, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
+import { emptyCityDesk, ensureCityProfile, loadMeta, normalizeCityDesk, noteCityTurns, recordEmojiConsume, recordPrestigeWin, recordRunEmojiConsume, replaceEmojiConsumes, saveCity, saveCityName, saveMeta, setMetaStore, settleCityCatchUp, type KeyValueStore } from './meta';
 import { COWBOY, FENCER, GENIE, HITMAN, META_SAVE_KEY, META_SCHEMA_VERSION, NINJA, RANGER, ROYAL_GUARD, VOID, WIZARD } from './prestigeConstants';
 
 function memoryStore(): KeyValueStore {
@@ -1080,6 +1080,73 @@ describe('EmojiCB passability', () => {
     const raced = tickCitizens(shared, () => 0);
     expect(raced.citizens[0]).toMatchObject({ x: 1, y: 0 });
     expect(raced.citizens[1]).toMatchObject({ x: 2, y: 0 });
+  });
+});
+
+describe('EmojiCB refresh', () => {
+  it('reloads placements, passability, name, tokens, size, citizens, tool, and brush', () => {
+    const store = memoryStore();
+    setMetaStore(store);
+    const city = emptyCity();
+    city.tiles[0] = '🏠';
+    city.tiles[1] = '🟧';
+    city.blockedTypes = [];
+    city.passOverride[2] = true;
+    city.citizens = [{ id: 'c-1', emoji: '🧟', x: 3, y: 1 }];
+    city.cols = 9;
+    city.rows = 8;
+    city.tiles = Array.from({ length: 72 }, (_, index) => city.tiles[index] ?? null);
+    city.decor = Array.from({ length: 72 }, () => false);
+    city.passOverride = Array.from({ length: 72 }, (_, index) => index === 2);
+    saveMeta({
+      ...loadMeta(),
+      city,
+      emojiConsumes: { '🏠': 4 },
+      cityName: 'Dockside',
+      cityDesk: {
+        tool: 'pass',
+        brush: { kind: 'decor', emoji: '🌲' },
+        selection: { x0: 0, y0: 0, x1: 2, y1: 1 },
+        clipboard: { cols: 1, rows: 1, cells: [{ emoji: '🏠', decor: false }] },
+        passMode: 'square',
+        passSquare: false,
+      },
+    });
+
+    const again = loadMeta();
+    expect(again.city?.tiles[0]).toBe('🏠');
+    expect(again.city?.tiles[1]).toBe('🟧');
+    expect(again.city?.blockedTypes).toEqual([]);
+    expect(again.city?.passOverride[2]).toBe(true);
+    expect(again.city?.cols).toBe(9);
+    expect(again.city?.rows).toBe(8);
+    expect(again.city?.citizens[0]).toMatchObject({ emoji: '🧟', x: 3, y: 1 });
+    expect(again.emojiConsumes).toEqual({ '🏠': 4 });
+    expect(again.cityName).toBe('Dockside');
+    expect(again.cityDesk).toEqual({
+      tool: 'pass',
+      brush: { kind: 'decor', emoji: '🌲' },
+      selection: { x0: 0, y0: 0, x1: 2, y1: 1 },
+      clipboard: { cols: 1, rows: 1, cells: [{ emoji: '🏠', decor: false }] },
+      passMode: 'square',
+      passSquare: false,
+    });
+
+    const legacy = JSON.parse(store.getItem(META_SAVE_KEY) ?? '{}') as Record<string, unknown>;
+    delete legacy.cityDesk;
+    store.setItem(META_SAVE_KEY, JSON.stringify(legacy));
+    const restored = loadMeta();
+    expect(restored.city?.tiles[0]).toBe('🏠');
+    expect(restored.cityDesk).toEqual(emptyCityDesk());
+    expect(normalizeCityDesk({ tool: 'nope', clipboard: { cols: 0, rows: 1, cells: [] } }).tool).toBe('place');
+    expect(normalizeCityDesk({ tool: 'nope', clipboard: { cols: 0, rows: 1, cells: [] } }).clipboard).toBeNull();
+
+    const page = readFileSync(new URL('../pages/city.tsx', import.meta.url), 'utf8');
+    expect(page).toContain('const CITY_AUTOSAVE_MS = 300');
+    expect(page).toContain("window.addEventListener('beforeunload'");
+    expect(page).toContain("window.addEventListener('pagehide'");
+    expect(page).toContain("document.addEventListener('visibilitychange'");
+    expect(page).toContain("document.visibilityState === 'hidden'");
   });
 });
 
