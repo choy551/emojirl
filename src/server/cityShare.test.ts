@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { emptyCity, TRAIN_EMOJI, type CityState } from '../game/emojiCity';
+import { emptyCity, normalizeCity, TRAIN_EMOJI, type CityState } from '../game/emojiCity';
 import {
   ONLINE_UNAVAILABLE,
   PUBLISH_LIMIT,
@@ -96,11 +96,11 @@ describe('city share http', () => {
 
     const fetched = await handleCityShare(new Request(`http://local/api/cities/${created.city.id}`), deps);
     const body = await fetched.json() as { city: { grid: { tiles: (string | null)[] }; tokenHash?: string } };
-    expect(body.city.grid.tiles[body.city.grid.tiles.length > 8 ? 8 : 0]).toBe('🏠');
+    const sharedGrid = normalizeCity(body.city.grid);
+    expect(sharedGrid.tiles[sharedGrid.tiles.length > 8 ? 8 : 0]).toBe('🏠');
     expect(body.city.tokenHash).toBeUndefined();
-    const grid = body.city.grid as { blockedTypes?: string[] };
-    expect(grid.blockedTypes).toContain('🟧');
-    expect(grid.blockedTypes).toContain('🟦');
+    expect(sharedGrid.blockedTypes).toContain('🟧');
+    expect(sharedGrid.blockedTypes).toContain('🟦');
 
     const old = spannedCity();
     const { blockedTypes, passOverride, ...legacy } = old;
@@ -118,10 +118,11 @@ describe('city share http', () => {
     });
     const visited = await handleCityShare(new Request('http://local/api/cities/legacycity01'), deps);
     const oldBody = await visited.json() as { city: { grid: { blockedTypes: string[]; passOverride: (boolean | null)[]; tiles: (string | null)[] } } };
-    expect(oldBody.city.grid.blockedTypes).toContain('🟧');
-    expect(oldBody.city.grid.blockedTypes).toContain('🟦');
-    expect(oldBody.city.grid.passOverride.every(flag => flag === null)).toBe(true);
-    expect(oldBody.city.grid.tiles).toEqual(old.tiles);
+    const oldGrid = normalizeCity(oldBody.city.grid);
+    expect(oldGrid.blockedTypes).toContain('🟧');
+    expect(oldGrid.blockedTypes).toContain('🟦');
+    expect(oldGrid.passOverride.every(flag => flag === null)).toBe(true);
+    expect(oldGrid.tiles).toEqual(old.tiles);
     expect(await (await handleCityShare(new Request('http://local/api/cities/nope'), deps)).status).toBe(404);
 
     const empty = await handleCityShare(new Request('http://local/api/cities', { method: 'POST', body: '' }), deps);
@@ -238,7 +239,9 @@ describe('city share sql and client', () => {
     expect(published).toEqual({ online: true, ok: true, id: 'c00000000001', path: '/visit/c00000000001' });
     const auth = calls.find(call => call.url === '/api/cities')?.init?.headers as Record<string, string>;
     expect(auth.authorization).toBe(`Bearer ${token}`);
-    expect(String(calls.find(call => call.url === '/api/cities')?.init?.body)).not.toContain(token);
+    const publishedBody = String(calls.find(call => call.url === '/api/cities')?.init?.body);
+    expect(publishedBody).not.toContain(token);
+    expect(publishedBody).toContain('"compact":1');
     expect((await listSharedCities({ sort: 'city', dir: 'asc' }, fetchImpl)).online).toBe(true);
     expect(await getSharedCity('missing', fetchImpl)).toMatchObject({ online: true, ok: false, status: 404 });
     expect(await loadShareStatus(async () => { throw new Error('down'); })).toEqual({ online: false });

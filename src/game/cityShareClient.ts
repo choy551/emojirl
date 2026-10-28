@@ -5,6 +5,7 @@ import {
   type SortKey,
 } from './cityShareModel';
 import { normalizeCity, type CityState } from './emojiCity';
+import { compactCity } from './neighborhoods';
 
 export const PLAYER_TOKEN_KEY = 'emojirl_player_token';
 
@@ -76,7 +77,7 @@ export async function publishMyCity(input: {
         'content-type': 'application/json',
         authorization: `Bearer ${input.token}`,
       },
-      body: JSON.stringify({ username: input.username, cityName: input.cityName, city: input.city }),
+      body: JSON.stringify({ username: input.username, cityName: input.cityName, city: compactCity(normalizeCity(input.city)) }),
     });
     const body = await readJson(res);
     if (res.status === 503 || body.online === false) return { online: false, error: ONLINE_UNAVAILABLE };

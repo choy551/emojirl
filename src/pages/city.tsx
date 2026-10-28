@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
 import { Link, useLocation } from 'wouter';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,12 +7,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { CITY_NAME_MAX, normalizeCityName } from '../game/cityIdentity';
 import { FLYOUT_CLOSE_MS, flyoutStyle, raiseFlyoutFrame, raisePlace } from './cityPaletteLayout';
 import { fitZoom, stepZoom } from './cityZoom';
+import { allHoods, canGrowEdge, growthBlocked, hoodIsMaxed, NEIGHBORHOOD_COST, ORIGIN_ID, spawnBlocked, worldBounds, type Neighborhood } from '../game/neighborhoods';
 import { getEnemyKillCounts } from '../game/discoveries';
 import {
   BUILDING_EXCHANGE_COST,
   buildingOf,
 } from '../game/cityBuildings';
 import {
+  CITY_DIM_MAX,
   CITY_EXPAND_COST,
   CITY_TICK_MS,
   availableTokens,
@@ -26,8 +28,6 @@ import {
   emojiCityRulesBlurb,
   exchangeForBuilding,
   expandBlockReason,
-  expandCity,
-  lotUnpassable,
   normalizeCity,
   setSquarePass,
   toggleBlockedType,
@@ -38,6 +38,12 @@ import {
   totalAvailableTokens,
   TRAIN_LINE_HINT,
   trainLineSpansCity,
+  decorInHood,
+  editHoodLot,
+  expandNeighborhood,
+  placeInHood,
+  removeInHood,
+  spawnNeighborhood,
   trainLineStatusLabel,
   type CityEdge,
   type CityState,
@@ -72,7 +78,6 @@ import {
   indicesInRect,
   longPressMoved,
   pointFromIndex,
-  previewPlacement,
   pushUndo,
   type GridRect,
   type PaintSnapshot,
@@ -92,16 +97,17 @@ export default function CityPage() {
   const [undoStack, setUndoStack] = useState<PaintSnapshot[]>([]);
   const [dragAnchor, setDragAnchor] = useState<number | null>(null);
   const [dragCurrent, setDragCurrent] = useState<number | null>(null);
+  const [dragHood, setDragHood] = useState(ORIGIN_ID);
+  const [selectionHood, setSelectionHood] = useState(ORIGIN_ID);
   const [erasing, setErasing] = useState(false);
   const [passMode, setPassMode] = useState<'type' | 'square'>('type');
   const [passSquare, setPassSquare] = useState<boolean | null>(true);
   const [zoom, setZoom] = useState(1);
-  const [gridBox, setGridBox] = useState({ w: 0, h: 0 });
   const [portWidth, setPortWidth] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<{ pointerId: number; x: number; y: number; left: number; top: number } | null>(null);
-  const dragRef = useRef<{ tool: CityTool | 'erase'; anchor: number; current: number } | null>(null);
+  const dragRef = useRef<{ tool: CityTool | 'erase'; hood: string; anchor: number; current: number } | null>(null);
   const pressRef = useRef<{ x: number; y: number; timer: number } | null>(null);
   const undoRef = useRef<() => void>(() => {});
   const [away, setAway] = useState<string | null>(null);
@@ -251,8 +257,7 @@ export default function CityPage() {
     const measure = () => {
       const width = scroller.clientWidth;
       setPortWidth(prev => prev === width ? prev : width);
-      const next = { w: grid.offsetWidth, h: grid.offsetHeight };
-      setGridBox(prev => prev.w === next.w && prev.h === next.h ? prev : next);
+      void grid;
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -316,13 +321,22 @@ export default function CityPage() {
     setNote(`Raised ${selectedBuilding.emoji} ${selectedBuilding.name}. ${left} token${left === 1 ? '' : 's'} ready to place.`);
   };
 
-  const onExpand = (edge: CityEdge) => {
+  const onExpand = (hoodId: string, edge: CityEdge) => {
     if (!city) return;
-    const result = expandCity(city, edge, consumes);
+    const result = expandNeighborhood(city, hoodId, edge, consumes);
     if (!result.ok) { setNote(result.reason ?? 'Cannot expand.'); return; }
     storeConsumes(result.consumes);
     storeCity(result.city);
-    setNote(`Expanded ${edge}. The grid is ${result.city.cols}×${result.city.rows}.`);
+    setNote(`Expanded ${edge}.`);
+  };
+
+  const onSpawn = (hoodId: string, edge: CityEdge) => {
+    if (!city) return;
+    const result = spawnNeighborhood(city, hoodId, edge, consumes);
+    if (!result.ok) { setNote(result.reason ?? 'Cannot add a neighborhood.'); return; }
+    storeConsumes(result.consumes);
+    storeCity(result.city);
+    setNote('New neighborhood. It grows on the sides that face away from its parent.');
   };
 
   const remember = () => {
@@ -357,9 +371,18 @@ export default function CityPage() {
     return saved;
   };
 
+  const hoodGrid = (source: CityState, id: string) => {
+    if (id === ORIGIN_ID) {
+      return { cols: source.cols, rows: source.rows, tiles: source.tiles, decor: source.decor, passOverride: source.passOverride, blockedTypes: source.blockedTypes };
+    }
+    return source.neighborhoods?.find(hood => hood.id === id)
+      ?? { cols: source.cols, rows: source.rows, tiles: source.tiles, decor: source.decor, passOverride: source.passOverride, blockedTypes: source.blockedTypes };
+  };
+
   const selectionIndices = () => {
     if (!city || !selection) return [];
-    return indicesInRect(city.cols, city.rows, { x: selection.x0, y: selection.y0 }, { x: selection.x1, y: selection.y1 });
+    const grid = hoodGrid(city, selectionHood);
+    return indicesInRect(grid.cols, grid.rows, { x: selection.x0, y: selection.y0 }, { x: selection.x1, y: selection.y1 });
   };
 
   const chooseTool = (next: CityTool) => {
@@ -367,16 +390,39 @@ export default function CityPage() {
     setTool(next);
   };
 
-  const finishClear = (indices: number[], verb: string) => {
+  const finishClear = (hoodId: string, indices: number[], verb: string) => {
     if (!city) return;
-    const result = applyClear(city, indices, killsRef.current, Math.random);
-    if (result.removed === 0) {
+    if (hoodId === ORIGIN_ID) {
+      const result = applyClear(city, indices, killsRef.current, Math.random);
+      if (result.removed === 0) {
+        setNote('Nothing to clear.');
+        return;
+      }
+      remember();
+      storeCity(result.city);
+      setNote(`${verb} ${result.removed}. Refunded ${result.refunded} token${result.refunded === 1 ? '' : 's'}.`);
+      return;
+    }
+    let next = city;
+    let removed = 0;
+    let refunded = 0;
+    for (const index of indices) {
+      const grid = hoodGrid(next, hoodId);
+      if (!grid.tiles[index]) continue;
+      const decor = grid.decor?.[index] === true;
+      const result = removeInHood(next, hoodId, index, killsRef.current, Math.random);
+      if (!result.ok) continue;
+      next = result.city;
+      removed += 1;
+      if (!decor) refunded += 1;
+    }
+    if (removed === 0) {
       setNote('Nothing to clear.');
       return;
     }
     remember();
-    storeCity(result.city);
-    setNote(`${verb} ${result.removed}. Refunded ${result.refunded} token${result.refunded === 1 ? '' : 's'}.`);
+    storeCity(next);
+    setNote(`${verb} ${removed}. Refunded ${refunded} token${refunded === 1 ? '' : 's'}.`);
   };
 
   const doCopy = () => {
@@ -384,7 +430,8 @@ export default function CityPage() {
       setNote('Select a region first.');
       return;
     }
-    const stamp = copyRect(city, selection);
+    const grid = hoodGrid(city, selectionHood);
+    const stamp = copyRect({ ...city, cols: grid.cols, rows: grid.rows, tiles: grid.tiles, decor: grid.decor }, selection);
     setClipboard(stamp);
     setSelection(null);
     setNote(`Copied ${stamp.cols}×${stamp.rows}.`);
@@ -395,8 +442,28 @@ export default function CityPage() {
       setNote('Select a region first.');
       return;
     }
-    const stamp = copyRect(city, selection);
-    const result = applyClear(city, selectionIndices(), killsRef.current, Math.random);
+    const grid = hoodGrid(city, selectionHood);
+    const stamp = copyRect({ ...city, cols: grid.cols, rows: grid.rows, tiles: grid.tiles, decor: grid.decor }, selection);
+    const clearing = selectionIndices();
+    let result: { city: CityState; removed: number; refunded: number };
+    if (selectionHood === ORIGIN_ID) {
+      result = applyClear(city, clearing, killsRef.current, Math.random);
+    } else {
+      let next = city;
+      let removed = 0;
+      let refunded = 0;
+      for (const index of clearing) {
+        const lots = hoodGrid(next, selectionHood);
+        if (!lots.tiles[index]) continue;
+        const decor = lots.decor?.[index] === true;
+        const cleared = removeInHood(next, selectionHood, index, killsRef.current, Math.random);
+        if (!cleared.ok) continue;
+        next = cleared.city;
+        removed += 1;
+        if (!decor) refunded += 1;
+      }
+      result = { city: next, removed, refunded };
+    }
     if (result.removed === 0) {
       setNote('Nothing to cut.');
       return;
@@ -408,12 +475,54 @@ export default function CityPage() {
     setNote(`Cut ${stamp.cols}×${stamp.rows}. Refunded ${result.refunded} token${result.refunded === 1 ? '' : 's'}.`);
   };
 
-  const doPaste = (index: number) => {
+  const placeHood = (source: CityState, hoodId: string, indices: number[]) => {
+    let next = source;
+    let placed = 0;
+    let skipped = 0;
+    for (const index of indices) {
+      const lots = hoodGrid(next, hoodId);
+      if (lots.tiles[index]) { skipped += 1; continue; }
+      const result = selected?.kind === 'decor'
+        ? decorInHood(next, hoodId, index, selected.emoji)
+        : placeInHood(next, hoodId, index, selected?.emoji ?? '', consumes, killsRef.current, Math.random);
+      if (!result.ok) { skipped += 1; continue; }
+      next = result.city;
+      placed += 1;
+    }
+    return { city: next, placed, skipped };
+  };
+
+  const pasteHood = (source: CityState, hoodId: string, cols: number, index: number) => {
+    const origin = pointFromIndex(cols, index);
+    let next = source;
+    let placed = 0;
+    let skipped = 0;
+    clipboard?.cells.forEach((cell, offset) => {
+      if (!cell.emoji || !clipboard) return;
+      const x = origin.x + (offset % clipboard.cols);
+      const y = origin.y + Math.floor(offset / clipboard.cols);
+      const lots = hoodGrid(next, hoodId);
+      if (x < 0 || y < 0 || x >= lots.cols || y >= lots.rows || lots.tiles[y * lots.cols + x]) { skipped += 1; return; }
+      const at = y * lots.cols + x;
+      const result = cell.decor
+        ? decorInHood(next, hoodId, at, cell.emoji)
+        : placeInHood(next, hoodId, at, cell.emoji, consumes, killsRef.current, Math.random);
+      if (!result.ok) { skipped += 1; return; }
+      next = result.city;
+      placed += 1;
+    });
+    return { city: next, placed, skipped };
+  };
+
+  const doPaste = (hoodId: string, index: number) => {
     if (!city || !clipboard) {
       setNote('Copy or cut a region first.');
       return;
     }
-    const result = applyPaste(city, clipboard, pointFromIndex(city.cols, index), consumes, killsRef.current, Math.random);
+    const grid = hoodGrid(city, hoodId);
+    const result = hoodId === ORIGIN_ID
+      ? applyPaste(city, clipboard, pointFromIndex(city.cols, index), consumes, killsRef.current, Math.random)
+      : pasteHood(city, hoodId, grid.cols, index);
     if (result.placed === 0) {
       setNote('Nothing pasted. The lots are full or tokens ran out.');
       return;
@@ -423,9 +532,10 @@ export default function CityPage() {
     setNote(`Pasted ${result.placed}.${result.skipped ? ` Skipped ${result.skipped}.` : ''}`);
   };
 
-  const pickAt = (index: number) => {
+  const pickAt = (hoodId: string, index: number) => {
     if (!city) return;
-    const brush = brushFromLot(city, index);
+    const grid = hoodGrid(city, hoodId);
+    const brush = brushFromLot({ ...city, tiles: grid.tiles, decor: grid.decor }, index);
     if (!brush) {
       setNote('That lot is empty.');
       return;
@@ -435,14 +545,17 @@ export default function CityPage() {
     setNote(`Brush is ${brush.emoji}${brush.kind === 'decor' ? ' decor' : ''}.`);
   };
 
-  const finishPlace = (anchor: number, current: number) => {
+  const finishPlace = (hoodId: string, anchor: number, current: number) => {
     if (!city) return;
     if (!selected) {
       setNote('Pick an emoji first.');
       return;
     }
-    const indices = indicesInRect(city.cols, city.rows, pointFromIndex(city.cols, anchor), pointFromIndex(city.cols, current));
-    const result = applyPlacement(city, selected, consumes, indices, killsRef.current, Math.random);
+    const grid = hoodGrid(city, hoodId);
+    const indices = indicesInRect(grid.cols, grid.rows, pointFromIndex(grid.cols, anchor), pointFromIndex(grid.cols, current));
+    const result = hoodId === ORIGIN_ID
+      ? applyPlacement(city, selected, consumes, indices, killsRef.current, Math.random)
+      : placeHood(city, hoodId, indices);
     if (result.placed === 0) {
       setNote('Nothing placed. Lots were full or tokens ran out.');
       return;
@@ -453,12 +566,13 @@ export default function CityPage() {
     setNote(`Placed ${result.placed} ${selected.emoji}.${free}${result.skipped ? ` Skipped ${result.skipped}.` : ''}`);
   };
 
-  const lotIndexAt = (clientX: number, clientY: number): number | null => {
+  const lotIndexAt = (clientX: number, clientY: number): { hood: string; index: number } | null => {
     const el = document.elementFromPoint(clientX, clientY);
     const lot = el?.closest('[data-lot]');
     if (!lot) return null;
     const index = Number(lot.getAttribute('data-lot'));
-    return Number.isInteger(index) ? index : null;
+    if (!Number.isInteger(index)) return null;
+    return { hood: lot.getAttribute('data-hood') || ORIGIN_ID, index };
   };
 
   const clearLongPress = () => {
@@ -467,11 +581,12 @@ export default function CityPage() {
     pressRef.current = null;
   };
 
-  const beginDrag = (kind: CityTool | 'erase', index: number, event: ReactPointerEvent<HTMLDivElement>) => {
-    dragRef.current = { tool: kind, anchor: index, current: index };
+  const beginDrag = (kind: CityTool | 'erase', lot: { hood: string; index: number }, event: ReactPointerEvent<HTMLDivElement>) => {
+    dragRef.current = { tool: kind, hood: lot.hood, anchor: lot.index, current: lot.index };
+    setDragHood(lot.hood);
     setErasing(kind === 'erase');
-    setDragAnchor(index);
-    setDragCurrent(index);
+    setDragAnchor(lot.index);
+    setDragCurrent(lot.index);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
@@ -480,21 +595,36 @@ export default function CityPage() {
     return `Set ${count} square${count === 1 ? '' : 's'} to ${what}.`;
   };
 
-  const applyPassAt = (index: number) => {
+  const applyPassAt = (hoodId: string, index: number) => {
     if (!city) return;
+    const grid = hoodGrid(city, hoodId);
     if (passMode === 'type') {
-      const emoji = city.tiles[index];
+      const emoji = grid.tiles[index];
       if (!emoji) {
         setNote('That lot is empty.');
         return;
       }
-      const next = toggleBlockedType(city, emoji);
+      const wasBlocked = grid.blockedTypes.includes(emoji);
+      const next = hoodId === ORIGIN_ID
+        ? toggleBlockedType(city, emoji)
+        : editHoodLot(city, hoodId, index, hood => {
+          const blocked = new Set(hood.blockedTypes);
+          if (blocked.has(emoji)) blocked.delete(emoji);
+          else blocked.add(emoji);
+          return { ...hood, blockedTypes: [...blocked] };
+        });
       remember();
       storeCity(next);
-      setNote(`${emoji} is ${next.blockedTypes.includes(emoji) ? 'unpassable' : 'passable'} for wandering citizens.`);
+      setNote(`${emoji} is ${wasBlocked ? 'passable' : 'unpassable'} for wandering citizens.`);
       return;
     }
-    const next = setSquarePass(city, [index], passSquare);
+    const next = hoodId === ORIGIN_ID
+      ? setSquarePass(city, [index], passSquare)
+      : editHoodLot(city, hoodId, index, hood => {
+        const passOverride = hood.passOverride.slice();
+        passOverride[index] = passSquare;
+        return { ...hood, passOverride };
+      });
     remember();
     storeCity(next);
     setNote(passNote(passSquare, 1));
@@ -507,7 +637,13 @@ export default function CityPage() {
       return;
     }
     const indices = selectionIndices();
-    const next = setSquarePass(city, indices, value);
+    const next = selectionHood === ORIGIN_ID
+      ? setSquarePass(city, indices, value)
+      : editHoodLot(city, selectionHood, indices[0] ?? 0, hood => {
+        const passOverride = hood.passOverride.slice();
+        for (const index of indices) if (index >= 0 && index < passOverride.length) passOverride[index] = value;
+        return { ...hood, passOverride };
+      });
     remember();
     storeCity(next);
     setNote(passNote(value, indices.length));
@@ -517,20 +653,20 @@ export default function CityPage() {
     if (!city) return;
     if (event.button === 1 || event.button === 2) event.preventDefault();
     if (event.button === 1) {
-      const index = lotIndexAt(event.clientX, event.clientY);
-      if (index != null) pickAt(index);
+      const lot = lotIndexAt(event.clientX, event.clientY);
+      if (lot) pickAt(lot.hood, lot.index);
       return;
     }
-    const index = lotIndexAt(event.clientX, event.clientY);
-    if (index == null) return;
+    const lot = lotIndexAt(event.clientX, event.clientY);
+    if (!lot) return;
     if (event.button === 2) {
-      beginDrag('erase', index, event);
+      beginDrag('erase', lot, event);
       return;
     }
     if (event.button !== 0) return;
     if (tool === 'zoom') return;
     if (tool === 'pass') {
-      applyPassAt(index);
+      applyPassAt(lot.hood, lot.index);
       return;
     }
     if (event.pointerType === 'touch') {
@@ -541,27 +677,27 @@ export default function CityPage() {
         setErasing(true);
       }, ERASE_LONG_PRESS_MS);
       pressRef.current = { x: event.clientX, y: event.clientY, timer };
-      beginDrag(tool, index, event);
+      beginDrag(tool, lot, event);
       return;
     }
     if (tool === 'eyedropper') {
-      pickAt(index);
+      pickAt(lot.hood, lot.index);
       return;
     }
     if (tool === 'paste') {
-      doPaste(index);
+      doPaste(lot.hood, lot.index);
       return;
     }
-    if (tool === 'place' || tool === 'select' || tool === 'delete') beginDrag(tool, index, event);
+    if (tool === 'place' || tool === 'select' || tool === 'delete') beginDrag(tool, lot, event);
   };
 
   const onGridPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (pressRef.current && longPressMoved(pressRef.current, { x: event.clientX, y: event.clientY })) clearLongPress();
     if (!dragRef.current) return;
-    const index = lotIndexAt(event.clientX, event.clientY);
-    if (index == null || !dragRef.current) return;
-    dragRef.current.current = index;
-    setDragCurrent(index);
+    const lot = lotIndexAt(event.clientX, event.clientY);
+    if (!lot || !dragRef.current || lot.hood !== dragRef.current.hood) return;
+    dragRef.current.current = lot.index;
+    setDragCurrent(lot.index);
   };
 
   const onGridPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -574,21 +710,24 @@ export default function CityPage() {
       setDragCurrent(null);
       return;
     }
-    const index = lotIndexAt(event.clientX, event.clientY) ?? drag.current;
+    const lot = lotIndexAt(event.clientX, event.clientY);
+    const index = lot && lot.hood === drag.hood ? lot.index : drag.current;
+    const grid = hoodGrid(city, drag.hood);
     if (drag.tool === 'erase' || drag.tool === 'delete') {
-      finishClear(indicesInRect(city.cols, city.rows, pointFromIndex(city.cols, drag.anchor), pointFromIndex(city.cols, index)), 'Deleted');
-    } else if (drag.tool === 'place') finishPlace(drag.anchor, index);
+      finishClear(drag.hood, indicesInRect(grid.cols, grid.rows, pointFromIndex(grid.cols, drag.anchor), pointFromIndex(grid.cols, index)), 'Deleted');
+    } else if (drag.tool === 'place') finishPlace(drag.hood, drag.anchor, index);
     else if (drag.tool === 'select') {
-      const start = pointFromIndex(city.cols, drag.anchor);
-      const end = pointFromIndex(city.cols, index);
+      const start = pointFromIndex(grid.cols, drag.anchor);
+      const end = pointFromIndex(grid.cols, index);
+      setSelectionHood(drag.hood);
       setSelection({
         x0: Math.min(start.x, end.x),
         y0: Math.min(start.y, end.y),
         x1: Math.max(start.x, end.x),
         y1: Math.max(start.y, end.y),
       });
-    } else if (drag.tool === 'eyedropper') pickAt(index);
-    else if (drag.tool === 'paste') doPaste(index);
+    } else if (drag.tool === 'eyedropper') pickAt(drag.hood, index);
+    else if (drag.tool === 'paste') doPaste(drag.hood, index);
     setDragAnchor(null);
     setDragCurrent(null);
   };
@@ -602,7 +741,7 @@ export default function CityPage() {
     setTool('delete');
     setSelection(null);
     if (indices.length === 0) return;
-    finishClear(indices, 'Deleted');
+    finishClear(selectionHood, indices, 'Deleted');
   };
 
   const onShare = async () => {
@@ -647,38 +786,47 @@ export default function CityPage() {
   };
 
   const placePreview = useMemo(() => {
-    if (!city || erasing || tool !== 'place' || !selected || dragAnchor == null || dragCurrent == null) return new Map<number, string>();
-    const indices = indicesInRect(
-      city.cols,
-      city.rows,
-      pointFromIndex(city.cols, dragAnchor),
-      pointFromIndex(city.cols, dragCurrent),
-    );
-    return new Map(previewPlacement(city, selected, consumes, indices).map(cell => [cell.index, cell.status]));
-  }, [city, erasing, tool, selected, dragAnchor, dragCurrent, consumes]);
+    if (!city || erasing || tool !== 'place' || !selected || dragAnchor == null || dragCurrent == null) return new Map<string, string>();
+    const grid = hoodGrid(city, dragHood);
+    const indices = indicesInRect(grid.cols, grid.rows, pointFromIndex(grid.cols, dragAnchor), pointFromIndex(grid.cols, dragCurrent));
+    let budget = selected.kind === 'decor' ? Number.POSITIVE_INFINITY : availableTokens(consumes[selected.emoji] ?? 0, placedOf(city, selected.emoji));
+    const marks = new Map<string, string>();
+    for (const index of indices) {
+      if (grid.tiles[index]) marks.set(`${dragHood}:${index}`, 'skip-occupied');
+      else if (budget <= 0) marks.set(`${dragHood}:${index}`, 'skip-cost');
+      else {
+        budget -= 1;
+        marks.set(`${dragHood}:${index}`, 'place');
+      }
+    }
+    return marks;
+  }, [city, erasing, tool, selected, dragAnchor, dragCurrent, dragHood, consumes]);
 
   const ants = useMemo(() => {
-    if (!city) return new Set<number>();
+    if (!city) return new Set<string>();
+    const grid = hoodGrid(city, dragAnchor != null ? dragHood : selectionHood);
     const rect = !erasing && tool === 'select' && dragAnchor != null && dragCurrent != null
       ? (() => {
-        const start = pointFromIndex(city.cols, dragAnchor);
-        const end = pointFromIndex(city.cols, dragCurrent);
+        const start = pointFromIndex(grid.cols, dragAnchor);
+        const end = pointFromIndex(grid.cols, dragCurrent);
         return { x0: Math.min(start.x, end.x), y0: Math.min(start.y, end.y), x1: Math.max(start.x, end.x), y1: Math.max(start.y, end.y) };
       })()
       : selection;
-    if (!rect) return new Set<number>();
-    return new Set(indicesInRect(city.cols, city.rows, { x: rect.x0, y: rect.y0 }, { x: rect.x1, y: rect.y1 }));
-  }, [city, erasing, tool, dragAnchor, dragCurrent, selection]);
+    if (!rect) return new Set<string>();
+    const hood = dragAnchor != null && tool === 'select' && !erasing ? dragHood : selectionHood;
+    return new Set(indicesInRect(grid.cols, grid.rows, { x: rect.x0, y: rect.y0 }, { x: rect.x1, y: rect.y1 }).map(index => `${hood}:${index}`));
+  }, [city, erasing, tool, dragAnchor, dragCurrent, dragHood, selection, selectionHood]);
 
   const erase = useMemo(() => {
-    if (!city || dragAnchor == null || dragCurrent == null || (!erasing && tool !== 'delete')) return new Set<number>();
+    if (!city || dragAnchor == null || dragCurrent == null || (!erasing && tool !== 'delete')) return new Set<string>();
+    const grid = hoodGrid(city, dragHood);
     return new Set(indicesInRect(
-      city.cols,
-      city.rows,
-      pointFromIndex(city.cols, dragAnchor),
-      pointFromIndex(city.cols, dragCurrent),
-    ));
-  }, [city, erasing, tool, dragAnchor, dragCurrent]);
+      grid.cols,
+      grid.rows,
+      pointFromIndex(grid.cols, dragAnchor),
+      pointFromIndex(grid.cols, dragCurrent),
+    ).map(index => `${dragHood}:${index}`));
+  }, [city, erasing, tool, dragAnchor, dragCurrent, dragHood]);
 
   const trainUnlocked = city ? trainLineSpansCity(city) : false;
   const canShare = trainUnlocked && online === true;
@@ -881,17 +1029,14 @@ export default function CityPage() {
         </div>
         {city && (
           <div className="flex min-w-0 flex-col gap-1 max-lg:order-3 lg:col-start-2 lg:row-start-2" data-testid="city-expand">
-            <div className="flex justify-center">
-              <ExpandEdge edge="north" city={city} tokens={tokens} onExpand={onExpand} />
-            </div>
-            <div className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1">
-              <ExpandEdge edge="west" city={city} tokens={tokens} onExpand={onExpand} />
+            <div className="min-w-0">
               <div
                 ref={scrollRef}
                 className="min-h-0 min-w-0 max-h-[70dvh] overflow-auto"
                 data-testid="city-grid-scroll"
                 onPointerDown={event => {
                   if (tool !== 'zoom' || event.button !== 0) return;
+                  if ((event.target as Element).closest('button')) return;
                   const scroller = event.currentTarget;
                   panRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: scroller.scrollLeft, top: scroller.scrollTop };
                   scroller.setPointerCapture(event.pointerId);
@@ -905,65 +1050,25 @@ export default function CityPage() {
                 onPointerUp={event => { if (panRef.current?.pointerId === event.pointerId) panRef.current = null; }}
                 onPointerCancel={event => { if (panRef.current?.pointerId === event.pointerId) panRef.current = null; }}
               >
-                <div className="relative mx-auto" style={gridBox.w > 0 ? { width: gridBox.w * zoom, height: gridBox.h * zoom } : undefined}>
-                <div
-                  ref={gridRef}
-                  data-testid="city-grid"
-                  data-zoom={zoom}
-                  data-selection={selection ? `${selection.x0},${selection.y0},${selection.x1},${selection.y1}` : undefined}
-                  className={`${gridBox.w > 0 ? 'absolute top-0 left-0' : 'relative'} grid w-fit min-w-min max-w-full touch-none select-none gap-0.5`}
-                  style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', maxWidth: portWidth > 0 ? portWidth : undefined, gridTemplateColumns: `repeat(${city.cols}, minmax(${CITY_TILE_MIN}, ${CITY_TILE_MAX}))` }}
+                <WorldMap
+                  city={city}
+                  zoom={zoom}
+                  portWidth={portWidth}
+                  gridRef={gridRef}
+                  tokens={tokens}
+                  tool={tool}
+                  selected={selected}
+                  placePreview={placePreview}
+                  ants={ants}
+                  erase={erase}
                   onPointerDown={onGridPointerDown}
                   onPointerMove={onGridPointerMove}
                   onPointerUp={onGridPointerUp}
-                  onPointerCancel={onGridPointerUp}
+                  onExpand={onExpand}
+                  onSpawn={onSpawn}
                   onContextMenu={onGridContextMenu}
-                  onMouseDown={event => { if (event.button === 1 || event.button === 2) event.preventDefault(); }}
-                >
-                  {city.tiles.map((cell, index) => {
-                    const here = city.citizens.filter(c => c.y * city.cols + c.x === index);
-                    const previewStatus = placePreview.get(index);
-                    return (
-                      <button
-                        key={index}
-                        type="button"
-                        data-testid={`lot-${index}`}
-                        data-lot={index}
-                        data-preview={previewStatus}
-                        data-selected={ants.has(index) ? 'true' : undefined}
-                        data-unpassable={tool === 'pass' && lotUnpassable(city, index) ? 'true' : undefined}
-                        aria-label={cell ? `Lot with ${cell}` : `Empty lot ${index + 1}`}
-                        className={`relative aspect-square w-full min-h-0 min-w-0 rounded-md border border-border/70 bg-emerald-950/30 text-xl leading-none ${erase.has(index) ? 'bg-red-950/50' : ''}`}
-                      >
-                        {ants.has(index) && <span className="paint-ants absolute inset-0" />}
-                        {tool === 'pass' && lotUnpassable(city, index) && (
-                          <span className="pointer-events-none absolute inset-0 rounded-md bg-rose-500/25" data-testid={`pass-block-${index}`} />
-                        )}
-                        {cell ?? (previewStatus === 'place' && selected
-                          ? <span className="opacity-60" data-testid={`preview-${index}`}>{selected.emoji}</span>
-                          : <span className="text-muted-foreground/30 text-sm">·</span>)}
-                        {previewStatus === 'skip-cost' && !cell && (
-                          <span className="text-[10px] font-bold text-red-300" data-testid={`preview-skip-${index}`}>×</span>
-                        )}
-                        {here.map(citizen => (
-                          <span
-                            key={citizen.id}
-                            data-testid={`citizen-${citizen.id}`}
-                            className="absolute bottom-0 right-0 text-[11px] leading-none"
-                          >
-                            {citizen.emoji}
-                          </span>
-                        ))}
-                      </button>
-                    );
-                  })}
-                </div>
-                </div>
+                />
               </div>
-              <ExpandEdge edge="east" city={city} tokens={tokens} onExpand={onExpand} />
-            </div>
-            <div className="flex justify-center">
-              <ExpandEdge edge="south" city={city} tokens={tokens} onExpand={onExpand} />
             </div>
           </div>
         )}
@@ -1364,6 +1469,181 @@ function PaletteChoice({
   );
 }
 
+function cellBlocked(hood: { tiles: (string | null)[]; passOverride: (boolean | null)[]; blockedTypes: string[] }, index: number): boolean {
+  const override = hood.passOverride[index];
+  if (override === true) return true;
+  if (override === false) return false;
+  const emoji = hood.tiles[index];
+  return !!emoji && hood.blockedTypes.includes(emoji);
+}
+
+function WorldMap({
+  city,
+  zoom,
+  portWidth,
+  gridRef,
+  tokens,
+  tool,
+  selected,
+  placePreview,
+  ants,
+  erase,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onExpand,
+  onSpawn,
+  onContextMenu,
+}: {
+  city: CityState;
+  zoom: number;
+  portWidth: number;
+  gridRef: RefObject<HTMLDivElement | null>;
+  tokens: number;
+  tool: CityTool;
+  selected: PalettePick | null;
+  placePreview: Map<string, string>;
+  ants: Set<string>;
+  erase: Set<string>;
+  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onExpand: (hoodId: string, edge: CityEdge) => void;
+  onSpawn: (hoodId: string, edge: CityEdge) => void;
+  onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
+}) {
+  const bounds = worldBounds(city);
+  const spanX = Math.max(1, bounds.maxX - bounds.minX);
+  const spanY = Math.max(1, bounds.maxY - bounds.minY);
+  const tile = portWidth > 0 ? Math.max(32, Math.min(44, Math.floor((portWidth - 2 * (spanX - 1)) / spanX))) : 44;
+  const gap = 2;
+  const pad = 64;
+  const worldW = spanX * tile + Math.max(0, spanX - 1) * gap + pad * 2;
+  const worldH = spanY * tile + Math.max(0, spanY - 1) * gap + pad * 2;
+  const place = (ox: number, oy: number) => ({
+    left: pad + (ox - bounds.minX) * (tile + gap),
+    top: pad + (oy - bounds.minY) * (tile + gap),
+  });
+  return (
+    <div className="relative w-fit min-w-min max-w-full" style={{ width: worldW * zoom, height: worldH * zoom }}>
+      <div
+        ref={gridRef}
+        data-testid="city-grid"
+        data-zoom={zoom}
+        className="relative"
+        style={{ width: worldW, height: worldH, transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onContextMenu={onContextMenu}
+        onMouseDown={event => { if (event.button === 1 || event.button === 2) event.preventDefault(); }}
+      >
+        {allHoods(city).map(hood => {
+          const at = place(hood.ox, hood.oy);
+          const edgeBox = (edge: CityEdge): CSSProperties => {
+            const outer = edge === 'north' ? hood.oy === bounds.minY
+              : edge === 'south' ? hood.oy + hood.rows === bounds.maxY
+                : edge === 'west' ? hood.ox === bounds.minX
+                  : hood.ox + hood.cols === bounds.maxX;
+            if (edge === 'north') return outer ? { top: -52, left: '50%', transform: 'translateX(-50%)' } : { top: 2, left: '50%', transform: 'translateX(-50%)' };
+            if (edge === 'south') return outer ? { bottom: -52, left: '50%', transform: 'translateX(-50%)' } : { bottom: 2, left: '50%', transform: 'translateX(-50%)' };
+            if (edge === 'west') return outer ? { left: -60, top: '50%', transform: 'translateY(-50%)' } : { left: 2, top: '50%', transform: 'translateY(-50%)' };
+            return outer ? { right: -60, top: '50%', transform: 'translateY(-50%)' } : { right: 2, top: '50%', transform: 'translateY(-50%)' };
+          };
+          return (
+            <div key={hood.id} data-testid={`neighborhood-${hood.id}`} className="absolute" style={at}>
+              <div className="absolute z-20" style={edgeBox('north')}>
+                <HoodEdge edge="north" hood={hood} city={city} tokens={tokens} onExpand={onExpand} onSpawn={onSpawn} />
+              </div>
+              <div className="absolute z-20" style={edgeBox('west')}>
+                <HoodEdge edge="west" hood={hood} city={city} tokens={tokens} onExpand={onExpand} onSpawn={onSpawn} />
+              </div>
+              <div className="absolute z-20" style={edgeBox('east')}>
+                <HoodEdge edge="east" hood={hood} city={city} tokens={tokens} onExpand={onExpand} onSpawn={onSpawn} />
+              </div>
+              <div className="absolute z-20" style={edgeBox('south')}>
+                <HoodEdge edge="south" hood={hood} city={city} tokens={tokens} onExpand={onExpand} onSpawn={onSpawn} />
+              </div>
+              <div className="relative z-0 grid gap-0.5" style={{ gridTemplateColumns: portWidth > 0 ? `repeat(${hood.cols}, ${tile}px)` : `repeat(${hood.cols}, minmax(${CITY_TILE_MIN}, ${CITY_TILE_MAX}))` }}>
+                {hood.tiles.map((cell, index) => {
+                  const lx = index % hood.cols;
+                  const ly = Math.floor(index / hood.cols);
+                  const key = `${hood.id}:${index}`;
+                  const here = city.citizens.filter(citizen => citizen.x === hood.ox + lx && citizen.y === hood.oy + ly);
+                  const previewStatus = placePreview.get(key);
+                  const blocked = cellBlocked(hood, index);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      data-testid={hood.id === ORIGIN_ID ? `lot-${index}` : `lot-${hood.id}-${index}`}
+                      data-lot={index}
+                      data-hood={hood.id}
+                      data-preview={previewStatus}
+                      data-selected={ants.has(key) ? 'true' : undefined}
+                      data-unpassable={tool === 'pass' && blocked ? 'true' : undefined}
+                      aria-label={cell ? `Lot with ${cell}` : `Empty lot ${index + 1}`}
+                      className={`relative aspect-square w-full min-h-0 min-w-0 rounded-md border border-border/70 bg-emerald-950/30 text-xl leading-none ${erase.has(key) ? 'bg-red-950/50' : ''}`}
+                      style={{ width: tile, height: tile }}
+                    >
+                      {ants.has(key) && <span className="paint-ants absolute inset-0" />}
+                      {tool === 'pass' && blocked && (
+                        <span className="pointer-events-none absolute inset-0 rounded-md bg-rose-500/25" />
+                      )}
+                      {cell ?? (previewStatus === 'place' && selected
+                        ? <span className="opacity-60">{selected.emoji}</span>
+                        : <span className="text-muted-foreground/30 text-sm">·</span>)}
+                      {previewStatus === 'skip-cost' && !cell && (
+                        <span className="text-[10px] font-bold text-red-300">×</span>
+                      )}
+                      {here.map(citizen => (
+                        <span key={citizen.id} data-testid={`citizen-${citizen.id}`} className="absolute bottom-0 right-0 text-[11px] leading-none">
+                          {citizen.emoji}
+                        </span>
+                      ))}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function HoodEdge({
+  edge,
+  hood,
+  city,
+  tokens,
+  onExpand,
+  onSpawn,
+}: {
+  edge: CityEdge;
+  hood: Neighborhood;
+  city: CityState;
+  tokens: number;
+  onExpand: (hoodId: string, edge: CityEdge) => void;
+  onSpawn: (hoodId: string, edge: CityEdge) => void;
+}) {
+  if (!canGrowEdge(hood, edge)) return null;
+  const span = edge === 'east' || edge === 'west' ? hood.cols : hood.rows;
+  if (span >= CITY_DIM_MAX && hoodIsMaxed(hood, CITY_DIM_MAX)) {
+    if (spawnBlocked(city, hood, edge)) return null;
+    return (
+      <button type="button" data-testid={`spawn-${hood.id}-${edge}`} className="paint-btn h-12 w-16 px-1 text-[9px] font-bold leading-tight" onClick={() => onSpawn(hood.id, edge)}>
+        New neighborhood
+        <span className="mt-0.5 block tabular-nums">{NEIGHBORHOOD_COST}</span>
+      </button>
+    );
+  }
+  if (growthBlocked(city, hood, edge)) return null;
+  return <ExpandEdge edge={edge} hoodId={hood.id} city={{ ...city, cols: hood.cols, rows: hood.rows }} tokens={tokens} onExpand={onExpand} />;
+}
+
 const EDGE_ICON = {
   north: ChevronUp,
   south: ChevronDown,
@@ -1373,20 +1653,22 @@ const EDGE_ICON = {
 
 function ExpandEdge({
   edge,
+  hoodId,
   city,
   tokens,
   onExpand,
 }: {
   edge: CityEdge;
+  hoodId: string;
   city: CityState;
   tokens: number;
-  onExpand: (edge: CityEdge) => void;
+  onExpand: (hoodId: string, edge: CityEdge) => void;
 }) {
   const blocked = expandBlockReason(city, edge, tokens);
   if (blocked === 'This edge cannot grow further.') {
     return (
       <div
-        data-testid={`expand-${edge}`}
+        data-testid={`expand-${hoodId}-${edge}`}
         data-max-size="true"
         aria-label="Max size"
         className="flex h-11 w-9 items-center justify-center px-0.5 text-center text-[9px] font-bold leading-tight text-muted-foreground sm:w-11"
@@ -1406,9 +1688,9 @@ function ExpandEdge({
             variant="outline"
             className="flex h-11 w-9 flex-col gap-0 whitespace-normal px-0.5 sm:w-11"
             disabled={blocked !== null}
-            data-testid={`expand-${edge}`}
+            data-testid={`expand-${hoodId}-${edge}`}
             aria-label={hint}
-            onClick={() => onExpand(edge)}
+            onClick={() => onExpand(hoodId, edge)}
           >
             <Icon className="h-4 w-4" aria-hidden="true" />
             <span className="text-[10px] font-bold tabular-nums">{CITY_EXPAND_COST}</span>

@@ -5,11 +5,11 @@ import {
   CITY_DIM_MAX,
   CITY_ROWS,
   emptyCity,
-  isDecorLot,
   normalizeCity,
   trainLineSpansCity,
   type CityState,
 } from './emojiCity';
+import { allHoods, compactCity, isCompactCity } from './neighborhoods';
 
 /** Shown on Share and the ledger when no database is configured or it cannot be reached. */
 export const ONLINE_UNAVAILABLE = 'online features unavailable';
@@ -70,10 +70,17 @@ export interface PublishValue {
 /** Placed structures. Free decor and plain emoji do not count. */
 export function structureCount(city: CityState): number {
   let count = 0;
-  for (let i = 0; i < city.tiles.length; i++) {
-    const cell = city.tiles[i];
-    if (!cell || isDecorLot(city, i)) continue;
-    if (isBuildingEmoji(cell)) count++;
+  const hoods = city.neighborhoods ?? [];
+  const grids = [
+    { tiles: city.tiles, decor: city.decor },
+    ...hoods.map(hood => ({ tiles: hood.tiles, decor: hood.decor })),
+  ];
+  for (const grid of grids) {
+    for (let i = 0; i < grid.tiles.length; i++) {
+      const cell = grid.tiles[i];
+      if (!cell || grid.decor?.[i] === true) continue;
+      if (isBuildingEmoji(cell)) count++;
+    }
   }
   return count;
 }
@@ -213,32 +220,29 @@ export function validatePublish(input: {
   const city = input.city;
   if (!city || typeof city !== 'object') return { ok: false, error: 'The city grid is missing.' };
   const raw = city as Partial<CityState>;
-  const cols = typeof raw.cols === 'number' ? Math.floor(raw.cols) : NaN;
-  const rows = typeof raw.rows === 'number' ? Math.floor(raw.rows) : NaN;
-  if (cols < CITY_COLS || rows < CITY_ROWS || cols > CITY_DIM_MAX || rows > CITY_DIM_MAX) {
-    return { ok: false, error: 'That city grid is the wrong size.' };
-  }
-  if (!Array.isArray(raw.tiles) || raw.tiles.length !== cols * rows) {
-    return { ok: false, error: 'That city grid is the wrong size.' };
-  }
-  if (JSON.stringify(raw.tiles).length > GRID_JSON_MAX) return { ok: false, error: 'City payload is too large.' };
-  for (const cell of raw.tiles) {
-    if (cell === null) continue;
-    if (typeof cell !== 'string' || cell.length === 0 || cell.length > 32) {
-      return { ok: false, error: 'A city tile is not a valid emoji.' };
-    }
-  }
-  if (raw.decor !== undefined) {
-    if (!Array.isArray(raw.decor) || raw.decor.length !== raw.tiles.length || raw.decor.some(flag => typeof flag !== 'boolean')) {
-      return { ok: false, error: 'That city grid is the wrong size.' };
-    }
-  }
-  if (raw.citizens !== undefined && (!Array.isArray(raw.citizens) || raw.citizens.length > 400)) {
-    return { ok: false, error: 'That city has too many citizens.' };
+  if (!isCompactCity(raw) && Array.isArray(raw.tiles)) {
+    const cols = typeof raw.cols === 'number' ? Math.floor(raw.cols) : Number.NaN;
+    const rows = typeof raw.rows === 'number' ? Math.floor(raw.rows) : Number.NaN;
+    if (raw.tiles.length !== cols * rows) return { ok: false, error: 'That city grid is the wrong size.' };
   }
   const normalized = normalizeCity(raw);
-  if (normalized.cols !== cols || normalized.rows !== rows) return { ok: false, error: 'That city grid is the wrong size.' };
-  if (JSON.stringify(normalized).length > GRID_JSON_MAX) return { ok: false, error: 'City payload is too large.' };
+  if (normalized.cols < CITY_COLS || normalized.rows < CITY_ROWS || normalized.cols > CITY_DIM_MAX || normalized.rows > CITY_DIM_MAX) {
+    return { ok: false, error: 'That city grid is the wrong size.' };
+  }
+  for (const hood of allHoods(normalized)) {
+    if (hood.cols < CITY_COLS || hood.rows < CITY_ROWS || hood.cols > CITY_DIM_MAX || hood.rows > CITY_DIM_MAX) {
+      return { ok: false, error: 'That city grid is the wrong size.' };
+    }
+    if (hood.tiles.length !== hood.cols * hood.rows) return { ok: false, error: 'That city grid is the wrong size.' };
+    for (const cell of hood.tiles) {
+      if (cell === null) continue;
+      if (typeof cell !== 'string' || cell.length === 0 || cell.length > 32) {
+        return { ok: false, error: 'A city tile is not a valid emoji.' };
+      }
+    }
+  }
+  if (normalized.citizens.length > 400) return { ok: false, error: 'That city has too many citizens.' };
+  if (JSON.stringify(compactCity(normalized)).length > GRID_JSON_MAX) return { ok: false, error: 'City payload is too large.' };
   if (!trainLineSpansCity(normalized)) {
     return { ok: false, error: 'A train line has to span the city before it can be shared.' };
   }

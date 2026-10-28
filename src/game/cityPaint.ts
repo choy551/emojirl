@@ -246,6 +246,13 @@ export function snapshotPaint(city: CityState, consumes: Record<string, number>)
       decor: city.decor.slice(),
       blockedTypes: city.blockedTypes.slice(),
       passOverride: city.passOverride.slice(),
+      neighborhoods: city.neighborhoods?.map(hood => ({
+        ...hood,
+        tiles: hood.tiles.slice(),
+        decor: hood.decor.slice(),
+        passOverride: hood.passOverride.slice(),
+        blockedTypes: hood.blockedTypes.slice(),
+      })),
     },
     consumes: { ...consumes },
   };

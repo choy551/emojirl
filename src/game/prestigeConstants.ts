@@ -33,10 +33,11 @@ export const META_SAVE_KEY = 'emojirl_meta_v1';
  * v3 stores the grid's cols and rows. Older cities omit them and load as 8×8.
  * v4 stores which emoji types block wandering citizens, and any per-square overrides.
  * Older cities omit both and load with orange and blue squares blocked.
+ * v5 stores extra neighborhoods beside the origin grid. A save without them is the origin.
  * The city name and the anonymous visitor name are optional fields on this version.
  * The storage key stays `emojirl_meta_v1` so existing browsers keep their file.
  */
-export const META_SCHEMA_VERSION = 4;
+export const META_SCHEMA_VERSION = 5;
 
 // ── Genie (ranged, 3 passives + Blink) ──────────────────────────────────────
 export const GENIE_BASE_MP = 6;
