@@ -196,6 +196,9 @@ export interface CityCitizen {
 
 export type CityEdge = 'north' | 'south' | 'east' | 'west';
 
+/** Orange and blue squares block wandering, the same way lava and water do in a run. */
+export const DEFAULT_BLOCKED_TYPES = ['🟧', '🟦'].map(emoji => normalizeEmojiKey(emoji));
+
 export interface CityState {
   tiles: (string | null)[];
   citizens: CityCitizen[];
@@ -206,6 +209,10 @@ export interface CityState {
   rows: number;
   /** True when that lot is free decor. Missing entries are real placements. */
   decor: boolean[];
+  /** Emoji types citizens will not enter. Missing on older saves, which use the defaults. */
+  blockedTypes: string[];
+  /** Per-lot override. true blocks, false allows, null follows the emoji type. */
+  passOverride: (boolean | null)[];
 }
 
 export interface CityEdit {
@@ -229,6 +236,8 @@ export function emptyCity(): CityState {
     cols: CITY_COLS,
     rows: CITY_ROWS,
     decor: Array.from({ length: CITY_SIZE }, () => false),
+    blockedTypes: [...DEFAULT_BLOCKED_TYPES],
+    passOverride: Array.from({ length: CITY_SIZE }, () => null),
   };
 }
 
@@ -288,7 +297,58 @@ export function normalizeCity(raw: unknown): CityState {
     }
   }
   const nextId = typeof src.nextId === 'number' && src.nextId > 0 ? Math.floor(src.nextId) : citizens.length + 1;
-  return { tiles, citizens, nextId, cols, rows, decor };
+  return { tiles, citizens, nextId, cols, rows, decor, blockedTypes: readBlockedTypes(src.blockedTypes), passOverride: readPassOverride(src.passOverride, size) };
+}
+
+function readBlockedTypes(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_BLOCKED_TYPES];
+  const types: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'string' || entry.length === 0) continue;
+    const key = normalizeEmojiKey(entry);
+    if (!types.includes(key)) types.push(key);
+  }
+  return types;
+}
+
+function readPassOverride(raw: unknown, size: number): (boolean | null)[] {
+  const flags = Array.from({ length: size }, () => null as boolean | null);
+  if (!Array.isArray(raw)) return flags;
+  const limit = Math.min(size, raw.length);
+  for (let i = 0; i < limit; i++) {
+    if (raw[i] === true || raw[i] === false) flags[i] = raw[i];
+  }
+  return flags;
+}
+
+/** A square override wins. Otherwise orange and blue squares block, and every other emoji does not. */
+export function lotUnpassable(city: CityState, index: number): boolean {
+  const override = city.passOverride?.[index];
+  if (override === true) return true;
+  if (override === false) return false;
+  const emoji = city.tiles[index];
+  if (!emoji) return false;
+  const blocked = city.blockedTypes ?? DEFAULT_BLOCKED_TYPES;
+  return blocked.includes(normalizeEmojiKey(emoji));
+}
+
+export function toggleBlockedType(city: CityState, emoji: string): CityState {
+  const key = normalizeEmojiKey(emoji);
+  const blocked = new Set((city.blockedTypes ?? DEFAULT_BLOCKED_TYPES).map(entry => normalizeEmojiKey(entry)));
+  if (blocked.has(key)) blocked.delete(key);
+  else blocked.add(key);
+  return { ...city, blockedTypes: [...blocked] };
+}
+
+/** `null` clears the square back to its emoji type. */
+export function setSquarePass(city: CityState, indices: readonly number[], value: boolean | null): CityState {
+  const { size } = gridOf(city);
+  const passOverride = readPassOverride(city.passOverride, size);
+  for (const index of indices) {
+    if (!Number.isInteger(index) || index < 0 || index >= size) continue;
+    passOverride[index] = value;
+  }
+  return { ...city, passOverride };
 }
 
 export function tokensForEmoji(consumes: number): number {
@@ -536,7 +596,7 @@ export function tickCitizens(city: CityState, rng: () => number = Math.random): 
     if (x < 0 || y < 0 || x >= cols || y >= rows) return citizen;
     const next = cellIndex(cols, x, y);
     const here = cellIndex(cols, citizen.x, citizen.y);
-    if (occupied.has(next)) return citizen;
+    if (occupied.has(next) || lotUnpassable(city, next)) return citizen;
     occupied.delete(here);
     occupied.add(next);
     return { ...citizen, x, y };
@@ -991,7 +1051,7 @@ function scatterCitizens(city: CityState, rng: () => number): CityState {
   const occupied = new Set<number>();
   const citizens = city.citizens.map(citizen => {
     const open: number[] = [];
-    for (let i = 0; i < size; i++) if (!occupied.has(i)) open.push(i);
+    for (let i = 0; i < size; i++) if (!occupied.has(i) && !lotUnpassable(city, i)) open.push(i);
     if (open.length === 0) return citizen;
     const index = open[Math.min(open.length - 1, Math.floor(rng() * open.length))]!;
     occupied.add(index);
@@ -1083,6 +1143,7 @@ function shiftGrid(city: CityState, edge: CityEdge): CityState {
     const nextRows = rows + 1;
     const nextTiles: (string | null)[] = Array.from({ length: cols * nextRows }, () => null);
     const nextDecor = Array.from({ length: cols * nextRows }, () => false);
+    const nextPass: (boolean | null)[] = Array.from({ length: cols * nextRows }, () => null);
     const yOffset = edge === 'north' ? 1 : 0;
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
@@ -1090,6 +1151,7 @@ function shiftGrid(city: CityState, edge: CityEdge): CityState {
         const to = (y + yOffset) * cols + x;
         nextTiles[to] = city.tiles[from] ?? null;
         nextDecor[to] = city.decor?.[from] === true && !!nextTiles[to];
+        nextPass[to] = city.passOverride?.[from] === true || city.passOverride?.[from] === false ? city.passOverride[from] : null;
       }
     }
     return {
@@ -1098,12 +1160,14 @@ function shiftGrid(city: CityState, edge: CityEdge): CityState {
       rows: nextRows,
       tiles: nextTiles,
       decor: nextDecor,
+      passOverride: nextPass,
       citizens: city.citizens.map(citizen => ({ ...citizen, y: citizen.y + yOffset })),
     };
   }
   const nextCols = cols + 1;
   const nextTiles: (string | null)[] = Array.from({ length: nextCols * rows }, () => null);
   const nextDecor = Array.from({ length: nextCols * rows }, () => false);
+  const nextPass: (boolean | null)[] = Array.from({ length: nextCols * rows }, () => null);
   const xOffset = edge === 'west' ? 1 : 0;
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
@@ -1111,6 +1175,7 @@ function shiftGrid(city: CityState, edge: CityEdge): CityState {
       const to = y * nextCols + x + xOffset;
       nextTiles[to] = city.tiles[from] ?? null;
       nextDecor[to] = city.decor?.[from] === true && !!nextTiles[to];
+      nextPass[to] = city.passOverride?.[from] === true || city.passOverride?.[from] === false ? city.passOverride[from] : null;
     }
   }
   return {
@@ -1119,6 +1184,7 @@ function shiftGrid(city: CityState, edge: CityEdge): CityState {
     rows,
     tiles: nextTiles,
     decor: nextDecor,
+    passOverride: nextPass,
     citizens: city.citizens.map(citizen => ({ ...citizen, x: citizen.x + xOffset })),
   };
 }

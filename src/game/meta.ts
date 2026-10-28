@@ -5,6 +5,7 @@ import { fullGridTokensPerConsume, type DropIdentity } from './dropTable';
 import {
   CITY_COLS,
   CITY_ROWS,
+  DEFAULT_BLOCKED_TYPES,
   cityGridIsFull,
   fullCityConsumeNotice,
   normalizeCity,
@@ -101,6 +102,8 @@ function countMap(raw: unknown): Record<string, number> {
  * key is dropped. The grid, consume ledger, citizens, pending turns, insured carry,
  * and prestige unlocks are kept, and every built style now scores on its own.
  * v2 → v3: a city without cols and rows is the original 8×8. Stored dimensions are kept.
+ * v3 → v4: a city without passability rules blocks orange and blue squares and
+ * leaves every square on the type rule. A saved list, including an empty one, is kept.
  * City name and visitor name are optional. Invalid values are dropped and filled
  * later by ensureCityProfile, without a schema bump.
  */
@@ -113,6 +116,11 @@ export function migrateMetaRaw(raw: Record<string, unknown>): void {
     const city = raw.city as Record<string, unknown>;
     if (typeof city.cols !== 'number') city.cols = CITY_COLS;
     if (typeof city.rows !== 'number') city.rows = CITY_ROWS;
+  }
+  if (version < 4 && raw.city && typeof raw.city === 'object') {
+    const city = raw.city as Record<string, unknown>;
+    if (!Array.isArray(city.blockedTypes)) city.blockedTypes = [...DEFAULT_BLOCKED_TYPES];
+    if (!Array.isArray(city.passOverride)) city.passOverride = [];
   }
   raw.schemaVersion = META_SCHEMA_VERSION;
 }

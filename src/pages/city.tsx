@@ -26,7 +26,10 @@ import {
   exchangeForBuilding,
   expandBlockReason,
   expandCity,
+  lotUnpassable,
   normalizeCity,
+  setSquarePass,
+  toggleBlockedType,
   paletteMenuRows,
   placedCount,
   placedOf,
@@ -81,6 +84,8 @@ export default function CityPage() {
   const [dragAnchor, setDragAnchor] = useState<number | null>(null);
   const [dragCurrent, setDragCurrent] = useState<number | null>(null);
   const [erasing, setErasing] = useState(false);
+  const [passMode, setPassMode] = useState<'type' | 'square'>('type');
+  const [passSquare, setPassSquare] = useState<boolean | null>(true);
   const dragRef = useRef<{ tool: CityTool | 'erase'; anchor: number; current: number } | null>(null);
   const pressRef = useRef<{ x: number; y: number; timer: number } | null>(null);
   const undoRef = useRef<() => void>(() => {});
@@ -160,7 +165,7 @@ export default function CityPage() {
     if (!selection || !city) return;
     const onPointerDown = (event: PointerEvent) => {
       const el = event.target instanceof Element ? event.target : null;
-      if (el?.closest('[data-testid="city-tool-copy"], [data-testid="city-tool-cut"], [data-testid="city-tool-delete"]')) return;
+      if (el?.closest('[data-testid="city-tool-copy"], [data-testid="city-tool-cut"], [data-testid="city-tool-delete"], [data-testid="city-tool-pass"], [data-testid="pass-options"]')) return;
       const lot = el?.closest('[data-lot]');
       if (lot) {
         const index = Number(lot.getAttribute('data-lot'));
@@ -230,7 +235,7 @@ export default function CityPage() {
   };
 
   const chooseTool = (next: CityTool) => {
-    if (next !== tool) setSelection(null);
+    if (next !== tool && next !== 'select' && next !== 'pass') setSelection(null);
     setTool(next);
   };
 
@@ -346,6 +351,47 @@ export default function CityPage() {
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
+  const passNote = (value: boolean | null, count: number) => {
+    const what = value === null ? 'the type rule' : value ? 'unpassable' : 'passable';
+    return `Set ${count} square${count === 1 ? '' : 's'} to ${what}.`;
+  };
+
+  const applyPassAt = (index: number) => {
+    if (!city) return;
+    if (passMode === 'type') {
+      const emoji = city.tiles[index];
+      if (!emoji) {
+        setNote('That lot is empty.');
+        return;
+      }
+      const next = toggleBlockedType(city, emoji);
+      remember();
+      setCity(next);
+      saveCity(next);
+      setNote(`${emoji} is ${next.blockedTypes.includes(emoji) ? 'unpassable' : 'passable'} for wandering citizens.`);
+      return;
+    }
+    const next = setSquarePass(city, [index], passSquare);
+    remember();
+    setCity(next);
+    saveCity(next);
+    setNote(passNote(passSquare, 1));
+  };
+
+  const applyPassMarquee = (value: boolean | null) => {
+    setPassSquare(value);
+    if (!city || !selection) {
+      setNote(value === null ? 'Click a square to use its emoji type.' : value ? 'Click a square to block it.' : 'Click a square to open it.');
+      return;
+    }
+    const indices = selectionIndices();
+    const next = setSquarePass(city, indices, value);
+    remember();
+    setCity(next);
+    saveCity(next);
+    setNote(passNote(value, indices.length));
+  };
+
   const onGridPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!city) return;
     if (event.button === 1 || event.button === 2) event.preventDefault();
@@ -361,6 +407,10 @@ export default function CityPage() {
       return;
     }
     if (event.button !== 0) return;
+    if (tool === 'pass') {
+      applyPassAt(index);
+      return;
+    }
     if (event.pointerType === 'touch') {
       const timer = window.setTimeout(() => {
         pressRef.current = null;
@@ -681,6 +731,19 @@ export default function CityPage() {
           onCut={doCut}
           onUndo={undo}
         />
+        {tool === 'pass' && (
+          <div data-testid="pass-options" className="paint-box mt-1 grid grid-cols-2 gap-1 p-1" aria-label="Passability">
+            <button type="button" className="paint-btn h-9 text-[10px] font-bold" data-testid="pass-mode-type" aria-pressed={passMode === 'type'} onClick={() => setPassMode('type')}>Type</button>
+            <button type="button" className="paint-btn h-9 text-[10px] font-bold" data-testid="pass-mode-square" aria-pressed={passMode === 'square'} onClick={() => setPassMode('square')}>Square</button>
+            {passMode === 'square' && (
+              <>
+                <button type="button" className="paint-btn h-9 text-[10px] font-bold" data-testid="pass-set-block" aria-pressed={passSquare === true} onClick={() => applyPassMarquee(true)}>Block</button>
+                <button type="button" className="paint-btn h-9 text-[10px] font-bold" data-testid="pass-set-open" aria-pressed={passSquare === false} onClick={() => applyPassMarquee(false)}>Open</button>
+                <button type="button" className="paint-btn col-span-2 h-9 text-[10px] font-bold" data-testid="pass-set-clear" aria-pressed={passSquare === null} onClick={() => applyPassMarquee(null)}>Type rule</button>
+              </>
+            )}
+          </div>
+        )}
         </div>
         {city && (
           <div className="flex min-w-0 flex-col gap-1 max-lg:order-3 lg:col-start-2 lg:row-start-2" data-testid="city-expand">
@@ -713,10 +776,14 @@ export default function CityPage() {
                         data-lot={index}
                         data-preview={previewStatus}
                         data-selected={ants.has(index) ? 'true' : undefined}
+                        data-unpassable={tool === 'pass' && lotUnpassable(city, index) ? 'true' : undefined}
                         aria-label={cell ? `Lot with ${cell}` : `Empty lot ${index + 1}`}
                         className={`relative aspect-square w-full min-h-0 min-w-0 rounded-md border border-border/70 bg-emerald-950/30 text-xl leading-none ${erase.has(index) ? 'bg-red-950/50' : ''}`}
                       >
                         {ants.has(index) && <span className="paint-ants absolute inset-0" />}
+                        {tool === 'pass' && lotUnpassable(city, index) && (
+                          <span className="pointer-events-none absolute inset-0 rounded-md bg-rose-500/25" data-testid={`pass-block-${index}`} />
+                        )}
                         {cell ?? (previewStatus === 'place' && selected
                           ? <span className="opacity-60" data-testid={`preview-${index}`}>{selected.emoji}</span>
                           : <span className="text-muted-foreground/30 text-sm">·</span>)}

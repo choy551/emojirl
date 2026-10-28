@@ -10,6 +10,7 @@ import {
   validatePublish,
   type SharedCityRecord,
 } from '../game/cityShareModel.ts';
+import { normalizeCity } from '../game/emojiCity.ts';
 import { databaseUrl, hashPlayerToken, memoryCityStore, neonCityStore, newPublicId, type CityStore } from './cityStore.ts';
 
 export { ONLINE_UNAVAILABLE };
@@ -61,7 +62,7 @@ function publicCity(row: SharedCityRecord, withGrid: boolean) {
     citizens: row.citizens,
     updatedAt: row.updatedAt,
   };
-  return withGrid ? { ...base, grid: row.grid } : base;
+  return withGrid ? { ...base, grid: normalizeCity(row.grid) } : base;
 }
 
 async function allowRead(store: CityStore, request: Request, now: number): Promise<Response | null> {

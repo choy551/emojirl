@@ -244,6 +244,8 @@ export function snapshotPaint(city: CityState, consumes: Record<string, number>)
       cols: city.cols,
       rows: city.rows,
       decor: city.decor.slice(),
+      blockedTypes: city.blockedTypes.slice(),
+      passOverride: city.passOverride.slice(),
     },
     consumes: { ...consumes },
   };
