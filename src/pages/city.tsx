@@ -1541,18 +1541,28 @@ function WorldMap({
       >
         {allHoods(city).map(hood => {
           const at = place(hood.ox, hood.oy);
+          const edgeBox = (edge: CityEdge): CSSProperties => {
+            const outer = edge === 'north' ? hood.oy === bounds.minY
+              : edge === 'south' ? hood.oy + hood.rows === bounds.maxY
+                : edge === 'west' ? hood.ox === bounds.minX
+                  : hood.ox + hood.cols === bounds.maxX;
+            if (edge === 'north') return outer ? { top: -52, left: '50%', transform: 'translateX(-50%)' } : { top: 2, left: '50%', transform: 'translateX(-50%)' };
+            if (edge === 'south') return outer ? { bottom: -52, left: '50%', transform: 'translateX(-50%)' } : { bottom: 2, left: '50%', transform: 'translateX(-50%)' };
+            if (edge === 'west') return outer ? { left: -60, top: '50%', transform: 'translateY(-50%)' } : { left: 2, top: '50%', transform: 'translateY(-50%)' };
+            return outer ? { right: -60, top: '50%', transform: 'translateY(-50%)' } : { right: 2, top: '50%', transform: 'translateY(-50%)' };
+          };
           return (
             <div key={hood.id} data-testid={`neighborhood-${hood.id}`} className="absolute" style={at}>
-              <div className="absolute z-20 -translate-x-1/2" style={{ top: 2, left: '50%' }}>
+              <div className="absolute z-20" style={edgeBox('north')}>
                 <HoodEdge edge="north" hood={hood} city={city} tokens={tokens} onExpand={onExpand} onSpawn={onSpawn} />
               </div>
-              <div className="absolute z-20 -translate-y-1/2" style={{ left: 2, top: '50%' }}>
+              <div className="absolute z-20" style={edgeBox('west')}>
                 <HoodEdge edge="west" hood={hood} city={city} tokens={tokens} onExpand={onExpand} onSpawn={onSpawn} />
               </div>
-              <div className="absolute z-20 -translate-y-1/2" style={{ right: 2, top: '50%' }}>
+              <div className="absolute z-20" style={edgeBox('east')}>
                 <HoodEdge edge="east" hood={hood} city={city} tokens={tokens} onExpand={onExpand} onSpawn={onSpawn} />
               </div>
-              <div className="absolute z-20 -translate-x-1/2" style={{ bottom: 2, left: '50%' }}>
+              <div className="absolute z-20" style={edgeBox('south')}>
                 <HoodEdge edge="south" hood={hood} city={city} tokens={tokens} onExpand={onExpand} onSpawn={onSpawn} />
               </div>
               <div className="relative z-0 grid gap-0.5" style={{ gridTemplateColumns: portWidth > 0 ? `repeat(${hood.cols}, ${tile}px)` : `repeat(${hood.cols}, minmax(${CITY_TILE_MIN}, ${CITY_TILE_MAX}))` }}>
