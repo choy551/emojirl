@@ -1,6 +1,7 @@
 import { Player, Enemy, MoodType } from './types';
 import { crowGoldSteal } from './economy';
 import { applyNullMomentum } from './voidDamage';
+import { shieldReduction } from './emojiBalance';
 import { blinkStrikeAlwaysHits, blinkStrikeDamageMultiplier, critStat } from './blinkStrike';
 import { DODGE_CHANCE_CAP, effectiveCrit } from './softCap';
 import { feastDefense } from './foodSinks';
@@ -300,7 +301,10 @@ export function resolveCombat(
         ? 1
         : Math.max(1, enemy.attack - Math.floor(defense / 2));
       const incoming = Math.round(rawEnemy * mods.incomingMult * incomingScale);
-      const shieldDR = Math.min(incoming, opts.shieldWall ?? 0);
+      const shieldDR = Math.min(
+        incoming,
+        opts.shieldWall ? shieldReduction(opts.shieldWall, opts.floor ?? 1, defense) : 0,
+      );
       const afterShield = incoming - shieldDR;
       const finalDmg = applyNullMomentum(afterShield, player);
       newPlayerHp -= finalDmg;

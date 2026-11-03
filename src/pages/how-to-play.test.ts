@@ -57,6 +57,7 @@ describe('RTFM sections and table of contents', () => {
     expect(manual).toContain('T5+');
     expect(manual).toContain('Endless Chain removes that cap');
     expect(manual).toContain('Blink Truestrike ignores this');
+    expect(manual).toContain('rarityOfItem');
     expect(manual).not.toContain('all six');
     expect(manual).not.toContain('T4+');
     expect(manual).not.toContain('Longer Chain');

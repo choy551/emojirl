@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, Lock } from "lucide-react";
 import { EMOJI_POWERS } from "../game/emojis";
+import { RARITY_LABEL, RARITY_TEXT_CLASS, rarityOfItem } from "../game/dropTable";
 import { ENEMY_TYPES } from "../game/enemies";
 import { CHARACTER_CLASSES } from "../game/classes";
 import { DRINK_DROPS, DRINK_TIER_MP, DRINK_TIER_SELL, classDrinkEffects } from "../game/drinks";
@@ -382,7 +383,7 @@ export default function HowToPlay({
                 • <strong>Genie 🧞‍♀️</strong>: same aim keys as the Wizard; 4 is Blink. 5 toggles Bloodcast and 6 toggles Overchannel (both start on). 7 toggles Safe fireballs (starts off). Fireball replaces the bolt.<br />
                 • <strong>Fencer 🤺</strong>: 1 Backdash / 2 Lunge (X lunges)<br />
                 • <strong>Levitating Hitman 🕴️</strong>: 1 Execute Contract (X) / 2 stealth<br />
-                • <strong>Royal Guard 💂</strong>: 1 ranged / 2 melee / 4 Guardian Stance (X)
+                • <strong>Royal Guard 💂</strong>: starts in melee. 1 ranged (only with a bow or gun equipped) / 2 melee / 4 Guardian Stance (X)
               </div>
               <div className="flex items-center gap-2">
                 <Kbd>T</Kbd>
@@ -475,7 +476,7 @@ export default function HowToPlay({
           </div>
 
           <div className="text-xs text-muted-foreground mt-2">
-            <strong>Special modes:</strong> When using bombs, guns, boomerang, rope, or freeze (from hotbar 1–9), you enter direction-pick mode — click a tile, use the d-pad, or press movement keys (arrows/WASD/numpad) to fire in that direction. The shot travels the whole line immediately (hits the first hostile, skips companions). Esc cancels.
+            <strong>Special modes:</strong> When using bombs, guns, boomerang, rope, or freeze (from hotbar 1–9), you enter direction-pick mode — click a tile, use the d-pad, or press movement keys (arrows/WASD/numpad) to fire in that direction. The shot travels the whole line immediately (a gun pierces for 300% ATK, then 50 percentage points less per further enemy, down to 50%; bombs, freeze, and boomerangs stop on the first hostile; companions are skipped). Esc cancels.
           </div>
 
           <div className="text-xs text-muted-foreground mt-1">
@@ -761,7 +762,17 @@ export default function HowToPlay({
                 <div className="flex-1 min-w-0">
                   {seen ? (
                     <>
-                      <div className="font-semibold text-sm">{power.name}</div>
+                      <div className="font-semibold text-sm">
+                        {power.name}
+                        {(() => {
+                          const rarity = rarityOfItem({ emoji: power.emoji, bagPassive: power.bagPassive });
+                          return rarity ? (
+                            <span className={`ml-2 text-[10px] uppercase tracking-wide ${RARITY_TEXT_CLASS[rarity]}`}>
+                              {RARITY_LABEL[rarity]}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {power.description}
                       </div>
@@ -797,11 +808,35 @@ export default function HowToPlay({
         <div className="space-y-2">
           {[
             {
+              emoji: "👑",
+              name: "Crown",
+              effect: "Royal Stun",
+              detail:
+                "Stacks to 5. A Royal Guard stuns for 5% per crown (25% at 5): the enemy skips its turn. This replaces the old 20% flee.",
+              color: "text-yellow-300",
+            },
+            {
+              emoji: "🌟",
+              name: "Star",
+              effect: "Beacon",
+              detail:
+                "Consume: instant level-up (full heal and the usual level rewards) and +50% XP for 20 turns. Bag: +1 sight and +1 detection per stack, max 5. At 5, stealth is gone and foes path from across the map.",
+              color: "text-amber-200",
+            },
+            {
+              emoji: "🔥",
+              name: "Fire",
+              effect: "Ignite",
+              detail:
+                "Legendary. Stacks to 5. Each turn of burn is z × (depth + depth × 10% of ATK). The ATK term is capped at 100% ATK at 1 stack and 200% at 5 (25 points per extra stack). Fire Arrows count as 1 stack and share that cap. Lasts 3 turns.",
+              color: "text-orange-400",
+            },
+            {
               emoji: "❤️",
               name: "Heart",
               effect: "Vampiric",
               detail:
-                "+1 HP restored on melee hit per copy (cap 5). Five hearts = +5 HP healed per hit.",
+                "+1 HP per hit per stack, plus 1% of ATK × depth × stacks (cap 5).",
               color: "text-rose-400",
             },
             {
@@ -809,7 +844,7 @@ export default function HowToPlay({
               name: "Butterfly",
               effect: "Dodge Heal",
               detail:
-                "+1 HP restored on successful dodge per copy (cap 5). Two butterflies = +2 HP per dodge.",
+                "+1 HP on dodge per stack, plus 0.1% of max HP × depth × stacks (cap 5).",
               color: "text-purple-400",
             },
             {
@@ -833,7 +868,7 @@ export default function HowToPlay({
               name: "Shield",
               effect: "Shield Wall",
               detail:
-                "−1 incoming damage per copy (min 1). Three shields = −3 damage every hit.",
+                "25% block. −1 damage per stack, plus 0.2% of DEF × depth × stacks (cap 9).",
               color: "text-blue-400",
             },
             {
@@ -841,7 +876,7 @@ export default function HowToPlay({
               name: "Mushroom",
               effect: "Heal on Kill",
               detail:
-                "+1 HP restored per enemy killed, per copy. Three mushrooms = +3 HP per kill.",
+                "+1 HP per kill per stack, plus 0.1% of max HP × depth × stacks (cap 9).",
               color: "text-emerald-400",
             },
             {
@@ -857,7 +892,7 @@ export default function HowToPlay({
               name: "Pill",
               effect: "Regeneration",
               detail:
-                "Regen interval shrinks by 1 turn per copy: 1 pill = every 5 turns, 2 = every 4, 3 = every 3, up to every turn.",
+                "Every 5 turns, heal 5% of max HP at 1 stack and 10% at 5 stacks. Consuming a pill is a full heal plus 10% overheal.",
               color: "text-teal-400",
             },
             {
@@ -865,7 +900,7 @@ export default function HowToPlay({
               name: "Diamond",
               effect: "Thorns",
               detail:
-                "Reflects 1 damage back per copy when an enemy hits you. Two diamonds = 2 thorns damage per melee hit.",
+                "Reflect 1 damage per stack, plus 1% of ATK × depth × stacks (cap 9).",
               color: "text-cyan-400",
             },
             {

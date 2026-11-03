@@ -5,6 +5,8 @@ import { isHostileCombatTarget, resolveCombat } from '../../game/combat';
 import type { GameRefs, GameSetters, AddLog } from './types';
 import type { Player } from '../../game/types';
 import { isArcaneCaster, isFencer, isHitman, isRoyalGuard, activateGuardianStance, planBackdash, planLunge, nearestExecuteTarget, notePrestigeKill, fencerOutgoingMult } from '../../game/prestige';
+import { guardHasRangedWeapon } from '../../game/royalGuard';
+import { starXpGain } from '../../game/emojiBalance';
 import { FENCER_BACKDASH_CD, FENCER_LUNGE_CD, FENCER_LUNGE_MULT } from '../../game/prestigeConstants';
 import { resolveExecuteContract } from '../../game/hitman';
 
@@ -122,6 +124,11 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
       trailblazeTurnRef.current = state.turn;
       setTrailblazeTurn(state.turn);
       addLog(`💨 Trailblaze — sprinting 2 tiles for ${BLINK_ACTIVE} turns!`);
+    } else if (mode === 'ranged' && isRoyalGuard(state.player.characterClass) && !guardHasRangedWeapon(state.player)) {
+      addLog('🏹 Equip a bow or gun before you can shoot. Staying in melee.');
+      rangerModeRef.current = 'melee';
+      setRangerMode('melee');
+      return;
     } else {
       const label = mode === 'melee' ? '⚔️ Melee mode — conserving ammo' : '🏹 Ranged mode — auto-fire bow';
       addLog(label);
@@ -192,7 +199,7 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
         const paid = notePrestigeKill(player, prev.currentFloor, playerSoftCap(player).raw.luck);
         player = paid.player;
         paid.logs.forEach(addLog);
-        player = { ...player, stats: { ...player.stats, xp: player.stats.xp + (plan.target.isBoss ? 25 : 5) } };
+        player = { ...player, stats: { ...player.stats, xp: player.stats.xp + starXpGain(plan.target.isBoss ? 25 : 5, player.stats.xpBoostTurns) } };
         enemies.splice(idx, 1);
       } else if (idx >= 0) {
         enemies[idx] = { ...enemies[idx], hp: result.enemyHp, engaged: true };

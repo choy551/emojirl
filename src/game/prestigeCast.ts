@@ -2,6 +2,7 @@ import type { Enemy, FloatingText, Player, Position } from './types';
 import { isHostileCombatTarget, resolveCombat } from './combat';
 import { applyLevelUp } from './playerTurn';
 import { levelFromXP } from './progression';
+import { starXpGain } from './emojiBalance';
 import { chebyshev } from './geo';
 import { hasLOSBetween } from './pathfinding';
 import { VISION_RADIUS } from './vision';
@@ -123,7 +124,7 @@ function genieMeleeVolley(
     const paid = notePrestigeKill(player, args.floor, playerSoftCap(player).raw.luck);
     player = paid.player;
     paid.logs.forEach(args.addLog);
-    const xpGain = target.isBoss ? 25 : 5;
+    const xpGain = starXpGain(target.isBoss ? 25 : 5, player.stats.xpBoostTurns);
     const oldLevel = player.stats.level;
     player = { ...player, stats: { ...player.stats, xp: player.stats.xp + xpGain } };
     const newLevel = levelFromXP(player.stats.xp);
@@ -250,7 +251,7 @@ export function resolveGenieFireball(args: {
     const paid = notePrestigeKill(player, args.floor, playerSoftCap(player).raw.luck);
     player = paid.player;
     paid.logs.forEach(args.addLog);
-    const xpGain = dead.isBoss ? 25 : 5;
+    const xpGain = starXpGain(dead.isBoss ? 25 : 5, player.stats.xpBoostTurns);
     const oldLevel = player.stats.level;
     player = { ...player, stats: { ...player.stats, xp: player.stats.xp + xpGain } };
     const newLevel = levelFromXP(player.stats.xp);

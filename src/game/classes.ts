@@ -28,7 +28,6 @@ import {
   HITMAN_START_AMMO,
   ROYAL_AURA_DEF,
   ROYAL_BARE_MELEE_MULT,
-  ROYAL_CROWN_DEF,
   ROYAL_SWORD_MELEE_MULT,
   ROYAL_START_AMMO,
 } from './prestigeConstants';
@@ -154,7 +153,7 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
     startingAmmo: ROYAL_START_AMMO,
     passives: [
       { label: 'Versatile Armory', detail: `Bow and sword together: melee deals ${Math.round(ROYAL_SWORD_MELEE_MULT * 100)}% ATK. Guns, bullets, bows, and arrows all fit — main and off hand may both be ranged (gun and bow). With no sword, melee is ${Math.round(ROYAL_BARE_MELEE_MULT * 100)}% ATK, including when you are out of ammo. Muskets are yours.` },
-      { label: 'Royal Aura', detail: `+${ROYAL_AURA_DEF} DEF while you stand your post. You begin wearing a Crown (+${ROYAL_CROWN_DEF} DEF).` },
+      { label: 'Royal Aura', detail: `+${ROYAL_AURA_DEF} DEF while you stand your post. You begin with a Crown in the hotbar. Each Crown is a 5% chance an enemy skips its turn (max 5, 25%). You start in melee and can shoot only with a bow or gun equipped.` },
       { label: 'Piercing', detail: 'Shots and slashes pierce into the tile behind the target for half the damage dealt.' },
     ],
     active: { label: 'Guardian Stance', detail: `For ${GUARDIAN_STANCE_TURNS} turns, incoming damage is reduced to ${Math.round(GUARDIAN_INCOMING_MULT * 100)}% and your guard hardens. Cooldown ${GUARDIAN_STANCE_CD} turns.` },

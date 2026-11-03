@@ -20,7 +20,8 @@ import { Button } from '@/components/ui/button';
 import { MOODS } from '../game/moods';
 import { isDrinkStealthActive, playerMood } from '../game/drinks';
 import { getClassDef } from '../game/classes';
-import { classFlies, crownItem, fencerEvasion, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, startFloorContract, toggleGenieCast, type GenieCastToggle } from '../game/prestige';
+import { classFlies, fencerEvasion, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, startFloorContract, toggleGenieCast, type GenieCastToggle } from '../game/prestige';
+import { guardHasRangedWeapon, hotbarCrown, initialRangerMode } from '../game/royalGuard';
 import { GENIE_BASE_MP } from '../game/prestigeConstants';
 import { saveScore, leaderboardEntryFromRun } from '../game/leaderboard';
 import {
@@ -778,6 +779,9 @@ export default function Game() {
       clearSave();
       setCorruptedSaveWarning(true);
     } else if (result.kind === 'ok' && !result.state.gameOver) {
+      const mode = initialRangerMode(result.state.player.characterClass);
+      rangerModeRef.current = mode;
+      setRangerMode(mode);
       setGameState({ ...result.state, killCounts: result.state.killCounts ?? {} });
       return;
     } else {
@@ -818,12 +822,19 @@ export default function Game() {
       },
       inventory: startingPowers,
       bank: [],
-      equipment: isRoyalGuard(vessel) ? { accessory: crownItem() } : {},
+      equipment: {},
       ghostHotbar: voidLoad?.ghostHotbar,
       ghostBank: voidLoad?.ghostBank,
       voidBossesCleared: 0,
       ...(isGenie(vessel) ? { genieBloodcast: true, genieOverchannel: true, genieSafeFireball: false } : {}),
     };
+    if (isRoyalGuard(vessel)) {
+      const crowned = addToPlayerBag(initialPlayer, hotbarCrown());
+      initialPlayer = { ...initialPlayer, inventory: crowned.inventory, bank: crowned.bank };
+    }
+    const mode = initialRangerMode(vessel);
+    rangerModeRef.current = mode;
+    setRangerMode(mode);
     const openingContract = startFloorContract(initialPlayer);
     initialPlayer = openingContract.player;
     const carried = takeInsuredStartItems();
@@ -1077,7 +1088,7 @@ export default function Game() {
       const exploreCowboyDualGuns = exploreCls === '🤠' &&
         player.equipment.mainHand?.weaponKind === 'gun' &&
         player.equipment.offHand?.weaponKind === 'gun';
-      const exploreGuardRanged = isRoyalGuard(exploreCls) && rangerModeRef.current === 'ranged';
+      const exploreGuardRanged = isRoyalGuard(exploreCls) && rangerModeRef.current === 'ranged' && guardHasRangedWeapon(player);
       const exploreHitmanArmed = isHitman(exploreCls) && (
         player.equipment.mainHand?.weaponKind === 'gun' || player.equipment.offHand?.weaponKind === 'gun'
       );
@@ -2351,7 +2362,7 @@ export default function Game() {
   }
 
   const rangerTargetKeys = new Set<string>();
-  if (((player.characterClass === '🧝' && rangerMode === 'ranged') || (player.characterClass === '👤' && (gameState.voidAttackMode ?? 'melee') === 'ranger')) && player.ammo > 0) {
+  if ((((player.characterClass === '🧝' && rangerMode === 'ranged') || (isRoyalGuard(player.characterClass) && rangerMode === 'ranged' && guardHasRangedWeapon(player))) || (player.characterClass === '👤' && (gameState.voidAttackMode ?? 'melee') === 'ranger')) && player.ammo > 0) {
     const _maxRange = eagleEyeRange(player.stats.level);
     for (const e of gameState.enemies) {
       if (e.isSpectator) continue;

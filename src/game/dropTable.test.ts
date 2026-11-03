@@ -90,7 +90,7 @@ describe('drop rarity catalog', () => {
     expect(DROP_TABLE.find(e => e.itemId === 'heal:mushroom')?.rarity).toBe('common');
     expect(DROP_TABLE.find(e => e.itemId === 'soul:mushroom')?.rarity).toBe('uncommon');
     expect(DROP_TABLE.find(e => e.itemId === 'gear:fire-arrows')?.rarity).toBe('uncommon');
-    expect(DROP_TABLE.find(e => e.itemId === 'soul:fire')?.rarity).toBe('rare');
+    expect(DROP_TABLE.find(e => e.itemId === 'soul:fire')?.rarity).toBe('legendary');
     expect(DROP_TABLE.find(e => e.itemId === 'soul:ice')?.rarity).toBe('uncommon');
     expect(DROP_TABLE.find(e => e.itemId === 'gear:ice-arrows')?.rarity).toBe('uncommon');
     expect(DROP_TABLE.find(e => e.itemId === 'ammo:quiver')?.rarity).toBe('uncommon');

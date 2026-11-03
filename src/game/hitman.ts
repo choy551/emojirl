@@ -12,6 +12,7 @@ import {
   HITMAN_EXECUTE_GOLD,
 } from './prestigeConstants';
 import { levelFromXP, moodMax } from './progression';
+import { starXpGain } from './emojiBalance';
 import { goldWithLuck } from './softCap';
 
 type GroundItem = EmojiItem & { pos: Position };
@@ -95,7 +96,7 @@ export function resolveExecuteContract(input: {
 
   markEnemyKilled(target.emoji);
   const killCounts = { ...input.killCounts, [target.emoji]: (input.killCounts[target.emoji] ?? 0) + 1 };
-  const xpGain = target.isBoss ? 25 : 5;
+  const xpGain = starXpGain(target.isBoss ? 25 : 5, player.stats.xpBoostTurns);
   const newXP = player.stats.xp + xpGain;
   const oldLevel = player.stats.level;
   const newLevel = levelFromXP(newXP);

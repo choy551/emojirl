@@ -13,6 +13,7 @@ import { cookedEatHeal } from './economy';
 import { goldWithLuck } from './softCap';
 import { applyDrinkToPlayer } from './drinks';
 import { isArcaneCaster } from './prestige';
+import { applyStarConsume, pillOverhealHp, starXpGain } from './emojiBalance';
 import { buildingOf, structureSurvey } from './cityBuildings';
 
 export type ShopUseBlockReason =
@@ -145,6 +146,20 @@ export function applyInstantItemUse(
     return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
   }
 
+  if (item.emoji === '🌟') {
+    const leveled = applyStarConsume(s.player, log);
+    const mid = { ...s, player: leveled, turn: s.turn + 1 };
+    return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
+  }
+
+  if (item.emoji === '💊') {
+    const pool = livingMaxHp(s.player);
+    const hp = pillOverhealHp(pool);
+    log(`💊 The pill mends you — full heal and +${hp - pool} overheal.`);
+    const mid = { ...s, player: { ...s.player, stats: { ...s.player.stats, hp } }, turn: s.turn + 1 };
+    return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
+  }
+
   if (effect?.instakillNearest && !hasVisibleEnemy(s)) {
     log(`${item.emoji} No visible enemies to strike!`);
     return null;
@@ -205,7 +220,7 @@ export function applyInstantItemUse(
     } else {
       log(`⚡ ZAP! ${target.emoji} ${target.name} is obliterated!`);
     }
-    const xpGain = target.isBoss ? 25 : 5;
+    const xpGain = starXpGain(target.isBoss ? 25 : 5, newPlayer.stats.xpBoostTurns);
     const newXP = newPlayer.stats.xp + xpGain;
     const oldLevel = newPlayer.stats.level;
     const newLevel = levelFromXP(newXP);
