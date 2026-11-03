@@ -18,9 +18,10 @@ import {
   isBlankConsoleDraft,
   parseDevCommand,
   scoreCountsForLeaderboard,
+  showMobileConsoleButton,
   type DevConsoleEnterBlockers,
 } from './devConsole';
-import { DevConsoleBar, DevConsoleConfirm } from '../components/DevConsole';
+import { DevConsoleBar, DevConsoleButton, DevConsoleConfirm } from '../components/DevConsole';
 
 function floor(w: number, h: number): Tile[][] {
   return Array.from({ length: h }, () =>
@@ -147,6 +148,28 @@ describe('console strip under the combat log', () => {
     expect(html).toContain(`height:${DEV_CONSOLE_STRIP}`);
     expect(html).not.toContain('inset-x-0');
     expect(html).not.toContain('bottom-0');
+  });
+});
+
+describe('mobile console button', () => {
+  const hidden = { mobile: true, logOpen: false, consoleOpen: false, gameOver: false };
+
+  it('stays hidden until the expanded combat log is open', () => {
+    expect(showMobileConsoleButton(hidden)).toBe(false);
+    expect(showMobileConsoleButton({ ...hidden, mobile: false, logOpen: true })).toBe(false);
+    expect(showMobileConsoleButton({ ...hidden, logOpen: true })).toBe(true);
+    expect(showMobileConsoleButton({ ...hidden, logOpen: true, consoleOpen: true })).toBe(false);
+    expect(showMobileConsoleButton({ ...hidden, logOpen: true, gameOver: true })).toBe(false);
+    expect(showMobileConsoleButton({ ...hidden, logOpen: false })).toBe(false);
+  });
+
+  it('keeps a 44px target and sits in normal flow under the log', () => {
+    const html = renderToStaticMarkup(<DevConsoleButton onOpen={() => {}} />);
+    expect(html).toContain('aria-label="Open console"');
+    expect(html).toContain('min-h-11');
+    expect(html).toContain('min-w-11');
+    expect(html).toContain('&gt;_');
+    expect(html).not.toContain('absolute');
   });
 });
 

@@ -7,7 +7,7 @@ export function DevConsoleButton({ onOpen }: { onOpen: () => void }) {
     <button
       type="button"
       aria-label="Open console"
-      className="absolute bottom-1 left-1 z-10 min-h-11 min-w-11 rounded-md border border-border/70 bg-black/75 text-sm font-bold text-foreground"
+      className="min-h-11 min-w-11 shrink-0 rounded-md border border-border/70 bg-black/75 text-sm font-bold text-foreground"
       onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); onOpen(); }}
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOpen(); }}
     >

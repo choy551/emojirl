@@ -33,6 +33,7 @@ import {
   applyStuck,
   consoleStack,
   devConsoleOpensOnEnter,
+  showMobileConsoleButton,
   isConsoleOpenKey,
   parseDevCommand,
   scoreCountsForLeaderboard,
@@ -3673,9 +3674,6 @@ export default function Game() {
           }}
           title="Click or press / to open full log"
         >
-          {isMobile && !devConsoleOpen && !gameState.gameOver && (
-            <DevConsoleButton onOpen={() => setDevConsoleOpen(true)} />
-          )}
           {gameState.logs.slice(0, 8).reverse().map((log, i) => (
             <div
               key={log.id}
@@ -3718,7 +3716,7 @@ export default function Game() {
               <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">📜 Combat Log</h2>
               <button onClick={() => setLogOpen(false)} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded">ESC · /</button>
             </div>
-            <div className="overflow-y-auto flex-1 px-4 py-3 space-y-1 flex flex-col-reverse">
+            <div className="overflow-y-auto min-h-0 flex-1 px-4 py-3 space-y-1 flex flex-col-reverse">
               {gameState.logs.slice().map((log, i) => (
                 <div
                   key={log.id}
@@ -3729,6 +3727,16 @@ export default function Game() {
                 </div>
               ))}
             </div>
+            {showMobileConsoleButton({
+              mobile: isMobile,
+              logOpen,
+              consoleOpen: devConsoleOpen,
+              gameOver: gameState.gameOver,
+            }) && (
+              <div className="shrink-0 border-t border-border/40 px-3 py-2">
+                <DevConsoleButton onOpen={() => { setLogOpen(false); setDevConsoleOpen(true); }} />
+              </div>
+            )}
           </div>
         </div>
       )}
