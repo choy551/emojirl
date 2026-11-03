@@ -5,7 +5,7 @@ import { CLOVER_TIER_STEP, cloverLootSummary } from './dropTable';
 /** Per-emoji caps for the stackable-passive collapse mechanic. */
 export const STACKABLE_BAG_CAPS: Record<string, number> = {
   '🍀': 3,   // drop chance 55%+15%×3 capped at 95%; tier weight ×(3/2)^(i×3)
-  '💊': 4,   // regeneration: 5-turn interval shrinks to 1-turn minimum after 4 copies
+  '💊': 5,   // 5% max HP every 5 turns, up to 10% at 5 stacks
   '🛡️': 9,  // shieldWall: no natural gameplay cap
   '🍄': 9,   // healOnKill: no natural gameplay cap
   '💎': 9,   // thorns: no natural gameplay cap
@@ -14,12 +14,16 @@ export const STACKABLE_BAG_CAPS: Record<string, number> = {
   '🗡️': 4,   // ninjaCombo: 25% base + ~15% per copy (capped reasonably)
   '🌊': 5,   // combatRegen: +1 HP per turn per copy (in combat)
   '⚡': 4,   // lightningBolt: 75/50/25% ATK arcs +25% per extra copy
+  '🔥': 5,   // ignite stacks; Fire Arrows add one more, still capped at 5
+  '🌟': 5,   // sight and detection per stack; map-wide at 5
+  '👑': 5,   // Royal Guard stun: +5% per stack, 25% at 5
 };
 
 export function isStackableBagPassive(item: EmojiItem): boolean {
   const p = item.bagPassive;
   return !!p && !!(p.shieldWall || p.healOnKill || p.bonusLoot || p.thorns || p.regeneration ||
-    p.vampiricStrike || p.dodgeHeal || p.ninjaCombo || p.combatRegen || p.lightningBolt);
+    p.vampiricStrike || p.dodgeHeal || p.ninjaCombo || p.combatRegen || p.lightningBolt ||
+    p.burningOnHit || p.starGaze || p.royalAura);
 }
 
 /** 1st/2nd/3rd melee arc as ATK fractions. stacks 1 → 0.75/0.50/0.25; each extra +0.25. */
@@ -52,7 +56,9 @@ export function getStackableBonusLabel(item: EmojiItem): string | null {
   // thorns: reflect N dmg per hit where N = total copies (acc.thorns += sc)
   if (p.thorns)       return '+1 reflect dmg per ×';
   // regeneration: +1 HP every (6 − copies) turns, min 1-turn interval
-  if (p.regeneration) return '+1 HP / 5 turns';
+  if (p.regeneration) return '5% max HP / 5 turns, up to 10% at ×5';
+  if (p.starGaze) return '+1 sight and detection per ×; map-wide at ×5';
+  if (p.royalAura) return 'Royal Guard: +5% stun per ×';
   if (p.vampiricStrike) return '+1 HP per hit per ×';
   if (p.dodgeHeal)      return '+1 HP on dodge per ×';
   if (p.ninjaCombo)     return 'Ninja only: +15% combo chance per × (base 25%)';
@@ -69,7 +75,9 @@ export function getStackableCumulativeLabel(item: EmojiItem): string | null {
   if (p.healOnKill)   return `+${n} HP per kill`;
   if (p.bonusLoot)    return cloverLootSummary(n);
   if (p.thorns)       return `+${n} reflect dmg per hit`;
-  if (p.regeneration) return `+1 HP every ${Math.max(1, 6 - n)} turns`;
+  if (p.regeneration) return `${5 + (Math.min(5, n) - 1) * 1.25}% max HP every 5 turns`;
+  if (p.starGaze) return n >= 5 ? 'no stealth · foes path across the map' : `+${n} sight · +${n} detection`;
+  if (p.royalAura) return `Royal Guard stun ${Math.min(5, n) * 5}%`;
   if (p.vampiricStrike) return `+${n} HP per hit`;
   if (p.dodgeHeal)      return `+${n} HP on dodge`;
   if (p.ninjaCombo)     return `Ninja only: ${25 + (n-1)*15}% chance of bonus melee strike`;

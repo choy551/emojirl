@@ -192,7 +192,7 @@ export function TacticsMenu({
         {(player.characterClass === '🧝' || isRoyalGuard(player.characterClass)) && (
           <div className="space-y-1.5">
             {([
-              { n: 1, label: '🏹 Ranged — auto-fire bow', active: rangerMode === 'ranged', mode: 'ranged' as const },
+              { n: 1, label: player.characterClass === '💂' ? '🏹 Ranged — bow or gun' : '🏹 Ranged — auto-fire bow', active: rangerMode === 'ranged', mode: 'ranged' as const },
               { n: 2, label: '⚔️ Melee — conserve ammo',  active: rangerMode === 'melee',  mode: 'melee'  as const },
             ]).map(({ n, label, active, mode }) => (
               <button key={mode}

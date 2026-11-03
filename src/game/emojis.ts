@@ -89,7 +89,7 @@ export const ACTIVE_DROPS: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   {
     emoji: '🔫',
     name: 'Gun',
-    description: 'Fire in a direction. Travels tile-by-tile, deals ATK damage. 3 shots.',
+    description: 'Fire in a direction. Pierces the line for 300% ATK, then 50 percentage points less per further enemy (minimum 50%). 3 shots.',
     activeKind: 'gun',
     charges: 3,
   },
@@ -135,26 +135,26 @@ export interface SoulEffect {
 }
 
 export const EMOJI_POWERS: { emoji: string; name: string; description: string; effect: SoulEffect; bagPassive?: import('./types').BagPassive }[] = [
-  { emoji: '❤️', name: 'Heart',        description: '+3 max HP & heals 3 · Bag: life steal (stacks)',       effect: { maxHpBonus: 3, hpBonus: 3, moodBonus: 15, label: 'Your heart swells with life!' },        bagPassive: { description: 'Each hit restores 1 HP 🩸', vampiricStrike: true } },
-  { emoji: '🔥', name: 'Fire',         description: '+3 ATK · Bag: +1 ATK, all attacks ignite',     effect: { attackBonus: 3, moodBonus: 10, label: 'Flames ignite your blade!' },                     bagPassive: { description: '+1 ATK · all attacks ignite 🔥', attackBonus: 1, burningOnHit: true, nonStackable: true } },
+  { emoji: '❤️', name: 'Heart',        description: '+3 max HP & heals 3 · Bag: life steal (stacks)',       effect: { maxHpBonus: 3, hpBonus: 3, moodBonus: 15, label: 'Your heart swells with life!' },        bagPassive: { description: '+1 HP per hit per stack, plus 1% ATK × depth × stacks 🩸', vampiricStrike: true } },
+  { emoji: '🔥', name: 'Fire',         description: '+3 ATK · Bag: +1 ATK, ignite scales with stacks, depth, and ATK (max 5)',     effect: { attackBonus: 3, moodBonus: 10, label: 'Flames ignite your blade!' },                     bagPassive: { description: '+1 ATK. Ignite z×(depth + depth×10% ATK); the ATK term caps from 100% at 1 stack to 200% at 5. Fire Arrows add 1 stack.', attackBonus: 1, burningOnHit: true } },
   { emoji: '⚡', name: 'Lightning',    description: 'Use: instakill nearest visible foe · Bag: melee arcs 75/50/25% ATK (stacks)', effect: { instakillNearest: true, moodBonus: 10, label: 'Lightning strikes!' },   bagPassive: { description: 'Melee hits arc to 1–3 nearby foes at 75%/50%/25% ATK; +25% per extra ⚡ (cap 4)', lightningBolt: true } },
-  { emoji: '💎', name: 'Diamond',      description: '+3 DEF · Bag: thorns',                        effect: { defenseBonus: 3, moodBonus: 8, label: 'You harden like diamond!' },                       bagPassive: { description: 'Reflect 1 dmg per copy when struck 💎', thorns: true } },
+  { emoji: '💎', name: 'Diamond',      description: '+3 DEF · Bag: thorns',                        effect: { defenseBonus: 3, moodBonus: 8, label: 'You harden like diamond!' },                       bagPassive: { description: 'Reflect 1 dmg per stack, plus 1% ATK × depth × stacks 💎', thorns: true } },
   { emoji: '🍀', name: 'Clover',       description: '+5 LCK, +20 mood · Bag: more drops, rarer tiers', effect: { luckBonus: 5, moodBonus: 30, label: 'Luck is on your side!' },                     bagPassive: { description: 'Enemy drops are more likely and shift toward rarer tiers per copy 🍀', bonusLoot: true } },
   { emoji: '💀', name: 'Skull',        description: '+2 ATK, +2 SPD · Bag: crits scale with foe HP',            effect: { attackBonus: 2, speedBonus: 2, moodBonus: 5, label: 'Death lends you its strength!' },     bagPassive: { description: '+25% crit at full HP, up to +50% at ≤25% HP 💀', execBlow: true, nonStackable: true } },
-  { emoji: '🌟', name: 'Star',         description: '+20 XP & mood boost · Bag: +1 vision, alert',  effect: { xpBonus: 20, moodBonus: 20, label: 'You shine brighter!' },                               bagPassive: { description: '+1 vision · enemies are more alert', losBonus: 1, stealthPenalty: 1, nonStackable: true } },
+  { emoji: '🌟', name: 'Star',         description: 'Instant level-up (full heal and level rewards) and +50% XP for 20 turns · Bag: +1 sight per stack, max 5',  effect: { label: 'You shine brighter!' },                               bagPassive: { description: '+1 sight and +1 detection per stack (max 5). At 5, no stealth — foes path from across the map.', starGaze: true } },
   { emoji: '🔮', name: 'Crystal Ball', description: '+1 ATK/DEF/SPD/EVA · Bag: true vision',      effect: { attackBonus: 1, defenseBonus: 1, speedBonus: 1, evasionBonus: 1, hpBonus: 2, moodBonus: 15, label: 'The future reveals itself to you!' }, bagPassive: { description: 'See all enemies through walls 🔮', trueVision: true, nonStackable: true } },
   { emoji: '🧲', name: 'Magnet',       description: '+2 DEF, +4 EVA · Bag: item magnet',          effect: { defenseBonus: 2, evasionBonus: 4, moodBonus: 10, label: 'Forces bend to your will!' },    bagPassive: { description: 'All visible dropped items pulled to you 🧲', itemMagnet: true, nonStackable: true } },
-  { emoji: '🛡️', name: 'Shield',      description: '+4 DEF, +2 EVA · Bag: shield wall (stacks!)', effect: { defenseBonus: 4, evasionBonus: 2, moodBonus: 8, label: 'You raise an impenetrable shield!' }, bagPassive: { description: '25% block chance + −1 dmg per shield in bag (stacks 1–9) 🛡️', shieldWall: true } },
-  { emoji: '🍄', name: 'Mushroom',     description: '+3 HP, +5 SPD · Bag: heal on kill',          effect: { hpBonus: 3, speedBonus: 5, moodBonus: 5, label: 'Strange mushroom energy flows through you!' }, bagPassive: { description: '+1 HP per enemy killed per copy 🍄', healOnKill: true } },
+  { emoji: '🛡️', name: 'Shield',      description: '+4 DEF, +2 EVA · Bag: shield wall (stacks!)', effect: { defenseBonus: 4, evasionBonus: 2, moodBonus: 8, label: 'You raise an impenetrable shield!' }, bagPassive: { description: '25% block. −1 dmg per stack, plus 0.2% DEF × depth × stacks 🛡️', shieldWall: true } },
+  { emoji: '🍄', name: 'Mushroom',     description: '+3 HP, +5 SPD · Bag: heal on kill',          effect: { hpBonus: 3, speedBonus: 5, moodBonus: 5, label: 'Strange mushroom energy flows through you!' }, bagPassive: { description: '+1 HP per kill per stack, plus 0.1% max HP × depth × stacks 🍄', healOnKill: true } },
   { emoji: '🎯', name: 'Target',       description: '+2 ATK, +3 LCK · Bag: true aim',            effect: { attackBonus: 2, luckBonus: 3, moodBonus: 12, label: 'Your aim becomes perfect!' },          bagPassive: { description: 'Ranged attacks never miss 🎯', trueAim: true, nonStackable: true } },
-  { emoji: '💊', name: 'Pill',         description: '+4 HP, +2 EVA · Bag: regeneration',         effect: { hpBonus: 4, evasionBonus: 2, moodBonus: 10, label: 'The pill mends your wounds!' },          bagPassive: { description: '+1 HP every 5 turns; regen interval decreases per copy 💊', regeneration: true } },
+  { emoji: '💊', name: 'Pill',         description: 'Full heal and +10% overheal · Bag: 5% max HP every 5 turns, up to 10% at 5 stacks',         effect: { label: 'The pill mends your wounds!' },          bagPassive: { description: 'Heal 5% of max HP every 5 turns, scaling to 10% at 5 stacks 💊', regeneration: true } },
   { emoji: '🗡️', name: 'Dagger',      description: '+4 ATK, +3 SPD · Bag: Ninja-only ninja combo (stacks)',         effect: { attackBonus: 4, speedBonus: 3, moodBonus: 8, label: 'The dagger soul sharpens you!' },      bagPassive: { description: 'Ninja only: 25% chance of 1/4-power bonus melee strike 🗡️', ninjaCombo: true } },
-  { emoji: '👑', name: 'Crown',        description: '+1 all stats & +15 mood · Bag: royal aura',  effect: { attackBonus: 1, defenseBonus: 1, speedBonus: 1, evasionBonus: 1, luckBonus: 1, hpBonus: 1, moodBonus: 15, label: 'You rule! All stats rise!' }, bagPassive: { description: '20% of enemies flee when they spot you 👑', royalAura: true, nonStackable: true } },
+  { emoji: '👑', name: 'Crown',        description: '+1 all stats & +15 mood · Bag: crowns stack to 5; a Royal Guard stuns for 5% per crown',  effect: { attackBonus: 1, defenseBonus: 1, speedBonus: 1, evasionBonus: 1, luckBonus: 1, hpBonus: 1, moodBonus: 15, label: 'You rule! All stats rise!' }, bagPassive: { description: 'Royal Guard: each stack is a 5% chance an enemy skips its turn (max 5 stacks, 25%) 👑', royalAura: true } },
   { emoji: '🌊', name: 'Wave',         description: '+2 HP, +5 EVA · Bag: regen aura (stacks)',           effect: { hpBonus: 2, evasionBonus: 5, moodBonus: 15, label: 'A wave of calm washes over you!' },     bagPassive: { description: '+1 HP every turn, +2 HP when resting 🌊', combatRegen: true } },
   { emoji: '🧊', name: 'Ice',          description: '+2 DEF, +4 EVA · Bag: +1 DEF/EVA, aura slows', effect: { defenseBonus: 2, evasionBonus: 4, moodBonus: 8, label: 'Ice encases you protectively!' },  bagPassive: { description: '+1 DEF/EVA · aura slows adjacent foes ❄️', defenseBonus: 1, evasionBonus: 1, freezeAura: true, nonStackable: true } },
   { emoji: '🌙', name: 'Moon',         description: '+6 EVA, +5 SPD · Bag: −1 vision, +stealth', effect: { evasionBonus: 6, speedBonus: 5, moodBonus: 25, label: 'Moonlight floods your soul!' },       bagPassive: { description: '−1 vision but enemies have halved detection', losBonus: -1, stealthBonus: 1, nonStackable: true } },
   { emoji: '🎲', name: 'Die',          description: 'Random: +1–3 to two stats · Bag: +1 LCK, ADV', effect: { attackBonus: Math.ceil(Math.random() * 3), speedBonus: Math.ceil(Math.random() * 3), moodBonus: 10, label: 'The die is cast!' }, bagPassive: { description: '+1 LCK · advantage on all dice rolls 🎲', luckBonus: 1, advantageDice: true, nonStackable: true } },
-  { emoji: '🦋', name: 'Butterfly',    description: '+8 EVA, +20 mood · Bag: dodge heal (stacks)',        effect: { evasionBonus: 8, moodBonus: 20, label: 'You transform — lighter than air!' },               bagPassive: { description: 'Dodging an attack restores 1 HP 🦋', dodgeHeal: true } },
+  { emoji: '🦋', name: 'Butterfly',    description: '+8 EVA, +20 mood · Bag: dodge heal (stacks)',        effect: { evasionBonus: 8, moodBonus: 20, label: 'You transform — lighter than air!' },               bagPassive: { description: '+1 HP on dodge per stack, plus 0.1% max HP × depth × stacks 🦋', dodgeHeal: true } },
   { emoji: '⛵', name: 'Boat',         description: '+50g, +20 mood · Bag: cross water tiles freely', effect: { moodBonus: 20, label: 'The boat bobs beneath you — water holds no fear!' },             bagPassive: { description: 'Cross water tiles while carried', canSwim: true, nonStackable: true } },
 ];
 
@@ -189,6 +189,11 @@ function equipmentCatalogDescription(item: CatalogItem): string | undefined {
   return EQUIPMENT_DROPS.find(e => e.name === item.name)?.description;
 }
 
+function activeCatalogDescription(item: CatalogItem): string | undefined {
+  if (item.isEquipment || !item.activeKind) return undefined;
+  return ACTIVE_DROPS.find(d => d.emoji === item.emoji && d.activeKind === item.activeKind)?.description;
+}
+
 /** Live catalog copy so saved items pick up wording nerfs without a new drop. */
 export function soulHelpText(item: CatalogItem): {
   description: string;
@@ -198,6 +203,8 @@ export function soulHelpText(item: CatalogItem): {
   if (item.isEquipment) {
     return { description: gear ?? item.description };
   }
+  const active = activeCatalogDescription(item);
+  if (active) return { description: active, bagPassiveDescription: item.bagPassive?.description };
   const cat = soulCatalogEntry(item);
   return {
     description: cat?.description ?? item.description,
@@ -211,15 +218,19 @@ export function applySoulCatalogCopy<T extends CatalogItem>(item: T): T {
     if (!gear || gear === item.description) return item;
     return { ...item, description: gear };
   }
+  const active = activeCatalogDescription(item);
+  if (active) {
+    if (active === item.description) return item;
+    return { ...item, description: active };
+  }
   const cat = soulCatalogEntry(item);
   if (!cat) return item;
   return {
     ...item,
     description: cat.description,
-    bagPassive: item.bagPassive && cat.bagPassive
-      ? { ...item.bagPassive, description: cat.bagPassive.description }
-      : item.bagPassive,
-  };
+    effect: cat.effect,
+    bagPassive: cat.bagPassive ? { ...cat.bagPassive } : item.bagPassive,
+  } as T;
 }
 
 export const VOLCANO_VALUABLE_EMOJIS = ['💀', '🗡️', '⛵'] as const;
@@ -244,7 +255,7 @@ export const EQUIPMENT_DROPS_T1: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   // Ranger offHand melee
   { emoji: '🔰', name: 'Hunting Blade',    description: 'Ranger off-hand: +3 ATK to melee. Separate from ranged damage.',        isEquipment: true, equipSlots: ['offHand'],              weaponKind: 'blade', equipBonus: { attack: 3 } },
   // Special Ammo (Ranger offHand)
-  { emoji: '🔥', name: 'Fire Arrows',      description: 'Ranger off-hand: ranged hits ignite enemies (1 dmg/turn, 3 turns).',    isEquipment: true, equipSlots: ['offHand'],              specialAmmoKind: 'fire',   equipBonus: {} },
+  { emoji: '🔥', name: 'Fire Arrows',      description: 'Ranger off-hand: ranged hits ignite with the Fire formula (counts as 1 stack, shares the cap of 5 with bag Fire).',    isEquipment: true, equipSlots: ['offHand'],              specialAmmoKind: 'fire',   equipBonus: {} },
   { emoji: '🧊', name: 'Ice Arrows',       description: 'Ranger off-hand: ranged hits slow enemies for 3 turns.',                isEquipment: true, equipSlots: ['offHand'],              specialAmmoKind: 'freeze', equipBonus: {} },
   // Body Armor
   { emoji: '⛑️', name: 'Combat Helmet',    description: 'Body: +3 DEF. Battle-worn headgear.',                                   isEquipment: true, equipSlots: ['body'],                 armorKind: 'armor', equipBonus: { defense: 3 } },
@@ -280,7 +291,7 @@ export const EQUIPMENT_DROPS_T2: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   // Ranger offHand melee
   { emoji: '🔰', name: 'Hunting Sword',    description: 'Ranger off-hand: +5 ATK to melee. Longer reach, harder hits.',         isEquipment: true, equipSlots: ['offHand'],              weaponKind: 'blade', equipBonus: { attack: 5 } },
   // Special Ammo — unchanged (no tier 2 version)
-  { emoji: '🔥', name: 'Fire Arrows',      description: 'Ranger off-hand: ranged hits ignite enemies (1 dmg/turn, 3 turns).',   isEquipment: true, equipSlots: ['offHand'],              specialAmmoKind: 'fire',   equipBonus: {} },
+  { emoji: '🔥', name: 'Fire Arrows',      description: 'Ranger off-hand: ranged hits ignite with the Fire formula (counts as 1 stack, shares the cap of 5 with bag Fire).',   isEquipment: true, equipSlots: ['offHand'],              specialAmmoKind: 'fire',   equipBonus: {} },
   { emoji: '🧊', name: 'Ice Arrows',       description: 'Ranger off-hand: ranged hits slow enemies for 3 turns.',               isEquipment: true, equipSlots: ['offHand'],              specialAmmoKind: 'freeze', equipBonus: {} },
   // Body Armor
   { emoji: '⛑️', name: 'Steel Helmet',     description: 'Body: +5 DEF. Tempered steel headgear.',                               isEquipment: true, equipSlots: ['body'],                 armorKind: 'armor', equipBonus: { defense: 5 } },
@@ -316,7 +327,7 @@ export const EQUIPMENT_DROPS_T3: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   // Ranger offHand melee
   { emoji: '🔰', name: 'Battle Blade',     description: 'Ranger off-hand: +8 ATK to melee. Deep-dungeon forged.',              isEquipment: true, equipSlots: ['offHand'],              weaponKind: 'blade', equipBonus: { attack: 8 } },
   // Special Ammo — unchanged
-  { emoji: '🔥', name: 'Fire Arrows',      description: 'Ranger off-hand: ranged hits ignite enemies (1 dmg/turn, 3 turns).',  isEquipment: true, equipSlots: ['offHand'],              specialAmmoKind: 'fire',   equipBonus: {} },
+  { emoji: '🔥', name: 'Fire Arrows',      description: 'Ranger off-hand: ranged hits ignite with the Fire formula (counts as 1 stack, shares the cap of 5 with bag Fire).',  isEquipment: true, equipSlots: ['offHand'],              specialAmmoKind: 'fire',   equipBonus: {} },
   { emoji: '🧊', name: 'Ice Arrows',       description: 'Ranger off-hand: ranged hits slow enemies for 3 turns.',              isEquipment: true, equipSlots: ['offHand'],              specialAmmoKind: 'freeze', equipBonus: {} },
   // Body Armor
   { emoji: '⛑️', name: 'Adamant Helm',     description: 'Body: +8 DEF. Near-indestructible alloy.',                            isEquipment: true, equipSlots: ['body'],                 armorKind: 'armor', equipBonus: { defense: 8 } },

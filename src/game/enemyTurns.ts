@@ -8,6 +8,8 @@ import { stealOneSoulEmoji, applySoulThefts, stolenEmojiSummary } from './monkey
 import { resolveProjectileFlight } from './projectiles';
 import { withVisibility, visionRadiusFor } from './vision';
 import { bfsStepToward, fleeStep, hasLOSBetween, detectionRadius } from './pathfinding';
+import { foeDetectionRadius, pillRegenAmount, starXpGain, tickStarXpBoost } from './emojiBalance';
+import { crownStuns } from './royalGuard';
 import { PLAYER_PASSABLE_TILES } from './tiles';
 import { passableTilesForEnemy } from './enemies';
 import { tickVolcanoAndLava } from './lava';
@@ -176,7 +178,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     const extraBooms = newProjectile.kind === 'boomerang'
       ? state.player.bank.filter(it => it.activeKind === 'boomerang' && !it.consumed).length
       : 0;
-    const shot = resolveProjectileFlight(newProjectile, map, newEnemies, player, state.turn, extraBooms);
+    const shot = resolveProjectileFlight(newProjectile, map, newEnemies, player, state.turn, extraBooms, state.currentFloor);
     newEnemies.length = 0;
     newEnemies.push(...shot.enemies);
     newLogs.push(...shot.logs);
@@ -214,11 +216,12 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   if (regen > 0) {
     playerHp = healHp(playerHp, poolMaxHp, regen);
   }
-  if (_freezePassives.regeneration > 0 && state.turn % Math.max(1, 6 - _freezePassives.regeneration) === 0) {
-    const nextHp = healHp(playerHp, poolMaxHp, 1);
+  if (_freezePassives.regeneration > 0 && state.turn % 5 === 0) {
+    const amount = pillRegenAmount(_freezePassives.regeneration, poolMaxHp);
+    const nextHp = healHp(playerHp, poolMaxHp, amount);
     if (nextHp > playerHp) {
       playerHp = nextHp;
-      log('💊 You regenerate! (+1 HP)');
+      log(`💊 You regenerate! (+${nextHp - playerHp} HP)`);
     }
   }
   if (player.characterClass === '👤') {
@@ -274,17 +277,18 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
 
     if ((enemy.burningTurns ?? 0) > 0) {
       const newBurning = enemy.burningTurns! - 1;
-      const newHp = enemy.hp - 1;
+      const burn = enemy.burnDamage ?? 1;
+      const newHp = enemy.hp - burn;
       if (newHp <= 0) {
         reclaimMonkeyLoot(enemy);
-        newEnemies[i] = { ...enemy, hp: 0, burningTurns: 0 };
+        newEnemies[i] = { ...enemy, hp: 0, burningTurns: 0, burnDamage: 0 };
         log(`🔥 ${enemy.name} burns to ash!`);
         titheKills.push('burningOnHit');
         continue;
       }
       newEnemies[i] = { ...enemy, hp: newHp, burningTurns: newBurning };
       if (newBurning === 0) log(`🔥 ${enemy.name} stops burning.`);
-      else log(`🔥 ${enemy.name} burns! (−1 hp)`);
+      else log(`🔥 ${enemy.name} burns! (−${burn} hp)`);
     }
 
     if ((enemy.frozenTurns ?? 0) > 0) {
@@ -528,14 +532,13 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
     const baseDetectionRadius = detectionRadius(enemy.speed);
     const _bagPassivesDetect = playerBagPassives(state.player);
     const isStealthy = (state.stealthMode && (state.player.characterClass === '🥷' || state.player.characterClass === '🕴️')) || isDrinkStealthActive(state.player) || _bagPassivesDetect.stealthBonus > 0;
-    // When player lingers in the restaurant 3×3 safe zone, every mob on the map aggroes —
-    // the smell of food and activity draws everything in. They lose track once the player leaves.
-    const playerNearRestaurant = nearRestaurant(map, player.pos) && !isStealthy;
-    const enemyDetectionRadius = playerNearRestaurant
-      ? 9999
-      : isStealthy
-        ? Math.max(1, Math.ceil(baseDetectionRadius / 2))
-        : baseDetectionRadius + (_bagPassivesDetect.stealthPenalty > 0 ? 2 : 0);
+    // Restaurant smell still pulls the map unless you are stealthed. Five Stars
+    // erase stealth and pull the map on their own.
+    const enemyDetectionRadius = foeDetectionRadius(baseDetectionRadius, {
+      stealthy: isStealthy,
+      starStacks: _bagPassivesDetect.starStacks,
+      restaurant: nearRestaurant(map, player.pos),
+    });
     const HUNT_TURNS_BASE = 5;
 
     if (enemy.engaged && dist > enemyDetectionRadius) {
@@ -554,11 +557,6 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
       : (dist <= enemyDetectionRadius || enemy.engaged);
     if (entersCombat) {
       if (!enemy.engaged && dist <= enemyDetectionRadius && enemy.tag !== 'Neutral') {
-        if (_freezePassives.royalAura && Math.random() < 0.20) {
-          log(`👑 ${enemy.emoji} ${enemy.name} cowers before your royal aura!`);
-          occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
-          continue;
-        }
         const traitHint = enemy.cowardly
           ? ' ...it looks ready to bolt!'
           : enemy.berserker
@@ -618,6 +616,13 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
         : Math.max(0, (enemy.huntTurns ?? HUNT_TURNS_BASE) - 1);
       const alertedBlind = enemy.alertedBlind && dist > enemyDetectionRadius ? true : undefined;
       let updated: Enemy = { ...newEnemies[i], engaged: true, huntTurns, alertedBlind };
+
+      if (crownStuns(_freezePassives.crownStacks, Math.random(), state.player.characterClass)) {
+        log(`👑 ${enemy.emoji} ${enemy.name} is stunned by the crown and skips a turn!`);
+        newEnemies[i] = updated;
+        occupied.add(`${updated.pos.x},${updated.pos.y}`);
+        continue;
+      }
 
       if (enemy.cowardly && enemy.hp / enemy.maxHp < 0.3) {
         const fleePos = fleeStep(map, updated.pos, player.pos, occupied, passable);
@@ -990,17 +995,22 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
     };
   }
   const xpGain = result.playerXpGain ?? 0;
-  if (xpGain > 0) {
-    const oldLevel = next.player.stats.level;
-    const newXP = next.player.stats.xp + xpGain;
-    const newLevel = levelFromXP(newXP);
-    let p = { ...next.player, stats: { ...next.player.stats, xp: newXP } };
+  {
     const extraLogs: Array<{ id: string; text: string; turn: number }> = [];
-    if (newLevel > oldLevel) {
-      p = applyLevelUp(p, oldLevel, newLevel, text => {
-        extraLogs.push({ id: Math.random().toString(), text, turn: next.turn });
-      });
+    let p = next.player;
+    if (xpGain > 0) {
+      const oldLevel = p.stats.level;
+      const gained = starXpGain(xpGain, p.stats.xpBoostTurns);
+      const newXP = p.stats.xp + gained;
+      const newLevel = levelFromXP(newXP);
+      p = { ...p, stats: { ...p.stats, xp: newXP } };
+      if (newLevel > oldLevel) {
+        p = applyLevelUp(p, oldLevel, newLevel, text => {
+          extraLogs.push({ id: Math.random().toString(), text, turn: next.turn });
+        });
+      }
     }
+    p = { ...p, stats: { ...p.stats, xpBoostTurns: tickStarXpBoost(p.stats.xpBoostTurns) } };
     next = {
       ...next,
       player: p,

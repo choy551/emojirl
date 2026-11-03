@@ -362,6 +362,7 @@ export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {
     execBlow: false, trueVision: false, itemMagnet: false, shieldWall: 0,
     healOnKill: 0, trueAim: false, regeneration: 0, ninjaCombo: 0,
     royalAura: false, combatRegen: 0, dodgeHeal: 0,
+    fireStacks: 0, starStacks: 0, crownStacks: 0,
   };
   for (const item of inventory) {
     if (item.consumed || item.isEquipment || !item.bagPassive || item.activeKind || item.healAmount != null || item.ammoAmount != null) continue;
@@ -371,12 +372,21 @@ export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {
     acc.speed          += p.speedBonus     ?? 0;
     acc.evasion        += p.evasionBonus   ?? 0;
     acc.luck           += p.luckBonus      ?? 0;
-    acc.losBonus       += p.losBonus       ?? 0;
     acc.stealthBonus   += p.stealthBonus   ?? 0;
-    acc.stealthPenalty += p.stealthPenalty ?? 0;
     const sc = isStackableBagPassive(item) ? (item.stackCount ?? 1) : 1;
+    if (p.starGaze) {
+      acc.starStacks += sc;
+      acc.losBonus += sc;
+      acc.stealthPenalty += sc;
+    } else {
+      acc.losBonus       += p.losBonus       ?? 0;
+      acc.stealthPenalty += p.stealthPenalty ?? 0;
+    }
     if (p.canSwim)        acc.canSwim        = true;
-    if (p.burningOnHit)   acc.burningOnHit   = true;
+    if (p.burningOnHit) {
+      acc.burningOnHit = true;
+      acc.fireStacks += sc;
+    }
     if (p.freezeAura)     acc.freezeAura     = true;
     if (p.advantageDice)  acc.advantageDice  = true;
     if (p.vampiricStrike) acc.vampiricStrike += sc;
@@ -391,7 +401,10 @@ export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {
     if (p.trueAim)        acc.trueAim        = true;
     if (p.regeneration)   acc.regeneration  += sc;
     if (p.ninjaCombo)     acc.ninjaCombo    += sc;
-    if (p.royalAura)      acc.royalAura      = true;
+    if (p.royalAura) {
+      acc.royalAura = true;
+      acc.crownStacks += sc;
+    }
     if (p.combatRegen)    acc.combatRegen   += sc;
     if (p.dodgeHeal)      acc.dodgeHeal     += sc;
   }

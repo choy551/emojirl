@@ -4,6 +4,7 @@ import { buildHotbarSlots, countVoidPressureSlots, grantGhostStack } from './inv
 import { hasLOSBetween } from './pathfinding';
 import { applyLevelUp } from './playerTurn';
 import { levelFromXP } from './progression';
+import { starXpGain } from './emojiBalance';
 import { applyNullMomentum, creditVoidBoss } from './voidDamage';
 import { handleGodBlessedImmunity } from './flashSignals';
 import { markEnemyKilled } from './discoveries';
@@ -190,7 +191,7 @@ export function resolveUnmake(
         player = { ...player, inventory: restored.inventory, bank: restored.bank };
         lines.push(`🐒 ${enemy.emoji} dropped your ${stolenEmojiSummary(enemy.stolenEmojis)}!`);
       }
-      const xpGain = enemy.isBoss ? 25 : 5;
+      const xpGain = starXpGain(enemy.isBoss ? 25 : 5, player.stats.xpBoostTurns);
       const oldLevel = player.stats.level;
       player = { ...player, stats: { ...player.stats, xp: player.stats.xp + xpGain } };
       const newLevel = levelFromXP(player.stats.xp);

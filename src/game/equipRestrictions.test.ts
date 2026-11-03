@@ -286,7 +286,7 @@ describe('invalid gear on load', () => {
     });
     const state = loadOk();
     expect(state.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
-    expect(state.schemaVersion).toBe(6);
+    expect(state.schemaVersion).toBe(7);
     expect(state.scoreInvalid).toBe(false);
     expect(state.player.equipment.mainHand).toBeUndefined();
     expect(state.player.equipment.offHand).toBeUndefined();
@@ -330,7 +330,7 @@ describe('invalid gear on load', () => {
       },
     });
     const cheated = loadOk();
-    expect(cheated.schemaVersion).toBe(6);
+    expect(cheated.schemaVersion).toBe(7);
     expect(cheated.scoreInvalid).toBe(true);
     expect(cheated.player.stats.gold).toBe(40);
     expect(cheated.player.equipment.mainHand).toBeUndefined();
@@ -348,7 +348,7 @@ describe('invalid gear on load', () => {
       },
     });
     const eligible = loadOk();
-    expect(eligible.schemaVersion).toBe(6);
+    expect(eligible.schemaVersion).toBe(7);
     expect(eligible.scoreInvalid).toBe(false);
     expect(eligible.player.equipment.offHand).toBeUndefined();
     expect(eligible.player.inventory.map(item => item.id)).toEqual(['keep', 'wand']);

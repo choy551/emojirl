@@ -27,6 +27,8 @@ import {
   evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
 } from '../game/gameHelpers';
 import { lightningArcDamage } from '../game/passives';
+import { butterflyHeal, diamondThorns, heartHeal, igniteFields, mushroomHeal, starXpGain } from '../game/emojiBalance';
+import { guardHasRangedWeapon } from '../game/royalGuard';
 import { canEquipItem, emptyLegalEquipSlot } from '../components/itemUtils';
 import { creditVoidBoss } from '../game/voidDamage';
 import { applyEntropicTithe } from '../game/voidAbilities';
@@ -201,7 +203,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               paid.logs.forEach(addLog);
             }
             cEnemies.splice(enemyIdx, 1);
-            cPlayer.stats.xp = cPlayer.stats.xp + (enemy.isBoss ? 25 : 5);
+            cPlayer.stats.xp = cPlayer.stats.xp + starXpGain(enemy.isBoss ? 25 : 5, cPlayer.stats.xpBoostTurns);
             cPlayer.stats.moodValue = Math.min(moodMax(cls), cPlayer.stats.moodValue + 10);
             const cDrop = rollKillDrop({
               boss: !!enemy.isBoss,
@@ -217,8 +219,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             }
           } else {
             const cLanded = cResult.enemyHp < enemy.hp;
-            const _cBurning = cLanded && _cowboyPassives.burningOnHit ? { burningTurns: 3 } : {};
-            if (cLanded && _cowboyPassives.burningOnHit) addLog(`🔥 ${enemy.emoji} is ignited!`);
+            const _cBurn = cLanded ? igniteFields(player, prev.currentFloor, false) : null;
+            const _cBurning = _cBurn ?? {};
+            if (_cBurn) addLog(`🔥 ${enemy.emoji} is ignited! (${_cBurn.burnDamage}/turn)`);
             cEnemies[enemyIdx] = { ...enemy, hp: cResult.enemyHp, engaged: true, ..._cBurning };
             cSkip = enemy.id;
           }
@@ -229,7 +232,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       }
 
       const voidRanged = cls === '👤' && voidAttackModeRef.current === 'ranger';
-      if (((cls === '🧝' || isRoyalGuard(cls)) && rangerModeRef.current === 'ranged') || voidRanged) {
+      const guardShoots = isRoyalGuard(cls) && rangerModeRef.current === 'ranged' && guardHasRangedWeapon(player);
+      if (((cls === '🧝' && rangerModeRef.current === 'ranged') || guardShoots) || voidRanged) {
         for (let range = 2; range <= eagleEyeRange(player.stats.level); range++) {
           const tx = player.pos.x + dx * range;
           const ty = player.pos.y + dy * range;
@@ -252,18 +256,19 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
           const offHandAmmo = player.equipment.offHand?.specialAmmoKind;
           let specialAmmoEffect: Partial<Enemy> = {};
-          if (!combatResult.fled && combatResult.enemyHp > 0 && offHandAmmo) {
-            if (offHandAmmo === 'fire') {
-              specialAmmoEffect = { burningTurns: 3 };
-              addLog(`🔥 Fire arrow ignites ${enemy.emoji} ${enemy.name}!`);
-            } else if (offHandAmmo === 'freeze') {
+          if (!combatResult.fled && combatResult.enemyHp > 0 && combatResult.enemyHp < enemy.hp) {
+            if (offHandAmmo === 'freeze') {
               specialAmmoEffect = { slowedTurns: 3, slowSkipNext: false };
               addLog(`🧊 Ice arrow slows ${enemy.emoji} ${enemy.name}!`);
+            } else if (offHandAmmo === 'fire' || _rangerPassives.burningOnHit) {
+              const burn = igniteFields(player, prev.currentFloor, offHandAmmo === 'fire');
+              if (burn) {
+                specialAmmoEffect = burn;
+                addLog(offHandAmmo === 'fire'
+                  ? `🔥 Fire arrow ignites ${enemy.emoji} ${enemy.name}! (${burn.burnDamage}/turn)`
+                  : `🔥 ${enemy.emoji} is ignited! (${burn.burnDamage}/turn)`);
+              }
             }
-          }
-          if (!combatResult.fled && combatResult.enemyHp > 0 && combatResult.enemyHp < enemy.hp && _rangerPassives.burningOnHit && !specialAmmoEffect.burningTurns) {
-            specialAmmoEffect = { ...specialAmmoEffect, burningTurns: 3 };
-            addLog(`🔥 ${enemy.emoji} is ignited!`);
           }
 
           if (combatResult.fled) {
@@ -316,7 +321,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             if (victim.hp - pd <= 0) {
               markEnemyKilled(victim.emoji);
               rangerKillCounts = { ...rangerKillCounts, [victim.emoji]: (rangerKillCounts[victim.emoji] ?? 0) + 1 };
-              newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, xp: newPlayer.stats.xp + (victim.isBoss ? 25 : 5) } };
+              newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, xp: newPlayer.stats.xp + starXpGain(victim.isBoss ? 25 : 5, newPlayer.stats.xpBoostTurns) } };
               newEnemies = newEnemies.filter(e => e.id !== victim.id);
             } else {
               newEnemies = newEnemies.map(e => e.id === victim.id ? { ...e, hp: e.hp - pd, engaged: true } : e);
@@ -332,7 +337,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               paid.logs.forEach(addLog);
             }
             newEnemies.splice(enemyIdx, 1);
-            const xpGain = enemy.isBoss ? 25 : 5;
+            const xpGain = starXpGain(enemy.isBoss ? 25 : 5, newPlayer.stats.xpBoostTurns);
             const newXP = newPlayer.stats.xp + xpGain;
             const oldLevel = newPlayer.stats.level;
             const newLevel = levelFromXP(newXP);
@@ -656,7 +661,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           updatedKillCounts[enemy.emoji] = (updatedKillCounts[enemy.emoji] ?? 0) + 1;
           newPlayer = applyMonkeyDropOnKill(enemy, newPlayer);
           newEnemies.splice(enemyIndex, 1);
-          const xpGain = enemy.isBoss ? 25 : 5;
+          const xpGain = starXpGain(enemy.isBoss ? 25 : 5, newPlayer.stats.xpBoostTurns);
           const newXP = newPlayer.stats.xp + xpGain;
           const oldLevel = newPlayer.stats.level;
           const newLevel = levelFromXP(newXP);
@@ -717,8 +722,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
         const playerLanded = (combatResult.enemyDied && !godBlessedProc) || combatResult.enemyHp < enemy.hp;
         if (!godBlessedProc && !combatResult.enemyDied) {
-          const _mBurning = playerLanded && _meleePassives.burningOnHit ? { burningTurns: 3 } : {};
-          if (playerLanded && _meleePassives.burningOnHit) addLog(`🔥 ${enemy.emoji} is ignited!`);
+          const _mBurn = playerLanded ? igniteFields(player, prev.currentFloor, false) : null;
+          const _mBurning = _mBurn ?? {};
+          if (_mBurn) addLog(`🔥 ${enemy.emoji} is ignited! (${_mBurn.burnDamage}/turn)`);
           newEnemies[enemyIndex] = { ...enemy, hp: combatResult.enemyHp, engaged: true, ..._mBurning };
           skipFightId = enemy.id;
         }
@@ -732,7 +738,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             if (victim.hp - pd <= 0) {
               markEnemyKilled(victim.emoji);
               updatedKillCounts[victim.emoji] = (updatedKillCounts[victim.emoji] ?? 0) + 1;
-              newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, xp: newPlayer.stats.xp + (victim.isBoss ? 25 : 5) } };
+              newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, xp: newPlayer.stats.xp + starXpGain(victim.isBoss ? 25 : 5, newPlayer.stats.xpBoostTurns) } };
               newEnemies = newEnemies.filter(e => e.id !== victim.id);
             } else {
               newEnemies = newEnemies.map(e => e.id === victim.id ? { ...e, hp: e.hp - pd, engaged: true } : e);
@@ -760,7 +766,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                 updatedKillCounts[tgt.emoji] = (updatedKillCounts[tgt.emoji] ?? 0) + 1;
                 newPlayer = applyMonkeyDropOnKill(tgt, newPlayer);
                 newEnemies.splice(idx, 1);
-                newPlayer.stats.xp += tgt.isBoss ? 25 : 5;
+                newPlayer.stats.xp += starXpGain(tgt.isBoss ? 25 : 5, newPlayer.stats.xpBoostTurns);
                 const tithed = applyEntropicTithe({ ...prev, player: newPlayer, logs: newState.logs }, 'lightningBolt');
                 newPlayer = tithed.player;
                 newState.logs = tithed.logs;
@@ -790,7 +796,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               updatedKillCounts[ncEnemy.emoji] = (updatedKillCounts[ncEnemy.emoji] ?? 0) + 1;
               newPlayer = applyMonkeyDropOnKill(ncEnemy, newPlayer);
               newEnemies.splice(nci, 1);
-              newPlayer.stats.xp += enemy.isBoss ? 25 : 5;
+              newPlayer.stats.xp += starXpGain(enemy.isBoss ? 25 : 5, newPlayer.stats.xpBoostTurns);
               newPlayer.stats.moodValue = Math.min(moodMax(cls), newPlayer.stats.moodValue + 10);
               skipFightId = undefined;
             } else {
@@ -811,25 +817,28 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
         const vampCount = _meleePassives.vampiricStrike || 0;
         const pool = livingMaxHp(newPlayer);
+        const depth = prev.currentFloor;
+        const scaledAtk = combatPlayer.stats.attack;
         if (vampCount > 0 && meleeDmgToEnemy > 0) {
-          newPlayer.stats.hp = healHp(newPlayer.stats.hp, pool, vampCount);
+          newPlayer.stats.hp = healHp(newPlayer.stats.hp, pool, heartHeal(vampCount, depth, scaledAtk));
         }
         if (_meleePassives.healOnKill > 0 && combatResult.enemyDied) {
           const before = newPlayer.stats.hp;
-          newPlayer.stats.hp = healHp(before, pool, _meleePassives.healOnKill);
+          newPlayer.stats.hp = healHp(before, pool, mushroomHeal(_meleePassives.healOnKill, depth, pool));
           const mushHeal = newPlayer.stats.hp - before;
           if (mushHeal > 0) addLog(`🍄 Heal on kill! +${mushHeal} HP`);
         }
         const dodgeCount = _meleePassives.dodgeHeal || 0;
         if (dodgeCount > 0 && combatResult.dodged) {
           const before = newPlayer.stats.hp;
-          newPlayer.stats.hp = healHp(before, pool, dodgeCount);
-          if (newPlayer.stats.hp > before) addLog(`🦋 Dodge heals! +${dodgeCount} HP`);
+          newPlayer.stats.hp = healHp(before, pool, butterflyHeal(dodgeCount, depth, pool));
+          if (newPlayer.stats.hp > before) addLog(`🦋 Dodge heals! +${newPlayer.stats.hp - before} HP`);
         }
-        if (_meleePassives.thorns > 0 && meleeDmgToPlayer > 0) {
+        const thornDmg = diamondThorns(_meleePassives.thorns, depth, scaledAtk);
+        if (thornDmg > 0 && meleeDmgToPlayer > 0) {
           const thornIdx = newEnemies.findIndex(e => e.id === enemy.id);
           if (thornIdx !== -1) {
-            const thornNewHp = newEnemies[thornIdx].hp - _meleePassives.thorns;
+            const thornNewHp = newEnemies[thornIdx].hp - thornDmg;
             if (thornNewHp <= 0) {
               newEnemies.splice(thornIdx, 1);
               addLog(`💎 Thorns finish off ${enemy.emoji}!`);
@@ -838,7 +847,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               newState.logs = tithed.logs;
             } else {
               newEnemies[thornIdx] = { ...newEnemies[thornIdx], hp: thornNewHp };
-              addLog(`💎 Thorns reflect ${_meleePassives.thorns} dmg to ${enemy.emoji}!`);
+              addLog(`💎 Thorns reflect ${thornDmg} dmg to ${enemy.emoji}!`);
             }
           }
         }
@@ -1093,7 +1102,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             newState.killCounts = { ...newState.killCounts, [boltTarget.emoji]: (newState.killCounts[boltTarget.emoji] ?? 0) + 1 };
             newPlayer = applyMonkeyDropOnKill(boltTarget, newPlayer);
             boltEnemies.splice(boltEnemyIdx, 1);
-            const boltXpGain = boltTarget.isBoss ? 25 : 5;
+            const boltXpGain = starXpGain(boltTarget.isBoss ? 25 : 5, newPlayer.stats.xpBoostTurns);
             const boltXP = newPlayer.stats.xp + boltXpGain;
             const boltOldLevel = newPlayer.stats.level;
             const boltNewLevel = levelFromXP(boltXP);
@@ -1118,8 +1127,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             }
           } else {
             const boltLanded = boltResult.enemyHp < boltTarget.hp;
-            const _bBurning = boltLanded && _boltPassives.burningOnHit ? { burningTurns: 3 } : {};
-            if (boltLanded && _boltPassives.burningOnHit) addLog(`🔥 ${boltTarget.emoji} is ignited!`);
+            const _bBurn = boltLanded ? igniteFields(newPlayer, prev.currentFloor, false) : null;
+            const _bBurning = _bBurn ?? {};
+            if (_bBurn) addLog(`🔥 ${boltTarget.emoji} is ignited! (${_bBurn.burnDamage}/turn)`);
             boltEnemies[boltEnemyIdx] = { ...boltTarget, hp: boltResult.enemyHp, engaged: true, ..._bBurning };
           }
           newState.enemies = boltEnemies;
@@ -1282,7 +1292,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             waitKillCounts = { ...waitKillCounts, [boltTarget.emoji]: (waitKillCounts[boltTarget.emoji] ?? 0) + 1 };
             waitPlayer = applyMonkeyDropOnKill(boltTarget, waitPlayer);
             waitEnemies.splice(boltEnemyIdx, 1);
-            const boltXpGain = boltTarget.isBoss ? 25 : 5;
+            const boltXpGain = starXpGain(boltTarget.isBoss ? 25 : 5, waitPlayer.stats.xpBoostTurns);
             const boltXP = waitPlayer.stats.xp + boltXpGain;
             const boltOldLevel = waitPlayer.stats.level;
             const boltNewLevel = levelFromXP(boltXP);
@@ -1305,8 +1315,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             }
           } else {
             const boltLanded = boltResult.enemyHp < boltTarget.hp;
-            const _bBurning = boltLanded && _boltPassives.burningOnHit ? { burningTurns: 3 } : {};
-            if (boltLanded && _boltPassives.burningOnHit) addLog(`🔥 ${boltTarget.emoji} is ignited!`);
+            const _bBurn = boltLanded ? igniteFields(waitPlayer, prev.currentFloor, false) : null;
+            const _bBurning = _bBurn ?? {};
+            if (_bBurn) addLog(`🔥 ${boltTarget.emoji} is ignited! (${_bBurn.burnDamage}/turn)`);
             waitEnemies[boltEnemyIdx] = { ...boltTarget, hp: boltResult.enemyHp, engaged: true, ..._bBurning };
           }
           const _bdx = boltTarget.pos.x - waitPlayer.pos.x;

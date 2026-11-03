@@ -27,6 +27,18 @@ describe('soul catalog copy skips gear that shares an emoji', () => {
     expect(soulHelpText({ emoji: '🗡️', description: 'old' }).description).toContain('ninja combo');
   });
 
+  it('shows the piercing gun line from the catalog', () => {
+    const gun = {
+      emoji: '🔫', name: 'Gun', activeKind: 'gun' as const,
+      description: 'Fire in a direction. Travels tile-by-tile, deals ATK damage. 3 shots.',
+    };
+    const text = soulHelpText(gun).description;
+    expect(text).toContain('300% ATK');
+    expect(text).toContain('50 percentage points');
+    expect(text).toContain('minimum 50%');
+    expect(applySoulCatalogCopy(gun).description).toBe(text);
+  });
+
   it('keeps fire and ice arrows off the soul lines', () => {
     expect(soulHelpText({
       emoji: '🔥', name: 'Fire Arrows', isEquipment: true, description: 'wrong',

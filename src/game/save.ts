@@ -3,6 +3,7 @@ import { applyBlinkTalentSaveMigration, knownBlinkTalents } from './blinkStrike'
 import { applySoulCatalogCopy } from './emojis';
 import { normalizeBounty, normalizeVanity } from './goldSinks2';
 import { applyEquipmentRestrictionMigration } from '../components/itemUtils';
+import { migrateEquippedCrown } from './royalGuard';
 
 export const SAVE_KEY = 'emojirl_save_v1';
 
@@ -17,12 +18,14 @@ export const SAVE_KEY = 'emojirl_save_v1';
  * 5: scoreInvalid. Missing flag stays eligible for high scores.
  * 6: Class weapon locks. Gear the class cannot wear in that slot moves to the
  *    Bag, or to the Bank when the Bag is full. Runs after the score flag.
+ * 7: An equipped Crown moves into the hotbar as a stackable soul. Soul bag
+ *    passives refresh from the catalog in the same step.
  */
-export const SAVE_SCHEMA_VERSION = 6;
+export const SAVE_SCHEMA_VERSION = 7;
 const CURRENT_SCHEMA_VERSION = SAVE_SCHEMA_VERSION;
 
 /** Set of schema versions this build knows how to load (after migration). */
-const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6]);
+const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7]);
 
 /**
  * Runs in-place migrations on the raw parsed JSON object so that
@@ -91,6 +94,7 @@ const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
   migrateGenieSafeFireball,
   migrateScoreInvalid,
   applyEquipmentRestrictionMigration,
+  migrateEquippedCrown,
 ];
 
 function migrateRaw(raw: Record<string, unknown>): void {
@@ -137,6 +141,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     blinkOverkillBank:             rawStats.blinkOverkillBank              as number | undefined,
     blinkOverkillCooldown:         rawStats.blinkOverkillCooldown          as number | undefined,
     overhealDecayTick:             rawStats.overhealDecayTick             as number | undefined,
+    xpBoostTurns:                  rawStats.xpBoostTurns                  as number | undefined,
     backdashCooldown:              rawStats.backdashCooldown              as number | undefined,
     lungeCooldown:                 rawStats.lungeCooldown                 as number | undefined,
     executeCooldown:               rawStats.executeCooldown               as number | undefined,

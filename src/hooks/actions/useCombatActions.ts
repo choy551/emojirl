@@ -17,6 +17,7 @@ import {
   resolveOverkillAfterBlink,
 } from '../../game/blinkStrike';
 import { playerMood } from '../../game/drinks';
+import { starXpGain } from '../../game/emojiBalance';
 import { markEnemyKilled } from '../../game/discoveries';
 import {
   moodMax, chebyshev, hasLOSBetween, PLAYER_PASSABLE_TILES, playerBagPassives,
@@ -246,7 +247,7 @@ export function useCombatActions(
         const dropped = applyMonkeyDropOnKill(target, { ...prev.player, inventory, bank, stats: { ...prev.player.stats, hp: runningHp, xp, level } });
         inventory = dropped.inventory;
         bank = dropped.bank;
-        const xpGain = target.isBoss ? 25 : 5;
+        const xpGain = starXpGain(target.isBoss ? 25 : 5, prev.player.stats.xpBoostTurns);
         const oldLevel = level;
         xp += xpGain;
         const newLevel = levelFromXP(xp);

@@ -1,8 +1,9 @@
 import { ActiveProjectile, Enemy, EmojiItem, FloatingText, Player, Position } from './types';
-import { applyEquipmentAndPassives, playerBagPassives } from './inventory';
+import { applyEquipmentAndPassives } from './inventory';
 import { stolenEmojiSummary } from './monkeyLoot';
 import { RANGED_BLOCKING_TILES } from './tiles';
 import { applyNullMomentum } from './voidDamage';
+import { igniteFields } from './emojiBalance';
 
 export interface ProjectileResolution {
   projectile: ActiveProjectile | null;
@@ -45,6 +46,16 @@ function gunDmg(atk: number, def: number): number {
   return Math.max(1, atk - (def ?? 0));
 }
 
+/** First foe 300% ATK, then −50 percentage points per further foe, floored at 50%. */
+export function gunPiercePercent(hitIndex: number): number {
+  const step = Math.max(0, hitIndex);
+  return Math.max(50, 300 - 50 * step);
+}
+
+function gunPierceDmg(atk: number, def: number, hitIndex: number): number {
+  return Math.max(1, Math.floor(atk * gunPiercePercent(hitIndex) / 100) - (def ?? 0));
+}
+
 function boomDmg(atk: number, def: number, extraBoomerangs: number): number {
   const mult = Math.min(2.0, 1.0 + 0.25 * extraBoomerangs);
   return Math.max(1, Math.floor(atk * mult) - (def ?? 0));
@@ -53,6 +64,7 @@ function boomDmg(atk: number, def: number, extraBoomerangs: number): number {
 /**
  * Resolve a gun / freeze / boomerang / bomb along its whole line in one action.
  * Enemies no longer get a move to step off the lane before the shot arrives.
+ * A gun pierces every hostile. Freeze, boomerang, and bomb stop on the first.
  */
 export function resolveProjectileFlight(
   proj: ActiveProjectile,
@@ -61,6 +73,7 @@ export function resolveProjectileFlight(
   player: Player,
   turn: number,
   extraBoomerangs = 0,
+  floor = 1,
 ): ProjectileResolution {
   const logs: ProjectileResolution['logs'] = [];
   const floats: FloatingText[] = [];
@@ -76,8 +89,9 @@ export function resolveProjectileFlight(
   };
 
   const atk = applyEquipmentAndPassives(player).stats.attack;
-  const ignite = playerBagPassives(player).burningOnHit;
+  const burn = igniteFields(player, floor, false);
   let enemies = [...enemiesIn];
+  let gunHits = 0;
   let playerDamage = 0;
   let playerDied = false;
   let killer: { name: string; emoji: string } | undefined;
@@ -93,16 +107,18 @@ export function resolveProjectileFlight(
       return true;
     }
     if (kind === 'gun') {
-      const dmg = gunDmg(atk, target.defense ?? 0);
-      log(`🔫 Bullet hits ${target.emoji} ${target.name} for ${dmg} dmg!`);
+      const pct = gunPiercePercent(gunHits);
+      const dmg = gunPierceDmg(atk, target.defense ?? 0, gunHits);
+      gunHits += 1;
+      log(`🔫 Bullet hits ${target.emoji} ${target.name} for ${dmg} dmg! (${pct}% ATK)`);
       floats.push({ id: `gun-hit-${target.id}-${turn}`, pos: { ...target.pos }, text: `-${dmg}`, color: '#ef4444', life: 2 });
       const newHp = target.hp - dmg;
       if (newHp <= 0) { reclaim(target); enemies.splice(idx, 1); }
       else {
-        if (ignite) log(`🔥 ${target.emoji} is ignited!`);
-        enemies[idx] = { ...target, hp: newHp, engaged: true, ...(ignite ? { burningTurns: 3 } : {}) };
+        if (burn) log(`🔥 ${target.emoji} is ignited! (${burn.burnDamage}/turn)`);
+        enemies[idx] = { ...target, hp: newHp, engaged: true, ...(burn ?? {}) };
       }
-      return true;
+      return false;
     }
     if (kind === 'freeze') {
       const dmg = gunDmg(atk, target.defense ?? 0);
@@ -111,8 +127,8 @@ export function resolveProjectileFlight(
       const newHp = target.hp - dmg;
       if (newHp <= 0) { reclaim(target); enemies.splice(idx, 1); }
       else {
-        if (ignite) log(`🔥 ${target.emoji} is ignited!`);
-        enemies[idx] = { ...target, hp: newHp, engaged: true, frozenTurns: 3, slowedTurns: 0, ...(ignite ? { burningTurns: 3 } : {}) };
+        if (burn) log(`🔥 ${target.emoji} is ignited! (${burn.burnDamage}/turn)`);
+        enemies[idx] = { ...target, hp: newHp, engaged: true, frozenTurns: 3, slowedTurns: 0, ...(burn ?? {}) };
       }
       return true;
     }
@@ -124,8 +140,8 @@ export function resolveProjectileFlight(
       const newHp = target.hp - dmg;
       if (newHp <= 0) { reclaim(target); enemies.splice(idx, 1); }
       else {
-        if (ignite) log(`🔥 ${target.emoji} is ignited!`);
-        enemies[idx] = { ...target, hp: newHp, engaged: true, ...(ignite ? { burningTurns: 3 } : {}) };
+        if (burn) log(`🔥 ${target.emoji} is ignited! (${burn.burnDamage}/turn)`);
+        enemies[idx] = { ...target, hp: newHp, engaged: true, ...(burn ?? {}) };
       }
       return true;
     }
@@ -152,8 +168,8 @@ export function resolveProjectileFlight(
         const newHp = e.hp - dmg;
         if (newHp <= 0) { reclaim(e); enemies.splice(ei, 1); }
         else {
-          if (ignite) log(`🔥 ${e.emoji} is ignited!`);
-          enemies[ei] = { ...e, hp: newHp, engaged: true, ...(ignite ? { burningTurns: 3 } : {}) };
+          if (burn) log(`🔥 ${e.emoji} is ignited! (${burn.burnDamage}/turn)`);
+          enemies[ei] = { ...e, hp: newHp, engaged: true, ...(burn ?? {}) };
         }
       }
       if (Math.max(Math.abs(player.pos.x - blastPos.x), Math.abs(player.pos.y - blastPos.y)) <= blastRadius) {
@@ -188,9 +204,9 @@ export function resolveProjectileFlight(
     beam.push({ x, y });
     const idx = hitIndex(enemies, x, y);
     if (idx !== -1) {
-      applyHit(idx, proj.kind);
+      const stop = applyHit(idx, proj.kind);
       if (proj.kind === 'boomerang') log('🪃 The boomerang returns to your hand!');
-      break;
+      if (stop) break;
     }
     if (step === maxSteps && proj.kind === 'boomerang') {
       log('🪃 The boomerang returns to your hand!');

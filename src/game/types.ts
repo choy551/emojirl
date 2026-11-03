@@ -97,6 +97,8 @@ export interface PlayerStats {
   /** Turns until Overkill can bank again. Spending the bank does not wait on this. */
   blinkOverkillCooldown?: number;
   overhealDecayTick?: number;
+  /** Turns left on a Star's +50% XP. Absent means none. */
+  xpBoostTurns?: number;
   backdashCooldown?: number;
   lungeCooldown?: number;
   executeCooldown?: number;
@@ -151,6 +153,8 @@ export interface BagPassive {
   royalAura?: boolean;
   combatRegen?: number | boolean;
   dodgeHeal?: number | boolean;
+  /** Stackable Star sight. Each stack is +1 vision and +1 detection. */
+  starGaze?: boolean;
 }
 
 export interface EquipBonus {
@@ -380,6 +384,8 @@ export interface Enemy {
   slowedTurns?: number;
   slowSkipNext?: boolean;
   burningTurns?: number;
+  /** Damage dealt each burn tick. Missing saves still burn for 1. */
+  burnDamage?: number;
   silent?: boolean;
   cowardly?: boolean;
   berserker?: boolean;
@@ -554,4 +560,5 @@ export type BagPassiveSummary = {
   execBlow: boolean; trueVision: boolean; itemMagnet: boolean; shieldWall: number;
   healOnKill: number; trueAim: boolean; regeneration: number; ninjaCombo: number;
   royalAura: boolean; combatRegen: number; dodgeHeal: number;
+  fireStacks: number; starStacks: number; crownStacks: number;
 };
