@@ -61,13 +61,15 @@ function addItemsToBag(
       if (isActiveKindDuplicate(item, newInv)) { newBank.push(item); duplicateActiveBanked.push(item); continue; }
     }
     if (isStackableBagPassive(item)) {
-      const cap = STACKABLE_BAG_CAPS[item.emoji] ?? 9;
+      // Stack size is not the hotbar slot count. A new clover (cap 3) still
+      // belongs in an empty slot when the bar already holds more than 3 souls.
+      const stackCap = STACKABLE_BAG_CAPS[item.emoji] ?? 9;
       const addCount = Math.max(1, item.stackCount ?? 1);
       const existingIdx = newInv.findIndex(i => i.emoji === item.emoji && isStackableBagPassive(i));
       if (existingIdx !== -1) {
         const existing = newInv[existingIdx];
         const cur = existing.stackCount ?? 1;
-        const room = Math.max(0, cap - cur);
+        const room = Math.max(0, stackCap - cur);
         if (room === 0) { newBank.push({ ...item, stackCount: addCount }); continue; }
         const toStack = Math.min(room, addCount);
         newInv[existingIdx] = { ...existing, stackCount: cur + toStack };
@@ -78,9 +80,9 @@ function addItemsToBag(
       }
       const bagCount = newInv.filter(isHotbarBagItem).length;
       if (bagCount >= cap) { newBank.push({ ...item, stackCount: addCount }); continue; }
-      if (addCount > cap) {
-        newInv.push({ ...item, stackCount: cap });
-        newBank.push({ ...item, id: `${item.id}-overflow`, stackCount: addCount - cap });
+      if (addCount > stackCap) {
+        newInv.push({ ...item, stackCount: stackCap });
+        newBank.push({ ...item, id: `${item.id}-overflow`, stackCount: addCount - stackCap });
         continue;
       }
       newInv.push({ ...item, stackCount: addCount });
