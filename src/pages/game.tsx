@@ -100,7 +100,7 @@ import {
   eagleEyeRange, sortBagSlots, buildHotbarSlots, banishPlayerGhost, manifestPlayerGhost,
   generateShopStock, generateAmmoCacheStock, generateRestaurantStock,
   spawnEnemies, spawnVaultItems, xpThresholdForLevel,
-  computeVisibility, visionRadiusFor,
+  computeVisibility, visionRadiusFor, hitmanRevealsEnemy,
   _flashSignals,
   bfsStepToward, bfsNextStep, bfsNextStepWallHug, PLAYER_PASSABLE_TILES,
   pressureForRun, claimFinaleWin, descendFloor,
@@ -1524,6 +1524,7 @@ export default function Game() {
       const { x: px, y: py } = state.player.pos;
       const hasVisibleEnemy = state.enemies.some(e => {
         if (!isHostileCombatTarget(e)) return false;
+        if (hitmanRevealsEnemy(state.player, state.map, e.pos)) return true;
         if (!state.map[e.pos.y]?.[e.pos.x]?.visible) return false;
         if (passives.trueVision) {
           const dist = Math.max(Math.abs(e.pos.x - px), Math.abs(e.pos.y - py));
@@ -2384,17 +2385,27 @@ export default function Game() {
       if (mapY >= 0 && mapY < gameState.map.length && mapX >= 0 && mapX < gameState.map[0].length) {
         const tileData = gameState.map[mapY][mapX];
         const isTravelDest = !!travelTarget && travelTarget.x === mapX && travelTarget.y === mapY;
-        if (!tileData.seen) {
+        const revealedEnemy = !tileData.visible
+          ? gameState.enemies.find(e => e.hp > 0 && e.pos.x === mapX && e.pos.y === mapY && hitmanRevealsEnemy(player, gameState.map, e.pos))
+          : undefined;
+        if (!tileData.seen && !revealedEnemy) {
           row.push(<div key={`${x}-${y}`} className="w-8 h-8 bg-black" />);
         } else if (!tileData.visible) {
           row.push(
             <div
               key={`${x}-${y}`}
-              className={`relative w-8 h-8 flex items-center justify-center text-2xl select-none opacity-30 grayscale${clickToMove ? ' cursor-pointer hover:brightness-125 active:scale-90 transition-transform' : ''}`}
+              className={`relative w-8 h-8 flex items-center justify-center text-2xl select-none bg-black${clickToMove ? ' cursor-pointer hover:brightness-125 active:scale-90 transition-transform' : ''}`}
               onClick={clickToMove ? () => handleTileTap(mapX, mapY) : undefined}
               title={clickToMove ? 'Walk here' : undefined}
             >
-              {gameState.bounty?.status === 'active' && gameState.bounty.kind === 'reach' && gameState.bounty.x === mapX && gameState.bounty.y === mapY ? '📍' : tileData.emoji}
+              {tileData.seen && (
+                <span className="opacity-30 grayscale">
+                  {gameState.bounty?.status === 'active' && gameState.bounty.kind === 'reach' && gameState.bounty.x === mapX && gameState.bounty.y === mapY ? '📍' : tileData.emoji}
+                </span>
+              )}
+              {revealedEnemy && (
+                <span className="absolute inset-0 flex items-center justify-center">{revealedEnemy.emoji}</span>
+              )}
               {isTravelDest && <span className="absolute inset-0 rounded border-2 border-cyan-400/80 pointer-events-none" />}
             </div>
           );
@@ -3491,7 +3502,7 @@ export default function Game() {
                 const hovEnemy = gameState.enemies.find(e => e.id === activeId);
                 if (!hovEnemy) return null;
                 const tile = gameState.map[hovEnemy.pos.y]?.[hovEnemy.pos.x];
-                if (!tile?.visible) return null;
+                if (!tile?.visible && !hitmanRevealsEnemy(player, gameState.map, hovEnemy.pos)) return null;
                 const hvx = hovEnemy.pos.x - startX;
                 const hvy = hovEnemy.pos.y - startY;
                 if (hvx < 0 || hvx >= viewWidth || hvy < 0 || hvy >= viewHeight) return null;
@@ -3530,6 +3541,7 @@ export default function Game() {
                 if (chebyshev(enemy.pos, player.pos) <= detectionRadius(enemy.speed)) return null;
                 const tile = gameState.map[enemy.pos.y]?.[enemy.pos.x];
                 if (!tile || !tile.seen || tile.visible) return null;
+                if (hitmanRevealsEnemy(player, gameState.map, enemy.pos)) return null;
                 const vx = enemy.pos.x - startX;
                 const vy = enemy.pos.y - startY;
                 if (vx < 0 || vx >= viewWidth || vy < 0 || vy >= viewHeight) return null;

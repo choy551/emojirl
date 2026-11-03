@@ -4,9 +4,9 @@ import { getMood } from '../../game/moods';
 import { isHostileCombatTarget, resolveCombat } from '../../game/combat';
 import type { GameRefs, GameSetters, AddLog } from './types';
 import type { Player } from '../../game/types';
-import { isArcaneCaster, isFencer, isHitman, isRoyalGuard, activateGuardianStance, planBackdash, planLunge, nearestExecuteTarget, executeStrike, notePrestigeKill, fencerOutgoingMult } from '../../game/prestige';
-import { FENCER_BACKDASH_CD, FENCER_LUNGE_CD, FENCER_LUNGE_MULT, HITMAN_EXECUTE_BULLETS, HITMAN_EXECUTE_CD, HITMAN_EXECUTE_GOLD } from '../../game/prestigeConstants';
-import { goldWithLuck } from '../../game/softCap';
+import { isArcaneCaster, isFencer, isHitman, isRoyalGuard, activateGuardianStance, planBackdash, planLunge, nearestExecuteTarget, notePrestigeKill, fencerOutgoingMult } from '../../game/prestige';
+import { FENCER_BACKDASH_CD, FENCER_LUNGE_CD, FENCER_LUNGE_MULT } from '../../game/prestigeConstants';
+import { resolveExecuteContract } from '../../game/hitman';
 
 const BLINK_ACTIVE = 3;
 const BLINK_CD = 5;
@@ -214,34 +214,33 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
     if (!target) { addLog('🕴️ No contract in line of sight.'); return; }
     setGameState(prev => {
       if (!prev || prev.gameOver) return prev;
+      const live = prev.enemies.find(e => e.id === target.id);
+      if (!live) return prev;
       const geared = applyEquipmentAndPassives(prev.player);
-      const strike = executeStrike(geared.stats.attack, target.hp, target.maxHp, target.defense ?? 0);
-      let hp = target.godBlessed && strike.damage >= target.hp ? 1 : target.hp - strike.damage;
-      let player: Player = { ...prev.player, stats: { ...prev.player.stats, executeCooldown: HITMAN_EXECUTE_CD } };
-      let enemies = prev.enemies.map(e => ({ ...e }));
-      const idx = enemies.findIndex(e => e.id === target.id);
-      if (hp <= 0 && idx >= 0) {
-        if (strike.executed) {
-          const gained = goldWithLuck(HITMAN_EXECUTE_GOLD, playerSoftCap(player).raw.luck);
-          player = {
-            ...player,
-            ammo: (player.ammo ?? 0) + HITMAN_EXECUTE_BULLETS,
-            stats: { ...player.stats, gold: player.stats.gold + gained, xp: player.stats.xp + (target.isBoss ? 25 : 5) },
-          };
-          addLog(`🕴️ Contract executed — +${gained} gold, +${HITMAN_EXECUTE_BULLETS} bullets.`);
-        } else {
-          player = { ...player, stats: { ...player.stats, xp: player.stats.xp + (target.isBoss ? 25 : 5) } };
-          addLog(`🕴️ Execute Contract — ${strike.damage} damage.`);
-        }
-        const paid = notePrestigeKill(player, prev.currentFloor, playerSoftCap(player).raw.luck);
-        player = paid.player;
-        paid.logs.forEach(addLog);
-        enemies.splice(idx, 1);
-      } else if (idx >= 0) {
-        enemies[idx] = { ...enemies[idx], hp, engaged: true };
-        addLog(strike.executed ? `🕴️ The mark survives on a thread.` : `🕴️ Execute Contract — ${strike.damage} damage.`);
+      const resolved = resolveExecuteContract({
+        player: prev.player,
+        enemies: prev.enemies,
+        items: prev.items,
+        killCounts: prev.killCounts,
+        target: live,
+        floor: prev.currentFloor,
+        attack: geared.stats.attack,
+        difficultyTier: prev.difficultyTier,
+      });
+      const logEntries = [...resolved.logs].reverse().map(text => ({ id: Math.random().toString(), text, turn: prev.turn }));
+      const withLogs = {
+        ...prev,
+        player: resolved.player,
+        enemies: resolved.enemies,
+        items: resolved.items,
+        killCounts: resolved.killCounts,
+        difficultyTier: resolved.difficultyTier,
+        logs: [...logEntries, ...prev.logs].slice(0, 24),
+      };
+      if (resolved.playerDied) {
+        return { ...withLogs, gameOver: true, killer: resolved.killer };
       }
-      const mid = { ...prev, player, enemies, turn: prev.turn + 1 };
+      const mid = { ...withLogs, turn: prev.turn + 1 };
       return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
     });
   }, [addLog, gameStateRef, setGameState]);

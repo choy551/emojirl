@@ -58,9 +58,9 @@ export const HITMAN_CONTRACT_KILLS = 4;
 export const HITMAN_CONTRACT_BULLETS = 4;
 export const HITMAN_CONTRACT_GOLD_BASE = 20;
 export const HITMAN_CONTRACT_GOLD_PER_FLOOR = 2;
-/** Dual guns deal 75% damage (−25%). */
+/** Each gun in a dual-wield shot. Both fire, so the shot totals 150%. */
 export const HITMAN_DUAL_MULT = 0.75;
-/** One gun deals 250% damage (+150%). */
+/** One gun deals 250% damage. */
 export const HITMAN_SINGLE_MULT = 2.5;
 export const HITMAN_DUAL_RANGE = 4;
 export const HITMAN_SINGLE_RANGE = 5;
