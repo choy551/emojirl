@@ -20,6 +20,16 @@ export function isBlankConsoleDraft(draft: string): boolean {
   return draft.trim() === '';
 }
 
+/** Mobile >_ control. Hidden until the expanded combat log is open. */
+export function showMobileConsoleButton(opts: {
+  mobile: boolean;
+  logOpen: boolean;
+  consoleOpen: boolean;
+  gameOver: boolean;
+}): boolean {
+  return opts.mobile && opts.logOpen && !opts.consoleOpen && !opts.gameOver;
+}
+
 export interface ConsoleStripPlacement {
   bottom: string;
   height: string;
