@@ -89,7 +89,7 @@ export const ACTIVE_DROPS: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   {
     emoji: '🔫',
     name: 'Gun',
-    description: 'Fire in a direction. Travels tile-by-tile, deals ATK damage. 3 shots.',
+    description: 'Fire in a direction. Pierces the line for 300% ATK, then 50 percentage points less per further enemy (minimum 50%). 3 shots.',
     activeKind: 'gun',
     charges: 3,
   },
@@ -189,6 +189,11 @@ function equipmentCatalogDescription(item: CatalogItem): string | undefined {
   return EQUIPMENT_DROPS.find(e => e.name === item.name)?.description;
 }
 
+function activeCatalogDescription(item: CatalogItem): string | undefined {
+  if (item.isEquipment || !item.activeKind) return undefined;
+  return ACTIVE_DROPS.find(d => d.emoji === item.emoji && d.activeKind === item.activeKind)?.description;
+}
+
 /** Live catalog copy so saved items pick up wording nerfs without a new drop. */
 export function soulHelpText(item: CatalogItem): {
   description: string;
@@ -198,6 +203,8 @@ export function soulHelpText(item: CatalogItem): {
   if (item.isEquipment) {
     return { description: gear ?? item.description };
   }
+  const active = activeCatalogDescription(item);
+  if (active) return { description: active, bagPassiveDescription: item.bagPassive?.description };
   const cat = soulCatalogEntry(item);
   return {
     description: cat?.description ?? item.description,
@@ -210,6 +217,11 @@ export function applySoulCatalogCopy<T extends CatalogItem>(item: T): T {
     const gear = equipmentCatalogDescription(item);
     if (!gear || gear === item.description) return item;
     return { ...item, description: gear };
+  }
+  const active = activeCatalogDescription(item);
+  if (active) {
+    if (active === item.description) return item;
+    return { ...item, description: active };
   }
   const cat = soulCatalogEntry(item);
   if (!cat) return item;

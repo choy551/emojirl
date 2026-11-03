@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { EmojiItem } from './types';
-import { removeAndRefillBag, refillBagFromBank, sortBagSlots, addToBag, computeBagPassives, takeOneMatchingFromBank } from './inventory';
+import { removeAndRefillBag, refillBagFromBank, sortBagSlots, addToBag, addToBagCapped, computeBagPassives, takeOneMatchingFromBank } from './inventory';
 import { lightningArcTiers, lightningArcDamage, STACKABLE_BAG_CAPS } from './passives';
 
 function ice(id: string): EmojiItem {
@@ -239,6 +239,65 @@ describe('takeOneMatchingFromBank', () => {
     const { inventory, bank: nextBank } = refillBagFromBank(inv, bank);
     expect(inventory[0].stackCount).toBe(3);
     expect(nextBank.map(i => i.id)).toEqual(['ice-bank']);
+  });
+});
+
+function clover(id: string, stackCount = 1): EmojiItem {
+  return {
+    id,
+    emoji: '🍀',
+    name: 'Clover',
+    description: 'loot',
+    consumed: false,
+    stackCount,
+    bagPassive: { description: 'loot', bonusLoot: true },
+  };
+}
+
+describe('pickups fill empty hotbar slots before the bank', () => {
+  it('keeps a new stackable on the hotbar when other souls already exceed its stack cap', () => {
+    const inventory = [fire('f1'), star('s1'), moon('m1'), crown('c1')];
+    const { inventory: next, bank } = addToBag(inventory, [], clover('clover'));
+    expect(next.some(i => i.id === 'clover')).toBe(true);
+    expect(bank).toHaveLength(0);
+  });
+
+  it('banks a new emoji only after all 9 hotbar slots are taken', () => {
+    const inventory = [
+      fire('f'), star('s'), moon('m'), crown('c'), magnet('g'), ice('i'), boat('b'), heart('h', 1), gun('gun'),
+    ];
+    const { inventory: next, bank } = addToBag(inventory, [], clover('clover'));
+    expect(next.some(i => i.emoji === '🍀')).toBe(false);
+    expect(bank.map(i => i.id)).toEqual(['clover']);
+  });
+
+  it('puts the stack on an empty slot and banks only the copies past the stack cap', () => {
+    const inventory = [fire('f1'), star('s1'), moon('m1')];
+    const { inventory: next, bank } = addToBag(inventory, [], clover('clover', 5));
+    expect(next.find(i => i.emoji === '🍀')?.stackCount).toBe(STACKABLE_BAG_CAPS['🍀']);
+    expect(bank).toHaveLength(1);
+    expect(bank[0].stackCount).toBe(2);
+  });
+
+  it('uses the remaining hotbar room, including slots ghosts have not reserved', () => {
+    const four = [fire('f1'), star('s1'), moon('m1'), crown('c1')];
+    const open = addToBagCapped(four, [], 6, clover('open'));
+    expect(open.inventory.some(i => i.id === 'open')).toBe(true);
+    expect(open.bank).toHaveLength(0);
+
+    const six = [fire('f'), star('s'), moon('m'), crown('c'), magnet('g'), ice('i')];
+    const full = addToBagCapped(six, [], 6, clover('full'));
+    expect(full.inventory.some(i => i.emoji === '🍀')).toBe(false);
+    expect(full.bank.map(i => i.id)).toEqual(['full']);
+  });
+
+  it('still merges into an existing stack when the hotbar has no empty slot', () => {
+    const inventory = [
+      clover('c', 1), fire('f'), star('s'), moon('m'), crown('c1'), magnet('g'), ice('i'), boat('b'), gun('gun'),
+    ];
+    const { inventory: next, bank } = addToBag(inventory, [], clover('extra', 1));
+    expect(next.find(i => i.id === 'c')?.stackCount).toBe(2);
+    expect(bank).toHaveLength(0);
   });
 });
 

@@ -26,6 +26,8 @@ import { recordRunEmojiConsume } from '../../game/meta';
 import { noteThemedHotbarConsume } from '../../game/voidAbilities';
 import { _flashSignals } from '../../game/flashSignals';
 import { placeSealedVaultStairs, priorPassableKeys, reachesPriorFloor } from '../../game/ropeVault';
+import { boatConsumeGate } from '../../game/boatConsume';
+import { classFlies } from '../../game/prestige';
 import type { GameRefs, GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 
 function noteFullCity(state: GameState, notice: string | null, id: string): GameState {
@@ -408,21 +410,27 @@ export function useItemActions(
       return;
     }
 
+    let flyingBoatLog: string | undefined;
     if (item.emoji === '⛵') {
       const tile = gs.map[gs.player.pos.y]?.[gs.player.pos.x];
-      if (tile?.type === 'water') {
+      const boatCount = gs.player.inventory.filter(i => i.emoji === '⛵' && !i.consumed).length
+        + gs.player.bank.filter(i => i.emoji === '⛵' && !i.consumed).length;
+      const gate = boatConsumeGate({
+        flies: classFlies(gs.player.characterClass),
+        overWater: tile?.type === 'water',
+        boatCount,
+        confirmed: boatConfirmedRef.current,
+      });
+      if (gate.action === 'drown-warn') {
         setDrownWarnSlot(bagSlotIndex);
         return;
       }
-      if (!boatConfirmedRef.current) {
-        const totalBoats = gs.player.inventory.filter(i => i.emoji === '⛵' && !i.consumed).length
-                         + gs.player.bank.filter(i => i.emoji === '⛵' && !i.consumed).length;
-        if (totalBoats <= 1) {
-          setLastBoatWarnSlot(bagSlotIndex);
-          return;
-        }
+      if (gate.action === 'last-boat-warn') {
+        setLastBoatWarnSlot(bagSlotIndex);
+        return;
       }
       boatConfirmedRef.current = false;
+      flyingBoatLog = gate.log;
     }
 
     setGameState(prev => {
@@ -467,6 +475,9 @@ export function useItemActions(
 
       let nextPlayer = { ...applied.player, inventory: newInventory, bank: newSoulBank };
       let nextLogs = applied.logs;
+      if (flyingBoatLog && !echo && slotItem.emoji === '⛵') {
+        nextLogs = [{ id: `boat-fly-${applied.turn}-${slotItem.id}`, text: flyingBoatLog, turn: applied.turn }, ...nextLogs].slice(0, 24);
+      }
       if (!echo && prev.player.characterClass === '👤') {
         const reclaim = reclaimVoidSlotPressure(applied.player, slotItem);
         nextPlayer = {

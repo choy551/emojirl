@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveProjectileFlight } from './projectiles';
+import { gunPiercePercent, resolveProjectileFlight } from './projectiles';
 import type { ActiveProjectile, Enemy, Player, Tile } from './types';
 
 const floor: Tile = { type: 'floor', emoji: '⬜', seen: true, visible: true };
@@ -44,12 +44,13 @@ describe('resolveProjectileFlight', () => {
     expect(res.projectile).toBeNull();
     expect(res.enemies).toHaveLength(0);
     expect(res.logs.some(l => l.text.includes('Bullet hits'))).toBe(true);
-    expect(res.beam?.positions.length).toBe(4);
+    expect(res.beam?.positions.some(p => p.x === 5 && p.y === 2)).toBe(true);
+    expect(res.beam?.positions.length).toBe(8);
   });
 
   it('ignites on a gun hit when the bag has Fire', () => {
     const map = mapWithWalls(10, 5);
-    const enemies = [goblin('g', 5, 2)];
+    const enemies = [goblin('g', 5, 2, { hp: 30, maxHp: 30 })];
     const pyro = {
       ...player,
       inventory: [{
@@ -99,6 +100,39 @@ describe('resolveProjectileFlight', () => {
     const res = resolveProjectileFlight(gunAtPlayer(), map, enemies, player, 1);
     expect(res.enemies.some(e => e.id === 'ally' && e.hp === 10)).toBe(true);
     expect(res.enemies.some(e => e.id === 'g')).toBe(false);
+  });
+
+  it('pierces a line at 300/250/200/150/100 then 50% ATK', () => {
+    expect([0, 1, 2, 3, 4, 5, 6].map(gunPiercePercent)).toEqual([300, 250, 200, 150, 100, 50, 50]);
+    const map = mapWithWalls(12, 5);
+    const sharp = {
+      ...player,
+      stats: { ...player.stats, attack: 10 },
+    } as Player;
+    const enemies = [2, 3, 4, 5, 6, 7, 8].map((x, i) => goblin(`g${i}`, x, 2, { hp: 100, maxHp: 100 }));
+    const res = resolveProjectileFlight(gunAtPlayer(), map, enemies, sharp, 1);
+    expect(res.enemies.map(e => e.hp)).toEqual([70, 75, 80, 85, 90, 95, 95]);
+    expect(res.logs.filter(l => l.text.includes('Bullet hits')).map(l => l.text.match(/\((\d+)% ATK\)/)?.[1]))
+      .toEqual(['300', '250', '200', '150', '100', '50', '50']);
+  });
+
+  it('a wall still ends the pierce, and a crowd stops the bullet', () => {
+    const map = mapWithWalls(12, 5, [[5, 2]]);
+    const sharp = { ...player, stats: { ...player.stats, attack: 10 } } as Player;
+    const enemies = [goblin('a', 3, 2, { hp: 100, maxHp: 100 }), goblin('b', 7, 2, { hp: 100, maxHp: 100 })];
+    const blocked = resolveProjectileFlight(gunAtPlayer(), map, enemies, sharp, 1);
+    expect(blocked.enemies.find(e => e.id === 'a')?.hp).toBe(70);
+    expect(blocked.enemies.find(e => e.id === 'b')?.hp).toBe(100);
+
+    const open = mapWithWalls(12, 5);
+    const crowd: Enemy = {
+      id: 'crowd', emoji: '🧍', name: 'Crowd', hp: 5, maxHp: 5, attack: 0, defense: 0, speed: 1,
+      engaged: false, pos: { x: 3, y: 2 }, tag: 'Hostile', isSpectator: true,
+    };
+    const stopped = resolveProjectileFlight(gunAtPlayer(), open, [crowd, goblin('past', 6, 2, { hp: 20, maxHp: 20 })], sharp, 1);
+    expect(stopped.enemies.find(e => e.id === 'crowd')?.hp).toBe(5);
+    expect(stopped.enemies.find(e => e.id === 'past')?.hp).toBe(20);
+    expect(stopped.logs.some(l => l.text.includes('crowd'))).toBe(true);
   });
 
   it('boomerang hits the first enemy and returns the same action', () => {
