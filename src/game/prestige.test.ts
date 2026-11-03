@@ -368,9 +368,23 @@ describe('prestige kits', () => {
       ammo: 2,
       equipment: { mainHand: { id: 'a', emoji: '🔫', name: 'Musket', description: '', consumed: false, weaponKind: 'gun', gunTier: 'musket' } },
     }));
-    expect(dual?.damageMult).toBe(HITMAN_DUAL_MULT);
+    expect(dual?.ammoCost).toBe(2);
+    expect(dual?.damageMult).toBe(HITMAN_DUAL_MULT * 2);
+    expect(dual?.label).toContain('75%');
+    expect(dual?.label).toContain('150%');
+    expect(dual?.label).not.toContain('−25%');
+    expect(single?.ammoCost).toBe(1);
     expect(single?.damageMult).toBe(HITMAN_SINGLE_MULT);
     expect(single!.damageMult).toBeGreaterThan(dual!.damageMult);
+    const oneBullet = gunshotPlan(player({
+      characterClass: HITMAN,
+      ammo: 1,
+      equipment: {
+        mainHand: { id: 'a', emoji: '🔫', name: 'A', description: '', consumed: false, weaponKind: 'gun' },
+        offHand: { id: 'b', emoji: '🔫', name: 'B', description: '', consumed: false, weaponKind: 'gun' },
+      },
+    }));
+    expect(oneBullet).toBeNull();
     const low = executeStrike(10, 2, 10, 0);
     const high = executeStrike(10, 9, 10, 0);
     expect(low.executed).toBe(true);

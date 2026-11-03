@@ -142,7 +142,7 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
     passives: [
       { label: 'Contracts', detail: `Each floor posts a contract: ${HITMAN_CONTRACT_KILLS} kills pay bullets and gold.` },
       { label: 'Levitate', detail: 'Flying — cross water and lava, and lava does not burn you. Stealth (T) hides you in the open; you do not need a wall.' },
-      { label: 'Sharpshooter', detail: `Two guns deal ${Math.round(HITMAN_DUAL_MULT * 100)}% damage (−25%). One gun deals ${Math.round(HITMAN_SINGLE_MULT * 100)}% (+150%). Muskets count as one gun.` },
+      { label: 'Sharpshooter', detail: `Both guns fire together: each deals ${Math.round(HITMAN_DUAL_MULT * 100)}% damage, ${Math.round(HITMAN_DUAL_MULT * 2 * 100)}% total, and the shot spends 2 bullets. One gun deals ${Math.round(HITMAN_SINGLE_MULT * 100)}% and spends 1 bullet. Enemies on your eight straight lines — orthogonal and diagonal — stay visible at any range. Walls and solid terrain block the line. Ground beyond normal sight stays hidden. Muskets count as one gun.` },
     ],
     active: { label: 'Execute Contract', detail: `Shot at a foe within range (${HITMAN_EXECUTE_CD} turn cooldown). A target at or below ${Math.round(HITMAN_EXECUTE_HP_PCT * 100)}% HP is executed for bonus gold and bullets. Healthier targets take a heavy hit.` },
   },
