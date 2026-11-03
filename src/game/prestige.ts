@@ -110,10 +110,22 @@ export function gunshotPlan(player: Player): GunshotPlan | null {
   }
   if (player.characterClass === HITMAN) {
     if (guns === 2 && ammo >= 2) {
-      return { ammoCost: 2, range: HITMAN_DUAL_RANGE, damageMult: HITMAN_DUAL_MULT, label: '🕴️ Dual guns — suppressed pair (−25%).' };
+      const each = Math.round(HITMAN_DUAL_MULT * 100);
+      const total = Math.round(HITMAN_DUAL_MULT * 2 * 100);
+      return {
+        ammoCost: 2,
+        range: HITMAN_DUAL_RANGE,
+        damageMult: HITMAN_DUAL_MULT * 2,
+        label: `🕴️ Sharpshooter — both guns, ${each}% each (${total}% total).`,
+      };
     }
     if (guns === 1 && ammo >= 1) {
-      return { ammoCost: 1, range: HITMAN_SINGLE_RANGE, damageMult: HITMAN_SINGLE_MULT, label: '🕴️ Sharpshooter — one gun (+150%).' };
+      return {
+        ammoCost: 1,
+        range: HITMAN_SINGLE_RANGE,
+        damageMult: HITMAN_SINGLE_MULT,
+        label: `🕴️ Sharpshooter — one gun (${Math.round(HITMAN_SINGLE_MULT * 100)}%).`,
+      };
     }
   }
   return null;
