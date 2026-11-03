@@ -1,10 +1,11 @@
 import { Player, GameState, BagPassiveSummary } from '../../game/types';
-import { applyEquipmentAndPassives, computeNinjaEvasion, pressureForRun, playerSoftCap } from '../../game/gameHelpers';
-import { fencerEvasion, isArcaneCaster, isFencer } from '../../game/prestige';
-import { getCowboyUnarmedBonus } from '../../game/combat';
+import { applyEquipmentAndPassives, pressureForRun, playerSoftCap } from '../../game/gameHelpers';
+import { isArcaneCaster } from '../../game/prestige';
+import { getCowboyUnarmedBonus, getMoodModifiers, playerDodgeChance } from '../../game/combat';
+import { cowboyCombatMoodValue, playerMood } from '../../game/drinks';
 import { nullMomentumPercent } from '../../game/voidDamage';
 import { blinkStrikeDamagePhrase, blinkTalentById, blinkTalentProgress, knownBlinkTalents, overkillStatusPhrase } from '../../game/blinkStrike';
-import { DODGE_CHANCE_CAP, softCapBonusLines, softCapTitles } from '../../game/softCap';
+import { softCapBonusLines, softCapTitles } from '../../game/softCap';
 import { MiniMap } from '../MiniMap';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './oneHandedLayout';
 import { useDismissGuard } from '../../hooks/useDismissGuard';
@@ -39,11 +40,10 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
   const ironFist = (dualGuns && player.ammo <= 0) || unarmed ? getCowboyUnarmedBonus(player.stats.level) : 0;
   const atk = caps.attack + ironFist;
   const crit = caps.crit;
-  const dodge = player.characterClass === '🥷'
-    ? computeNinjaEvasion(eff)
-    : isFencer(player.characterClass)
-      ? fencerEvasion(eff.stats.hp, eff.stats.maxHp, eff.stats.evasion ?? 0)
-      : Math.min(DODGE_CHANCE_CAP, caps.evasion);
+  const dodge = playerDodgeChance(
+    eff,
+    getMoodModifiers(playerMood(player), player.stats.hp, player.stats.maxHp, cowboyCombatMoodValue(player)).dodgeBonus,
+  );
   const pressure = pressureForRun(currentFloor, gameState.deepDive);
   const voidDr = player.characterClass === '👤' ? nullMomentumPercent(player.stats.level) : 0;
   const p = bagPassiveSummary;
@@ -122,7 +122,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
           <StatPill label="EVA" value={caps.evasion} color="text-emerald-400" title={titles.EVA} />
           <StatPill label="LCK" value={caps.luck} color="text-pink-400" title={titles.LCK} />
           <StatPill label="CRIT" value={`${crit}%`} color="text-rose-300" title={titles.CRIT} />
-          <StatPill label="DODGE" value={`${dodge}%`} color="text-sky-300" />
+          <StatPill label="DODGE" value={`${dodge}%`} color="text-sky-300" title={player.characterClass === '🥷' ? 'Dodge chance combat rolls. Caps at 75%.' : player.characterClass === '🤺' ? 'Dodge chance combat rolls. Poise caps at 60%.' : 'Dodge chance combat rolls. Caps at 50%, even when EVA is higher.'} />
           {voidDr > 0 && <StatPill label="DR" value={`${voidDr}%`} color="text-zinc-200" />}
           {pressure.atk > 0 && <StatPill label="PRESSURE" value={`+${pressure.atk}/+${pressure.def}`} color="text-red-400" />}
         </div>

@@ -15,14 +15,13 @@ import { passableTilesForEnemy } from './enemies';
 import { tickVolcanoAndLava } from './lava';
 import { _flashSignals } from './flashSignals';
 import { nearRestaurant, crowGoldSteal } from './economy';
-import { computeNinjaEvasion, companionBountyShare, companionBountyPercent, companionKillXp, companionKillLogText, applyCompanionLevelUp, tickCompanionBountyOoc, levelFromXP, COMPANION_BOUNTY_REFRESH_LOG } from './progression';
+import { companionBountyShare, companionBountyPercent, companionKillXp, companionKillLogText, applyCompanionLevelUp, tickCompanionBountyOoc, levelFromXP, COMPANION_BOUNTY_REFRESH_LOG } from './progression';
 import { tickBossrush } from './finale';
-import { isHostileCombatTarget } from './combat';
-import { DODGE_CHANCE_CAP } from './softCap';
+import { getMoodModifiers, isHostileCombatTarget, playerDodgeChance } from './combat';
 import { applyLevelUp } from './playerTurn';
 import { markEnemyKilled } from './discoveries';
 import { settleBlinkStrikeMarks } from './blinkStrike';
-import { applyDrinkBuffTick, effectiveVoidPressureSlots, isDrinkStealthActive, voidPressureIgnoredSlots } from './drinks';
+import { applyDrinkBuffTick, cowboyCombatMoodValue, effectiveVoidPressureSlots, isDrinkStealthActive, playerMood, voidPressureIgnoredSlots } from './drinks';
 import { attributeVoidSlotPressure } from './voidSlotBurden';
 import { farmDenizenIntent } from './farmer';
 import { applyBanquetTick, feastAttackBonus, tickFeastBuffs } from './foodSinks';
@@ -63,6 +62,10 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   const { player } = state;
   let map = state.map;
   const effectivePlayer = applyEquipmentAndPassives(player);
+  const dodgeChance = playerDodgeChance(
+    effectivePlayer,
+    getMoodModifiers(playerMood(player), player.stats.hp, player.stats.maxHp, cowboyCombatMoodValue(player)).dodgeBonus,
+  );
   // Player's true sight range (class/level + bag LOS passives). Ranged enemies may
   // only attack while the player can actually see them — i.e. within this radius
   // with clear line of sight — so archers can't snipe from the unseen fog.
@@ -694,7 +697,6 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
           moodDrain += 1;
           log(`👻 ${enemy.name}'s ethereal arrow chills your soul! (mood −1)`);
         }
-        const dodgeChance = player.characterClass === '🥷' ? computeNinjaEvasion(effectivePlayer) : Math.min(DODGE_CHANCE_CAP, effectivePlayer.stats.evasion ?? 0);
         const rangedVerb = enemy.name.toLowerCase().includes('mage')
           ? 'casts a bolt'
           : enemy.name.toLowerCase().includes('eye')
@@ -715,8 +717,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             life: 2,
           });
           if (enemy.berserker && !playerDied) {
-            const dodgeChance2 = player.characterClass === '🥷' ? computeNinjaEvasion(effectivePlayer) : Math.min(DODGE_CHANCE_CAP, effectivePlayer.stats.evasion ?? 0);
-            if (Math.random() * 100 < dodgeChance2) {
+            if (Math.random() * 100 < dodgeChance) {
               log(`🔥 The ${enemy.name} ${rangedVerb} again — you dodge!`);
             } else {
               const dmg2 = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
@@ -745,7 +746,6 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
           moodDrain += 1;
           log(`👻 ${enemy.name}'s ethereal touch chills your soul! (mood −1)`);
         }
-        const dodgeChance = player.characterClass === '🥷' ? computeNinjaEvasion(effectivePlayer) : Math.min(DODGE_CHANCE_CAP, effectivePlayer.stats.evasion ?? 0);
         if (Math.random() * 100 < dodgeChance) {
           log(`${enemy.emoji} ${enemy.name} attacks — you dodge!`);
         } else {
@@ -764,8 +764,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
           });
           if (!playerDied) stealGoldOnCrowHit(enemy);
           if (enemy.berserker && !playerDied) {
-            const dodgeChance2 = player.characterClass === '🥷' ? computeNinjaEvasion(effectivePlayer) : Math.min(DODGE_CHANCE_CAP, effectivePlayer.stats.evasion ?? 0);
-            if (Math.random() * 100 < dodgeChance2) {
+            if (Math.random() * 100 < dodgeChance) {
               log(`🔥 ${enemy.emoji} ${enemy.name} attacks again — you dodge!`);
             } else {
               const dmg2 = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
@@ -797,7 +796,6 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
               moodDrain += 1;
               log(`👻 ${enemy.name}'s ethereal touch chills your soul! (mood −1)`);
             }
-            const dodgeChance = player.characterClass === '🥷' ? computeNinjaEvasion(effectivePlayer) : Math.min(DODGE_CHANCE_CAP, effectivePlayer.stats.evasion ?? 0);
             if (Math.random() * 100 < dodgeChance) {
               log(`${enemy.emoji} ${enemy.name} lunges — you dodge!`);
             } else {
@@ -813,8 +811,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
                 life: 2,
               });
               if (enemy.berserker && !playerDied) {
-                const dodgeChance2 = player.characterClass === '🥷' ? computeNinjaEvasion(effectivePlayer) : Math.min(DODGE_CHANCE_CAP, effectivePlayer.stats.evasion ?? 0);
-                if (Math.random() * 100 < dodgeChance2) {
+                if (Math.random() * 100 < dodgeChance) {
                   log(`🔥 ${enemy.emoji} ${enemy.name} attacks again — you dodge!`);
                 } else {
                   const dmg2 = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));

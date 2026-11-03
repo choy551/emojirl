@@ -28,8 +28,8 @@ export const LCK_GOLD_PERCENT = 5;
 /** Max HP granted for each point of Defense above the cap. */
 export const DEF_TO_HP = 2;
 
-/** Absolute dodge ceiling already used by melee counterattacks. */
-export const DODGE_CHANCE_CAP = 95;
+/** Dodge roll ceiling for every class except the Ninja (75%) and the Fencer (Poise cap). */
+export const DODGE_CAP = EVA_SOFT_CAP;
 
 export interface SoftCapInput {
   attack: number;

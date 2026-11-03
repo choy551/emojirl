@@ -21,7 +21,7 @@ import {
   eagleEyeRange, PLAYER_PASSABLE_TILES, playerBagPassives,
   applyEquipmentAndPassives, withVisibility, runEnemyTurns, applyEnemyTurns, tickActiveBuffs,
   addToPlayerBag, levelFromXP, livingMaxHp, playerSoftCap, healHp, applyShrineBlessing,
-  mpBonusForLevel, computeNinjaEvasion, getRandomCowboyFlavor, handleGodBlessedImmunity,
+  mpBonusForLevel, getRandomCowboyFlavor, handleGodBlessedImmunity,
   _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG, restoreStolenEmojis, stolenEmojiSummary,
   applyBedRest, simulateSleep, SLEEP_TURNS,
   evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
@@ -594,10 +594,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         const effectiveMeleePlayer = applyEquipmentAndPassives(meleeBasePlayer);
         const combatPlayer = (holdFire || rangerFlee) ? { ...effectiveMeleePlayer, stats: { ...effectiveMeleePlayer.stats, defense: 0 } } : effectiveMeleePlayer;
         const _meleePassives = playerBagPassives(prev.player);
-        const ninjaEvaCombatPlayer = cls === '🥷'
-          ? { ...combatPlayer, stats: { ...combatPlayer.stats, evasion: computeNinjaEvasion(combatPlayer) } }
-          : combatPlayer;
-        const combatResult = resolveCombat(ninjaEvaCombatPlayer, enemy, addLog, { weakMelee, wizardMelee, pistolWhip: isPistolWhip, mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), dualStrike: false, quadStrike: hasDualBlades, advantage: _meleePassives.advantageDice, execBlow: _meleePassives.execBlow, shieldWall: _meleePassives.shieldWall, floor: prev.currentFloor, damageMult: fencerSwing?.mult ?? 1 });
+        const combatResult = resolveCombat(combatPlayer, enemy, addLog, { weakMelee, wizardMelee, pistolWhip: isPistolWhip, mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), dualStrike: false, quadStrike: hasDualBlades, advantage: _meleePassives.advantageDice, execBlow: _meleePassives.execBlow, shieldWall: _meleePassives.shieldWall, floor: prev.currentFloor, damageMult: fencerSwing?.mult ?? 1 });
 
         if (cls === '🤠' && !combatResult.fled) {
           const dmgDealt = enemy.hp - Math.max(0, combatResult.enemyHp);

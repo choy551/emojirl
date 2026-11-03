@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { generateMap } from '../game/mapgen';
 import { Player, Enemy, EmojiItem, GameState, Position, EquipSlot } from '../game/types';
-import { getCowboyUnarmedBonus, isHostileCombatTarget } from '../game/combat';
-import { DODGE_CHANCE_CAP, softCapTitles } from '../game/softCap';
+import { getCowboyUnarmedBonus, getMoodModifiers, isHostileCombatTarget, playerDodgeChance } from '../game/combat';
+import { softCapTitles } from '../game/softCap';
 import {
   blinkNoTargetLog,
   blinkStrikeHudTitle,
@@ -18,9 +18,9 @@ import { getRandomEmojiPower } from '../game/emojis';
 import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { MOODS } from '../game/moods';
-import { isDrinkStealthActive, playerMood } from '../game/drinks';
+import { cowboyCombatMoodValue, isDrinkStealthActive, playerMood } from '../game/drinks';
 import { getClassDef } from '../game/classes';
-import { classFlies, fencerEvasion, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, startFloorContract, toggleGenieCast, type GenieCastToggle } from '../game/prestige';
+import { classFlies, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, startFloorContract, toggleGenieCast, type GenieCastToggle } from '../game/prestige';
 import { guardHasRangedWeapon, hotbarCrown, initialRangerMode } from '../game/royalGuard';
 import { GENIE_BASE_MP } from '../game/prestigeConstants';
 import { saveScore, leaderboardEntryFromRun } from '../game/leaderboard';
@@ -96,7 +96,7 @@ import { EquipmentTab } from '../components/EquipmentTab';
 import { preferredEquipSlot } from '../components/itemUtils';
 import { RightSidebar } from '../components/RightSidebar';
 import {
-  chebyshev, playerBagPassives, applyEquipmentAndPassives, computeNinjaEvasion, livingMaxHp, playerSoftCap, addToPlayerBag,
+  chebyshev, playerBagPassives, applyEquipmentAndPassives, livingMaxHp, playerSoftCap, addToPlayerBag,
   VISION_RADIUS, hasLOS, hasLOSBetween, detectionRadius,
   eagleEyeRange, sortBagSlots, buildHotbarSlots, banishPlayerGhost, manifestPlayerGhost,
   generateShopStock, generateAmmoCacheStock, generateRestaurantStock,
@@ -3294,11 +3294,8 @@ export default function Game() {
           const displayedAtk = softCaps.attack + hudIronFistBonus;
           const atkTitle = [softTitles.ATK, hudIronFistBonus > 0 ? `+${hudIronFistBonus} Iron Fist` : ''].filter(Boolean).join(' · ');
           const crit = softCaps.crit;
-          const dodge = player.characterClass === '🥷'
-            ? computeNinjaEvasion(_effPlayer)
-            : isFencer(player.characterClass)
-              ? fencerEvasion(_effPlayer.stats.hp, _effPlayer.stats.maxHp, _effPlayer.stats.evasion ?? 0)
-              : Math.min(DODGE_CHANCE_CAP, softCaps.evasion);
+          const dodgeMood = getMoodModifiers(currentMood, player.stats.hp, player.stats.maxHp, cowboyCombatMoodValue(player)).dodgeBonus;
+          const dodge = playerDodgeChance(_effPlayer, dodgeMood);
           const voidDr = player.characterClass === '👤' ? nullMomentumPercent(player.stats.level) : 0;
           return (
             <div className="flex gap-1.5 shrink-0 text-[9px]" data-testid="stat-grid">
@@ -3328,7 +3325,7 @@ export default function Game() {
                   <span className="text-muted-foreground/50">{ninjaBlink.progress.nextTier ?? 'DONE'}</span>
                 </div>
               )}
-              <div className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
+              <div title={player.characterClass === '🥷' ? 'Dodge chance combat rolls. Caps at 75%.' : player.characterClass === '🤺' ? 'Dodge chance combat rolls. Poise caps at 60%.' : 'Dodge chance combat rolls. Caps at 50%, even when EVA is higher.'} className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
                 <span className="font-bold text-sky-300">{dodge}%</span>
                 <span className="text-muted-foreground/50">DODGE</span>
               </div>
