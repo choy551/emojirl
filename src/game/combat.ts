@@ -2,10 +2,11 @@ import { Player, Enemy, MoodType } from './types';
 import { crowGoldSteal } from './economy';
 import { applyNullMomentum } from './voidDamage';
 import { blinkStrikeAlwaysHits, blinkStrikeDamageMultiplier, critStat } from './blinkStrike';
-import { DODGE_CHANCE_CAP, effectiveCrit } from './softCap';
+import { DODGE_CAP, effectiveCrit } from './softCap';
 import { feastDefense } from './foodSinks';
 import { fencerCritBonus, fencerEvasion, isFencer, isRoyalGuard, royalDefenseBonus, royalIncomingMult, royalMeleeMultiplier } from './prestige';
-import { FENCER_PARRY_CHANCE } from './prestigeConstants';
+import { FENCER_EVA_CAP, FENCER_PARRY_CHANCE } from './prestigeConstants';
+import { NINJA_DODGE_CAP, computeNinjaEvasion } from './progression';
 
 /**
  * Auto-fire / barrage should only pick real foes: not companions, not friendlies,
@@ -89,6 +90,31 @@ export interface CombatResult {
   goldStolen?: number;
 }
 
+/**
+ * Percent chance to dodge one incoming attack.
+ * The stat bar and every combat roll call this. EVA can sit above the cap
+ * because Speed overflow adds to the EVA number; the roll does not.
+ * Ninja uses the ninja formula, capped at 75%. Fencer uses Poise, capped at 60%.
+ * Everyone else caps at 50%. Mood dodge is included, then the cap is applied.
+ */
+export function playerDodgeChance(player: Player, moodDodgeBonus = 0): number {
+  const bonus = Number.isFinite(moodDodgeBonus) ? moodDodgeBonus : 0;
+  const eva = player.stats.evasion ?? 0;
+  let chance: number;
+  let cap: number;
+  if (player.characterClass === '🥷') {
+    chance = computeNinjaEvasion(player);
+    cap = NINJA_DODGE_CAP;
+  } else if (isFencer(player.characterClass)) {
+    chance = fencerEvasion(player.stats.hp, player.stats.maxHp, eva);
+    cap = FENCER_EVA_CAP;
+  } else {
+    chance = eva;
+    cap = DODGE_CAP;
+  }
+  return Math.max(0, Math.min(cap, chance + bonus));
+}
+
 export function getCowboyUnarmedBonus(level: number): number {
   if (level <= 5) return level;
   if (level <= 10) return 5 + (level - 5) * 2;
@@ -122,9 +148,7 @@ export function resolveCombat(
   const fencer = isFencer(cls);
   const critChance = effectiveCrit(player.stats.luck ?? 1) + mods.critBonus + (opts.critBonus ?? 0) + (fencer ? fencerCritBonus(player.stats.hp, player.stats.maxHp) : 0);
   const parryChance = Math.max(opts.parryChance ?? 0, fencer ? FENCER_PARRY_CHANCE : 0);
-  const defenderEvasion = fencer
-    ? fencerEvasion(player.stats.hp, player.stats.maxHp, player.stats.evasion ?? 0)
-    : (player.stats.evasion ?? 0);
+  const dodgeChance = playerDodgeChance(player, mods.dodgeBonus);
   const rollCrit = (hpNow: number) => {
     const skullBonus = opts.execBlow ? skullCritBonus(hpNow, enemy.maxHp) : 0;
     return r() * 100 < critChance + skullBonus;
@@ -290,7 +314,6 @@ export function resolveCombat(
         addLog(`🛡️ Shield wall! The blow is deflected!`);
         return;
       }
-      const dodgeChance = Math.min(DODGE_CHANCE_CAP, defenderEvasion + mods.dodgeBonus);
       if (r() * 100 < dodgeChance) {
         dodged = true;
         addLog(`${label}${enemy.emoji} swings — you dodge!`);

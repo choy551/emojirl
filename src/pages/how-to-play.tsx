@@ -655,9 +655,9 @@ export default function HowToPlay({
               color: "text-violet-400",
               desc: (
                 <>
-                  Evasion — percentage chance to dodge an incoming attack entirely.{" "}
-                  <strong className="text-foreground">Raw EVA soft-caps at 50. Ninja dodge still caps at 75%.</strong>{" "}
-                  Speed overflow can push effective EVA, and non-Ninja dodge, above 50. Ninja EVA also scales with level and spikes at low HP.
+                  Evasion — the EVA number.{" "}
+                  <strong className="text-foreground">Raw EVA soft-caps at 50. Dodge, the chance combat rolls, caps at 50% (75% for a Ninja) even when EVA is higher.</strong>{" "}
+                  Speed overflow can push the EVA number above 50. It does not push Dodge past that cap. Ninja dodge also scales with level and spikes at low HP. Fencer dodge uses Poise and caps at 60%.
                 </>
               ),
             },
