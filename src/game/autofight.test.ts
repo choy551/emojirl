@@ -84,6 +84,29 @@ describe('autofight', () => {
     expect(reposition).toEqual({ kind: 'move', dx: 1, dy: 0 });
   });
 
+  it('closes to melee with a bow and sword when the enemy is within 2 tiles', () => {
+    const hybrid = hero({
+      pos: { x: 1, y: 1 },
+      emoji: '💂',
+      characterClass: '💂',
+      ammo: 6,
+      equipment: {
+        mainHand: { id: 'bow', emoji: '🏹', name: 'Bow', description: '', consumed: false, weaponKind: 'bow' },
+        offHand: { id: 'sword', emoji: '⚔️', name: 'Sword', description: '', consumed: false, weaponKind: 'blade' },
+      },
+    });
+    const adjacent = plan({ player: hybrid, enemies: [foe(1, 2)], rangerMode: 'ranged' });
+    expect(adjacent).toEqual({ kind: 'move', dx: 0, dy: 1 });
+    const twoAway = plan({
+      player: { ...hybrid, pos: { x: 1, y: 1 } },
+      enemies: [foe(3, 2)],
+      rangerMode: 'ranged',
+    });
+    expect(twoAway).toEqual({ kind: 'move', dx: 1, dy: 0 });
+    const far = plan({ player: hybrid, enemies: [foe(1, 5)], rangerMode: 'ranged' });
+    expect(far).toEqual({ kind: 'move', dx: 0, dy: 1 });
+  });
+
   it('kites a wizard toward the edge of sight and waits to cast when already there', () => {
     const closer = plan({
       player: hero({ pos: { x: 2, y: 3 }, emoji: '🧙', characterClass: '🧙' }, { mana: 4 }),
