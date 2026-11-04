@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { generateMap } from '../game/mapgen';
 import { Player, Enemy, EmojiItem, GameState, Position, EquipSlot } from '../game/types';
 import { getCowboyUnarmedBonus, getMoodModifiers, isHostileCombatTarget, playerDodgeChance } from '../game/combat';
+import { planAutofight } from '../game/autofight';
 import { softCapTitles } from '../game/softCap';
 import {
   blinkNoTargetLog,
@@ -1008,7 +1009,7 @@ export default function Game() {
     inspectedEnemyIdRef.current = nearest.id;
     setBlinkTargetMode(true);
     blinkTargetModeRef.current = true;
-    addLog(`⚡ Blink targeting: ${nearest.emoji} ${nearest.name} — Tab to cycle · Enter to strike · Esc to cancel`);
+    addLog(`⚡ Blink targeting: ${nearest.emoji} ${nearest.name} — i to cycle · Enter to strike · Esc to cancel`);
   }, [addLog, gameStateRef, setInspectedEnemyId, inspectedEnemyIdRef]);
 
   const exitUnmakeTargetMode = useCallback(() => {
@@ -1370,6 +1371,33 @@ export default function Game() {
     setTravelTarget(null);
     handleWait();
   }, [handleWait]);
+
+  const doAutofight = useCallback(() => {
+    const gs = gameStateRef.current;
+    if (!gs || gs.gameOver) return;
+    const plan = planAutofight({
+      player: gs.player,
+      map: gs.map,
+      enemies: gs.enemies,
+      maxHp: livingMaxHp(gs.player),
+      rangerMode: rangerModeRef.current,
+      voidAttackMode: gs.voidAttackMode ?? voidAttackModeRef.current,
+      holdFire: wizardTacticsRef.current.mode === 'holdfire',
+    });
+    if (plan.kind === 'idle') {
+      addLog(plan.log);
+      return;
+    }
+    setAutoExplore(false);
+    setAutoRest(false);
+    setTravelTarget(null);
+    setInspectedEnemyId(null);
+    if (plan.kind === 'wait') {
+      handleWait();
+      return;
+    }
+    handleMove(plan.dx, plan.dy);
+  }, [addLog, gameStateRef, handleMove, handleWait, rangerModeRef, voidAttackModeRef, wizardTacticsRef]);
 
   // A swipe / edge-tap fires on pointerup, which is followed by a tile click.
   // Record when a gesture moved so the trailing tile tap is ignored (no double step).
@@ -1895,7 +1923,13 @@ export default function Game() {
 
       // ── Blink target mode intercept ────────────────────────────────────────
       if (blinkTargetModeRef.current) {
-        if (e.key === 'Tab' || (e.key === 'i' && !e.ctrlKey && !e.metaKey)) {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          exitBlinkTargetMode();
+          addLog('🥷 Blink Strike cancelled.');
+          return;
+        }
+        if ((e.key === 'i' || e.key === 'I') && !e.ctrlKey && !e.metaKey) {
           e.preventDefault();
           const gs = gameStateRef.current;
           if (gs) {
@@ -1910,7 +1944,7 @@ export default function Game() {
             })).sort((a, b) => chebyshev(gs.player.pos, a.pos) - chebyshev(gs.player.pos, b.pos));
             if (blinkTargets.length > 0) {
               const idx = blinkTargets.findIndex(en => en.id === inspectedEnemyIdRef.current);
-              const dir = e.shiftKey ? -1 : 1;
+              const dir = e.shiftKey || e.key === 'I' ? -1 : 1;
               const next = blinkTargets[(idx + dir + blinkTargets.length) % blinkTargets.length];
               setInspectedEnemyId(next.id);
               inspectedEnemyIdRef.current = next.id;
@@ -1938,10 +1972,15 @@ export default function Game() {
         exitBlinkTargetMode();
       }
 
-      // Cycle ranged target: Tab (forward) / Shift+Tab (backward) / I (forward)
-      if (e.key === 'Tab' || (e.key === 'i' && !e.ctrlKey && !e.metaKey)) {
+      if (e.key === 'Tab') {
         e.preventDefault();
-        handleCycleRangedTarget(e.shiftKey ? -1 : 1);
+        doAutofight();
+        return;
+      }
+      // Examine / cycle target: i forward, I or Shift+i backward
+      if ((e.key === 'i' || e.key === 'I') && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        handleCycleRangedTarget(e.shiftKey || e.key === 'I' ? -1 : 1);
         return;
       }
 
@@ -1990,7 +2029,7 @@ export default function Game() {
           const targetId = inspectedEnemyIdRef.current;
           const enemy = gs?.enemies.find(en => en.id === targetId);
           if (enemy) castUnmakeAt(enemy.pos.x, enemy.pos.y);
-          else addLog('👤 Unmake — click a tile, or Tab to an enemy and press Enter.');
+          else addLog('👤 Unmake — click a tile, or press i on an enemy and then Enter.');
           return;
         }
         if (e.key === 'Escape') {
@@ -2203,7 +2242,7 @@ export default function Game() {
       window.removeEventListener('keyup', handleKeyUp);
 
     };
-  }, [handleMove, handleWait, handleUseHeal, handleUseDrink, handleCook, handleCloseDoor, handleUseSlot, handleBankMove, setAutoRest, applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, handleBlinkStrike, handleBlinkStrikeOnTarget, enterBlinkTargetMode, exitBlinkTargetMode, applyRangerMode, handleCowboyTactics, handleFireProjectile, addLog, doContextAction, shopItems, ammoCacheItems, cycleVoidAttack, beginUnmake, castUnmakeAt, exitUnmakeTargetMode, toggleGenieCastOption]);
+  }, [handleMove, handleWait, handleUseHeal, handleUseDrink, handleCook, handleCloseDoor, handleUseSlot, handleBankMove, setAutoRest, applyWizardMode, handleCycleRangedTarget, applyNinjaMode, toggleAutoStealth, handleBlinkStrike, handleBlinkStrikeOnTarget, enterBlinkTargetMode, exitBlinkTargetMode, applyRangerMode, handleCowboyTactics, handleFireProjectile, addLog, doContextAction, shopItems, ammoCacheItems, cycleVoidAttack, beginUnmake, castUnmakeAt, exitUnmakeTargetMode, toggleGenieCastOption, doAutofight]);
 
   // ── render ────────────────────────────────────────────────────────────────
   if (!gameState) return <div className="p-8 text-center text-muted-foreground">Loading depths...</div>;
@@ -2314,6 +2353,7 @@ export default function Game() {
     { id: 'drink', icon: '🧃', label: 'Drink', onUse: handleUseDrink },
     { id: 'rest', icon: '💤', label: 'Rest', active: autoRest, onUse: () => { setTravelTarget(null); setAutoExplore(false); setAutoRest(v => !v); } },
     { id: 'explore', icon: '🔭', label: 'Explore', active: autoExplore, onUse: () => { setTravelTarget(null); setAutoRest(false); setAutoExplore(v => !v); } },
+    { id: 'autofight', icon: '⚔️', label: 'Autofight', detail: 'Tab', roomy: true, onUse: doAutofight },
     { id: 'cook', icon: '🔥', label: 'Cook', onUse: handleCook },
     { id: 'banquet', icon: '🍽️', label: 'Banquet', detail: '3+ cooked', disabled: !nearCampfire(gameState.map, player.pos) || cookedDishCount(player) < BANQUET_MIN_DISHES, onUse: () => setBanquetOpen(true) },
     { id: 'offer', icon: '🛕', label: 'Offer', detail: 'at shrine', disabled: !nearShrineOffer(gameState.map, player.pos), onUse: () => setShrineOfferOpen(true) },
@@ -3631,7 +3671,7 @@ export default function Game() {
           const en = gameState.enemies.find(e => e.id === inspectedEnemyId);
           return en ? (
             <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full bg-yellow-950/90 border border-yellow-500/60 text-yellow-300 text-xs font-semibold shadow-lg pointer-events-none select-none">
-              🔍 Inspecting {en.emoji} {en.name} — Tab to cycle · Esc or move to dismiss
+              🔍 Inspecting {en.emoji} {en.name} — i to cycle · Esc or move to dismiss
             </div>
           ) : null;
         })()}
@@ -3647,7 +3687,7 @@ export default function Game() {
         {blinkTargetMode && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-violet-950/90 border border-violet-500/60 rounded-lg px-3 py-1.5 text-xs font-bold text-violet-200 shadow-lg pointer-events-none">
             <span className="text-base leading-none">⚡</span>
-            BLINK TARGET — Tab to cycle · Enter to strike · Esc to cancel
+            BLINK TARGET — i to cycle · Enter to strike · Esc to cancel
           </div>
         )}
         {unmakeTargetMode && (
@@ -4299,6 +4339,17 @@ export default function Game() {
 
       {/* Virtual D-pad — touch/mobile only */}
       {isMobile && !gameState.gameOver && (() => {
+        const autofightButton = (
+          <button
+            data-testid="mobile-autofight"
+            onPointerDown={e => { e.preventDefault(); e.stopPropagation(); doAutofight(); }}
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-amber-300/40 bg-amber-800/70 text-xs font-bold text-white shadow-2xl select-none touch-none transition-transform duration-75 active:scale-90"
+            aria-label="Autofight"
+            title="Autofight (Tab)"
+          >
+            Tab
+          </button>
+        );
         const contextRow = controlSettings.showContextButtons ? (
           <div className="flex items-end gap-1.5">
             {ctxSide === 'left' && (
@@ -4382,6 +4433,7 @@ export default function Game() {
               }}
             >
               {abilityStack}
+              {autofightButton}
               {contextRow}
               {quickUseStack}
               {closeDoor}
@@ -4402,20 +4454,19 @@ export default function Game() {
                 {quickUseStack}
               </div>
             )}
-            {(controlSettings.showContextButtons || controlSettings.showAbilityButtons) && (
-              <div
-                className={`fixed z-40 flex flex-col gap-1.5 ${ctxSide === 'right' ? 'right-2 items-end' : 'left-2 items-start'}`}
-                style={{
-                  bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))',
-                  ...(ctxSide === 'right'
-                    ? { paddingRight: 'env(safe-area-inset-right, 0px)' }
-                    : { paddingLeft: 'env(safe-area-inset-left, 0px)' }),
-                }}
-              >
-                {abilityStack}
-                {contextRow}
-              </div>
-            )}
+            <div
+              className={`fixed z-40 flex flex-col gap-1.5 ${ctxSide === 'right' ? 'right-2 items-end' : 'left-2 items-start'}`}
+              style={{
+                bottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))',
+                ...(ctxSide === 'right'
+                  ? { paddingRight: 'env(safe-area-inset-right, 0px)' }
+                  : { paddingLeft: 'env(safe-area-inset-left, 0px)' }),
+              }}
+            >
+              {abilityStack}
+              {autofightButton}
+              {contextRow}
+            </div>
           </>
         );
       })()}

@@ -399,15 +399,14 @@ export default function HowToPlay({
               </div>
               <div className="flex items-center gap-2">
                 <Kbd>Tab</Kbd>
-                <Kbd>Shift+Tab</Kbd>
                 <span className="text-muted-foreground">
-                  — cycle ranged attack target (Wizard / Ranger / Cowboy dual pistols) or inspect nearest enemy. Also used for navigation/cycling inside menus and bank.
+                  — one autofight step. Melee (and ranged with melee on) steps toward the nearest visible enemy and bumps when adjacent. Ranger-style shots fire if the nearest foe is on one of the 8 lines, in range, with a clear shot; otherwise you step toward a tile that lines the shot up. Wizards kite out toward the edge of sight and cast when a bolt can reach. No visible enemy logs “No enemies in sight.” and spends no turn. Below 50% HP it refuses and spends no turn. Inside the bag, Tab still switches tabs.
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <Kbd>I</Kbd>
                 <span className="text-muted-foreground">
-                  — (with Tab) inspect nearest visible enemy or cycle targets
+                  — examine: inspect the nearest visible enemy or cycle targets. Capital I cycles backward. Also cycles Blink targets.
                 </span>
               </div>
             </div>
@@ -440,16 +439,14 @@ export default function HowToPlay({
               </div>
               <div className="flex items-center gap-2">
                 <Kbd>Tab</Kbd>
-                <span className="text-muted-foreground">or</span>
-                <Kbd>I</Kbd>
                 <span className="text-muted-foreground">
-                  — inspect nearest enemy (keyboard)
+                  — autofight one step (refuses below 50% HP; does nothing if no enemy is visible)
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Kbd>Shift+Tab</Kbd>
+                <Kbd>I</Kbd>
                 <span className="text-muted-foreground">
-                  — cycle to previous enemy / target (also nav in bank modal)
+                  — examine / cycle the nearest visible enemy. Shift+I goes backward.
                 </span>
               </div>
               <div className="flex items-center gap-2">
