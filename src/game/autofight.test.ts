@@ -1,0 +1,129 @@
+import { describe, expect, it } from 'vitest';
+import type { Enemy, MapGrid, Player, Tile } from './types';
+import { LOW_HP_LOG, NO_ENEMIES_LOG, planAutofight, type AutofightInput } from './autofight';
+import { VISION_RADIUS } from './vision';
+
+function floor(w: number, h: number): MapGrid {
+  return Array.from({ length: h }, () =>
+    Array.from({ length: w }, (): Tile => ({ type: 'floor', emoji: '⬜', seen: true, visible: true })),
+  );
+}
+
+function wallAt(map: MapGrid, x: number, y: number) {
+  map[y][x] = { type: 'wall', emoji: '⬛', seen: true, visible: true };
+}
+
+function hero(partial: Partial<Player> = {}, stats: Partial<Player['stats']> = {}): Player {
+  return {
+    pos: { x: 1, y: 1 },
+    emoji: '🥷',
+    characterClass: '🥷',
+    ammo: 0,
+    inventory: [],
+    bank: [],
+    equipment: {},
+    ...partial,
+    stats: {
+      hp: 20, maxHp: 20, attack: 4, defense: 0, speed: 2, evasion: 0,
+      luck: 0, level: 1, xp: 0, moodValue: 0, gold: 0, mana: 4, maxMana: 4,
+      ...stats,
+    },
+  } as Player;
+}
+
+function foe(x: number, y: number, id = 'gob'): Enemy {
+  return {
+    id, pos: { x, y }, emoji: '👺', name: 'Goblin',
+    hp: 8, maxHp: 8, attack: 2, defense: 0, speed: 1, engaged: true,
+  };
+}
+
+function plan(over: Partial<AutofightInput> = {}) {
+  const player = over.player ?? hero();
+  return planAutofight({
+    player,
+    map: over.map ?? floor(8, 8),
+    enemies: over.enemies ?? [],
+    maxHp: over.maxHp ?? player.stats.maxHp,
+    rangerMode: over.rangerMode,
+    voidAttackMode: over.voidAttackMode,
+    holdFire: over.holdFire,
+  });
+}
+
+describe('autofight', () => {
+  it('steps toward a visible enemy and bumps when adjacent', () => {
+    const step = plan({ player: hero({ pos: { x: 1, y: 1 } }), enemies: [foe(1, 4)] });
+    expect(step).toEqual({ kind: 'move', dx: 0, dy: 1 });
+    const bump = plan({ player: hero({ pos: { x: 1, y: 1 } }), enemies: [foe(2, 2)] });
+    expect(bump).toEqual({ kind: 'move', dx: 1, dy: 1 });
+    const meleeRanger = plan({
+      player: hero({ pos: { x: 1, y: 1 }, emoji: '🧝', characterClass: '🧝', ammo: 6 }),
+      enemies: [foe(1, 2)],
+      rangerMode: 'melee',
+    });
+    expect(meleeRanger).toEqual({ kind: 'move', dx: 0, dy: 1 });
+  });
+
+  it('fires a lined shot and otherwise steps onto a firing tile', () => {
+    const ranger = hero({ pos: { x: 1, y: 1 }, emoji: '🧝', characterClass: '🧝', ammo: 6 });
+    const fire = plan({ player: ranger, enemies: [foe(1, 4)], rangerMode: 'ranged' });
+    expect(fire).toEqual({ kind: 'move', dx: 0, dy: 1 });
+
+    const map = floor(6, 6);
+    for (let y = 0; y < 6; y++) for (let x = 0; x < 6; x++) wallAt(map, x, y);
+    for (const [x, y] of [[1, 1], [2, 1], [3, 1], [3, 2]] as const) {
+      map[y][x] = { type: 'floor', emoji: '⬜', seen: true, visible: true };
+    }
+    const reposition = plan({
+      player: hero({ pos: { x: 1, y: 1 }, emoji: '🧝', characterClass: '🧝', ammo: 6 }),
+      map,
+      enemies: [foe(3, 2)],
+      rangerMode: 'ranged',
+    });
+    expect(reposition).toEqual({ kind: 'move', dx: 1, dy: 0 });
+  });
+
+  it('kites a wizard toward the edge of sight and waits to cast when already there', () => {
+    const closer = plan({
+      player: hero({ pos: { x: 2, y: 3 }, emoji: '🧙', characterClass: '🧙' }, { mana: 4 }),
+      enemies: [foe(2, 3 + 3)],
+    });
+    expect(closer).toEqual({ kind: 'move', dx: 0, dy: -1 });
+
+    const edge = plan({
+      player: hero({ pos: { x: 2, y: 2 }, emoji: '🧙', characterClass: '🧙' }, { mana: 4 }),
+      enemies: [foe(2, 2 + VISION_RADIUS)],
+    });
+    expect(edge).toEqual({ kind: 'wait' });
+
+    const far = plan({
+      player: hero({ pos: { x: 2, y: 1 }, emoji: '🧙', characterClass: '🧙' }, { mana: 4 }),
+      map: floor(5, 14),
+      enemies: [foe(2, 12)],
+    });
+    expect(far).toEqual({ kind: 'move', dx: 0, dy: 1 });
+  });
+
+  it('logs and spends nothing when no enemy is visible', () => {
+    expect(plan({ enemies: [] })).toEqual({ kind: 'idle', log: NO_ENEMIES_LOG });
+    const hidden = floor(6, 6);
+    hidden[4][1] = { ...hidden[4][1], visible: false };
+    expect(plan({ map: hidden, enemies: [foe(1, 4)] })).toEqual({ kind: 'idle', log: NO_ENEMIES_LOG });
+  });
+
+  it('refuses below half HP and still acts at exactly half', () => {
+    const wounded = plan({
+      player: hero({}, { hp: 9, maxHp: 20 }),
+      maxHp: 20,
+      enemies: [foe(1, 2)],
+    });
+    expect(wounded).toEqual({ kind: 'idle', log: LOW_HP_LOG });
+    const half = plan({
+      player: hero({ pos: { x: 1, y: 1 } }, { hp: 10, maxHp: 20 }),
+      maxHp: 20,
+      enemies: [foe(1, 2)],
+    });
+    expect(half).toEqual({ kind: 'move', dx: 0, dy: 1 });
+  });
+});
