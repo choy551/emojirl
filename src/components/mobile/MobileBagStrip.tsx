@@ -2,7 +2,7 @@ import type { DOMAttributes } from 'react';
 import { EmojiItem } from '../../game/types';
 import { activeKindEmoji } from '../itemUtils';
 import { rarityTooltipSuffix } from '../../game/dropTable';
-import { getPassiveTooltipSuffix } from '../../game/passives';
+import { getPassiveTooltipSuffix, hotbarCountBadge } from '../../game/passives';
 import { voidGhostBadge } from '../../game/voidCharge';
 
 interface MobileBagStripProps {
@@ -54,9 +54,12 @@ export function MobileBagStrip({
               <span data-testid={`ghost-stack-${item.emoji}`} className="absolute top-0 right-px text-[7px] text-violet-300 font-bold leading-none">{voidGhostBadge(item)}</span>
             )}
             {kindEmoji && <span className="absolute bottom-0 right-0 text-[7px] leading-none">{kindEmoji}</span>}
-            {!item.isVoidGhost && !item.isEquipment && !kindEmoji && (item.stackCount ?? 0) > 1 && (
-              <span className="absolute bottom-0 right-px text-[7px] text-emerald-400 font-bold leading-none">×{item.stackCount}</span>
-            )}
+            {(() => {
+              const countBadge = hotbarCountBadge(item);
+              return countBadge && (
+                <span className={`absolute bottom-0 ${countBadge.place === 'stack' ? 'right-px' : 'left-px'} text-[7px] ${countBadge.className} font-bold leading-none`}>{countBadge.label}</span>
+              );
+            })()}
             {inFlight && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping" />}
           </button>
         );
