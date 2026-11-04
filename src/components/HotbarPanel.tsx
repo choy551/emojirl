@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { EmojiItem } from '../game/types';
-import { getPassiveTooltipSuffix } from '../game/passives';
+import { getPassiveTooltipSuffix, hotbarCountBadge } from '../game/passives';
 import { rarityTooltipSuffix } from '../game/dropTable';
 import { BAG_LONG_PRESS_MS, resolveBagSlotClick } from '../game/bagConsume';
 import { voidGhostBadge } from '../game/voidCharge';
@@ -81,6 +81,7 @@ export function HotbarPanel({
           const bankDupes = item
             ? bank.filter(b => !b.isEquipment && !b.consumed && b.emoji === item.emoji).length
             : 0;
+          const countBadge = item ? hotbarCountBadge(item, bankDupes) : null;
           return (
             <button
               key={i}
@@ -147,11 +148,8 @@ export function HotbarPanel({
               {item?.charges !== undefined && item.charges >= 0 && !item.isVoidGhost && (
                 <span className="absolute top-0.5 right-0.5 text-[7px] text-amber-400/80 font-bold leading-none">×{item.charges}</span>
               )}
-              {item && !item.isVoidGhost && !item.isEquipment && !kindEmoji && (item.stackCount ?? 0) > 1 && (
-                <span className="absolute bottom-0.5 right-0.5 text-[8px] text-emerald-400 font-bold leading-none">×{item.stackCount}</span>
-              )}
-              {item && !kindEmoji && bankDupes > 0 && (
-                <span className="absolute bottom-0.5 left-0.5 text-[8px] text-sky-400 font-bold leading-none">+{bankDupes}</span>
+              {countBadge && (
+                <span className={`absolute bottom-0.5 ${countBadge.place === 'stack' ? 'right-0.5' : 'left-0.5'} text-[8px] ${countBadge.className} font-bold leading-none`}>{countBadge.label}</span>
               )}
             </button>
           );

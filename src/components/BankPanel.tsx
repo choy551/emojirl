@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { EmojiItem, Player } from '../game/types';
-import { hasBagPassive, getPassiveTooltipSuffix, isStackableBagPassive, getStackableBonusLabel } from '../game/passives';
+import { hasBagPassive, getPassiveTooltipSuffix, hotbarCountBadge, isStackableBagPassive, getStackableBonusLabel } from '../game/passives';
 import { soulHelpText } from '../game/emojis';
 import { isNonStackableBagPassiveDuplicate, isActiveKindDuplicate } from '../game/gameHelpers';
 import { foodHealDescription } from '../game/economy';
@@ -67,6 +67,7 @@ export function BankPanel({
             const hBankDupes = hItem
               ? player.bank.filter(b => !b.isEquipment && !b.consumed && b.emoji === hItem.emoji).length
               : 0;
+            const countBadge = hItem ? hotbarCountBadge(hItem, hBankDupes) : null;
             return (
               <div
                 key={i}
@@ -79,15 +80,12 @@ export function BankPanel({
                 {hItem?.isVoidGhost && (
                   <span data-testid={`ghost-stack-${hItem.emoji}`} className="absolute top-0 right-0.5 text-[7px] text-violet-300 font-bold leading-none">{voidGhostBadge(hItem)}</span>
                 )}
-                {hItem && !hItem.isVoidGhost && !hKind && (hItem.stackCount ?? 0) > 1 && (
-                  <span className="absolute bottom-0 right-0.5 text-[7px] text-emerald-400 font-bold leading-none">×{hItem.stackCount}</span>
+                {countBadge && (
+                  <span className={`absolute bottom-0 ${countBadge.place === 'stack' ? 'right-0.5' : 'left-0.5'} text-[7px] ${countBadge.className} font-bold leading-none`}>{countBadge.label}</span>
                 )}
                 {hItem && hKind && <span className="absolute bottom-0 right-0.5 text-[7px] leading-none">{hKind}</span>}
                 {hItem && hItem.charges !== undefined && hItem.charges >= 0 && !hItem.isVoidGhost && (
                   <span className="absolute top-0 right-0.5 text-[7px] text-amber-400/80 font-bold leading-none">×{hItem.charges}</span>
-                )}
-                {hItem && !hKind && hBankDupes > 0 && (
-                  <span className="absolute bottom-0 left-0.5 text-[7px] text-sky-400 font-bold leading-none">+{hBankDupes}</span>
                 )}
               </div>
             );
@@ -259,9 +257,12 @@ export function BankPanel({
                   {stackLabel && (
                     <span className="absolute top-0.5 right-0.5 text-[7px] text-amber-400/80 font-bold leading-none">{stackLabel}</span>
                   )}
-                  {!item.isEquipment && !kindEmoji && !item.charges && (item.stackCount ?? 0) > 1 && (
-                    <span className="absolute bottom-0.5 right-0.5 text-[8px] text-emerald-400 font-bold leading-none">×{item.stackCount}</span>
-                  )}
+                  {(() => {
+                    const countBadge = hotbarCountBadge(item);
+                    return countBadge?.place === 'stack' ? (
+                      <span className={`absolute bottom-0.5 right-0.5 text-[8px] ${countBadge.className} font-bold leading-none`}>{countBadge.label}</span>
+                    ) : null;
+                  })()}
                   {isStackableBagPassive(item) && (() => {
                     const label = getStackableBonusLabel(item);
                     return label ? (

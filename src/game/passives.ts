@@ -26,6 +26,28 @@ export function isStackableBagPassive(item: EmojiItem): boolean {
     p.burningOnHit || p.starGaze || p.royalAura);
 }
 
+export type HotbarCountBadge = {
+  /** stack = green ×N on the hotbar soul. bank = blue +N for a non-stackable's bank extras. */
+  place: 'stack' | 'bank';
+  label: string;
+  className: string;
+};
+
+/**
+ * One badge per hotbar soul. Stackable passives always take the green ×N
+ * (including ×1) and never the blue bank-extra +N.
+ */
+export function hotbarCountBadge(item: EmojiItem, bankCopies = 0): HotbarCountBadge | null {
+  if (item.isVoidGhost || item.isEquipment || item.activeKind) return null;
+  if (isStackableBagPassive(item)) {
+    return { place: 'stack', label: `×${Math.max(1, item.stackCount ?? 1)}`, className: 'text-emerald-400' };
+  }
+  if (bankCopies > 0) {
+    return { place: 'bank', label: `+${bankCopies}`, className: 'text-sky-400' };
+  }
+  return null;
+}
+
 /** 1st/2nd/3rd melee arc as ATK fractions. stacks 1 → 0.75/0.50/0.25; each extra +0.25. */
 export function lightningArcTiers(stacks: number): [number, number, number] {
   const extra = Math.max(0, Math.min(3, stacks - 1));
