@@ -89,6 +89,14 @@ function shotRange(input: AutofightInput): number {
   return gunshotPlan(input.player)?.range ?? eagleEyeRange(input.player.stats.level);
 }
 
+/** Bow or gun in one hand and a blade in the other. */
+function hybridLoadout(player: Player): boolean {
+  const hands = [player.equipment.mainHand, player.equipment.offHand];
+  const ranged = hands.some(item => item?.weaponKind === 'bow' || item?.weaponKind === 'gun');
+  const blade = hands.some(item => item?.weaponKind === 'blade');
+  return ranged && blade;
+}
+
 /** First step toward the nearest tile that satisfies `goal`. */
 function stepToGoal(
   map: MapGrid,
@@ -152,6 +160,10 @@ export function planAutofight(input: AutofightInput): AutofightAction {
   const from = input.player.pos;
 
   if (style === 'ranged') {
+    // Close hybrids step in and swing. Lining up a shot only starts past 2 tiles.
+    if (hybridLoadout(input.player) && chebyshev(from, foe.pos) <= 2) {
+      return melee(input, foe);
+    }
     const guns = gunshotPlan(input.player);
     const ammo = input.player.ammo ?? 0;
     const armed = guns ? ammo >= guns.ammoCost : ammo > 0;
