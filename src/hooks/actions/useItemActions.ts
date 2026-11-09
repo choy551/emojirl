@@ -67,7 +67,7 @@ export function applyRopeVault(
 
   const spendRope = (p: typeof newPlayer) => {
     if (!consumeInventoryId) return p;
-    const { inventory, bank } = removeAndRefillBag(p.inventory, p.bank, consumeInventoryId);
+    const { inventory, bank } = removeAndRefillBag(p.inventory, p.bank, consumeInventoryId, p.hotbarLocked === true);
     return { ...p, inventory, bank };
   };
 
@@ -257,7 +257,7 @@ export function useItemActions(
       }
 
       const consumed = prev.player.inventory.filter((_, idx) => idx !== healIndex);
-      const { inventory: newInventory, bank: newBank } = refillBagFromBank(consumed, prev.player.bank);
+      const { inventory: newInventory, bank: newBank } = refillBagFromBank(consumed, prev.player.bank, prev.player.hotbarLocked === true);
       const cityGrant = recordRunEmojiConsume(item.emoji, 1, item);
       if (prev.player.characterClass === '👤') {
         const themed = noteThemedHotbarConsume(item);
@@ -278,7 +278,7 @@ export function useItemActions(
       if (!drank.ok) { addLog(drank.log); return prev; }
       addLog(drank.log);
       const consumed = prev.player.inventory.filter((_, idx) => idx !== pick.idx);
-      const { inventory, bank } = refillBagFromBank(consumed, prev.player.bank);
+      const { inventory, bank } = refillBagFromBank(consumed, prev.player.bank, prev.player.hotbarLocked === true);
       const cityGrant = recordRunEmojiConsume(pick.it.emoji, 1, pick.it);
       const midState = { ...prev, player: { ...drank.player, inventory, bank }, turn: prev.turn + 1 };
       return noteFullCity(applyEnemyTurns(midState, runEnemyTurns(midState)), cityGrant.notice, `city-full-${prev.turn}-${pick.it.id}`);
@@ -462,14 +462,14 @@ export function useItemActions(
           newInventory = applied.player.inventory.map(it =>
             it.id === slotItem.id ? { ...it, stackCount: (it.stackCount ?? 1) - 1 } : it
           );
-          const r = refillBagFromBank(newInventory, applied.player.bank);
+          const r = refillBagFromBank(newInventory, applied.player.bank, prev.player.hotbarLocked === true);
           newInventory = r.inventory; newSoulBank = r.bank;
         } else {
-          const r = removeAndRefillBag(applied.player.inventory, applied.player.bank, slotItem.id);
+          const r = removeAndRefillBag(applied.player.inventory, applied.player.bank, slotItem.id, prev.player.hotbarLocked === true);
           newInventory = r.inventory; newSoulBank = r.bank;
         }
       } else {
-        const r = removeAndRefillBag(applied.player.inventory, applied.player.bank, slotItem.id);
+        const r = removeAndRefillBag(applied.player.inventory, applied.player.bank, slotItem.id, prev.player.hotbarLocked === true);
         newInventory = r.inventory; newSoulBank = r.bank;
       }
 

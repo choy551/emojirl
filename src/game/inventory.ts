@@ -38,7 +38,25 @@ export function addToPlayerBag(
   player: Player,
   ...items: EmojiItem[]
 ): { inventory: EmojiItem[]; bank: EmojiItem[]; nonStackableBanked: EmojiItem[]; duplicateActiveBanked: EmojiItem[] } {
+  if (player.hotbarLocked) {
+    return {
+      inventory: player.inventory,
+      bank: [...player.bank, ...items],
+      nonStackableBanked: [],
+      duplicateActiveBanked: [],
+    };
+  }
   return addItemsToBag(player.inventory, player.bank, items, hotbarCapFor(player));
+}
+
+export function toggleHotbarLock(player: Player): { player: Player; log: string } {
+  const hotbarLocked = !player.hotbarLocked;
+  return {
+    player: { ...player, hotbarLocked },
+    log: hotbarLocked
+      ? '🔒 Hotbar locked. New finds go to the Bank.'
+      : '🔓 Hotbar unlocked. New finds can fill the hotbar.',
+  };
 }
 
 function addItemsToBag(
@@ -226,8 +244,8 @@ export function takeOneMatchingFromBank(
   return { bank: [...bank.slice(0, idx), ...bank.slice(idx + 1)], took: true };
 }
 
-export function refillBagFromBank(inventory: EmojiItem[], bank: EmojiItem[]): { inventory: EmojiItem[]; bank: EmojiItem[] } {
-  if (bank.length === 0) return { inventory, bank };
+export function refillBagFromBank(inventory: EmojiItem[], bank: EmojiItem[], locked = false): { inventory: EmojiItem[]; bank: EmojiItem[] } {
+  if (locked || bank.length === 0) return { inventory, bank };
 
   // Merge one copy of a banked stackable into an existing under-cap hotbar stack.
   for (let bi = 0; bi < bank.length; bi++) {
@@ -260,8 +278,13 @@ export function removeAndRefillBag(
   inventory: EmojiItem[],
   bank: EmojiItem[],
   consumedId: string,
+  locked = false,
 ): { inventory: EmojiItem[]; bank: EmojiItem[] } {
   const idx = inventory.findIndex(i => i.id === consumedId);
+  if (locked) {
+    if (idx === -1) return { inventory, bank };
+    return { inventory: [...inventory.slice(0, idx), ...inventory.slice(idx + 1)], bank };
+  }
   if (idx === -1) return refillBagFromBank(inventory, bank);
 
   const consumed = inventory[idx];

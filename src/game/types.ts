@@ -253,6 +253,11 @@ export interface Player {
    * Safe fireballs. Missing means off. True refuses a cast whose 3×3 contains the Genie.
    */
   genieSafeFireball?: boolean;
+  /**
+   * When true, the hotbar stays as it is. New finds go to the Bank.
+   * A deliberate Bank swap still changes the bar.
+   */
+  hotbarLocked?: boolean;
 }
 
 export type VanityTrailId = 'glitter' | 'petals' | 'prisms';

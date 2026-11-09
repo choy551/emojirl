@@ -48,11 +48,14 @@ export function applySoulThefts(inventory: EmojiItem[], sourceIds: string[]): Em
 }
 
 export function restoreStolenEmojis(
-  player: Pick<Player, 'inventory' | 'bank'> & Partial<Pick<Player, 'characterClass' | 'ghostHotbar'>>,
+  player: Pick<Player, 'inventory' | 'bank'> & Partial<Pick<Player, 'characterClass' | 'ghostHotbar' | 'hotbarLocked'>>,
   stolen: EmojiItem[],
 ): { inventory: EmojiItem[]; bank: EmojiItem[]; banked: number } {
   if (stolen.length === 0) {
     return { inventory: player.inventory, bank: player.bank, banked: 0 };
+  }
+  if (player.hotbarLocked) {
+    return { inventory: player.inventory, bank: [...player.bank, ...stolen], banked: stolen.length };
   }
   const before = player.bank.length;
   const cap = hotbarCapFor({ characterClass: player.characterClass ?? '🧙', ghostHotbar: player.ghostHotbar });
