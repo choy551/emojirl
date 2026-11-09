@@ -945,13 +945,15 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
 
   let newInventory = state.player.inventory;
   let newBank = state.player.bank;
+  let newFood = state.player.food ?? [];
   if (result.playerInventoryRemovals.length > 0) {
     newInventory = applySoulThefts(newInventory, result.playerInventoryRemovals);
   }
   if (result.playerInventoryAdditions.length > 0) {
-    const added = addToPlayerBag({ ...state.player, inventory: newInventory, bank: newBank }, ...result.playerInventoryAdditions);
+    const added = addToPlayerBag({ ...state.player, inventory: newInventory, bank: newBank, food: newFood }, ...result.playerInventoryAdditions);
     newInventory = added.inventory;
     newBank = added.bank;
+    newFood = added.food;
   }
   const newMoodValue = result.moodDrain > 0
     ? Math.max(-100, state.player.stats.moodValue - result.moodDrain)
@@ -996,6 +998,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
         stats: { ...state.player.stats, hp: result.playerHp, moodValue: newMoodValue, gold: newGold, fencerParries: 0 },
         inventory: newInventory,
         bank: newBank,
+        food: newFood,
         trailblazerCooldown: result.trailblazerCooldown,
         voidSlotBurden: result.voidSlotBurden ?? state.player.voidSlotBurden,
       },

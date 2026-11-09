@@ -341,7 +341,7 @@ export function CompanionTalkDialog({ gameState, setGameState, companionId, onCl
   const behavior = companion.companionBehavior ?? 'close';
 
   // Player item pools
-  const healItems = gameState.player.inventory.filter(it => !it.consumed && it.healAmount !== undefined);
+  const healItems = [...(gameState.player.food ?? []), ...gameState.player.inventory].filter(it => !it.consumed && it.healAmount !== undefined);
   const feastFoods = sinkFoods(gameState.player);
   const soulItems = gameState.player.inventory.filter(it =>
     !it.consumed && !it.isEquipment && !it.activeKind && it.healAmount === undefined && it.bagPassive

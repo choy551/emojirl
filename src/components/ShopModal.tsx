@@ -128,9 +128,9 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                           }
                         }
                         const bankBefore = prev.player.bank.length;
-                        const { inventory, bank } = addToPlayerBag(prev.player, boughtItem);
+                        const { inventory, bank, food } = addToPlayerBag(prev.player, boughtItem);
                         overflowToBank = bank.length > bankBefore;
-                        return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, inventory, bank } };
+                        return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, inventory, bank, food } };
                       });
                       if (shopAmmoTotal !== null) {
                         const shopAmmoWord = item.emoji === '🪙' ? 'bullets' : 'arrows';

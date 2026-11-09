@@ -1,5 +1,5 @@
 import type { EmojiItem, Enemy, GameState, MapGrid, Player, Position } from './types';
-import { FOOD_EMOJI_SET } from './emojis';
+import { COOKABLE_EMOJIS, FOOD_EMOJI_SET, cookFood } from './emojis';
 import { isCookedDish, RESTAURANT_COOKED_SELL_LIMIT } from './economy';
 import { livingMaxHp } from './inventory';
 import { applyCompanionLevelUp, levelFromXP } from './progression';
@@ -81,12 +81,51 @@ export function nearShrineOffer(map: MapGrid, pos: Position): boolean {
   return false;
 }
 
+function carried(player: Pick<Player, 'food' | 'inventory' | 'bank'>): EmojiItem[] {
+  return [...(player.food ?? []), ...player.inventory, ...player.bank];
+}
+
 export function cookedDishCount(player: Player): number {
-  return [...player.inventory, ...player.bank].filter(isCookedDish).length;
+  return carried(player).filter(isCookedDish).length;
 }
 
 export function sinkFoods(player: Player): EmojiItem[] {
-  return [...player.inventory, ...player.bank].filter(isSinkFood);
+  return carried(player).filter(isSinkFood);
+}
+
+/** Cook one raw dish from food storage, then the bag, then the Bank. The result stays in food storage. */
+export function cookOneFromPantry(player: Player): { player: Player; log: string } | null {
+  const food = [...(player.food ?? [])];
+  let inventory = player.inventory;
+  let bank = player.bank;
+  const raw = (it: EmojiItem) => !it.consumed && COOKABLE_EMOJIS.has(it.emoji);
+  let idx = food.findIndex(raw);
+  if (idx === -1) {
+    const invIdx = inventory.findIndex(it => raw(it) && it.healAmount !== undefined);
+    if (invIdx !== -1) {
+      food.push(inventory[invIdx]);
+      idx = food.length - 1;
+      inventory = inventory.filter((_, i) => i !== invIdx);
+    }
+  }
+  if (idx === -1) {
+    const bankIdx = bank.findIndex(it => raw(it) && it.healAmount !== undefined);
+    if (bankIdx !== -1) {
+      food.push(bank[bankIdx]);
+      idx = food.length - 1;
+      bank = bank.filter((_, i) => i !== bankIdx);
+    }
+  }
+  if (idx === -1) return null;
+  const item = food[idx];
+  const cooked = cookFood(item);
+  if (!cooked) return null;
+  const next: EmojiItem = { ...cooked, id: item.id, consumed: false };
+  food[idx] = next;
+  return {
+    player: { ...player, food, inventory, bank },
+    log: `🔥 Cooked ${item.emoji} → ${next.emoji} ${next.name}!`,
+  };
 }
 
 export function feastDefense(enemy: { defense?: number; feastBuff?: { defense: number; turnsLeft: number } }): number {

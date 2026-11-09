@@ -233,6 +233,8 @@ export interface Player {
   stats: PlayerStats;
   inventory: EmojiItem[];
   bank: EmojiItem[];
+  /** Food only. No slot cap, and it is not part of the hotbar or the Bank. */
+  food?: EmojiItem[];
   equipment: Equipment;
   trailblazerCooldown?: number;
   /** Void 👤 only. Index = hotbar slot 0–8. A slot holds a ghost or a real item, never both. */

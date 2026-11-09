@@ -262,6 +262,7 @@ export function executeFarmerTrade(
       ...player,
       inventory: packed.inventory,
       bank: packed.bank,
+      food: packed.food,
       stats: { ...player.stats, gold },
     },
     stock: stock.filter(s => s.id !== goods.id),

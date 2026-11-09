@@ -747,7 +747,7 @@ export default function HowToPlay({
           finding them in the dungeon.
         </p>
         <p className="text-xs text-muted-foreground">
-          🔒 Lock Hotbar sits beside the bag on desktop and on the mobile hotbar. While it is on, the emojis already in the hotbar stay put and every new find goes to the Bank. A deliberate swap from the Bank still moves that emoji.
+          🔒 Lock Hotbar sits beside the bag on desktop and on the mobile hotbar. While it is on, the emojis already in the hotbar stay put and every new find goes to the Bank. Food is the exception: it always goes to food storage, locked or not, and never takes a hotbar slot. A deliberate swap from the Bank still moves that emoji.
         </p>
         <div className="space-y-2">
           {EMOJI_POWERS.map((power) => {

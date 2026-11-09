@@ -65,7 +65,7 @@ export function resolveContextAction(
     const t = tileAt(px + d.dx, py + d.dy)?.type;
     return t === 'campfire' || t === 'restaurant';
   });
-  const hasRaw = player.inventory.some(it => !it.consumed && it.healAmount !== undefined && COOKABLE_EMOJIS.has(it.emoji));
+  const hasRaw = [...(player.food ?? []), ...player.inventory, ...player.bank].some(it => !it.consumed && it.healAmount !== undefined && COOKABLE_EMOJIS.has(it.emoji));
   if (nearCook && hasRaw) return { kind: 'cook', label: 'Cook', icon: '🔥' };
 
   const adjEnemy = (pred: (e: Enemy) => boolean): Enemy | null =>

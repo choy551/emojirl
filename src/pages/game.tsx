@@ -2986,7 +2986,7 @@ export default function Game() {
       allStackableCounts[item.emoji] = (allStackableCounts[item.emoji] ?? 0) + (item.stackCount ?? 1);
     }
   }
-  const healSlots = player.inventory.filter(i => i.healAmount !== undefined && !i.consumed);
+  const healSlots = [...(player.food ?? []), ...player.inventory].filter(i => i.healAmount !== undefined && !i.consumed);
   const drinkSlots = player.inventory.filter(i => i.drinkTier !== undefined && !i.consumed);
 
   const xpThisLevel = xpThresholdForLevel(player.stats.level);

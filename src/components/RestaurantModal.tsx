@@ -110,8 +110,8 @@ export function RestaurantModal({
                             };
                           }
                         }
-                        const { inventory, bank } = addToPlayerBag(prev.player, boughtItem);
-                        return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, inventory, bank } };
+                        const { inventory, bank, food } = addToPlayerBag(prev.player, boughtItem);
+                        return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, inventory, bank, food } };
                       });
                       if (peacemakers) addLog(PEACEMAKERS_LOG);
                       addLog(restAutoEquippedSlot
@@ -264,6 +264,7 @@ export function RestaurantModal({
             </div>
           ) : (() => {
             const sellable = [
+              ...(gameState.player.food ?? []).filter(i => !i.consumed && i.healAmount !== undefined),
               ...gameState.player.inventory.filter(i => !i.consumed && i.healAmount !== undefined),
               ...gameState.player.bank.filter(i => !i.consumed && i.healAmount !== undefined),
             ];
@@ -284,6 +285,7 @@ export function RestaurantModal({
                 if (!prev) return prev;
                 const inventory = prev.player.inventory.filter(i => !soldIds.has(i.id));
                 const bank = prev.player.bank.filter(i => !soldIds.has(i.id));
+                const food = (prev.player.food ?? []).filter(i => !soldIds.has(i.id));
                 return {
                   ...prev,
                   player: {
@@ -291,6 +293,7 @@ export function RestaurantModal({
                     stats: { ...prev.player.stats, gold: prev.player.stats.gold + gold },
                     inventory,
                     bank,
+                    food,
                   },
                 };
               });
@@ -342,11 +345,12 @@ export function RestaurantModal({
                             if (!prev) return prev;
                             const inventory = prev.player.inventory.filter(i => i.id !== item.id);
                             const bank = prev.player.bank.filter(i => i.id !== item.id);
+                            const food = (prev.player.food ?? []).filter(i => i.id !== item.id);
                             const equipment: Equipment = { ...prev.player.equipment };
                             (Object.keys(equipment) as EquipSlot[]).forEach(slot => {
                               if (equipment[slot]?.id === item.id) delete equipment[slot];
                             });
-                            return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: prev.player.stats.gold + price }, inventory, bank, equipment } };
+                            return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: prev.player.stats.gold + price }, inventory, bank, food, equipment } };
                           });
                           if (isCooked) {
                             const newCount = restaurantSoldCount + 1;
