@@ -987,7 +987,7 @@ export default function CityPage() {
       <p className="text-[11px] text-muted-foreground leading-snug min-h-8" data-testid="city-note">{note}</p>
     </div>
 
-        <div className="max-lg:order-2 lg:col-start-1 lg:row-span-full lg:sticky lg:top-3 lg:self-start">
+        <div data-testid="city-tools-dock" className="max-lg:order-2 lg:col-start-1 lg:row-start-2 lg:row-span-2 lg:sticky lg:top-3 lg:self-start">
         <CityToolPalette
           tool={tool}
           canCopy={selection !== null}
@@ -1072,7 +1072,7 @@ export default function CityPage() {
             </div>
           </div>
         )}
-        <div className="min-w-0 w-full max-lg:order-4 lg:col-start-3 lg:row-span-full lg:sticky lg:top-3 lg:max-h-[calc(100dvh-1.5rem)] lg:w-80 lg:self-start lg:overflow-y-auto xl:w-96" data-testid="city-structures">
+        <div className="min-w-0 w-full max-lg:order-4 lg:col-start-3 lg:row-start-2 lg:row-span-2 lg:sticky lg:top-3 lg:max-h-[calc(100dvh-1.5rem)] lg:w-80 lg:self-start lg:overflow-y-auto xl:w-96" data-testid="city-structures">
           <BuildPalette
             sections={sections}
             selected={selected}
