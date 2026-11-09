@@ -13,6 +13,7 @@ import { _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../../game/f
 import { canEquipInSlot, equipRestrictionReason } from '../../components/itemUtils';
 import { applyDrinkToPlayer } from '../../game/drinks';
 import { creditVoidBoss, hotbarCapFor } from '../../game/voidDamage';
+import { surveyBankedBlueprint } from '../../game/shopUse';
 
 export function useInventoryActions(
   setters: GameSetters,
@@ -85,6 +86,22 @@ export function useInventoryActions(
       if (!prev || prev.gameOver) return prev;
       const item = prev.player.bank.find(i => i.id === itemId);
       if (!item || item.consumed || item.isEquipment) return prev;
+
+      if (item.isStructure) {
+        const surveyed = surveyBankedBlueprint(prev.player, itemId);
+        if (!surveyed) {
+          addLog(`${item.emoji} The plan is blank.`);
+          return prev;
+        }
+        if (!surveyed.consumed) _flashSignals.spellEchoFlashPending = true;
+        const entries = [...surveyed.logs].reverse().map(text => ({ id: Math.random().toString(), text, turn: prev.turn }));
+        let logs = [...entries, ...prev.logs].slice(0, 24);
+        if (surveyed.notice) {
+          logs = [{ id: `city-full-${prev.turn}-${itemId}`, text: surveyed.notice, turn: prev.turn }, ...logs].slice(0, 24);
+        }
+        const mid = { ...prev, player: surveyed.player, logs, turn: prev.turn + 1 };
+        return applyEnemyTurns(mid, runEnemyTurns(mid));
+      }
 
       const stats = { ...prev.player.stats };
 
