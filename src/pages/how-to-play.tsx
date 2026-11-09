@@ -631,7 +631,7 @@ export default function HowToPlay({
             {
               label: "⚔️ ATK",
               color: "text-orange-400",
-              desc: "Attack — your base melee damage. Final hit = ATK × mood modifier − enemy DEF (minimum 1). Crits double the pre-defence damage. Surprise attacks deal ×1.6 ATK. Some classes get multi-hit combos at higher ATK.",
+              desc: "Attack — your base melee damage. Final hit = ATK × mood modifier − enemy DEF (minimum 1). Crits double the pre-defence damage. Surprise attacks deal ×1.6 ATK. Some classes get multi-hit combos at higher ATK. A Royal Guard with a blade in each hand hits with the main hand at 100% ATK and the off hand at 50% plus 1% per level, capped at 100% at level 50.",
             },
             {
               label: "🛡️ DEF",

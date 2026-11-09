@@ -6,6 +6,7 @@ import { blinkStrikeAlwaysHits, blinkStrikeDamageMultiplier, critStat } from './
 import { DODGE_CAP, effectiveCrit } from './softCap';
 import { feastDefense } from './foodSinks';
 import { fencerCritBonus, fencerEvasion, isFencer, isRoyalGuard, royalDefenseBonus, royalIncomingMult, royalMeleeMultiplier } from './prestige';
+import { royalDualBlades, royalOffhandFraction } from './royalGuard';
 import { FENCER_EVA_CAP, FENCER_PARRY_CHANCE } from './prestigeConstants';
 import { NINJA_DODGE_CAP, computeNinjaEvasion } from './progression';
 
@@ -238,7 +239,8 @@ export function resolveCombat(
       } else if (opts.firstShot) {
         rawDamage = Math.ceil(rawDamage * 1.5);
       }
-      if (isRoyalGuard(cls) && !opts.isRanged) {
+      const dualBlades = royalDualBlades(player) && !opts.isRanged;
+      if (isRoyalGuard(cls) && !opts.isRanged && !dualBlades) {
         rawDamage = Math.max(1, Math.round(rawDamage * royalMeleeMultiplier(player)));
       }
       rawDamage = Math.max(1, Math.round(rawDamage * (opts.damageMult ?? 1)));
@@ -264,8 +266,19 @@ export function resolveCombat(
         addLog(`🤠 Pistol whip! ${actualDamage} dmg to ${enemy.emoji}!`);
       } else if (opts.firstShot) {
         addLog(`🎯 First shot! ${actualDamage} dmg to ${enemy.emoji}${isCrit ? ' CRITICAL!' : ''}!`);
+      } else if (dualBlades) {
+        addLog(`💂 Main hand hits ${enemy.emoji} for ${actualDamage} dmg${isCrit ? ' CRITICAL!' : ''}`);
       } else {
         addLog(`You hit ${enemy.emoji} for ${actualDamage} dmg${isCrit ? ' CRITICAL!' : ''}`);
+      }
+
+      if (dualBlades && newEnemyHp > 0) {
+        const frac = royalOffhandFraction(player.stats.level);
+        const offRaw = Math.max(1, Math.round(player.stats.attack * frac * (opts.damageMult ?? 1)));
+        const offCrit = rollCrit(newEnemyHp);
+        const offDamage = Math.max(1, Math.round(offRaw * mods.damageMult * (offCrit ? 2 : 1)) - enemyDef);
+        newEnemyHp -= offDamage;
+        addLog(`💂 Off-hand hits ${enemy.emoji} for ${offDamage} dmg (${Math.round(frac * 100)}% ATK)${offCrit ? ' CRITICAL!' : ''}`);
       }
 
       // Mood: double strike

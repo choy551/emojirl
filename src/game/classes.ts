@@ -152,7 +152,7 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
     startingEmojiSlots: 3,
     startingAmmo: ROYAL_START_AMMO,
     passives: [
-      { label: 'Versatile Armory', detail: `Bow and sword together: melee deals ${Math.round(ROYAL_SWORD_MELEE_MULT * 100)}% ATK. Guns, bullets, bows, and arrows all fit — main and off hand may both be ranged (gun and bow). With no sword, melee is ${Math.round(ROYAL_BARE_MELEE_MULT * 100)}% ATK, including when you are out of ammo. Muskets are yours.` },
+      { label: 'Versatile Armory', detail: `Two blades: each bump hits with the main hand at 100% ATK and the off hand at 50% ATK plus 1% per level, capped at 100% at level 50. Bow and sword together: melee deals ${Math.round(ROYAL_SWORD_MELEE_MULT * 100)}% ATK. Guns, bullets, bows, and arrows all fit — main and off hand may both be ranged (gun and bow). With no sword, melee is ${Math.round(ROYAL_BARE_MELEE_MULT * 100)}% ATK, including when you are out of ammo. Muskets are yours.` },
       { label: 'Royal Aura', detail: `+${ROYAL_AURA_DEF} DEF while you stand your post. You begin with a Crown in the hotbar. Each Crown is a 5% chance an enemy skips its turn (max 5, 25%). You start in melee and can shoot only with a bow or gun equipped.` },
       { label: 'Piercing', detail: 'Shots and slashes pierce into the tile behind the target for half the damage dealt.' },
     ],

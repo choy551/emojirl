@@ -1,12 +1,16 @@
-import { describe, expect, it } from 'vitest';
-import type { EmojiItem, Player } from './types';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { EmojiItem, Enemy, Player } from './types';
 import { SAVE_KEY, loadGame } from './save';
+import { resolveCombat } from './combat';
+import { readFileSync } from 'node:fs';
 import {
   crownStunChance,
   crownStuns,
   guardHasRangedWeapon,
   hotbarCrown,
   initialRangerMode,
+  royalDualBlades,
+  royalOffhandFraction,
 } from './royalGuard';
 
 function piece(partial: Partial<EmojiItem> & Pick<EmojiItem, 'id' | 'emoji' | 'name'>): EmojiItem {
@@ -88,5 +92,45 @@ describe('royal guard crowns and ranged', () => {
     expect(crown?.stackCount).toBe(2);
     expect(crown?.bagPassive?.nonStackable).toBeUndefined();
     expect(loaded.state.player.bank).toEqual([]);
+  });
+});
+
+describe('royal guard dual blades', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('hits with the main hand at 100% and the off hand at 50% plus 1% per level', () => {
+    expect(royalOffhandFraction(1)).toBeCloseTo(0.51);
+    expect(royalOffhandFraction(50)).toBe(1);
+    expect(royalOffhandFraction(80)).toBe(1);
+    const blade = (id: string): EmojiItem => piece({ id, emoji: '⚔️', name: 'Sword', weaponKind: 'blade' });
+    const guard = {
+      pos: { x: 0, y: 0 },
+      emoji: '💂',
+      characterClass: '💂',
+      ammo: 0,
+      inventory: [],
+      bank: [],
+      equipment: { mainHand: blade('main'), offHand: blade('off') },
+      stats: {
+        hp: 40, maxHp: 40, attack: 20, defense: 0, speed: 2, evasion: 0,
+        luck: 0, level: 1, xp: 0, moodValue: 0, gold: 0,
+      },
+    } as Player;
+    expect(royalDualBlades(guard)).toBe(true);
+    expect(royalDualBlades({ ...guard, equipment: { mainHand: blade('main') } })).toBe(false);
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const logs: string[] = [];
+    const foe = {
+      id: 'rat', pos: { x: 1, y: 0 }, emoji: '🐀', name: 'Rat',
+      hp: 80, maxHp: 80, attack: 0, defense: 0, speed: 1, engaged: true,
+    } as Enemy;
+    resolveCombat(guard, foe, text => logs.push(text), { mood: 'neutral' });
+    expect(logs.some(line => line.includes('Main hand hits 🐀 for 20'))).toBe(true);
+    expect(logs.some(line => line.includes('Off-hand hits 🐀 for 10') && line.includes('51% ATK'))).toBe(true);
+    const manual = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
+    expect(manual).toContain('blade in each hand');
+    expect(manual).toContain('level 50');
   });
 });
