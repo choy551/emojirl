@@ -19,6 +19,18 @@ export function crownStuns(stacks: number, roll: number, characterClass: string)
   return chance > 0 && roll < chance;
 }
 
+/** Off-hand share of ATK when both hands are blades. 50% + 1% per level, 100% at level 50. */
+export function royalOffhandFraction(level: number): number {
+  const lv = Math.max(0, Math.floor(level));
+  return Math.min(1, 0.5 + lv * 0.01);
+}
+
+export function royalDualBlades(player: Pick<Player, 'characterClass' | 'equipment'>): boolean {
+  return player.characterClass === ROYAL_GUARD
+    && player.equipment.mainHand?.weaponKind === 'blade'
+    && player.equipment.offHand?.weaponKind === 'blade';
+}
+
 export function guardHasRangedWeapon(player: Pick<Player, 'equipment'>): boolean {
   return [player.equipment.mainHand, player.equipment.offHand].some(
     item => item?.weaponKind === 'bow' || item?.weaponKind === 'gun',
