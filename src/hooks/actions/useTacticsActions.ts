@@ -1,12 +1,12 @@
 import { useCallback } from 'react';
-import { chebyshev, withVisibility, runEnemyTurns, applyEnemyTurns, applyEquipmentAndPassives, hasLOSBetween, playerSoftCap } from '../../game/gameHelpers';
+import { chebyshev, withVisibility, runEnemyTurns, applyEnemyTurns, applyEquipmentAndPassives, hasLOSBetween } from '../../game/gameHelpers';
 import { getMood } from '../../game/moods';
 import { isHostileCombatTarget, resolveCombat } from '../../game/combat';
 import type { GameRefs, GameSetters, AddLog } from './types';
 import type { Player } from '../../game/types';
-import { isArcaneCaster, isFencer, isHitman, isRoyalGuard, activateGuardianStance, planBackdash, planLunge, nearestExecuteTarget, notePrestigeKill, fencerOutgoingMult } from '../../game/prestige';
+import { isArcaneCaster, isFencer, isHitman, isRoyalGuard, activateGuardianStance, planBackdash, planLunge, nearestExecuteTarget, fencerOutgoingMult } from '../../game/prestige';
 import { guardHasRangedWeapon } from '../../game/royalGuard';
-import { starXpGain } from '../../game/emojiBalance';
+import { applyLungeStrike } from '../../game/lunge';
 import { FENCER_BACKDASH_CD, FENCER_LUNGE_CD, FENCER_LUNGE_MULT } from '../../game/prestigeConstants';
 import { resolveExecuteContract } from '../../game/hitman';
 
@@ -192,20 +192,29 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
       const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false, 0, Math.max(banquetFloor, houseFloor));
       const attacker = applyEquipmentAndPassives({ ...prev.player, pos: plan.pos });
       const result = resolveCombat(attacker, plan.target, addLog, { mood, damageMult: FENCER_LUNGE_MULT * swing.mult, floor: prev.currentFloor });
-      let player: Player = { ...prev.player, pos: plan.pos, stats: { ...prev.player.stats, hp: result.playerHp, lungeCooldown: FENCER_LUNGE_CD, flourishCount: swing.nextFlourish, riposteReady: result.parried } };
-      let enemies = prev.enemies.map(e => ({ ...e }));
-      const idx = enemies.findIndex(e => e.id === plan.target.id);
-      if (result.enemyDied && idx >= 0) {
-        const paid = notePrestigeKill(player, prev.currentFloor, playerSoftCap(player).raw.luck);
-        player = paid.player;
-        paid.logs.forEach(addLog);
-        player = { ...player, stats: { ...player.stats, xp: player.stats.xp + starXpGain(plan.target.isBoss ? 25 : 5, player.stats.xpBoostTurns) } };
-        enemies.splice(idx, 1);
-      } else if (idx >= 0) {
-        enemies[idx] = { ...enemies[idx], hp: result.enemyHp, engaged: true };
-      }
-      addLog('🤺 Lunge!');
-      const mid = { ...prev, player, enemies, turn: prev.turn + 1 };
+      const cooled: Player = { ...prev.player, pos: plan.pos, stats: { ...prev.player.stats, hp: result.playerHp, lungeCooldown: FENCER_LUNGE_CD, flourishCount: swing.nextFlourish, riposteReady: result.parried } };
+      const settled = applyLungeStrike({
+        player: cooled,
+        enemies: prev.enemies,
+        items: prev.items,
+        killCounts: prev.killCounts,
+        targetId: plan.target.id,
+        enemyHp: result.enemyHp,
+        enemyDied: result.enemyDied,
+        floor: prev.currentFloor,
+        difficultyTier: prev.difficultyTier,
+      });
+      const logEntries = [...settled.logs].reverse().map(text => ({ id: Math.random().toString(), text, turn: prev.turn }));
+      const mid = {
+        ...prev,
+        player: settled.player,
+        enemies: settled.enemies,
+        items: settled.items,
+        killCounts: settled.killCounts,
+        difficultyTier: settled.difficultyTier,
+        logs: [...logEntries, ...prev.logs].slice(0, 24),
+        turn: prev.turn + 1,
+      };
       return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
     });
   }, [addLog, gameStateRef, setGameState]);

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Player, EmojiItem, GameState, EquipSlot, BagPassiveSummary } from '../game/types';
-import { getPassiveTooltipSuffix, hotbarCountBadge } from '../game/passives';
+import { bankExtraCopies, getPassiveTooltipSuffix, hotbarCountBadge } from '../game/passives';
 import { cloverLootSummary, rarityTooltipSuffix } from '../game/dropTable';
 import { getCowboyUnarmedBonus } from '../game/combat';
 import { MiniMap } from './MiniMap';
@@ -124,10 +124,8 @@ export function RightSidebar({
             }
             const kindEmoji = activeKindEmoji(item.activeKind);
             const isInFlight = !!item.activeKind && !!gameState.activeProjectile && gameState.activeProjectile.kind === item.activeKind;
-            const bankDupes = !item.isEquipment
-              ? player.bank.filter(b => !b.isEquipment && !b.consumed && b.emoji === item.emoji).length
-              : 0;
-            const countBadge = hotbarCountBadge(item, bankDupes);
+            const bankDupes = !item.isEquipment ? bankExtraCopies(player.bank, item.emoji) : 0;
+            const countBadges = hotbarCountBadge(item, bankDupes);
             return (
               <button
                 key={item.id}
@@ -156,9 +154,9 @@ export function RightSidebar({
                   {item.charges !== undefined && item.charges >= 0 && !item.isVoidGhost && (
                     <span className="absolute top-0.5 right-0.5 text-[7px] text-amber-400/80 font-bold leading-none">×{item.charges}</span>
                   )}
-                  {countBadge && (
-                    <span className={`absolute bottom-0.5 ${countBadge.place === 'stack' ? 'right-0.5' : 'left-0.5'} text-[8px] ${countBadge.className} font-bold leading-none`}>{countBadge.label}</span>
-                  )}
+                  {countBadges.map(badge => (
+                    <span key={badge.place} className={`absolute bottom-0.5 ${badge.place === 'stack' ? 'right-0.5' : 'left-0.5'} text-[8px] ${badge.className} font-bold leading-none`}>{badge.label}</span>
+                  ))}
                 </>
                 {isInFlight && (
                   <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-yellow-400 animate-ping" />

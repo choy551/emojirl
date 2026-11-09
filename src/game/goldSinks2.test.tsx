@@ -221,6 +221,17 @@ describe('blood auction', () => {
     expect(won.player?.inventory.map(item => item.name)).toContain('Crown');
     expect(won.player?.stats.attack).toBe(6);
     expect(executeBloodAuction(player({ stats: { ...player().stats, hp: 1 } }), 1, 10, lot, () => 0).ok).toBe(false);
+
+    const star = RARE_REWARDS.find(reward => reward.name === 'Star')!;
+    const bidder = player({ stats: { ...player().stats, hp: 400, gold: 5000 } });
+    const once = executeBloodAuction(bidder, 16, 30, star, () => 0);
+    expect(once.won).toBe(true);
+    expect(once.log?.match(/The lot is yours/g)).toHaveLength(1);
+    expect(once.player?.stats.gold).toBe(5000 - auctionGold(16));
+    expect(once.player?.stats.hp).toBe(400 - auctionHpCost(400, 30));
+    expect(once.player?.inventory.filter(item => item.name === 'Star')).toHaveLength(1);
+    expect(once.player?.bank.filter(item => item.name === 'Star')).toHaveLength(0);
+    expect(readFileSync(new URL('../components/BloodAuctionModal.tsx', import.meta.url), 'utf8')).not.toContain('addLog(');
     expect(executeBloodAuction(player(), 1, 10, { ...lot, tier: 'uncommon' }, () => 0).ok).toBe(false);
   });
 });
@@ -257,7 +268,7 @@ describe('boards on the map', () => {
     expect(flex).toContain('Zero attack');
 
     const auction = renderToStaticMarkup(
-      <BloodAuctionModal gameState={state()} setGameState={() => {}} addLog={() => {}} onClose={() => {}} lot={RARE_REWARDS[2]} />,
+      <BloodAuctionModal gameState={state()} setGameState={() => {}} onClose={() => {}} lot={RARE_REWARDS[2]} />,
     );
     expect(auction).toContain('Dagger');
     expect(auction).toContain('Bid 500g');
