@@ -21,8 +21,8 @@ export const PILL_OVERHEAL = 0.1;
  * The ATK term is capped at a fraction of ATK that rises from 100% at 1 stack
  * to 200% at 5 stacks (25 percentage points per extra stack).
  *
- * z = min(5, fire bag stacks + 1 when Fire Arrows are equipped). The two
- * sources share one ignite and add before that cap.
+ * z = min(5, fire bag stacks + 1 when Fire Arrows or Incendiary Rounds are paired).
+ * The sources share one ignite and add before that cap.
  */
 export function igniteAtkCapFraction(stacks: number): number {
   const z = Math.max(1, Math.min(FIRE_STACK_CAP, Math.floor(stacks)));

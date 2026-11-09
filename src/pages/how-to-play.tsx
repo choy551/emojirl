@@ -828,7 +828,7 @@ export default function HowToPlay({
               name: "Fire",
               effect: "Ignite",
               detail:
-                "Legendary. Stacks to 5. Each turn of burn is z × (depth + depth × 10% of ATK). The ATK term is capped at 100% ATK at 1 stack and 200% at 5 (25 points per extra stack). Fire Arrows count as 1 stack and share that cap. Lasts 3 turns.",
+                "Legendary. Stacks to 5. Each turn of burn is z × (depth + depth × 10% of ATK). The ATK term is capped at 100% ATK at 1 stack and 200% at 5 (25 points per extra stack). Fire Arrows (with a bow) and Incendiary Rounds (with a gun) each count as 1 stack and share that cap. Lasts 3 turns.",
               color: "text-orange-400",
             },
             {

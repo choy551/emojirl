@@ -2,6 +2,7 @@ import { EmojiItem, EquipSlot, Equipment, Player } from '../game/types';
 import { COWBOY, FENCER, GENIE, HITMAN, NINJA, RANGER, ROYAL_GUARD, VOID, WIZARD, CLASS_SELECT_ORDER } from '../game/prestigeConstants';
 import { getClassDef } from '../game/classes';
 import { hotbarCapFor } from '../game/voidDamage';
+import { ammoConflicts } from '../game/weaponCombo';
 
 export const EQUIP_STAT_LABELS: Record<string, string> = {
   attack: 'ATK', defense: 'DEF', speed: 'SPD', evasion: 'EVA', luck: 'LCK', hp: 'HP', vitality: 'VIT',
@@ -33,15 +34,15 @@ export const CLASS_WEAPON_SUMMARY: Record<string, string> = {
   [NINJA]: 'blades in either hand',
   [FENCER]: 'blades in either hand',
   [RANGER]: 'bows in the main hand, arrows or swords in the off hand',
-  [COWBOY]: 'guns in either hand, never muskets',
-  [HITMAN]: 'guns in either hand, including muskets in the main hand',
-  [ROYAL_GUARD]: 'bows, guns, and blades in either hand; muskets in the main hand; arrows in the off hand; both hands may be ranged',
-  [VOID]: 'any weapon in its usual slot, except muskets and special arrows',
+  [COWBOY]: 'guns in either hand, never muskets; Ice Bullets and Incendiary Rounds in the off hand',
+  [HITMAN]: 'guns in either hand, including muskets in the main hand; Ice Bullets and Incendiary Rounds in the off hand',
+  [ROYAL_GUARD]: 'bows, guns, and blades in either hand; muskets in the main hand; arrows with a bow and bullets with a gun; both hands may be ranged',
+  [VOID]: 'any weapon in its usual slot, except muskets and special arrows or bullets',
 };
 
 export function classWeaponRulesBlurb(): string {
   const classes = CLASS_SELECT_ORDER.map(emoji => `${emoji} ${getClassDef(emoji).name}: ${CLASS_WEAPON_SUMMARY[emoji]}.`).join(' ');
-  return `Hands are class-locked. Body armor and accessories fit every class. Shields fit the off hand, except for the Ranger, the Cowboy, and the Levitating Hitman. ${classes}`;
+  return `Hands are class-locked. Body armor and accessories fit every class. Shields fit the off hand, except for the Ranger, the Cowboy, and the Levitating Hitman. Fire Arrows and Ice Arrows need a bow in the main hand. Ice Bullets and Incendiary Rounds need a gun in the main hand. Equipping the wrong off-hand takes the conflicting main-hand weapon off. Those bullets sell for 20 gold; the arrow versions sell for 15, like other gear. ${classes}`;
 }
 
 export function getEquipBonusSuffix(item: EmojiItem): string {
@@ -84,7 +85,10 @@ function handAllows(item: EmojiItem, playerClass: string, slot: EquipSlot): bool
   if (item.armorKind) return false;
 
   if (item.specialAmmoKind) {
-    return slot === 'offHand' && (playerClass === RANGER || playerClass === ROYAL_GUARD);
+    if (slot !== 'offHand') return false;
+    const bullets = item.ammoCarrier === 'bullet';
+    if (bullets) return playerClass === COWBOY || playerClass === HITMAN || playerClass === ROYAL_GUARD;
+    return playerClass === RANGER || playerClass === ROYAL_GUARD;
   }
 
   if (item.gunTier === 'musket') {
@@ -125,7 +129,12 @@ export function emptyLegalEquipSlot(
   playerClass: string,
   equipment: Equipment | undefined,
 ): EquipSlot | undefined {
-  return legalEquipSlots(item, playerClass).find(slot => !equipment?.[slot]);
+  return legalEquipSlots(item, playerClass).find(slot => {
+    if (equipment?.[slot]) return false;
+    const weapon = slot === 'offHand' ? equipment?.mainHand : item;
+    const ammo = slot === 'offHand' ? item : equipment?.offHand;
+    return !ammoConflicts(weapon, ammo);
+  });
 }
 
 /** Empty legal slot, or the first legal slot when the player is replacing what they already wear. */
@@ -152,7 +161,10 @@ export function equipRestrictionReason(item: EmojiItem, playerClass: string, slo
   if (item.gunTier === 'musket' && playerClass !== ROYAL_GUARD && playerClass !== HITMAN) {
     return `${cls} cannot equip muskets. Only the Royal Guard and the Levitating Hitman carry them.`;
   }
-  if (item.specialAmmoKind && playerClass !== RANGER && playerClass !== ROYAL_GUARD) {
+  if (item.specialAmmoKind && item.ammoCarrier === 'bullet' && playerClass !== COWBOY && playerClass !== HITMAN && playerClass !== ROYAL_GUARD) {
+    return `${cls} cannot use special bullets — Cowboy, Hitman, and Royal Guard only.`;
+  }
+  if (item.specialAmmoKind && item.ammoCarrier !== 'bullet' && playerClass !== RANGER && playerClass !== ROYAL_GUARD) {
     return `${cls} cannot use special arrows — Ranger and Royal Guard only.`;
   }
   if (playerClass === COWBOY && ((item.weaponKind && item.weaponKind !== 'gun') || item.armorKind === 'shield')) {
@@ -166,7 +178,7 @@ export function equipRestrictionReason(item: EmojiItem, playerClass: string, slo
   }
 
   const kind = item.specialAmmoKind
-    ? 'special arrows'
+    ? (item.ammoCarrier === 'bullet' ? 'special bullets' : 'special arrows')
     : item.armorKind === 'shield'
       ? 'shields'
       : (KIND_LABEL[item.weaponKind ?? ''] ?? item.weaponKind ?? 'that');

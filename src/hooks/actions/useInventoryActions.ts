@@ -11,6 +11,7 @@ import {
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 import { _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../../game/flashSignals';
 import { canEquipInSlot, equipRestrictionReason } from '../../components/itemUtils';
+import { settleHandEquip } from '../../game/weaponCombo';
 import { applyDrinkToPlayer } from '../../game/drinks';
 import { creditVoidBoss, hotbarCapFor } from '../../game/voidDamage';
 import { surveyBankedBlueprint } from '../../game/shopUse';
@@ -217,9 +218,15 @@ export function useInventoryActions(
         return prev;
       }
 
+      const settled = settleHandEquip(player.equipment, item, slot);
       let newInv = [...player.inventory];
       let newBank = [...player.bank];
-      const currentEquipped = player.equipment[slot];
+      if (settled.stow.length > 0) {
+        const parked = addToPlayerBag({ ...player, inventory: newInv, bank: newBank }, ...settled.stow);
+        newInv = parked.inventory;
+        newBank = parked.bank;
+      }
+      const currentEquipped = settled.equipment[slot];
       if (currentEquipped) {
         const result = addToPlayerBag({ ...player, inventory: newInv, bank: newBank }, currentEquipped);
         newInv = result.inventory; newBank = result.bank;
@@ -231,7 +238,7 @@ export function useInventoryActions(
 
       const bonusStr = Object.entries(item.equipBonus ?? {}).filter(([,v]) => (v ?? 0) !== 0).map(([k, v]) => `${(v ?? 0) > 0 ? '+' : ''}${v}${k.substring(0,3).toUpperCase()}`).join(' ');
       addLog(`${item.emoji} ${item.name} equipped${bonusStr ? ` (${bonusStr})` : ''}.`);
-      const newEquipment = { ...player.equipment, [slot]: item };
+      const newEquipment = { ...settled.equipment, [slot]: item };
       const fan = tryDualGunsFanfare({
         characterClass: cls,
         prevEquipment: player.equipment,
@@ -239,9 +246,13 @@ export function useInventoryActions(
         alreadyDone: prev.dualGunsFanfareDone,
       });
       if (fan.fired) addLog(PEACEMAKERS_LOG);
+      const logs = settled.log
+        ? [{ id: `ammo-clash-${prev.turn}-${item.id}`, text: settled.log, turn: prev.turn }, ...prev.logs].slice(0, 24)
+        : prev.logs;
       return {
         ...prev,
         ...(fan.done ? { dualGunsFanfareDone: true } : {}),
+        logs,
         player: { ...player, inventory: newInv, bank: newBank, equipment: newEquipment },
       };
     });

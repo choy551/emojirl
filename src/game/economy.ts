@@ -4,6 +4,7 @@ import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, get
 import { DRINK_SHOP_CHANCE, DRINK_TIER_SELL, getRandomDrinkDrop } from './drinks';
 import { addToBag, addToBagCapped } from './inventory';
 import { usesArrows, usesBullets } from './prestige';
+import { BULLET_AMMO_SELL_VALUE, GEAR_SELL_VALUE, ammoCarrierOf } from './weaponCombo';
 
 /** Gold stolen by a 🐦‍⬛ Crow on a successful hit. Scales with dungeon floor. */
 export function crowGoldSteal(floor: number, playerGold: number): number {
@@ -23,7 +24,10 @@ export function moneyBagSellValue(floor: number): number {
 export function getItemSellValue(item: EmojiItem, multiplier = 1, floor = 1): number {
   if (item.isMoneyBag || item.emoji === '💰') return moneyBagSellValue(floor);
   if (item.isStructure) return Math.round(STRUCTURE_SELL_VALUE * multiplier);
-  if (item.isEquipment) return 15 * multiplier;
+  if (item.isEquipment) {
+    const sell = ammoCarrierOf(item) === 'bullet' ? BULLET_AMMO_SELL_VALUE : GEAR_SELL_VALUE;
+    return sell * multiplier;
+  }
   if (item.activeKind) return 10 * multiplier;
   if (item.healAmount !== undefined) {
     const base = Math.max(2, item.healAmount);

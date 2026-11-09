@@ -115,6 +115,8 @@ export type EquipSlot = 'body' | 'mainHand' | 'offHand' | 'accessory';
 export type WeaponKind = 'staff' | 'blade' | 'bow' | 'gun';
 export type ArmorKind = 'armor' | 'light' | 'shield';
 export type SpecialAmmoKind = 'fire' | 'freeze';
+/** Arrows need a bow. Bullets need a gun. Missing means arrow, so older Fire/Ice Arrows stay arrows. */
+export type AmmoCarrier = 'arrow' | 'bullet';
 
 export interface ActiveBuff {
   stat: 'attack' | 'defense';
@@ -343,6 +345,8 @@ export interface EmojiItem {
   gunTier?: 'musket';
   armorKind?: ArmorKind;
   specialAmmoKind?: SpecialAmmoKind;
+  /** Arrow ammo pairs with a bow. Bullet ammo pairs with a gun. */
+  ammoCarrier?: AmmoCarrier;
   equipBonus?: EquipBonus;
   bagPassive?: BagPassive;
   stackCount?: number; // for stackable bag passives — how many copies are collapsed into this slot
