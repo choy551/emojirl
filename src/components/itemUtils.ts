@@ -37,7 +37,7 @@ export const CLASS_WEAPON_SUMMARY: Record<string, string> = {
   [COWBOY]: 'guns in either hand, never muskets; Ice Bullets and Incendiary Rounds in the off hand',
   [HITMAN]: 'guns in either hand, including muskets in the main hand; Ice Bullets and Incendiary Rounds in the off hand',
   [ROYAL_GUARD]: 'bows, guns, and blades in either hand; muskets in the main hand; arrows with a bow and bullets with a gun; both hands may be ranged',
-  [VOID]: 'any weapon in its usual slot, except muskets and special arrows or bullets',
+  [VOID]: 'any weapon in its usual slot, except muskets; arrows with a bow and bullets with a gun, including Fire Arrows, Ice Arrows, Incendiary Rounds, and Ice Bullets',
 };
 
 export function classWeaponRulesBlurb(): string {
@@ -87,8 +87,8 @@ function handAllows(item: EmojiItem, playerClass: string, slot: EquipSlot): bool
   if (item.specialAmmoKind) {
     if (slot !== 'offHand') return false;
     const bullets = item.ammoCarrier === 'bullet';
-    if (bullets) return playerClass === COWBOY || playerClass === HITMAN || playerClass === ROYAL_GUARD;
-    return playerClass === RANGER || playerClass === ROYAL_GUARD;
+    if (bullets) return playerClass === COWBOY || playerClass === HITMAN || playerClass === ROYAL_GUARD || playerClass === VOID;
+    return playerClass === RANGER || playerClass === ROYAL_GUARD || playerClass === VOID;
   }
 
   if (item.gunTier === 'musket') {
@@ -161,11 +161,11 @@ export function equipRestrictionReason(item: EmojiItem, playerClass: string, slo
   if (item.gunTier === 'musket' && playerClass !== ROYAL_GUARD && playerClass !== HITMAN) {
     return `${cls} cannot equip muskets. Only the Royal Guard and the Levitating Hitman carry them.`;
   }
-  if (item.specialAmmoKind && item.ammoCarrier === 'bullet' && playerClass !== COWBOY && playerClass !== HITMAN && playerClass !== ROYAL_GUARD) {
-    return `${cls} cannot use special bullets — Cowboy, Hitman, and Royal Guard only.`;
+  if (item.specialAmmoKind && item.ammoCarrier === 'bullet' && playerClass !== COWBOY && playerClass !== HITMAN && playerClass !== ROYAL_GUARD && playerClass !== VOID) {
+    return `${cls} cannot use special bullets — Cowboy, Hitman, Royal Guard, and The Void only.`;
   }
-  if (item.specialAmmoKind && item.ammoCarrier !== 'bullet' && playerClass !== RANGER && playerClass !== ROYAL_GUARD) {
-    return `${cls} cannot use special arrows — Ranger and Royal Guard only.`;
+  if (item.specialAmmoKind && item.ammoCarrier !== 'bullet' && playerClass !== RANGER && playerClass !== ROYAL_GUARD && playerClass !== VOID) {
+    return `${cls} cannot use special arrows — Ranger, Royal Guard, and The Void only.`;
   }
   if (playerClass === COWBOY && ((item.weaponKind && item.weaponKind !== 'gun') || item.armorKind === 'shield')) {
     return 'Only real Cowboys fight with their fists!';
