@@ -29,13 +29,14 @@ interface TacticsMenuProps {
   handleExecuteContract: () => void;
   handleGuardianStance: () => void;
   onToggleGenieCast: (which: GenieCastToggle) => void;
+  onOpenBlinkShop?: () => void;
   onClose: () => void;
 }
 
 export function TacticsMenu({
   player, gameState, wizardTactics, blinkTurn, trailblazeTurn, yeehawTurn,
   autoStealth, rangerMode, applyWizardMode, enterBlinkTargetMode, applyNinjaMode,
-  toggleAutoStealth,   applyRangerMode, handleCowboyTactics, handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance, onToggleGenieCast, onClose,
+  toggleAutoStealth,   applyRangerMode, handleCowboyTactics, handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance, onToggleGenieCast, onOpenBlinkShop, onClose,
 }: TacticsMenuProps) {
   const hand = useMobileHand();
   const dismiss = useDismissGuard(onClose);
@@ -145,6 +146,11 @@ export function TacticsMenu({
                 <div className="px-1 pb-1 text-[11px] leading-snug" data-testid="tactics-blink-talents">
                   <div className="font-bold text-violet-200">{progress.hudLabel}</div>
                   <div className="text-muted-foreground">{progress.nextLabel}{owned.length ? ` · ${owned.join(', ')}` : ''}{overkill ? ` · ${overkill}` : ''}</div>
+                  {onOpenBlinkShop && (
+                    <button type="button" className="mt-1 min-h-11 text-left text-violet-100 underline" onClick={() => { onOpenBlinkShop(); onClose(); }}>
+                      Open talent shop
+                    </button>
+                  )}
                 </div>
               );
             })()}

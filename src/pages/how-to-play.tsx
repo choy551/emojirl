@@ -394,7 +394,7 @@ export default function HowToPlay({
               <div className="flex items-center gap-2">
                 <Kbd>X</Kbd>
                 <span className="text-muted-foreground">
-                  — Ninja only: activate Blink Strike (teleport and strike, 8t cooldown). {blinkStrikeRulesBlurb(blinkLuck, blinkTalents)} Instakilling resets the cooldown to 0 — chain up to 3 instakills in a row for instant resets (Endless Chain removes that cap), then each further instakill gives a reduced 3t cooldown instead. Regular kills reduce to 7t; missing gives full 8t. The instakill chain fades back to 0 after 10 turns out of combat once it has reached 2 or more. Talents unlock every {BLINK_TALENT_CREDITS_PER_TIER} Blink credits.
+                  — Ninja only: activate Blink Strike (teleport and strike, 8t cooldown). {blinkStrikeRulesBlurb(blinkLuck, blinkTalents)} Instakilling resets the cooldown to 0 — chain up to 3 instakills in a row for instant resets (Endless Chain removes that cap), then each further instakill gives a reduced 3t cooldown instead. Regular kills reduce to 7t; missing gives full 8t. The instakill chain fades back to 0 after 10 turns out of combat once it has reached 2 or more. Every {BLINK_TALENT_CREDITS_PER_TIER} Blink credits earns 1 Talent Token. Tier N costs N tokens.
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -584,9 +584,12 @@ export default function HowToPlay({
           is worth {BLINK_TALENT_INSTAKILL_CREDITS} credits. A Blink that does not
           instakill — a fizzle or a normal hit — is worth 1 credit if that target
           dies within {BLINK_TALENT_DELAYED_KILL_TURNS} turns. Every{" "}
-          {BLINK_TALENT_CREDITS_PER_TIER} credits opens a permanent pick. The first
-          four offers are tier-locked (two branches each). Later offers (T5+) let
-          you take any talent you skipped, until all eight are yours.
+          {BLINK_TALENT_CREDITS_PER_TIER} credits earns 1 Talent Token. A Tier N talent
+          costs N tokens. Tier N is visible once N tokens have been earned. Buying
+          spends tokens you still hold, so you can skip a tier and bank tokens.
+          Earned 4 and spent 1 leaves Tier 4 visible, and you need 1 more held token
+          to buy it. From T5+ (5 tokens earned), you can also buy the other branch of an
+          earlier tier at that tier&apos;s cost, until all eight are yours.
         </p>
         {blinkCredits != null && (
           <p className="text-xs font-semibold text-violet-200" data-testid="rtfm-blink-talents">
@@ -611,10 +614,9 @@ export default function HowToPlay({
             </div>
           ))}
           <div className="bg-card/50 border border-border/50 rounded-lg p-3 text-xs">
-            <div className="font-bold text-violet-300 mb-1">T5+</div>
+            <div className="font-bold text-violet-300 mb-1">5 tokens earned</div>
             <p className="text-muted-foreground">
-              Each further {BLINK_TALENT_CREDITS_PER_TIER} credits offers any talent
-              from the tiers above that you have not picked yet.
+              The other branch of a tier you already bought becomes available at that tier&apos;s token cost.
             </p>
           </div>
         </div>

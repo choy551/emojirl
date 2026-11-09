@@ -90,7 +90,7 @@ describe('royal guard crowns and ranged', () => {
     const loaded = loadGame();
     expect(loaded.kind).toBe('ok');
     if (loaded.kind !== 'ok') return;
-    expect(loaded.state.schemaVersion).toBe(8);
+    expect(loaded.state.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
     expect(loaded.state.player.equipment.accessory).toBeUndefined();
     const crown = loaded.state.player.inventory.find(item => item.emoji === '👑');
     expect(crown?.isEquipment).toBeUndefined();
@@ -201,7 +201,6 @@ describe('royal guard split ammo', () => {
     expect(loaded.kind).toBe('ok');
     if (loaded.kind !== 'ok') return;
     expect(loaded.state.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
-    expect(loaded.state.schemaVersion).toBe(8);
     expect(loaded.state.player.ammo).toBe(0);
     expect(loaded.state.player.arrowAmmo).toBe(4);
     expect(loaded.state.player.bulletAmmo).toBe(3);

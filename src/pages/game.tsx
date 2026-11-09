@@ -8,8 +8,13 @@ import {
   blinkNoTargetLog,
   blinkStrikeHudTitle,
   blinkTalentById,
+  blinkTalentAvailability,
   blinkTalentProgress,
   blinkTalentPrompt,
+  BLINK_TALENTS,
+  blinkTokensEarned,
+  blinkTokensHeld,
+  buyBlinkTalent,
   grantBlinkT3Respec,
   isBlinkStrikeTarget,
 } from '../game/blinkStrike';
@@ -175,6 +180,7 @@ export default function Game() {
   }>({ mode: 'nearest', manualTargetId: null });
   const [autoStealth, setAutoStealth] = useState(() => localStorage.getItem('emojirl_vessel') === '🥷');
   const autoStealthRef = useRef(localStorage.getItem('emojirl_vessel') === '🥷');
+  const [blinkShopOpen, setBlinkShopOpen] = useState(false);
   const [rangerMode, setRangerMode] = useState<'ranged' | 'melee' | 'flee'>('ranged');
   const rangerModeRef = useRef<'ranged' | 'melee' | 'flee'>('ranged');
   const voidAttackModeRef = useRef<VoidAttackMode>('melee');
@@ -2295,9 +2301,9 @@ export default function Game() {
     setGameState(prev => {
       if (!prev) return prev;
       const prompt = blinkPromptFor(prev);
-      if (!prompt || !prompt.choices.some(choice => choice.id === id)) return prev;
       const talent = blinkTalentById(id);
-      if (prompt.kind === 'respec') {
+      if (prompt?.kind === 'respec') {
+        if (!prompt.choices.some(choice => choice.id === id)) return prev;
         const nextStats = grantBlinkT3Respec(prev.player.stats, id);
         if (!nextStats) return prev;
         addLog(`🥷 Blink talent respec: ${talent.name}. Your Tier 4 pick stays.`);
@@ -2307,11 +2313,12 @@ export default function Game() {
           player: { ...prev.player, stats: nextStats },
         };
       }
-      const owned = prev.player.stats.blinkTalents ?? [];
+      const bought = buyBlinkTalent(prev.player.stats, id);
+      if (!bought) return prev;
       addLog(`🥷 Blink talent: ${talent.name}.`);
       return {
         ...prev,
-        player: { ...prev.player, stats: { ...prev.player.stats, blinkTalents: [...owned, id] } },
+        player: { ...prev.player, stats: bought },
       };
     });
   };
@@ -3908,10 +3915,22 @@ export default function Game() {
 
       {ninjaBlink?.offer && !gameState.gameOver && (
         <BlinkTalentModal
-          tierLabel={ninjaBlink.offer.tierLabel}
-          choices={ninjaBlink.offer.choices}
+          earned={0}
+          held={0}
+          progressLabel={ninjaBlink.progress.ratio}
+          rows={ninjaBlink.offer.choices.map(talent => ({ talent, state: 'buy' as const }))}
           note={ninjaBlink.offer.note}
-          onPick={id => pickBlinkTalentRef.current(id)}
+          onBuy={id => pickBlinkTalentRef.current(id)}
+        />
+      )}
+      {blinkShopOpen && ninjaBlink && !ninjaBlink.offer && !gameState.gameOver && (
+        <BlinkTalentModal
+          earned={blinkTokensEarned(player.stats.blinkStrikeCredits ?? 0)}
+          held={blinkTokensHeld(player.stats.blinkStrikeCredits ?? 0, player.stats.blinkTalents)}
+          progressLabel={ninjaBlink.progress.ratio}
+          rows={BLINK_TALENTS.map(talent => ({ talent, state: blinkTalentAvailability(player.stats.blinkStrikeCredits ?? 0, player.stats.blinkTalents, talent) }))}
+          onBuy={id => pickBlinkTalentRef.current(id)}
+          onClose={() => setBlinkShopOpen(false)}
         />
       )}
 
@@ -3969,6 +3988,7 @@ export default function Game() {
           handleExecuteContract={handleExecuteContract}
           handleGuardianStance={handleGuardianStance}
           onToggleGenieCast={toggleGenieCastOption}
+          onOpenBlinkShop={() => setBlinkShopOpen(true)}
           onClose={() => setTacticsMenuOpen(false)}
         />
       )}
