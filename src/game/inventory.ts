@@ -123,6 +123,78 @@ function isHotbarBagItem(item: EmojiItem): boolean {
   return item.healAmount === undefined && item.ammoAmount === undefined && item.drinkTier === undefined && !item.isEquipment;
 }
 
+/** Tap the selected bank emoji again to clear it. Esc uses the same clear. */
+export function bankSelectionAfterTap(selectedId: string | null, tappedId: string): string | null {
+  return selectedId === tappedId ? null : tappedId;
+}
+
+/**
+ * Move a bank emoji into hotbar slot `slot`.
+ * Occupied slot swaps. Empty slot moves. Stackables merge up to the stack cap
+ * and leave the overflow in the bank. Duplicate passives, duplicate actives,
+ * equipment, and ghost slots stay put.
+ */
+export function applyBankToHotbarSlot(player: Player, sourceId: string, slot: number): Player {
+  if (slot < 0 || slot > 8) return player;
+  const srcBankIdx = player.bank.findIndex(i => i.id === sourceId);
+  if (srcBankIdx === -1) return player;
+  const srcItem = player.bank[srcBankIdx];
+  if (!isHotbarBagItem(srcItem)) return player;
+  if (isNonStackableBagPassiveDuplicate(srcItem, player.inventory) || isActiveKindDuplicate(srcItem, player.inventory)) {
+    return player;
+  }
+
+  const bank = [...player.bank];
+  const inv = [...player.inventory];
+  const cells = buildHotbarSlots({ ...player, inventory: inv, bank });
+  const dstCell = cells[slot] ?? null;
+  if (dstCell?.isVoidGhost) return player;
+
+  if (isStackableBagPassive(srcItem)) {
+    const stackCap = STACKABLE_BAG_CAPS[srcItem.emoji] ?? 9;
+    const addCount = Math.max(1, srcItem.stackCount ?? 1);
+    const existingIdx = inv.findIndex(i => i.emoji === srcItem.emoji && isStackableBagPassive(i));
+    if (existingIdx !== -1) {
+      const existing = inv[existingIdx];
+      const room = Math.max(0, stackCap - (existing.stackCount ?? 1));
+      if (room === 0) return player;
+      const toStack = Math.min(room, addCount);
+      inv[existingIdx] = { ...existing, stackCount: (existing.stackCount ?? 1) + toStack };
+      if (addCount > toStack) bank[srcBankIdx] = { ...srcItem, stackCount: addCount - toStack };
+      else bank.splice(srcBankIdx, 1);
+      return { ...player, inventory: inv, bank };
+    }
+    const [moved] = bank.splice(srcBankIdx, 1);
+    const placed = addCount > stackCap ? stackCap : addCount;
+    const incoming = { ...moved, stackCount: placed };
+    if (dstCell && !dstCell.isVoidGhost) {
+      const dstIdx = inv.findIndex(i => i.id === dstCell.id);
+      if (dstIdx === -1) return player;
+      bank.push(inv[dstIdx]);
+      inv[dstIdx] = incoming;
+    } else {
+      const bagCount = inv.filter(isHotbarBagItem).length;
+      if (bagCount >= hotbarCapFor(player)) return player;
+      inv.push(incoming);
+    }
+    if (addCount > placed) bank.push({ ...moved, id: `${moved.id}-overflow`, stackCount: addCount - placed });
+    return { ...player, inventory: inv, bank };
+  }
+
+  const [moved] = bank.splice(srcBankIdx, 1);
+  if (dstCell && !dstCell.isVoidGhost) {
+    const dstIdx = inv.findIndex(i => i.id === dstCell.id);
+    if (dstIdx === -1) return player;
+    bank.push(inv[dstIdx]);
+    inv[dstIdx] = moved;
+  } else {
+    const bagCount = inv.filter(isHotbarBagItem).length;
+    if (bagCount >= hotbarCapFor(player)) return player;
+    inv.push(moved);
+  }
+  return { ...player, inventory: inv, bank };
+}
+
 function isEligibleBankPull(item: EmojiItem, inventory: EmojiItem[]): boolean {
   return !item.isEquipment &&
     !isNonStackableBagPassiveDuplicate(item, inventory) &&
