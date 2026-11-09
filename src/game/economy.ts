@@ -324,7 +324,16 @@ export function grantSlotPrizeItems(
   items: EmojiItem[],
   floor: number,
   hotbarCap = 9,
+  locked = false,
 ): { inventory: EmojiItem[]; bank: EmojiItem[]; gold: number; logs: string[] } {
+  if (locked) {
+    return {
+      inventory,
+      bank: [...bank, ...items],
+      gold: 0,
+      logs: items.map(item => `🔒 ${item.emoji} ${item.name} → Bank (hotbar locked).`),
+    };
+  }
   let inv = inventory;
   let bnk = bank;
   let gold = 0;

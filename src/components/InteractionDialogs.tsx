@@ -32,7 +32,7 @@ export function MonkeyInteractionDialog({ gameState, setGameState, interaction, 
       if (itemIdx === -1) return prev;
       const remainingInv = prev.player.inventory.filter((_, i) => i !== itemIdx);
       const restored = restoreStolenEmojis(
-        { inventory: remainingInv, bank: prev.player.bank },
+        { inventory: remainingInv, bank: prev.player.bank, hotbarLocked: prev.player.hotbarLocked },
         monkey.stolenEmojis ?? [],
       );
       return {
