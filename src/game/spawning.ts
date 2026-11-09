@@ -259,7 +259,7 @@ export function rollStructureFind(
   rng: () => number = Math.random,
 ): (EmojiItem & { pos: Position }) | null {
   if (!map || rooms.length === 0 || rng() >= STRUCTURE_FLOOR_CHANCE) return null;
-  const openRooms = rooms.filter(room => room.theme !== 'boss' && room.theme !== 'treasure-vault');
+  const openRooms = rooms.filter(room => room.theme !== 'boss' && room.theme !== 'treasure-vault' && room.theme !== 'district-vault');
   if (openRooms.length === 0) return null;
   const blocked = new Set(taken.map(pos => `${pos.x},${pos.y}`));
   const spots: Position[] = [];

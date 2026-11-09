@@ -9,6 +9,7 @@ import { FINALE_FLOOR, buildFinaleFloor, waveBeginLog } from './finale';
 import { isArcaneCaster, startFloorContract } from './prestige';
 import { clearShrineOffering } from './foodSinks';
 import { expireBountyOnDescend } from './goldSinks2';
+import { districtVaultEnteredLog } from './districtVault';
 
 function stampDualGunsFanfare(state: GameState, prevEquipment: Player['equipment'], addLog: (text: string) => void): GameState {
   const fan = tryDualGunsFanfare({
@@ -115,6 +116,8 @@ export function descendFloor(state: GameState, addLog: (text: string) => void): 
     if (rooms.some(r => r.theme === 'treasure-vault')) addLog(`💎 You sense hidden treasure surrounded by water...`);
     if (rooms.some(r => r.theme === 'bush-ambush')) addLog(`🌿 You hear bowstrings drawn behind the bushes...`);
     if (rooms.some(r => r.theme === 'room-vault')) addLog(`🛏️ A small room is tucked inside these halls...`);
+    const districtHall = rooms.find(r => r.theme === 'district-vault' && r.district);
+    if (districtHall?.district) addLog(districtVaultEnteredLog(districtHall.district));
     if (rooms.some(r => r.theme === 'volcano')) {
       addLog(`🌋 There is a Volcano on this floor!`);
       newState.floorAnnouncement = {
