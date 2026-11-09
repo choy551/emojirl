@@ -1,7 +1,7 @@
 import { Player, EmojiItem, VoidGhost } from './types';
 import type { BagPassiveSummary } from './types';
 import { STACKABLE_BAG_CAPS, isStackableBagPassive } from './passives';
-import { ACTIVE_DROPS, EMOJI_POWERS } from './emojis';
+import { ACTIVE_DROPS, EMOJI_POWERS, isPantryFood } from './emojis';
 import { hotbarCapFor, padGhostHotbar, voidGhostCapacity } from './voidDamage';
 import { drinkEvasionBonus } from './drinks';
 import { resolveSoftCap, type SoftCapInput, type SoftCapResult } from './softCap';
@@ -37,16 +37,21 @@ export function addToBagCapped(
 export function addToPlayerBag(
   player: Player,
   ...items: EmojiItem[]
-): { inventory: EmojiItem[]; bank: EmojiItem[]; nonStackableBanked: EmojiItem[]; duplicateActiveBanked: EmojiItem[] } {
+): { inventory: EmojiItem[]; bank: EmojiItem[]; food: EmojiItem[]; nonStackableBanked: EmojiItem[]; duplicateActiveBanked: EmojiItem[] } {
+  const pantry = items.filter(isPantryFood);
+  const rest = items.filter(item => !isPantryFood(item));
+  const food = pantry.length > 0 ? [...(player.food ?? []), ...pantry] : [...(player.food ?? [])];
+  if (pantry.length > 0) player.food = food;
   if (player.hotbarLocked) {
     return {
       inventory: player.inventory,
-      bank: [...player.bank, ...items],
+      bank: [...player.bank, ...rest],
+      food,
       nonStackableBanked: [],
       duplicateActiveBanked: [],
     };
   }
-  return addItemsToBag(player.inventory, player.bank, items, hotbarCapFor(player));
+  return { ...addItemsToBag(player.inventory, player.bank, rest, hotbarCapFor(player)), food };
 }
 
 export function toggleHotbarLock(player: Player): { player: Player; log: string } {

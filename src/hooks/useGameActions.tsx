@@ -596,7 +596,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           return prev;
         }
         if (enemy.bear && !enemy.engaged && enemy.tag !== 'Hostile') {
-          const foodItems = getFoodHealItems(prev.player.inventory);
+          const foodItems = getFoodHealItems([...(prev.player.food ?? []), ...prev.player.inventory]);
           const offerItem = foodItems.length > 0 ? foodItems[Math.floor(Math.random() * foodItems.length)] : null;
           setPendingBearInteraction({ id: enemy.id, stage: enemy.tag === 'Friendly' ? 'friendly' : 'neutral', offerId: offerItem?.id ?? null });
           return prev;

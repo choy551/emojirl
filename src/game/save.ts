@@ -1,6 +1,6 @@
 import { GameState, Player, PlayerStats, EmojiItem, Equipment } from './types';
 import { applyBlinkTalentSaveMigration, applyBlinkTokenSaveMigration, knownBlinkTalents } from './blinkStrike';
-import { applySoulCatalogCopy } from './emojis';
+import { applySoulCatalogCopy, isPantryFood } from './emojis';
 import { normalizeBounty, normalizeVanity } from './goldSinks2';
 import { applyEquipmentRestrictionMigration } from '../components/itemUtils';
 import { migrateEquippedCrown, splitPooledGuardAmmo } from './royalGuard';
@@ -27,12 +27,13 @@ export const SAVE_KEY = 'emojirl_save_v1';
  *    earned. Owned talents stay, and their tier costs count as spent. Held
  *    tokens clamp at 0 when the owned talents cost more than were earned.
  * 10: A ready Fencer Riposte becomes one riposte charge.
+ * 11: Food leaves the hotbar and the Bank for an uncapped food store.
  */
-export const SAVE_SCHEMA_VERSION = 10;
+export const SAVE_SCHEMA_VERSION = 11;
 const CURRENT_SCHEMA_VERSION = SAVE_SCHEMA_VERSION;
 
 /** Set of schema versions this build knows how to load (after migration). */
-const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
 
 /**
  * Runs in-place migrations on the raw parsed JSON object so that
@@ -127,6 +128,24 @@ const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
     stats.riposteCharges = Math.max(0, charges) + ready;
     delete stats.riposteReady;
   },
+  raw => {
+    const player = raw.player;
+    if (!player || typeof player !== 'object') return;
+    const record = player as Record<string, unknown>;
+    const food = Array.isArray(record.food) ? [...record.food] : [];
+    const pull = (list: unknown): unknown[] => {
+      if (!Array.isArray(list)) return [];
+      const keep: unknown[] = [];
+      for (const item of list) {
+        if (item && typeof item === 'object' && isPantryFood(item as { healAmount?: number; emoji: string })) food.push(item);
+        else keep.push(item);
+      }
+      return keep;
+    };
+    record.inventory = pull(record.inventory);
+    record.bank = pull(record.bank);
+    record.food = food;
+  },
 ];
 
 function migrateRaw(raw: Record<string, unknown>): void {
@@ -203,6 +222,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     stats,
     inventory:       ((rawPlayer.inventory as EmojiItem[]) ?? []).map(applySoulCatalogCopy),
     bank:            ((rawPlayer.bank as EmojiItem[]) ?? []).map(applySoulCatalogCopy),
+    food:            ((rawPlayer.food as EmojiItem[]) ?? []).map(applySoulCatalogCopy),
     equipment:       refreshEquipmentCopy((rawPlayer.equipment as Equipment) ?? {}),
     // optional fields
     trailblazerCooldown: rawPlayer.trailblazerCooldown as number | undefined,

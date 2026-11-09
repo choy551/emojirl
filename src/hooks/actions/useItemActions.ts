@@ -1,8 +1,9 @@
 import { useCallback } from 'react';
 import { EmojiItem, ActiveBuff, GameState } from '../../game/types';
 import {
-  getRandomEmojiPower, getRandomActiveDrop, getBulletDrop, COOKABLE_EMOJIS, cookFood,
+  getRandomEmojiPower, getRandomActiveDrop, getBulletDrop,
 } from '../../game/emojis';
+import { cookOneFromPantry } from '../../game/foodSinks';
 import { isStackableBagPassive } from '../../game/passives';
 import {
   moodMax, refillBagFromBank, removeAndRefillBag, takeOneMatchingFromBank,
@@ -195,16 +196,17 @@ export function useItemActions(
       const pool = livingMaxHp(prev.player);
       if (prev.player.stats.hp >= pool) { addLog('Already at full HP.'); return prev; }
 
-      const healCandidates = prev.player.inventory
-        .map((it, idx) => ({ it, idx }))
-        .filter(({ it }) => !it.consumed && it.healAmount !== undefined);
+      const healCandidates = [
+        ...(prev.player.food ?? []).map((it, idx) => ({ it, idx, where: 'food' as const })),
+        ...prev.player.inventory.map((it, idx) => ({ it, idx, where: 'bag' as const })),
+      ].filter(({ it }) => !it.consumed && it.healAmount !== undefined);
       if (healCandidates.length === 0) { addLog('No healing items! Search for 🍎🍖🧪 drops from enemies.'); return prev; }
 
       const hpPct = prev.player.stats.hp / pool;
       const missingHp = pool - prev.player.stats.hp;
       const lessons = prev.chefLessonCount ?? 0;
       const healOf = (it: EmojiItem) => cookedEatHeal(it, lessons, pool);
-      let best: { it: EmojiItem; idx: number };
+      let best: { it: EmojiItem; idx: number; where: 'food' | 'bag' };
       if (hpPct <= 0.4) {
         // Low health — use the biggest heal available
         best = healCandidates.reduce((a, b) => healOf(b.it) > healOf(a.it) ? b : a);
@@ -256,7 +258,9 @@ export function useItemActions(
         );
       }
 
-      const consumed = prev.player.inventory.filter((_, idx) => idx !== healIndex);
+      const fromFood = best.where === 'food';
+      const consumed = fromFood ? prev.player.inventory : prev.player.inventory.filter((_, idx) => idx !== healIndex);
+      const nextFood = fromFood ? (prev.player.food ?? []).filter((_, idx) => idx !== healIndex) : prev.player.food;
       const { inventory: newInventory, bank: newBank } = refillBagFromBank(consumed, prev.player.bank, prev.player.hotbarLocked === true);
       const cityGrant = recordRunEmojiConsume(item.emoji, 1, item);
       if (prev.player.characterClass === '👤') {
@@ -264,7 +268,7 @@ export function useItemActions(
         if (themed) addLog(themed.text);
       }
 
-      const midState = { ...prev, player: { ...prev.player, stats, inventory: newInventory, bank: newBank }, turn: prev.turn + 1 };
+      const midState = { ...prev, player: { ...prev.player, stats, inventory: newInventory, bank: newBank, food: nextFood }, turn: prev.turn + 1 };
       return noteFullCity(applyEnemyTurns(midState, runEnemyTurns(midState)), cityGrant.notice, `city-full-${prev.turn}-${item.id}`);
     });
   }, [addLog, setGameState]);
@@ -303,21 +307,13 @@ export function useItemActions(
         addLog('🏪 The kitchen is closed — thank you for cooking for us today!');
         return prev;
       }
-      const rawIdx = prev.player.inventory.findIndex(
-        it => !it.consumed && it.healAmount !== undefined && COOKABLE_EMOJIS.has(it.emoji)
-      );
-      if (rawIdx === -1) {
-        addLog('🔥 Nothing to cook — need raw food (🍎 🍞 🍖 🍄 🍇) in your bag.');
+      const cooked = cookOneFromPantry(prev.player);
+      if (!cooked) {
+        addLog('🔥 Nothing to cook — need raw food (🍎 🍞 🍖 🍄 🍇) in food storage.');
         return prev;
       }
-      const raw = prev.player.inventory[rawIdx];
-      const cooked = cookFood(raw);
-      if (!cooked) return prev;
-      const cookedItem: EmojiItem = { ...cooked, id: `cooked-${Math.random()}`, consumed: false };
-      const newInventory = [...prev.player.inventory];
-      newInventory[rawIdx] = cookedItem;
-      addLog(`🔥 Cooked ${raw.emoji} → ${cookedItem.emoji} ${cookedItem.name}!`);
-      const midState = { ...prev, player: { ...prev.player, inventory: newInventory }, turn: prev.turn + 1 };
+      addLog(cooked.log);
+      const midState = { ...prev, player: cooked.player, turn: prev.turn + 1 };
       return withVisibility(applyEnemyTurns(midState, runEnemyTurns(midState)));
     });
   }, [addLog, setGameState]);

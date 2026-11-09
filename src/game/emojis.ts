@@ -48,6 +48,10 @@ export const FOOD_EMOJI_SET = new Set([
   '🍏', '🥩', '🍓', '🥪', '🍲',         // cooked food
 ]);
 
+export function isPantryFood(item: { healAmount?: number; emoji: string }): boolean {
+  return item.healAmount !== undefined && FOOD_EMOJI_SET.has(item.emoji);
+}
+
 export function getFoodHealItems(inventory: import('./types').EmojiItem[]) {
   return inventory.filter(it => !it.consumed && it.healAmount !== undefined && FOOD_EMOJI_SET.has(it.emoji));
 }
