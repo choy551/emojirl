@@ -32,6 +32,7 @@ import { afterGuardShot, chooseGuardShot, gainCarriedAmmo, guardHasBow, guardHas
 import { legalSpecialAmmo, specialAmmoForShot } from '../game/weaponCombo';
 import { canEquipItem, emptyLegalEquipSlot } from '../components/itemUtils';
 import { creditVoidBoss } from '../game/voidDamage';
+import { voidBossesBeaten, voidHpAttackPaidLog, voidRangedSpend } from '../game/voidAttackCost';
 import { applyEntropicTithe } from '../game/voidAbilities';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
 import { descendFloor } from '../game/descend';
@@ -244,8 +245,22 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (!hasLOS(prev.map, player.pos, dx, dy, range)) break;
 
           const guardShot = isRoyalGuard(cls) ? chooseGuardShot(player) : null;
+          let voidHpCost = 0;
           if (isRoyalGuard(cls)) {
             if (!guardShot) break;
+          } else if (voidRanged) {
+            const spend = voidRangedSpend({
+              style: 'ranger',
+              hp: player.stats.hp,
+              maxHp: livingMaxHp(player),
+              ammo: player.ammo ?? 0,
+              bossesCleared: voidBossesBeaten(prev),
+            });
+            if (spend.kind === 'melee') {
+              addLog(spend.log);
+              break;
+            }
+            if (spend.kind === 'hp') voidHpCost = spend.cost;
           } else if ((player.ammo ?? 0) <= 0) {
             break;
           }
@@ -255,7 +270,11 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (enemy.tag === 'Friendly') continue;
           if (enemy.tag === 'Neutral' && !enemy.engaged) continue;
           const mood = playerMood(prev.player);
-          const effectiveRanger = applyEquipmentAndPassives(player);
+          const voidShooter = voidHpCost > 0
+            ? { ...player, stats: { ...player.stats, hp: player.stats.hp - voidHpCost } }
+            : player;
+          if (voidHpCost > 0) addLog(voidHpAttackPaidLog('ranger', voidHpCost));
+          const effectiveRanger = applyEquipmentAndPassives(voidShooter);
           const _rangerPassives = playerBagPassives(prev.player);
           const combatResult = resolveCombat(effectiveRanger, enemy, addLog, { mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), advantage: _rangerPassives.advantageDice, execBlow: _rangerPassives.execBlow, trueAim: _rangerPassives.trueAim, shieldWall: _rangerPassives.shieldWall, firstShot: (cls === '🧝' || voidRanged) && !enemy.engaged, isRanged: true });
 
@@ -315,16 +334,16 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (ammoSpend.saved) addLog(`🪶 Survivalist — ammo saved!`);
           else if (ammoSpend.reclaimed) addLog(guardShot?.shot === 'gun' ? '🪙 Round reclaimed!' : '🏹 Arrow reclaimed!');
           let newPlayer: Player = {
-            ...player,
-            stats: { ...player.stats, hp: combatResult.playerHp },
+            ...voidShooter,
+            stats: { ...voidShooter.stats, hp: combatResult.playerHp },
           };
           if (isRoyalGuard(cls) && guardShot) {
             newPlayer = afterGuardShot(newPlayer, guardShot.shot, ammoSpend.ammoDelta);
             if (guardHasBow(player) && guardHasGun(player)) {
               addLog(guardShot.shot === 'bow' ? '🏹 Bow shot.' : '🔫 Gun shot.');
             }
-          } else {
-            newPlayer = { ...newPlayer, ammo: (player.ammo ?? 0) + ammoSpend.ammoDelta };
+          } else if (voidHpCost <= 0) {
+            newPlayer = { ...newPlayer, ammo: Math.max(0, (player.ammo ?? 0) + ammoSpend.ammoDelta) };
           }
 
           let skipFightId: string | undefined;
@@ -1100,14 +1119,32 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               : [...boltCandidates].sort((a, b) => chebyshev(newPlayer.pos, a.pos) - chebyshev(newPlayer.pos, b.pos))[0];
 
         const voidWizardShot = cls === '👤';
-        if (boltTarget && (voidWizardShot || (newPlayer.stats.mana ?? 0) > 0)) {
+        let voidWizardBlocked = false;
+        let voidWizardCaster = newPlayer;
+        if (voidWizardShot && boltTarget) {
+          const spend = voidRangedSpend({
+            style: 'wizard',
+            hp: newPlayer.stats.hp,
+            maxHp: livingMaxHp(newPlayer),
+            bossesCleared: voidBossesBeaten(prev),
+          });
+          if (spend.kind === 'melee') {
+            addLog(spend.log);
+            voidWizardBlocked = true;
+          } else if (spend.kind === 'hp') {
+            voidWizardCaster = { ...newPlayer, stats: { ...newPlayer.stats, hp: newPlayer.stats.hp - spend.cost } };
+            addLog(voidHpAttackPaidLog('wizard', spend.cost));
+          }
+        }
+        if (boltTarget && !voidWizardBlocked && (voidWizardShot || (voidWizardCaster.stats.mana ?? 0) > 0)) {
           markEnemySeen(boltTarget.emoji);
           if (!voidWizardShot) {
             newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, mana: Math.max(0, (newPlayer.stats.mana ?? 0) - 1) } };
+            voidWizardCaster = newPlayer;
           }
-          const boltMood = playerMood(newPlayer);
-          const _boltPassives = playerBagPassives(newPlayer);
-          const boltResult = resolveCombat(applyEquipmentAndPassives(newPlayer), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall });
+          const boltMood = playerMood(voidWizardCaster);
+          const _boltPassives = playerBagPassives(voidWizardCaster);
+          const boltResult = resolveCombat(applyEquipmentAndPassives(voidWizardCaster), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall });
 
           const boltDmg = boltTarget.hp - boltResult.enemyHp;
           const boltPlayerDmg = newPlayer.stats.hp - boltResult.playerHp;
@@ -1296,14 +1333,32 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               : [...boltCandidates].sort((a, b) => chebyshev(waitPlayer.pos, a.pos) - chebyshev(waitPlayer.pos, b.pos))[0];
 
         const voidWizardShot = cls === '👤';
-        if (boltTarget && (voidWizardShot || (waitPlayer.stats.mana ?? 0) > 0)) {
+        let voidWizardBlocked = false;
+        let voidWizardCaster = waitPlayer;
+        if (voidWizardShot && boltTarget) {
+          const spend = voidRangedSpend({
+            style: 'wizard',
+            hp: waitPlayer.stats.hp,
+            maxHp: livingMaxHp(waitPlayer),
+            bossesCleared: voidBossesBeaten(prev),
+          });
+          if (spend.kind === 'melee') {
+            addLog(spend.log);
+            voidWizardBlocked = true;
+          } else if (spend.kind === 'hp') {
+            voidWizardCaster = { ...waitPlayer, stats: { ...waitPlayer.stats, hp: waitPlayer.stats.hp - spend.cost } };
+            addLog(voidHpAttackPaidLog('wizard', spend.cost));
+          }
+        }
+        if (boltTarget && !voidWizardBlocked && (voidWizardShot || (voidWizardCaster.stats.mana ?? 0) > 0)) {
           markEnemySeen(boltTarget.emoji);
           if (!voidWizardShot) {
             waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, mana: Math.max(0, (waitPlayer.stats.mana ?? 0) - 1) } };
+            voidWizardCaster = waitPlayer;
           }
-          const boltMood = playerMood(waitPlayer);
-          const _boltPassives = playerBagPassives(waitPlayer);
-          const boltResult = resolveCombat(applyEquipmentAndPassives(waitPlayer), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall });
+          const boltMood = playerMood(voidWizardCaster);
+          const _boltPassives = playerBagPassives(voidWizardCaster);
+          const boltResult = resolveCombat(applyEquipmentAndPassives(voidWizardCaster), boltTarget, addLog, { mood: boltMood, advantage: _boltPassives.advantageDice, execBlow: _boltPassives.execBlow, trueAim: _boltPassives.trueAim, shieldWall: _boltPassives.shieldWall });
           const boltDmg = boltTarget.hp - boltResult.enemyHp;
           const boltPlayerDmg = waitPlayer.stats.hp - boltResult.playerHp;
           if (boltDmg > 0) waitFloats.push({ id: `bolt-e-${boltTarget.id}-${prev.turn}`, pos: { ...boltTarget.pos }, text: `-${boltDmg}`, color: '#a78bfa', life: 2 });

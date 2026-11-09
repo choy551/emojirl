@@ -2,6 +2,7 @@ import { Player } from '../../game/types';
 import { applyEquipmentAndPassives } from '../../game/inventory';
 import { blinkStrikeMultiplierPercent, critStat, overkillStatusPhrase } from '../../game/blinkStrike';
 import { genieBloodcastEnabled, genieOverchannelEnabled, genieSafeFireballEnabled, isArcaneCaster, isFencer, isHitman, isRoyalGuard, type GenieCastToggle } from '../../game/prestige';
+import { voidHpAttackTooltip, voidRangedHpCost } from '../../game/voidAttackCost';
 
 // Mirrors the cooldown constants in useTacticsActions.ts (BLINK_ACTIVE + BLINK_CD).
 const BLINK_TOTAL_CD = 8;
@@ -18,6 +19,8 @@ export interface AbilityDescriptor {
   active?: boolean;
   /** 44px-tall target for a thumb. Used by Genie cast switches. */
   roomy?: boolean;
+  /** Hover text. Falls back to the label and detail. */
+  title?: string;
   onUse: () => void;
 }
 
@@ -202,10 +205,12 @@ export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
       const mode = voidAttackMode ?? 'melee';
       const modeLabel = mode === 'ranger' ? 'Ranger' : mode === 'wizard' ? 'Wizard' : 'Melee';
       const modeIcon = mode === 'ranger' ? '🏹' : mode === 'wizard' ? '🎯' : '⚔️';
+      const hpCost = voidRangedHpCost(player.voidBossesCleared ?? 0);
       return [
         {
           id: 'void-attack-mode', icon: modeIcon, label: modeLabel,
-          detail: 'Cycle',
+          detail: `${hpCost} HP`,
+          title: voidHpAttackTooltip(player.voidBossesCleared ?? 0),
           disabled: false,
           active: mode !== 'melee',
           onUse: () => cycleVoidAttack?.(),

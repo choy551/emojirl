@@ -47,6 +47,7 @@ function plan(over: Partial<AutofightInput> = {}) {
     maxHp: over.maxHp ?? player.stats.maxHp,
     rangerMode: over.rangerMode,
     voidAttackMode: over.voidAttackMode,
+    voidBossesCleared: over.voidBossesCleared,
     holdFire: over.holdFire,
   });
 }
@@ -133,6 +134,51 @@ describe('autofight', () => {
     const hidden = floor(6, 6);
     hidden[4][1] = { ...hidden[4][1], visible: false };
     expect(plan({ map: hidden, enemies: [foe(1, 4)] })).toEqual({ kind: 'idle', log: NO_ENEMIES_LOG });
+  });
+
+  it('prices a void shot in HP and melees when that price would kill', () => {
+    const wizard = hero({ pos: { x: 2, y: 2 }, emoji: '👤', characterClass: '👤', ammo: 0, voidBossesCleared: 0 }, { hp: 16, maxHp: 20 });
+    const cast = plan({
+      player: wizard,
+      map: floor(5, 14),
+      enemies: [foe(2, 2 + VISION_RADIUS)],
+      voidAttackMode: 'wizard',
+      voidBossesCleared: 0,
+    });
+    expect(cast).toEqual({ kind: 'wait' });
+
+    const lethal = plan({
+      player: hero({ pos: { x: 2, y: 2 }, emoji: '👤', characterClass: '👤', ammo: 0 }, { hp: 12, maxHp: 20 }),
+      map: floor(5, 14),
+      enemies: [foe(2, 2 + VISION_RADIUS)],
+      voidAttackMode: 'wizard',
+      voidBossesCleared: 11,
+    });
+    expect(lethal.kind).toBe('move');
+
+    const ranger = plan({
+      player: hero({ pos: { x: 1, y: 1 }, emoji: '👤', characterClass: '👤', ammo: 0 }, { hp: 16, maxHp: 20 }),
+      enemies: [foe(1, 4)],
+      voidAttackMode: 'ranger',
+    });
+    expect(ranger).toEqual({ kind: 'move', dx: 0, dy: 1 });
+
+    const spent = plan({
+      player: hero({ pos: { x: 1, y: 1 }, emoji: '👤', characterClass: '👤', ammo: 0 }, { hp: 12, maxHp: 20 }),
+      enemies: [foe(4, 2)],
+      voidAttackMode: 'ranger',
+      voidBossesCleared: 11,
+    });
+    expect(spent.kind).toBe('move');
+    expect(spent).toMatchObject({ log: expect.stringContaining('lethal') });
+
+    const quiver = plan({
+      player: hero({ pos: { x: 1, y: 1 }, emoji: '👤', characterClass: '👤', ammo: 2 }, { hp: 12, maxHp: 20 }),
+      enemies: [foe(1, 4)],
+      voidAttackMode: 'ranger',
+      voidBossesCleared: 11,
+    });
+    expect(quiver).toEqual({ kind: 'move', dx: 0, dy: 1 });
   });
 
   it('refuses below half HP and still acts at exactly half', () => {

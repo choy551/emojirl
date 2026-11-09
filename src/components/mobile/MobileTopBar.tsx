@@ -1,6 +1,7 @@
 import { Player } from '../../game/types';
 import { livingMaxHp } from '../../game/inventory';
 import { ammoIcon, isArcaneCaster, usesArrows, usesBullets } from '../../game/prestige';
+import { voidHpAttackTooltip } from '../../game/voidAttackCost';
 
 interface MobileTopBarProps {
   player: Player;
@@ -80,7 +81,10 @@ export function MobileTopBar({ player, className, level, currentFloor, xpProgres
                 🏹{player.arrowAmmo ?? 0} 🪙{player.bulletAmmo ?? 0}
               </span>
             ) : showAmmo && (
-              <span className="font-bold tabular-nums text-amber-300/90 shrink-0">
+              <span
+                className="font-bold tabular-nums text-amber-300/90 shrink-0"
+                title={player.characterClass === '👤' ? voidHpAttackTooltip(player.voidBossesCleared ?? 0) : undefined}
+              >
                 {ammoIcon(player.characterClass, player.equipment)}{player.ammo}
               </span>
             )}

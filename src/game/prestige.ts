@@ -49,6 +49,7 @@ import {
   ROYAL_CROWN_DEF,
   ROYAL_CROWN_LUCK,
   ROYAL_GUARD,
+  VOID,
   ROYAL_PIERCE_FRACTION,
   ROYAL_SWORD_MELEE_MULT,
   WIZARD,
@@ -68,18 +69,18 @@ export function isHitman(cls: string): boolean { return cls === HITMAN; }
 export function isRoyalGuard(cls: string): boolean { return cls === ROYAL_GUARD; }
 export function isArcaneCaster(cls: string): boolean { return cls === WIZARD || cls === GENIE; }
 export function classFlies(cls: string): boolean { return cls === GENIE || cls === HITMAN; }
-export function usesBullets(cls: string): boolean { return cls === COWBOY || cls === HITMAN || cls === ROYAL_GUARD; }
-export function usesArrows(cls: string): boolean { return cls === RANGER || cls === ROYAL_GUARD; }
+export function usesBullets(cls: string): boolean { return cls === COWBOY || cls === HITMAN || cls === ROYAL_GUARD || cls === VOID; }
+export function usesArrows(cls: string): boolean { return cls === RANGER || cls === ROYAL_GUARD || cls === VOID; }
 export function isTrailblazer(cls: string): boolean { return cls === RANGER || cls === ROYAL_GUARD; }
 
 export function ammoNoun(cls: string): 'bullets' | 'arrows' | 'ammo' {
-  if (cls === ROYAL_GUARD) return 'ammo';
+  if (cls === ROYAL_GUARD || cls === VOID) return 'ammo';
   if (usesBullets(cls)) return 'bullets';
   return 'arrows';
 }
 
 export function ammoIcon(cls: string, equipment?: Equipment): string {
-  if (cls === ROYAL_GUARD) {
+  if (cls === ROYAL_GUARD || cls === VOID) {
     const gun = equipment?.mainHand?.weaponKind === 'gun' || equipment?.offHand?.weaponKind === 'gun';
     const bow = equipment?.mainHand?.weaponKind === 'bow' || equipment?.offHand?.weaponKind === 'bow';
     if (gun && !bow) return '🪙';
