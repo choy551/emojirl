@@ -981,7 +981,13 @@ describe('EmojiCB surfaces', () => {
     expect(city).toContain('data-testid="city-workbench"');
     expect(city).toContain('data-testid="city-structures"');
     expect(city).toContain('lg:grid-rows-[auto_auto_auto]');
-    expect(city).toContain('lg:row-span-full');
+    expect(city).not.toContain('lg:row-span-full');
+    const docked = 'lg:row-start-2 lg:row-span-2 lg:sticky lg:top-3';
+    expect(city.split(docked).length - 1).toBe(2);
+    expect(city).toContain('data-testid="city-tools-dock"');
+    expect(city).toContain('max-lg:order-2');
+    expect(city).toContain('max-lg:order-4');
+    expect(city).toContain('lg:col-start-2 lg:row-start-2');
     expect(city).toContain('lg:sticky lg:top-3 lg:max-h-[calc(100dvh-1.5rem)]');
     expect(city).toContain('onContextMenu={onGridContextMenu}');
     expect(city).toContain('button === 2');
