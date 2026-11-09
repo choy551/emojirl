@@ -104,18 +104,18 @@ export function useCombatActions(
         const newCharges = (item.charges ?? 3) - 1;
         if (newCharges <= 0) {
           addLog('🔫 Gun is empty!');
-          const r = removeAndRefillBag(prev.player.inventory, prev.player.bank, item.id);
+          const r = removeAndRefillBag(prev.player.inventory, prev.player.bank, item.id, prev.player.hotbarLocked === true);
           newInv = r.inventory; newProjBank = r.bank;
         } else {
           newInv = prev.player.inventory.map(it => it.id === item.id ? { ...it, charges: newCharges } : it);
         }
       } else if (kind === 'freeze') {
-        const r = removeAndRefillBag(prev.player.inventory, prev.player.bank, item.id);
+        const r = removeAndRefillBag(prev.player.inventory, prev.player.bank, item.id, prev.player.hotbarLocked === true);
         newInv = r.inventory; newProjBank = r.bank;
       } else if (kind === 'bomb') {
         const newCharges = (item.charges ?? 1) - 1;
         if (newCharges <= 0) {
-          const r = removeAndRefillBag(prev.player.inventory, prev.player.bank, item.id);
+          const r = removeAndRefillBag(prev.player.inventory, prev.player.bank, item.id, prev.player.hotbarLocked === true);
           newInv = r.inventory; newProjBank = r.bank;
         } else {
           newInv = prev.player.inventory.map(it => it.id === item.id ? { ...it, charges: newCharges } : it);

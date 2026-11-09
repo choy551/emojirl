@@ -15,6 +15,7 @@ import { applyDrinkToPlayer } from './drinks';
 import { isArcaneCaster } from './prestige';
 import { applyStarConsume, pillOverhealHp, starXpGain } from './emojiBalance';
 import { buildingOf, structureSurvey } from './cityBuildings';
+import { recordRunEmojiConsume } from './meta';
 
 export type ShopUseBlockReason =
   | 'Not enough gold'
@@ -78,6 +79,41 @@ export function canBuyAndUse(
     if ((state.player.stats.mana ?? 0) >= maxMana) return { ok: false, reason: 'Already at full MP' };
   }
   return { ok: true };
+}
+
+export interface BankBlueprintSurvey {
+  player: Player;
+  logs: string[];
+  /** Full-city token conversion, when the grid has no empty lot. */
+  notice: string | null;
+  consumed: boolean;
+}
+
+/**
+ * Survey a structure blueprint sitting in the Bank.
+ * Same result as using it from the hotbar: mood, one EmojiCB token, and the blueprint is spent.
+ * A Wizard Spell Echo keeps the blueprint and grants no token.
+ */
+export function surveyBankedBlueprint(
+  player: Player,
+  itemId: string,
+  rng: () => number = Math.random,
+): BankBlueprintSurvey | null {
+  const item = player.bank.find(entry => entry.id === itemId && !entry.consumed && entry.isStructure);
+  if (!item) return null;
+  const plan = buildingOf(item.emoji);
+  if (!plan) return null;
+  const surveyed = structureSurvey(player.stats.moodValue, moodMax(player.characterClass), plan);
+  const echo = player.characterClass === '🧙' && rng() < 0.25;
+  const next: Player = {
+    ...player,
+    stats: { ...player.stats, moodValue: surveyed.moodValue },
+    bank: echo ? player.bank : player.bank.filter(entry => entry.id !== itemId),
+  };
+  const logs = [surveyed.log];
+  if (echo) logs.push(`🧙 Spell Echo! ${item.emoji} resonates — not consumed.`);
+  const grant = echo ? null : recordRunEmojiConsume(item.emoji, 1, item);
+  return { player: next, logs, notice: grant?.notice ?? null, consumed: !echo };
 }
 
 export function applyInstantItemUse(

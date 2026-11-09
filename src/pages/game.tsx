@@ -97,7 +97,7 @@ import { EquipmentTab } from '../components/EquipmentTab';
 import { preferredEquipSlot } from '../components/itemUtils';
 import { RightSidebar } from '../components/RightSidebar';
 import {
-  chebyshev, playerBagPassives, applyEquipmentAndPassives, livingMaxHp, playerSoftCap, addToPlayerBag,
+  chebyshev, playerBagPassives, applyEquipmentAndPassives, livingMaxHp, playerSoftCap, addToPlayerBag, toggleHotbarLock,
   VISION_RADIUS, hasLOS, hasLOSBetween, detectionRadius,
   eagleEyeRange, sortBagSlots, buildHotbarSlots, banishPlayerGhost, manifestPlayerGhost,
   generateShopStock, generateAmmoCacheStock, generateRestaurantStock,
@@ -976,6 +976,18 @@ export default function Game() {
     setGameState(prev => {
       if (!prev || prev.player.characterClass !== '🧞‍♀️') return prev;
       return { ...prev, player: toggleGenieCast(prev.player, which) };
+    });
+  }, []);
+
+  const toggleHotbarLockOption = useCallback(() => {
+    setGameState(prev => {
+      if (!prev || prev.gameOver) return prev;
+      const next = toggleHotbarLock(prev.player);
+      return {
+        ...prev,
+        player: next.player,
+        logs: [{ id: `hotbar-lock-${prev.turn}`, text: next.log, turn: prev.turn }, ...prev.logs].slice(0, 24),
+      };
     });
   }, []);
 
@@ -3116,6 +3128,8 @@ export default function Game() {
             onOpenBag={() => setBankOpen(true)}
             itemInspectProps={itemInspectProps}
             bank={player.bank}
+            hotbarLocked={player.hotbarLocked === true}
+            onToggleHotbarLock={toggleHotbarLockOption}
             autoConsume={player.autoConsumeBank === true}
             onToggleAutoConsume={toggleAutoConsumeOption}
             align={oneHanded ? thumbSide : 'stretch'}
@@ -4526,6 +4540,7 @@ export default function Game() {
         setBagTab={setBagTab}
         setSelectedItemId={setSelectedItemId}
         onShowStatCard={showStatCard}
+        onToggleHotbarLock={toggleHotbarLockOption}
         onToggleAutoConsume={toggleAutoConsumeOption}
       />
       )}

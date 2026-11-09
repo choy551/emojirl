@@ -5,6 +5,7 @@ import { rarityTooltipSuffix } from '../../game/dropTable';
 import { bankExtraCopies, getPassiveTooltipSuffix, hotbarCountBadge } from '../../game/passives';
 import { voidGhostBadge } from '../../game/voidCharge';
 import { AutoConsumeButton } from '../AutoConsumeButton';
+import { HotbarLockButton } from '../HotbarLockButton';
 
 interface MobileBagStripProps {
   bagSlots: (EmojiItem | null)[];
@@ -17,6 +18,8 @@ interface MobileBagStripProps {
   onOpenBag: () => void;
   itemInspectProps: (item: EmojiItem | null) => DOMAttributes<HTMLButtonElement>;
   bank?: EmojiItem[];
+  hotbarLocked?: boolean;
+  onToggleHotbarLock?: () => void;
   autoConsume?: boolean;
   onToggleAutoConsume?: () => void;
   /** Compact 3×3 grid for one-handed thumb reach; default is the full-width strip. */
@@ -27,6 +30,7 @@ interface MobileBagStripProps {
 /** Compact horizontal quick-use hotbar shown on touch devices in place of the sidebar. */
 export function MobileBagStrip({
   bagSlots, healSlots, drinkSlots, activeProjectileKind, onUseSlot, onUseHeal, onUseDrink, onOpenBag, itemInspectProps, bank = [],
+  hotbarLocked = false, onToggleHotbarLock,
   autoConsume = false, onToggleAutoConsume,
   layout = 'bar', align = 'stretch',
 }: MobileBagStripProps) {
@@ -92,6 +96,9 @@ export function MobileBagStrip({
           {drinkSlots[0].emoji}
           {drinkSlots.length > 1 && <span className="absolute bottom-0 right-px text-[7px] text-sky-300 font-bold leading-none">×{drinkSlots.length}</span>}
         </button>
+      )}
+      {onToggleHotbarLock && (
+        <HotbarLockButton locked={hotbarLocked} onToggle={onToggleHotbarLock} size="mobile" />
       )}
       {onToggleAutoConsume && (
         <AutoConsumeButton enabled={autoConsume} onToggle={onToggleAutoConsume} size="mobile" />

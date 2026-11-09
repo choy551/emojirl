@@ -44,7 +44,7 @@ export function SlotShrineModal({ gameState, setGameState, addLog, onClose, onOf
     const { prize, tier, floor } = job;
     setStateRef.current(prev => {
       if (!prev) return prev;
-      const placed = grantSlotPrizeItems(prev.player.inventory, prev.player.bank, prize.items, floor, hotbarCapFor(prev.player));
+      const placed = grantSlotPrizeItems(prev.player.inventory, prev.player.bank, prize.items, floor, hotbarCapFor(prev.player), prev.player.hotbarLocked === true);
       const gain = goldWithLuck(prize.goldGain + placed.gold, playerSoftCap(prev.player).raw.luck);
       return {
         ...prev,

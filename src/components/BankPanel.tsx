@@ -151,7 +151,7 @@ export function BankPanel({
       {/* Selected-item action panel */}
       {selectedItemId && player.bank.some(i => i.id === selectedItemId && !i.isEquipment) && (() => {
         const si = player.bank.find(i => i.id === selectedItemId)!;
-        const canConsume = !si.isEquipment && !si.activeKind && (si.healAmount !== undefined || si.drinkTier !== undefined || (si as any).effect || si.bagPassive);
+        const canConsume = !si.isEquipment && !si.activeKind && (si.isStructure || si.healAmount !== undefined || si.drinkTier !== undefined || (si as any).effect || si.bagPassive);
         const needsHotbar = !si.isEquipment && !!si.activeKind;
         const alreadyActiveNonStack = (si.bagPassive?.nonStackable ?? false) && isNonStackableBagPassiveDuplicate(si, player.inventory);
         const alreadyActiveKind = !!si.activeKind && isActiveKindDuplicate(si, player.inventory);

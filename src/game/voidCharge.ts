@@ -174,7 +174,7 @@ export function consumeVoidBurdenItem(player: Player, item: EmojiItem, floor: nu
   if (!player.inventory.some(i => i.id === item.id)) return keep;
 
   const reclaim = reclaimVoidSlotPressure(player, item);
-  const removed = removeAndRefillBag(reclaim.player.inventory, reclaim.player.bank, item.id);
+  const removed = removeAndRefillBag(reclaim.player.inventory, reclaim.player.bank, item.id, reclaim.player.hotbarLocked === true);
   let next: Player = releaseVoidSlotBurden(
     { ...reclaim.player, inventory: removed.inventory, bank: removed.bank },
     item.id,

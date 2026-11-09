@@ -9,6 +9,7 @@ import { voidGhostBadge } from '../game/voidCharge';
 import { foodHealLabel, foodHealDescription } from '../game/economy';
 import { drinkEffectForClass } from '../game/drinks';
 import { AutoConsumeButton } from './AutoConsumeButton';
+import { HotbarLockButton } from './HotbarLockButton';
 
 const HEAL_DISPLAY_LIMIT = 9;
 
@@ -27,6 +28,7 @@ interface RightSidebarProps {
   setBagTab: (tab: 'hotbar' | 'equipment' | 'bank') => void;
   setSelectedItemId: (id: string | null) => void;
   onShowStatCard: (item: EmojiItem) => void;
+  onToggleHotbarLock: () => void;
   onToggleAutoConsume: () => void;
 }
 
@@ -45,6 +47,7 @@ export function RightSidebar({
   setBagTab,
   setSelectedItemId,
   onShowStatCard,
+  onToggleHotbarLock,
   onToggleAutoConsume,
 }: RightSidebarProps) {
   const p = bagPassiveSummary;
@@ -102,6 +105,7 @@ export function RightSidebar({
         <div className="flex justify-between items-center mb-1.5 gap-1">
           <div className="flex items-center gap-1">
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Bag</h3>
+            <HotbarLockButton locked={player.hotbarLocked === true} onToggle={onToggleHotbarLock} />
             <AutoConsumeButton enabled={player.autoConsumeBank === true} onToggle={onToggleAutoConsume} />
           </div>
           <button

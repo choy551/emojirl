@@ -219,7 +219,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                       if (!prev) return prev;
                       const fromHotbar = prev.player.inventory.some(i => i.id === item.id);
                       const { inventory, bank } = fromHotbar
-                        ? removeAndRefillBag(prev.player.inventory, prev.player.bank, item.id)
+                        ? removeAndRefillBag(prev.player.inventory, prev.player.bank, item.id, prev.player.hotbarLocked === true)
                         : { inventory: prev.player.inventory, bank: prev.player.bank.filter(i => i.id !== item.id) };
                       const equipment: Equipment = { ...prev.player.equipment };
                       (Object.keys(equipment) as EquipSlot[]).forEach(slot => {
@@ -252,7 +252,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                       let bank = prev.player.bank;
                       for (const j of junk) {
                         if (inventory.some(i => i.id === j.id)) {
-                          const r = removeAndRefillBag(inventory, bank, j.id);
+                          const r = removeAndRefillBag(inventory, bank, j.id, prev.player.hotbarLocked === true);
                           inventory = r.inventory;
                           bank = r.bank;
                         } else {

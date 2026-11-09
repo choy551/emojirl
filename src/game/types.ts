@@ -254,6 +254,11 @@ export interface Player {
    */
   genieSafeFireball?: boolean;
   /**
+   * When true, the hotbar stays as it is. New finds go to the Bank.
+   * A deliberate Bank swap still changes the bar.
+   */
+  hotbarLocked?: boolean;
+  /**
    * When true, excess Bank emoji are consumed for their stat effect.
    * Active-use items and stacking copies below the hotbar cap are left alone.
    */
