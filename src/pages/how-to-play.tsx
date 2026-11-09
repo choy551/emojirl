@@ -319,7 +319,7 @@ export default function HowToPlay({
               <div className="flex items-center gap-2 flex-wrap">
                 <Kbd>Space</Kbd>
                 <span className="text-muted-foreground">
-                  — context-sensitive action: automatically performs the most relevant action for your surroundings — attack an adjacent enemy, feed a nearby Bear, trade with a Farmer, recruit an adventurer, cook at a campfire, enter a shop, close a door, pick up an item, or wait. On mobile the context button idles as Auto-Explore instead of wait (tap again to stop). Pause → Options → One-handed mode parks the d-pad, hotbar, actions, and menus on the left or right for thumb reach.
+                  — context-sensitive action: automatically performs the most relevant action for your surroundings — attack an adjacent enemy, feed a nearby Bear, trade with a Farmer, recruit an adventurer, cook at a campfire, enter a shop, close a door, pick up an item, or wait. On mobile the context button shows Attack and takes one autofight step whenever a foe is in sight (the same step as Tab, including the below-50% HP refusal). With no foe in sight it idles as Auto-Explore instead of wait (tap again to stop). Pause → Options → One-handed mode parks the d-pad, hotbar, actions, and menus on the left or right for thumb reach.
                 </span>
               </div>
             </div>

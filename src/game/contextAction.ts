@@ -3,13 +3,14 @@ import { COOKABLE_EMOJIS } from './emojis';
 import { chebyshev } from './geo';
 import { FINALE_FLOOR } from './finaleConstants';
 import { BANQUET_MIN_DISHES, cookedDishCount, nearCampfire } from './foodSinks';
+import { foesInSight } from './autofight';
 
 export type ContextActionKind =
   | 'attack' | 'recruit' | 'fairy' | 'monkey' | 'bear' | 'talk' | 'trade'
   | 'cook' | 'banquet' | 'close-door' | 'rest'
   | 'open-shop' | 'open-cache' | 'open-restaurant' | 'open-slots' | 'open-mirror'
   | 'open-bounty' | 'open-vanity' | 'open-auction' | 'open-hollow'
-  | 'descend' | 'shrine' | 'offer' | 'pickup' | 'wait' | 'explore';
+  | 'descend' | 'shrine' | 'offer' | 'pickup' | 'wait' | 'explore' | 'autofight';
 
 export interface ContextActionDescriptor {
   kind: ContextActionKind;
@@ -138,4 +139,17 @@ export function resolveContextAction(
 
   if (idle === 'explore') return { kind: 'explore', label: 'Explore', icon: '🔭' };
   return { kind: 'wait', label: 'Wait', icon: '⏳' };
+}
+
+/**
+ * Mobile context button. A foe in sight becomes Attack and runs Tab autofight.
+ * Anything else stays the existing use action, including Explore when idle.
+ */
+export function resolveMobileContext(state: GameState, exploring = false): ContextActionDescriptor {
+  if (foesInSight(state.map, state.enemies).length > 0) {
+    return { kind: 'autofight', label: 'Attack', icon: '⚔️' };
+  }
+  const action = resolveContextAction(state, 'explore');
+  if (action.kind === 'explore' && exploring) return { kind: 'explore', label: 'Stop', icon: '⏹' };
+  return action;
 }
