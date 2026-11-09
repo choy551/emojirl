@@ -110,6 +110,7 @@ import {
   classifyStairsFinish, scanGotoDestinations, evaluateBedSleep, autoRestNeedsBountyWait,
 } from '../game/gameHelpers';
 import { useGameActions } from '../hooks/useGameActions';
+import { noteAutoConsume, toggleAutoConsume } from '../game/autoConsume';
 
 
 function DismissScope({
@@ -975,6 +976,19 @@ export default function Game() {
     setGameState(prev => {
       if (!prev || prev.player.characterClass !== '🧞‍♀️') return prev;
       return { ...prev, player: toggleGenieCast(prev.player, which) };
+    });
+  }, []);
+
+  const toggleAutoConsumeOption = useCallback(() => {
+    setGameState(prev => {
+      if (!prev || prev.gameOver) return prev;
+      const next = toggleAutoConsume(prev.player);
+      const withLog = {
+        ...prev,
+        player: next.player,
+        logs: [{ id: `auto-toggle-${prev.turn}`, text: next.log, turn: prev.turn }, ...prev.logs].slice(0, 24),
+      };
+      return next.player.autoConsumeBank ? noteAutoConsume(withLog) : withLog;
     });
   }, []);
 
@@ -3102,6 +3116,8 @@ export default function Game() {
             onOpenBag={() => setBankOpen(true)}
             itemInspectProps={itemInspectProps}
             bank={player.bank}
+            autoConsume={player.autoConsumeBank === true}
+            onToggleAutoConsume={toggleAutoConsumeOption}
             align={oneHanded ? thumbSide : 'stretch'}
           />
         </>
@@ -4510,6 +4526,7 @@ export default function Game() {
         setBagTab={setBagTab}
         setSelectedItemId={setSelectedItemId}
         onShowStatCard={showStatCard}
+        onToggleAutoConsume={toggleAutoConsumeOption}
       />
       )}
 

@@ -949,6 +949,9 @@ export default function HowToPlay({
           </li>
         </ul>
         <p className="text-xs text-muted-foreground mt-3">
+          🫳 Auto-consume sits beside the bag. While it is on, excess Bank emoji are used for their stat effect and the log names each one. It ignores bombs, guns, ropes, boomerangs, freeze rays, food, drinks, ammo, equipment, money bags, and structure blueprints. Lightning stays too, because that consume needs a target. A stacking emoji is used only once the hotbar copy is at its cap; only the Bank copies past that cap are consumed. The switch is saved with the run.
+        </p>
+        <p className="text-xs text-muted-foreground mt-3">
           💀 <strong className="text-foreground">Skull</strong> is non-stackable.
           Bag Death Crit: +25% crit chance at full HP, interpolating up to +50% when
           the foe is at 25% HP or below. Adds to luck/mood crit chance — never a

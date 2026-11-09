@@ -8,6 +8,7 @@ import { activeKindEmoji } from './itemUtils';
 import { voidGhostBadge } from '../game/voidCharge';
 import { foodHealLabel, foodHealDescription } from '../game/economy';
 import { drinkEffectForClass } from '../game/drinks';
+import { AutoConsumeButton } from './AutoConsumeButton';
 
 const HEAL_DISPLAY_LIMIT = 9;
 
@@ -26,6 +27,7 @@ interface RightSidebarProps {
   setBagTab: (tab: 'hotbar' | 'equipment' | 'bank') => void;
   setSelectedItemId: (id: string | null) => void;
   onShowStatCard: (item: EmojiItem) => void;
+  onToggleAutoConsume: () => void;
 }
 
 export function RightSidebar({
@@ -43,6 +45,7 @@ export function RightSidebar({
   setBagTab,
   setSelectedItemId,
   onShowStatCard,
+  onToggleAutoConsume,
 }: RightSidebarProps) {
   const p = bagPassiveSummary;
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -96,8 +99,11 @@ export function RightSidebar({
 
       {/* Bag — 9 hotbar slots */}
       <div>
-        <div className="flex justify-between items-baseline mb-1.5">
-          <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Bag</h3>
+        <div className="flex justify-between items-center mb-1.5 gap-1">
+          <div className="flex items-center gap-1">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Bag</h3>
+            <AutoConsumeButton enabled={player.autoConsumeBank === true} onToggle={onToggleAutoConsume} />
+          </div>
           <button
             onClick={() => { setBankOpen(true); setSelectedItemId(null); }}
             className="text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"

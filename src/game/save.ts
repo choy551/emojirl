@@ -181,6 +181,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     genieBloodcast: rawPlayer.genieBloodcast === false ? false : true,
     genieOverchannel: rawPlayer.genieOverchannel === false ? false : true,
     genieSafeFireball: rawPlayer.genieSafeFireball === true,
+    autoConsumeBank: rawPlayer.autoConsumeBank === true,
   };
 
   // ── GameState ─────────────────────────────────────────────────────────────

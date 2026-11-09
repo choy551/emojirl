@@ -46,6 +46,7 @@ describe('RTFM sections and table of contents', () => {
     }
     expect(manual).toContain('Hollow Market and grace');
     expect(manual).toContain('Blood Auction');
+    expect(manual).toContain('Auto-consume');
     expect(manual).toContain('×3 at 25%');
     expect(manual).toContain('visible hostile still cancels it');
     expect(manual).toContain('from D:28 on, Dungeon Pressure is doubled');

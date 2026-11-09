@@ -253,6 +253,11 @@ export interface Player {
    * Safe fireballs. Missing means off. True refuses a cast whose 3×3 contains the Genie.
    */
   genieSafeFireball?: boolean;
+  /**
+   * When true, excess Bank emoji are consumed for their stat effect.
+   * Active-use items and stacking copies below the hotbar cap are left alone.
+   */
+  autoConsumeBank?: boolean;
 }
 
 export type VanityTrailId = 'glitter' | 'petals' | 'prisms';
