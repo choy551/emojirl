@@ -8,6 +8,7 @@ import { activeKindEmoji } from './itemUtils';
 import { voidGhostBadge } from '../game/voidCharge';
 import { foodHealLabel, foodHealDescription } from '../game/economy';
 import { drinkEffectForClass } from '../game/drinks';
+import { AutoConsumeButton } from './AutoConsumeButton';
 import { HotbarLockButton } from './HotbarLockButton';
 
 const HEAL_DISPLAY_LIMIT = 9;
@@ -28,6 +29,7 @@ interface RightSidebarProps {
   setSelectedItemId: (id: string | null) => void;
   onShowStatCard: (item: EmojiItem) => void;
   onToggleHotbarLock: () => void;
+  onToggleAutoConsume: () => void;
 }
 
 export function RightSidebar({
@@ -46,6 +48,7 @@ export function RightSidebar({
   setSelectedItemId,
   onShowStatCard,
   onToggleHotbarLock,
+  onToggleAutoConsume,
 }: RightSidebarProps) {
   const p = bagPassiveSummary;
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,6 +106,7 @@ export function RightSidebar({
           <div className="flex items-center gap-1">
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Bag</h3>
             <HotbarLockButton locked={player.hotbarLocked === true} onToggle={onToggleHotbarLock} />
+            <AutoConsumeButton enabled={player.autoConsumeBank === true} onToggle={onToggleAutoConsume} />
           </div>
           <button
             onClick={() => { setBankOpen(true); setSelectedItemId(null); }}

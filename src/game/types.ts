@@ -258,6 +258,11 @@ export interface Player {
    * A deliberate Bank swap still changes the bar.
    */
   hotbarLocked?: boolean;
+  /**
+   * When true, excess Bank emoji are consumed for their stat effect.
+   * Active-use items and stacking copies below the hotbar cap are left alone.
+   */
+  autoConsumeBank?: boolean;
 }
 
 export type VanityTrailId = 'glitter' | 'petals' | 'prisms';

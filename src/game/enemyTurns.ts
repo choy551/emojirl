@@ -26,6 +26,7 @@ import { attributeVoidSlotPressure } from './voidSlotBurden';
 import { farmDenizenIntent } from './farmer';
 import { applyBanquetTick, feastAttackBonus, tickFeastBuffs } from './foodSinks';
 import { applyHouseRoundTick } from './goldSinks';
+import { noteAutoConsume } from './autoConsume';
 
 export interface EnemyTurnResult {
   enemies: Enemy[];
@@ -1075,12 +1076,14 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
 
   const afterHazards = withVisibility(tickBossrush(tickVolcanoAndLava(applyHouseRoundTick(applyBanquetTick(applyDrinkBuffTick(next))))));
   const settled = settleBlinkStrikeMarks(afterHazards.player, afterHazards.enemies, state.turn);
-  if (settled.logs.length === 0 && settled.player === afterHazards.player) return afterHazards;
-  return {
-    ...afterHazards,
-    player: settled.player,
-    logs: settled.logs.length
-      ? [...settled.logs.map((text, i) => ({ id: `blink-credit-${state.turn}-${i}`, text, turn: state.turn })), ...afterHazards.logs].slice(0, 24)
-      : afterHazards.logs,
-  };
+  const finished = settled.logs.length === 0 && settled.player === afterHazards.player
+    ? afterHazards
+    : {
+      ...afterHazards,
+      player: settled.player,
+      logs: settled.logs.length
+        ? [...settled.logs.map((text, i) => ({ id: `blink-credit-${state.turn}-${i}`, text, turn: state.turn })), ...afterHazards.logs].slice(0, 24)
+        : afterHazards.logs,
+    };
+  return noteAutoConsume(finished);
 }
