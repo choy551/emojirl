@@ -13,12 +13,15 @@ import {
   structureSurvey,
 } from './cityBuildings';
 import { DROP_TABLE, rarityOfItem } from './dropTable';
+import { DRINK_DROPS } from './drinks';
+import { normalizeEmojiKey } from './discoveries';
 import { getItemSellValue } from './economy';
 import {
   activeDistricts,
   applyDistrictBonus,
   citizenCapacityOf,
   classifyEmoji,
+  DISTRICTS,
   districtStandings,
   emptyCity,
   exchangeForBuilding,
@@ -30,13 +33,16 @@ import { replaceEmojiConsumes, saveCity, setMetaStore, loadMeta, type KeyValueSt
 import { rollStructureFind } from './spawning';
 import type { MapGrid, Tile } from './types';
 import type { Room } from './mapgen';
-import { WIZARD } from './prestigeConstants';
+import { BASE_CLASSES, PRESTIGE_CLASSES, VOID, WIZARD } from './prestigeConstants';
 
 const REQUIRED = [
   '🛖', '🏔️', '🗻', '⛩️', '🏢', '🏤', '🏭', '🏰', '🌉', '⛺',
   '🏠', '🏡', '🏘️', '🏚️', '🏣', '🏥', '🏦', '🏨', '🏪', '🏫', '🏬',
   '🏯', '💒', '🗼', '🗽', '⛪', '🕌', '🛕', '🕍', '⛲', '🏟️', '🏛️',
   '🏗️', '🏕️', '🌋', '🗾', '🎡', '🎢', '🎪', '🗺️',
+  '🌿', '🌱', '🌽', '🌾', '🌲', '🌳', '🪴', '🍃', '🪵', '🦅',
+  '🎩', '👢', '🌵', '🐴', '🍻', '🎭', '📜',
+  '🎰', '✨', '🌑', '🕳️', '👻', '🖤', '🌀',
 ];
 
 function memoryStore(): KeyValueStore {
@@ -188,6 +194,25 @@ describe('EmojiCB buildings', () => {
     expect(rollStructureFind([room], floorMap(), [], () => 0.5)).toBeNull();
     const boss: Room = { x: 0, y: 0, w: 4, h: 3, theme: 'boss' };
     expect(rollStructureFind([boss], floorMap(), [], () => 0)).toBeNull();
+  });
+
+  it('gives every surveyable blueprint a run drop', () => {
+    const classes = new Set([...BASE_CLASSES, ...PRESTIGE_CLASSES, VOID].map(emoji => normalizeEmojiKey(emoji)));
+    const sources = new Set<string>([
+      ...DROP_TABLE.filter(row => row.droppable).map(row => normalizeEmojiKey(row.emoji)),
+      ...DRINK_DROPS.map(row => normalizeEmojiKey(row.emoji)),
+      ...BUILDINGS.map(row => normalizeEmojiKey(row.emoji)),
+    ]);
+    const surveyable = new Set<string>([
+      ...BUILDINGS.map(row => normalizeEmojiKey(row.emoji)),
+      ...DISTRICTS.flatMap(style => style.emoji.map(emoji => normalizeEmojiKey(emoji))),
+    ]);
+    const missing = [...surveyable].filter(emoji => !classes.has(emoji) && !sources.has(emoji));
+    expect(missing).toEqual([]);
+    expect(buildingOf('🌽')?.rarity).toBe('common');
+    expect(buildingOf('🎩')?.rarity).toBe('uncommon');
+    expect(buildingOf('🎰')?.rarity).toBe('rare');
+    expect(buildingOf('🌿')?.rarity).toBe('common');
   });
 
   it('groups structures into the build palette', () => {

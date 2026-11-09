@@ -214,10 +214,10 @@ describe('EmojiCB token math', () => {
       decor.decor[i] = true;
     }
     saveCity(decor);
-    const cosmetic = recordRunEmojiConsume('🌵');
+    const cosmetic = recordRunEmojiConsume('🌴');
     expect(cityGridIsFull(decor)).toBe(true);
     expect(cosmetic.granted).toBe(FULL_GRID_RARITY_TOKENS.common);
-    expect(cosmetic.notice).toBe('🏙️ City is full. 🌵 became 1 token.');
+    expect(cosmetic.notice).toBe('🏙️ City is full. 🌴 became 1 token.');
 
     saveCity(full);
     const batch = recordRunEmojiConsume('🍀', 2, { emoji: '🍀', bagPassive: { bonusLoot: true } });
@@ -393,7 +393,7 @@ describe('EmojiCB districts', () => {
     expect(lines).toHaveLength(5);
     expect(lines.find(entry => entry.id === 'thieves')?.text).toContain('4 placed, weight 4, +1 SPD at run start');
     expect(lines.find(entry => entry.id === 'arcane')?.text).toContain('4 placed, weight 4, +2 max MP for Wizard');
-    expect(lines.find(entry => entry.id === 'void')?.text).toContain('+2 max HP for The Void');
+    expect(lines.find(entry => entry.id === 'void')?.text).toContain('+4 max HP for The Void');
 
     const ninja = applyDistrictBonus(vessel(NINJA, { speed: 3, mana: 4, maxMana: 4 }), city);
     expect(ninja.player.stats.speed).toBe(4);
@@ -412,11 +412,11 @@ describe('EmojiCB districts', () => {
 
     expect(applyDistrictBonus(vessel(COWBOY, { attack: 4 }), city).player.stats.attack).toBe(5);
     expect(applyDistrictBonus(vessel(HITMAN, { attack: 4 }), city).player.stats.attack).toBe(5);
-    expect(applyDistrictBonus(vessel(RANGER, { evasion: 10 }), city).player.stats.evasion).toBe(11);
-    expect(applyDistrictBonus(vessel(ROYAL_GUARD, { evasion: 10 }), city).player.stats.evasion).toBe(11);
+    expect(applyDistrictBonus(vessel(RANGER, { evasion: 10 }), city).player.stats.evasion).toBe(12);
+    expect(applyDistrictBonus(vessel(ROYAL_GUARD, { evasion: 10 }), city).player.stats.evasion).toBe(12);
     const voided = applyDistrictBonus(vessel(VOID, { hp: 6, maxHp: 6 }), city);
-    expect(voided.player.stats.hp).toBe(8);
-    expect(voided.player.stats.maxHp).toBe(8);
+    expect(voided.player.stats.hp).toBe(10);
+    expect(voided.player.stats.maxHp).toBe(10);
 
     const grown = paint([['🧪', 16], ['🗡️', 3], ['🌋', 1], ['🌑', 2]]);
     const sanctum = applyDistrictBonus(vessel(WIZARD, { mana: 4, maxMana: 4 }), grown);
@@ -425,7 +425,7 @@ describe('EmojiCB districts', () => {
     expect(sanctum.log).toContain('weight 16');
     expect(applyDistrictBonus(vessel(NINJA, { speed: 3 }), grown).log).toBeUndefined();
     const hollow = districtStandings(grown).find(row => row.id === 'void');
-    expect(hollow).toMatchObject({ count: 3, weight: 4, amount: 2, label: '+2 max HP' });
+    expect(hollow).toMatchObject({ count: 3, weight: 6, amount: 2, label: '+2 max HP' });
     expect(applyDistrictBonus(vessel(VOID, { hp: 6, maxHp: 6 }), grown).player.stats.maxHp).toBe(8);
 
     const capped = applyDistrictBonus(vessel(NINJA, { speed: 1 }), fill(40, '🗡️'));
@@ -766,7 +766,7 @@ describe('EmojiCB decor', () => {
     expect(isDecorLot(road.city, 0)).toBe(true);
     expect(placedOf(road.city, '🛣️')).toBe(0);
     expect(totalAvailableTokens(consumes, road.city)).toBe(4);
-    expect(supplyPalette(consumes, road.city)).toEqual(['🍎', '🌲']);
+    expect(supplyPalette(consumes, road.city)).toEqual(['🍎']);
 
     let cosmetic = road.city;
     for (let i = 1; i <= 4; i++) cosmetic = placeDecor(cosmetic, i, '🌲').city;
@@ -781,7 +781,7 @@ describe('EmojiCB decor', () => {
     expect(tokenTree.ok).toBe(true);
     expect(placedOf(tokenTree.city, '🌲')).toBe(1);
     expect(isDecorLot(tokenTree.city, 5)).toBe(false);
-    expect(districtStandings(tokenTree.city).find(row => row.id === 'grove')).toMatchObject({ count: 1, weight: 1, amount: 0 });
+    expect(districtStandings(tokenTree.city).find(row => row.id === 'grove')).toMatchObject({ count: 1, weight: 2, amount: 0 });
 
     const fountain = placeDecor(emptyCity(), 1, '⛲');
     expect(citizenCapacityOf(fountain.city)).toBe(0);
@@ -807,8 +807,8 @@ describe('EmojiCB decor', () => {
     for (let i = 0; i < 4; i++) tiles[i] = '🌲';
     const legacy = normalizeCity({ tiles, citizens: [], nextId: 1 });
     expect(legacy.decor.every(flag => flag === false)).toBe(true);
-    expect(districtStandings(legacy).find(row => row.id === 'grove')).toMatchObject({ count: 4, weight: 4, amount: 1 });
-    expect(applyDistrictBonus(vessel(RANGER, { evasion: 10 }), legacy).player.stats.evasion).toBe(11);
+    expect(districtStandings(legacy).find(row => row.id === 'grove')).toMatchObject({ count: 4, weight: 8, amount: 2 });
+    expect(applyDistrictBonus(vessel(RANGER, { evasion: 10 }), legacy).player.stats.evasion).toBe(12);
 
     saveCity(grown.city);
     const loaded = loadMeta().city;
@@ -847,7 +847,7 @@ describe('EmojiCB palette sections', () => {
     expect(knife.hint).toMatch(/locked/i);
     expect(knife.hint).toMatch(/descent/i);
     const sized = thieves.entries.filter(entry => entry.housing === 2).map(entry => entry.name);
-    expect(sized).toEqual(['Bridge', 'Hut', 'Ruin', 'Site']);
+    expect(sized).toEqual(['Bridge', 'Hut', 'Mask', 'Ruin', 'Site']);
     expect(thieves.entries.findIndex(entry => entry.emoji === '🛖')).toBeLessThan(
       thieves.entries.findIndex(entry => entry.emoji === '🗡️'),
     );
