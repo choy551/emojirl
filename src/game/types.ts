@@ -215,6 +215,12 @@ export interface Player {
   emoji: string;
   characterClass: string;
   ammo: number;
+  /** Royal Guard arrow pool. Other classes keep using `ammo`. */
+  arrowAmmo?: number;
+  /** Royal Guard bullet pool. Other classes keep using `ammo`. */
+  bulletAmmo?: number;
+  /** Which weapon fires next when a Royal Guard holds both a bow and a gun. */
+  guardNextShot?: 'bow' | 'gun';
   stats: PlayerStats;
   inventory: EmojiItem[];
   bank: EmojiItem[];

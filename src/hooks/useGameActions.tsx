@@ -28,8 +28,8 @@ import {
 } from '../game/gameHelpers';
 import { lightningArcDamage } from '../game/passives';
 import { butterflyHeal, diamondThorns, heartHeal, igniteFields, mushroomHeal, starXpGain } from '../game/emojiBalance';
-import { guardHasRangedWeapon } from '../game/royalGuard';
-import { legalSpecialAmmo } from '../game/weaponCombo';
+import { afterGuardShot, chooseGuardShot, gainCarriedAmmo, guardHasBow, guardHasGun, guardHasRangedWeapon } from '../game/royalGuard';
+import { legalSpecialAmmo, specialAmmoForShot } from '../game/weaponCombo';
 import { canEquipItem, emptyLegalEquipSlot } from '../components/itemUtils';
 import { creditVoidBoss } from '../game/voidDamage';
 import { applyEntropicTithe } from '../game/voidAbilities';
@@ -242,7 +242,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (enemyIdx === -1) continue;
           if (!hasLOS(prev.map, player.pos, dx, dy, range)) break;
 
-          if (player.ammo <= 0) {
+          const guardShot = isRoyalGuard(cls) ? chooseGuardShot(player) : null;
+          if (isRoyalGuard(cls)) {
+            if (!guardShot) break;
+          } else if ((player.ammo ?? 0) <= 0) {
             break;
           }
 
@@ -255,7 +258,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const _rangerPassives = playerBagPassives(prev.player);
           const combatResult = resolveCombat(effectiveRanger, enemy, addLog, { mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), advantage: _rangerPassives.advantageDice, execBlow: _rangerPassives.execBlow, trueAim: _rangerPassives.trueAim, shieldWall: _rangerPassives.shieldWall, firstShot: (cls === '🧝' || voidRanged) && !enemy.engaged, isRanged: true });
 
-          const pairedAmmo = legalSpecialAmmo(player);
+          const pairedAmmo = isRoyalGuard(cls) && guardShot
+            ? specialAmmoForShot(player, guardShot.shot)
+            : legalSpecialAmmo(player);
           let specialAmmoEffect: Partial<Enemy> = {};
           if (!combatResult.fled && combatResult.enemyHp > 0 && combatResult.enemyHp < enemy.hp) {
             if (pairedAmmo?.kind === 'freeze') {
@@ -307,12 +312,19 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             )
             : { saved: false, reclaimed: false, ammoDelta: -1 };
           if (ammoSpend.saved) addLog(`🪶 Survivalist — ammo saved!`);
-          else if (ammoSpend.reclaimed) addLog(`🏹 Arrow reclaimed!`);
+          else if (ammoSpend.reclaimed) addLog(guardShot?.shot === 'gun' ? '🪙 Round reclaimed!' : '🏹 Arrow reclaimed!');
           let newPlayer: Player = {
             ...player,
-            ammo: player.ammo + ammoSpend.ammoDelta,
             stats: { ...player.stats, hp: combatResult.playerHp },
           };
+          if (isRoyalGuard(cls) && guardShot) {
+            newPlayer = afterGuardShot(newPlayer, guardShot.shot, ammoSpend.ammoDelta);
+            if (guardHasBow(player) && guardHasGun(player)) {
+              addLog(guardShot.shot === 'bow' ? '🏹 Bow shot.' : '🔫 Gun shot.');
+            }
+          } else {
+            newPlayer = { ...newPlayer, ammo: (player.ammo ?? 0) + ammoSpend.ammoDelta };
+          }
 
           let skipFightId: string | undefined;
           let rangerKillCounts = { ...prev.killCounts };
@@ -431,9 +443,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               const item = prev.items[itemIndex];
               const newItems = prev.items.filter((_, i) => i !== itemIndex);
               if (item.ammoAmount) {
-                bumpedPlayer.ammo = (bumpedPlayer.ammo ?? 0) + item.ammoAmount;
-                const _ammoWord = item.emoji === '🪙' ? 'bullets' : 'arrows';
-                addLog(`${item.emoji} +${item.ammoAmount} ${_ammoWord} — ${bumpedPlayer.ammo} total`);
+                const gained = gainCarriedAmmo(bumpedPlayer, item);
+                bumpedPlayer = gained.player;
+                addLog(`${item.emoji} +${item.ammoAmount} ${gained.word} — ${gained.total} total`);
               } else {
                 const { pos: _pos, ...pickedUp } = item;
                 const isUnequippable = pickedUp.isEquipment && !canEquipItem(pickedUp, bumpedPlayer.characterClass);
@@ -884,9 +896,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         newState.items = prev.items.filter((_, i) => i !== itemIndex);
 
         if (item.ammoAmount) {
-          newPlayer.ammo = (newPlayer.ammo ?? 0) + item.ammoAmount;
-          const _ammoWord = item.emoji === '🪙' ? 'bullets' : 'arrows';
-          addLog(`${item.emoji} +${item.ammoAmount} ${_ammoWord} — ${newPlayer.ammo} total`);
+          const gained = gainCarriedAmmo(newPlayer, item);
+          newPlayer = gained.player;
+          addLog(`${item.emoji} +${item.ammoAmount} ${gained.word} — ${gained.total} total`);
         } else {
           const { pos: _pos, ...pickedUp } = item;
           const isUnequippable = pickedUp.isEquipment && !canEquipItem(pickedUp, newPlayer.characterClass);
@@ -923,9 +935,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           for (const mItem of magnetItems) {
             const { pos: _mp, ...pickedUp } = mItem;
             if (pickedUp.ammoAmount) {
-              newPlayer.ammo = (newPlayer.ammo ?? 0) + pickedUp.ammoAmount;
-              const _magnetAmmoWord = pickedUp.emoji === '🪙' ? 'bullets' : 'arrows';
-              addLog(`🧲 ${pickedUp.emoji} +${pickedUp.ammoAmount} ${_magnetAmmoWord} — ${newPlayer.ammo} total`);
+              const gained = gainCarriedAmmo(newPlayer, pickedUp);
+              newPlayer = gained.player;
+              addLog(`🧲 ${pickedUp.emoji} +${pickedUp.ammoAmount} ${gained.word} — ${gained.total} total`);
             } else {
               const isUnequippableMagnet = pickedUp.isEquipment && !canEquipItem(pickedUp, newPlayer.characterClass);
               if (pickedUp.isEquipment) {

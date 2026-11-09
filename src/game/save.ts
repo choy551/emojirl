@@ -3,7 +3,8 @@ import { applyBlinkTalentSaveMigration, knownBlinkTalents } from './blinkStrike'
 import { applySoulCatalogCopy } from './emojis';
 import { normalizeBounty, normalizeVanity } from './goldSinks2';
 import { applyEquipmentRestrictionMigration } from '../components/itemUtils';
-import { migrateEquippedCrown } from './royalGuard';
+import { migrateEquippedCrown, splitPooledGuardAmmo } from './royalGuard';
+import { ROYAL_GUARD } from './prestigeConstants';
 
 export const SAVE_KEY = 'emojirl_save_v1';
 
@@ -20,12 +21,14 @@ export const SAVE_KEY = 'emojirl_save_v1';
  *    Bag, or to the Bank when the Bag is full. Runs after the score flag.
  * 7: An equipped Crown moves into the hotbar as a stackable soul. Soul bag
  *    passives refresh from the catalog in the same step.
+ * 8: Royal Guard ammo splits into an arrow pool and a bullet pool. Half of the
+ *    old shared stack becomes bullets. The odd remainder stays arrows.
  */
-export const SAVE_SCHEMA_VERSION = 7;
+export const SAVE_SCHEMA_VERSION = 8;
 const CURRENT_SCHEMA_VERSION = SAVE_SCHEMA_VERSION;
 
 /** Set of schema versions this build knows how to load (after migration). */
-const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7]);
+const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8]);
 
 /**
  * Runs in-place migrations on the raw parsed JSON object so that
@@ -83,6 +86,19 @@ function migrateScoreInvalid(raw: Record<string, unknown>): void {
   if (raw.scoreInvalid !== true) raw.scoreInvalid = false;
 }
 
+function migrateRoyalGuardAmmo(raw: Record<string, unknown>): void {
+  const player = raw.player;
+  if (!player || typeof player !== 'object') return;
+  const record = player as Record<string, unknown>;
+  if (record.characterClass !== ROYAL_GUARD) return;
+  const pooled = typeof record.ammo === 'number' && Number.isFinite(record.ammo) ? record.ammo : 0;
+  const split = splitPooledGuardAmmo(pooled);
+  record.arrowAmmo = split.arrowAmmo;
+  record.bulletAmmo = split.bulletAmmo;
+  record.ammo = 0;
+  if (record.guardNextShot !== 'bow' && record.guardNextShot !== 'gun') record.guardNextShot = 'bow';
+}
+
 /** Index 0 migrates schema 1 → 2. Later steps append in order. */
 const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
   raw => {
@@ -95,6 +111,7 @@ const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
   migrateScoreInvalid,
   applyEquipmentRestrictionMigration,
   migrateEquippedCrown,
+  migrateRoyalGuardAmmo,
 ];
 
 function migrateRaw(raw: Record<string, unknown>): void {
@@ -161,6 +178,9 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     emoji:           (rawPlayer.emoji            as string)               ?? '🧙',
     characterClass:  (rawPlayer.characterClass   as string)               ?? '🧙',
     ammo:            (rawPlayer.ammo             as number)               ?? 0,
+    arrowAmmo:       typeof rawPlayer.arrowAmmo === 'number' ? rawPlayer.arrowAmmo : undefined,
+    bulletAmmo:      typeof rawPlayer.bulletAmmo === 'number' ? rawPlayer.bulletAmmo : undefined,
+    guardNextShot:   rawPlayer.guardNextShot === 'gun' || rawPlayer.guardNextShot === 'bow' ? rawPlayer.guardNextShot : undefined,
     stats,
     inventory:       ((rawPlayer.inventory as EmojiItem[]) ?? []).map(applySoulCatalogCopy),
     bank:            ((rawPlayer.bank as EmojiItem[]) ?? []).map(applySoulCatalogCopy),

@@ -22,7 +22,7 @@ import { MOODS } from '../game/moods';
 import { cowboyCombatMoodValue, isDrinkStealthActive, playerMood } from '../game/drinks';
 import { getClassDef } from '../game/classes';
 import { classFlies, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, startFloorContract, toggleGenieCast, type GenieCastToggle } from '../game/prestige';
-import { guardHasRangedWeapon, hotbarCrown, initialRangerMode } from '../game/royalGuard';
+import { chooseGuardShot, guardHasRangedWeapon, hotbarCrown, initialRangerMode, splitPooledGuardAmmo } from '../game/royalGuard';
 import { GENIE_BASE_MP } from '../game/prestigeConstants';
 import { saveScore, leaderboardEntryFromRun } from '../game/leaderboard';
 import {
@@ -802,11 +802,15 @@ export default function Game() {
     }));
     const voidLoad = vessel === '👤' ? startingVoidLoadout(0) : null;
 
+    const startingSplit = isRoyalGuard(vessel) ? splitPooledGuardAmmo(cls.startingAmmo) : null;
     let initialPlayer: Player = {
       pos: startPos,
       emoji: vessel,
       characterClass: vessel,
-      ammo: cls.startingAmmo,
+      ammo: startingSplit ? 0 : cls.startingAmmo,
+      arrowAmmo: startingSplit?.arrowAmmo,
+      bulletAmmo: startingSplit?.bulletAmmo,
+      guardNextShot: startingSplit ? 'bow' : undefined,
       stats: {
         hp: cls.baseStats.hp,
         maxHp: cls.baseStats.maxHp,
@@ -2428,7 +2432,8 @@ export default function Game() {
   }
 
   const rangerTargetKeys = new Set<string>();
-  if ((((player.characterClass === '🧝' && rangerMode === 'ranged') || (isRoyalGuard(player.characterClass) && rangerMode === 'ranged' && guardHasRangedWeapon(player))) || (player.characterClass === '👤' && (gameState.voidAttackMode ?? 'melee') === 'ranger')) && player.ammo > 0) {
+  const guardCanShoot = isRoyalGuard(player.characterClass) && chooseGuardShot(player) !== null;
+  if ((((player.characterClass === '🧝' && rangerMode === 'ranged') || (isRoyalGuard(player.characterClass) && rangerMode === 'ranged' && guardHasRangedWeapon(player) && guardCanShoot)) || (player.characterClass === '👤' && (gameState.voidAttackMode ?? 'melee') === 'ranger')) && (isRoyalGuard(player.characterClass) || player.ammo > 0)) {
     const _maxRange = eagleEyeRange(player.stats.level);
     for (const e of gameState.enemies) {
       if (e.isSpectator) continue;
@@ -3260,6 +3265,12 @@ export default function Game() {
             >
               <span className="text-sm leading-none">🏃</span>
               <span className="font-bold tabular-nums">{(player.trailblazerCooldown ?? 0) > 0 ? player.trailblazerCooldown : '✓'}</span>
+            </div>
+          )}
+          {player.characterClass === '💂' && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] shrink-0 bg-amber-950/30 border-amber-700/40 text-amber-300" data-testid="guard-ammo-hud" title="Bow and gun alternate. Arrows and bullets are separate. Special arrows affect bow shots. Special bullets affect gun shots.">
+              <span className="font-bold tabular-nums">🏹{player.arrowAmmo ?? 0}</span>
+              <span className="font-bold tabular-nums">🪙{player.bulletAmmo ?? 0}</span>
             </div>
           )}
           {player.characterClass === '🤠' && player.equipment.mainHand?.weaponKind === 'gun' && player.equipment.offHand?.weaponKind === 'gun' && (
