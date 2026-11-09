@@ -156,6 +156,8 @@ export const DROP_TABLE: DropEntry[] = [
   entry('gear:helmet', '⛑️', 'equipment', 'uncommon'),
   entry('gear:fire-arrows', '🔥', 'equipment', 'uncommon'),
   entry('gear:ice-arrows', '🧊', 'equipment', 'uncommon'),
+  entry('gear:incendiary', '🧨', 'equipment', 'uncommon'),
+  entry('gear:ice-bullets', '❄️', 'equipment', 'uncommon'),
   entry('cooked:baked-apple', '🍏', 'cooked', 'uncommon', false),
   entry('cooked:toast', '🥪', 'cooked', 'uncommon', false),
   entry('cooked:grilled-steak', '🥩', 'cooked', 'uncommon', false),

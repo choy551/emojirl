@@ -29,6 +29,7 @@ import {
 import { lightningArcDamage } from '../game/passives';
 import { butterflyHeal, diamondThorns, heartHeal, igniteFields, mushroomHeal, starXpGain } from '../game/emojiBalance';
 import { guardHasRangedWeapon } from '../game/royalGuard';
+import { legalSpecialAmmo } from '../game/weaponCombo';
 import { canEquipItem, emptyLegalEquipSlot } from '../components/itemUtils';
 import { creditVoidBoss } from '../game/voidDamage';
 import { applyEntropicTithe } from '../game/voidAbilities';
@@ -254,18 +255,22 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const _rangerPassives = playerBagPassives(prev.player);
           const combatResult = resolveCombat(effectiveRanger, enemy, addLog, { mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), advantage: _rangerPassives.advantageDice, execBlow: _rangerPassives.execBlow, trueAim: _rangerPassives.trueAim, shieldWall: _rangerPassives.shieldWall, firstShot: (cls === '🧝' || voidRanged) && !enemy.engaged, isRanged: true });
 
-          const offHandAmmo = player.equipment.offHand?.specialAmmoKind;
+          const pairedAmmo = legalSpecialAmmo(player);
           let specialAmmoEffect: Partial<Enemy> = {};
           if (!combatResult.fled && combatResult.enemyHp > 0 && combatResult.enemyHp < enemy.hp) {
-            if (offHandAmmo === 'freeze') {
+            if (pairedAmmo?.kind === 'freeze') {
               specialAmmoEffect = { slowedTurns: 3, slowSkipNext: false };
-              addLog(`🧊 Ice arrow slows ${enemy.emoji} ${enemy.name}!`);
-            } else if (offHandAmmo === 'fire' || _rangerPassives.burningOnHit) {
-              const burn = igniteFields(player, prev.currentFloor, offHandAmmo === 'fire');
+              addLog(pairedAmmo.carrier === 'bullet'
+                ? `❄️ Ice bullet slows ${enemy.emoji} ${enemy.name}!`
+                : `🧊 Ice arrow slows ${enemy.emoji} ${enemy.name}!`);
+            } else if (pairedAmmo?.kind === 'fire' || _rangerPassives.burningOnHit) {
+              const burn = igniteFields(player, prev.currentFloor, pairedAmmo?.kind === 'fire');
               if (burn) {
                 specialAmmoEffect = burn;
-                addLog(offHandAmmo === 'fire'
-                  ? `🔥 Fire arrow ignites ${enemy.emoji} ${enemy.name}! (${burn.burnDamage}/turn)`
+                addLog(pairedAmmo?.kind === 'fire'
+                  ? (pairedAmmo.carrier === 'bullet'
+                    ? `🧨 Incendiary round ignites ${enemy.emoji} ${enemy.name}! (${burn.burnDamage}/turn)`
+                    : `🔥 Fire arrow ignites ${enemy.emoji} ${enemy.name}! (${burn.burnDamage}/turn)`)
                   : `🔥 ${enemy.emoji} is ignited! (${burn.burnDamage}/turn)`);
               }
             }
