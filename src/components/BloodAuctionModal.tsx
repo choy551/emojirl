@@ -14,13 +14,12 @@ import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand }
 interface BloodAuctionModalProps {
   gameState: GameState;
   setGameState: React.Dispatch<React.SetStateAction<GameState | null>>;
-  addLog: (text: string) => void;
   onClose: () => void;
   /** Fixed lot for tests. The live stall rolls one rare emoji when the sheet opens. */
   lot?: BountyReward;
 }
 
-export function BloodAuctionModal({ gameState, setGameState, addLog, onClose, lot }: BloodAuctionModalProps) {
+export function BloodAuctionModal({ gameState, setGameState, onClose, lot }: BloodAuctionModalProps) {
   const dismiss = useDismissGuard(onClose);
   const hand = useMobileHand();
   const [offered] = useState<BountyReward>(() => lot ?? rollRareReward());
@@ -34,21 +33,18 @@ export function BloodAuctionModal({ gameState, setGameState, addLog, onClose, lo
 
   const bid = () => {
     if (broke || thin) return;
-    let message = '';
     let placed = false;
     setGameState(prev => {
       if (!prev) return prev;
       const result = executeBloodAuction(prev.player, prev.currentFloor, pct, offered);
-      message = result.ok ? (result.log ?? 'Bid placed.') : (result.reason ?? 'The auctioneer refuses.');
-      if (!result.ok || !result.player) return prev;
+      if (!result.ok || !result.player || !result.log) return prev;
       placed = true;
       return {
         ...prev,
         player: result.player,
-        logs: [{ id: `auction-${prev.turn}`, text: message, turn: prev.turn }, ...prev.logs].slice(0, 24),
+        logs: [{ id: `auction-${prev.turn}`, text: result.log, turn: prev.turn }, ...prev.logs].slice(0, 24),
       };
     });
-    if (message) addLog(message);
     if (placed) onClose();
   };
 

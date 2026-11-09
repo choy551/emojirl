@@ -3101,6 +3101,7 @@ export default function Game() {
             onUseDrink={handleUseDrink}
             onOpenBag={() => setBankOpen(true)}
             itemInspectProps={itemInspectProps}
+            bank={player.bank}
             align={oneHanded ? thumbSide : 'stretch'}
           />
         </>
@@ -4154,7 +4155,6 @@ export default function Game() {
         <BloodAuctionModal
           gameState={gameState}
           setGameState={setGameState}
-          addLog={addLog}
           onClose={() => setAuctionOpen(false)}
         />
       )}

@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { EmojiItem, Player } from '../game/types';
-import { hasBagPassive, getPassiveTooltipSuffix, hotbarCountBadge, isStackableBagPassive, getStackableBonusLabel } from '../game/passives';
+import { bankExtraCopies, hasBagPassive, getPassiveTooltipSuffix, hotbarCountBadge, isStackableBagPassive, getStackableBonusLabel } from '../game/passives';
 import { soulHelpText } from '../game/emojis';
 import { bankSelectionAfterTap, isNonStackableBagPassiveDuplicate, isActiveKindDuplicate } from '../game/gameHelpers';
 import { foodHealDescription } from '../game/economy';
@@ -64,10 +64,8 @@ export function BankPanel({
           {Array.from({ length: 9 }, (_, i) => {
             const hItem = bagSlots[i] ?? null;
             const hKind = activeKindEmoji(hItem?.activeKind);
-            const hBankDupes = hItem
-              ? player.bank.filter(b => !b.isEquipment && !b.consumed && b.emoji === hItem.emoji).length
-              : 0;
-            const countBadge = hItem ? hotbarCountBadge(hItem, hBankDupes) : null;
+            const hBankDupes = hItem ? bankExtraCopies(player.bank, hItem.emoji) : 0;
+            const countBadges = hItem ? hotbarCountBadge(hItem, hBankDupes) : [];
             const bankSelected = !!selectedItemId && player.bank.some(b => b.id === selectedItemId && !b.isEquipment);
             return (
               <button
@@ -88,9 +86,9 @@ export function BankPanel({
                 {hItem?.isVoidGhost && (
                   <span data-testid={`ghost-stack-${hItem.emoji}`} className="absolute top-0 right-0.5 text-[7px] text-violet-300 font-bold leading-none">{voidGhostBadge(hItem)}</span>
                 )}
-                {countBadge && (
-                  <span className={`absolute bottom-0 ${countBadge.place === 'stack' ? 'right-0.5' : 'left-0.5'} text-[7px] ${countBadge.className} font-bold leading-none`}>{countBadge.label}</span>
-                )}
+                {countBadges.map(badge => (
+                  <span key={badge.place} className={`absolute bottom-0 ${badge.place === 'stack' ? 'right-0.5' : 'left-0.5'} text-[7px] ${badge.className} font-bold leading-none`}>{badge.label}</span>
+                ))}
                 {hItem && hKind && <span className="absolute bottom-0 right-0.5 text-[7px] leading-none">{hKind}</span>}
                 {hItem && hItem.charges !== undefined && hItem.charges >= 0 && !hItem.isVoidGhost && (
                   <span className="absolute top-0 right-0.5 text-[7px] text-amber-400/80 font-bold leading-none">×{hItem.charges}</span>
@@ -267,12 +265,9 @@ export function BankPanel({
                   {stackLabel && (
                     <span className="absolute top-0.5 right-0.5 text-[7px] text-amber-400/80 font-bold leading-none">{stackLabel}</span>
                   )}
-                  {(() => {
-                    const countBadge = hotbarCountBadge(item);
-                    return countBadge?.place === 'stack' ? (
-                      <span className={`absolute bottom-0.5 right-0.5 text-[8px] ${countBadge.className} font-bold leading-none`}>{countBadge.label}</span>
-                    ) : null;
-                  })()}
+                  {hotbarCountBadge(item).filter(badge => badge.place === 'stack').map(badge => (
+                    <span key={badge.place} className={`absolute bottom-0.5 right-0.5 text-[8px] ${badge.className} font-bold leading-none`}>{badge.label}</span>
+                  ))}
                   {isStackableBagPassive(item) && (() => {
                     const label = getStackableBonusLabel(item);
                     return label ? (

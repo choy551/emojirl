@@ -2,7 +2,7 @@ import type { DOMAttributes } from 'react';
 import { EmojiItem } from '../../game/types';
 import { activeKindEmoji } from '../itemUtils';
 import { rarityTooltipSuffix } from '../../game/dropTable';
-import { getPassiveTooltipSuffix, hotbarCountBadge } from '../../game/passives';
+import { bankExtraCopies, getPassiveTooltipSuffix, hotbarCountBadge } from '../../game/passives';
 import { voidGhostBadge } from '../../game/voidCharge';
 
 interface MobileBagStripProps {
@@ -15,6 +15,7 @@ interface MobileBagStripProps {
   onUseDrink: () => void;
   onOpenBag: () => void;
   itemInspectProps: (item: EmojiItem | null) => DOMAttributes<HTMLButtonElement>;
+  bank?: EmojiItem[];
   /** Compact 3×3 grid for one-handed thumb reach; default is the full-width strip. */
   layout?: 'bar' | 'grid';
   align?: 'left' | 'right' | 'stretch';
@@ -22,7 +23,7 @@ interface MobileBagStripProps {
 
 /** Compact horizontal quick-use hotbar shown on touch devices in place of the sidebar. */
 export function MobileBagStrip({
-  bagSlots, healSlots, drinkSlots, activeProjectileKind, onUseSlot, onUseHeal, onUseDrink, onOpenBag, itemInspectProps,
+  bagSlots, healSlots, drinkSlots, activeProjectileKind, onUseSlot, onUseHeal, onUseDrink, onOpenBag, itemInspectProps, bank = [],
   layout = 'bar', align = 'stretch',
 }: MobileBagStripProps) {
   const slots = (
@@ -54,12 +55,9 @@ export function MobileBagStrip({
               <span data-testid={`ghost-stack-${item.emoji}`} className="absolute top-0 right-px text-[7px] text-violet-300 font-bold leading-none">{voidGhostBadge(item)}</span>
             )}
             {kindEmoji && <span className="absolute bottom-0 right-0 text-[7px] leading-none">{kindEmoji}</span>}
-            {(() => {
-              const countBadge = hotbarCountBadge(item);
-              return countBadge && (
-                <span className={`absolute bottom-0 ${countBadge.place === 'stack' ? 'right-px' : 'left-px'} text-[7px] ${countBadge.className} font-bold leading-none`}>{countBadge.label}</span>
-              );
-            })()}
+            {hotbarCountBadge(item, bankExtraCopies(bank, item.emoji)).map(badge => (
+              <span key={badge.place} className={`absolute bottom-0 ${badge.place === 'stack' ? 'right-px' : 'left-px'} text-[7px] ${badge.className} font-bold leading-none`}>{badge.label}</span>
+            ))}
             {inFlight && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping" />}
           </button>
         );

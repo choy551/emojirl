@@ -33,19 +33,37 @@ export type HotbarCountBadge = {
   className: string;
 };
 
+/** Extra copies of this emoji sitting in the bank, counting stack sizes. */
+export function bankExtraCopies(bank: readonly EmojiItem[], emoji: string): number {
+  let n = 0;
+  for (const item of bank) {
+    if (item.consumed || item.isEquipment || item.emoji !== emoji) continue;
+    n += isStackableBagPassive(item) ? Math.max(1, item.stackCount ?? 1) : 1;
+  }
+  return n;
+}
+
 /**
- * One badge per hotbar soul. Stackable passives always take the green ×N
- * (including ×1) and never the blue bank-extra +N.
+ * Badges for one hotbar soul. Below the stack cap, only the green ×N.
+ * At the cap, extra bank copies also show the blue +N.
  */
-export function hotbarCountBadge(item: EmojiItem, bankCopies = 0): HotbarCountBadge | null {
-  if (item.isVoidGhost || item.isEquipment || item.activeKind) return null;
+export function hotbarCountBadge(item: EmojiItem, bankCopies = 0): HotbarCountBadge[] {
+  if (item.isVoidGhost || item.isEquipment || item.activeKind) return [];
   if (isStackableBagPassive(item)) {
-    return { place: 'stack', label: `×${Math.max(1, item.stackCount ?? 1)}`, className: 'text-emerald-400' };
+    const stacks = Math.max(1, item.stackCount ?? 1);
+    const cap = STACKABLE_BAG_CAPS[item.emoji] ?? 9;
+    const badges: HotbarCountBadge[] = [
+      { place: 'stack', label: `×${stacks}`, className: 'text-emerald-400' },
+    ];
+    if (stacks >= cap && bankCopies > 0) {
+      badges.push({ place: 'bank', label: `+${bankCopies}`, className: 'text-sky-400' });
+    }
+    return badges;
   }
   if (bankCopies > 0) {
-    return { place: 'bank', label: `+${bankCopies}`, className: 'text-sky-400' };
+    return [{ place: 'bank', label: `+${bankCopies}`, className: 'text-sky-400' }];
   }
-  return null;
+  return [];
 }
 
 /** 1st/2nd/3rd melee arc as ATK fractions. stacks 1 → 0.75/0.50/0.25; each extra +0.25. */

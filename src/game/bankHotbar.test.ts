@@ -57,7 +57,10 @@ describe('bank tap into a hotbar slot', () => {
     const left = next.bank.find(i => i.id === 'bank');
     expect(hot?.stackCount).toBe(cap);
     expect(left?.stackCount).toBe(3 - 1);
-    expect(hotbarCountBadge(hot!, 1)?.className).toBe('text-emerald-400');
+    expect(hotbarCountBadge(hot!, left!.stackCount ?? 1).map(b => b.className)).toEqual([
+      'text-emerald-400',
+      'text-sky-400',
+    ]);
     expect(next.inventory.filter(i => i.emoji === '🍀')).toHaveLength(1);
   });
 
