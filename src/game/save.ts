@@ -26,12 +26,13 @@ export const SAVE_KEY = 'emojirl_save_v1';
  * 9: Blink Strike credits become Talent Tokens. Every 44 credits is one token
  *    earned. Owned talents stay, and their tier costs count as spent. Held
  *    tokens clamp at 0 when the owned talents cost more than were earned.
+ * 10: A ready Fencer Riposte becomes one riposte charge.
  */
-export const SAVE_SCHEMA_VERSION = 9;
+export const SAVE_SCHEMA_VERSION = 10;
 const CURRENT_SCHEMA_VERSION = SAVE_SCHEMA_VERSION;
 
 /** Set of schema versions this build knows how to load (after migration). */
-const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
 /**
  * Runs in-place migrations on the raw parsed JSON object so that
@@ -116,6 +117,16 @@ const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
   migrateEquippedCrown,
   migrateRoyalGuardAmmo,
   applyBlinkTokenSaveMigration,
+  raw => {
+    const player = raw.player;
+    if (!player || typeof player !== 'object') return;
+    const stats = (player as { stats?: Record<string, unknown> }).stats;
+    if (!stats) return;
+    const ready = stats.riposteReady === true ? 1 : 0;
+    const charges = typeof stats.riposteCharges === 'number' && Number.isFinite(stats.riposteCharges) ? stats.riposteCharges : 0;
+    stats.riposteCharges = Math.max(0, charges) + ready;
+    delete stats.riposteReady;
+  },
 ];
 
 function migrateRaw(raw: Record<string, unknown>): void {
@@ -169,7 +180,11 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     guardianStanceTurns:           rawStats.guardianStanceTurns           as number | undefined,
     guardianStanceCooldown:        rawStats.guardianStanceCooldown        as number | undefined,
     flourishCount:                 rawStats.flourishCount                 as number | undefined,
-    riposteReady:                  rawStats.riposteReady                  as boolean | undefined,
+    riposteReady:                  undefined,
+    riposteCharges:                typeof rawStats.riposteCharges === 'number' ? rawStats.riposteCharges : (rawStats.riposteReady === true ? 1 : 0),
+    fencerParries:                 typeof rawStats.fencerParries === 'number' ? rawStats.fencerParries : undefined,
+    fencerLastAct:                 rawStats.fencerLastAct === 'backdash' || rawStats.fencerLastAct === 'lunge' ? rawStats.fencerLastAct : undefined,
+    fencerLastActTurn:             typeof rawStats.fencerLastActTurn === 'number' ? rawStats.fencerLastActTurn : undefined,
     contractKills:                 rawStats.contractKills                 as number | undefined,
     contractGoal:                  rawStats.contractGoal                  as number | undefined,
     contractDone:                  rawStats.contractDone                  as boolean | undefined,

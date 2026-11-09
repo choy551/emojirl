@@ -309,7 +309,6 @@ describe('talent token save migration', () => {
     const loaded = loadGame();
     expect(loaded.kind).toBe('ok');
     if (loaded.kind !== 'ok') return;
-    expect(loaded.state.schemaVersion).toBe(9);
     expect(loaded.state.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
     const stats = loaded.state.player.stats;
     expect(stats.blinkStrikeCredits).toBe(100);

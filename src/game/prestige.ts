@@ -183,17 +183,46 @@ export function fencerEvasion(hp: number, maxHp: number, totalEvasion: number, c
   return Math.min(FENCER_EVA_CAP, Math.round(scaled + gear));
 }
 
-export function fencerOutgoingMult(stats: Player['stats']): { mult: number; nextFlourish: number; clearRiposte: boolean } {
+export function riposteChargeCount(stats: Player['stats']): number {
+  return Math.max(0, stats.riposteCharges ?? 0) + (stats.riposteReady ? 1 : 0);
+}
+
+export function fencerOutgoingMult(stats: Player['stats']): { mult: number; nextFlourish: number; riposteCharges: number } {
   let mult = 1;
   let flourish = stats.flourishCount ?? 0;
-  const clearRiposte = !!stats.riposteReady;
-  if (clearRiposte) mult *= FENCER_RIPOSTE_MULT;
+  let charges = riposteChargeCount(stats);
+  if (charges > 0) {
+    mult *= FENCER_RIPOSTE_MULT;
+    charges -= 1;
+  }
   flourish += 1;
   if (flourish >= FENCER_FLOURISH_EVERY) {
     mult *= FENCER_FLOURISH_MULT;
     flourish = 0;
   }
-  return { mult, nextFlourish: flourish, clearRiposte };
+  return { mult, nextFlourish: flourish, riposteCharges: charges };
+}
+
+/** Combo A spends one Riposte and still puts the bonus on every Lunge hit. */
+export function lungeHitMults(stats: Player['stats'], hits: number, combo: boolean): { mults: number[]; flourish: number; riposteCharges: number } {
+  const hadRiposte = riposteChargeCount(stats) > 0;
+  let flourish = stats.flourishCount ?? 0;
+  const mults: number[] = [];
+  for (let i = 0; i < hits; i++) {
+    let mult = 1;
+    if (hadRiposte && (combo || i === 0)) mult *= FENCER_RIPOSTE_MULT;
+    flourish += 1;
+    if (flourish >= FENCER_FLOURISH_EVERY) {
+      mult *= FENCER_FLOURISH_MULT;
+      flourish = 0;
+    }
+    mults.push(mult);
+  }
+  return { mults, flourish, riposteCharges: hadRiposte ? riposteChargeCount(stats) - 1 : 0 };
+}
+
+export function footworkCombo(stats: Player['stats'], turn: number, prev: 'backdash' | 'lunge'): boolean {
+  return stats.fencerLastAct === prev && turn === (stats.fencerLastActTurn ?? -999) + 1;
 }
 
 export interface CastPayment {
@@ -450,9 +479,11 @@ export function planBackdash(player: Player, enemies: Enemy[], map: { type: stri
   const dx = Math.sign(player.pos.x - nearest.pos.x);
   const dy = Math.sign(player.pos.y - nearest.pos.y);
   if (dx === 0 && dy === 0) return null;
-  const dest = { x: player.pos.x + dx, y: player.pos.y + dy };
-  if (!tileOpen(map, dest, enemies, player.pos)) return null;
-  return dest;
+  const step1 = { x: player.pos.x + dx, y: player.pos.y + dy };
+  if (!tileOpen(map, step1, enemies, player.pos)) return null;
+  const step2 = { x: player.pos.x + dx * 2, y: player.pos.y + dy * 2 };
+  if (!tileOpen(map, step2, enemies, player.pos)) return step1;
+  return step2;
 }
 
 export function planLunge(player: Player, enemies: Enemy[], map: { type: string }[][]): { pos: Position; target: Enemy } | null {
