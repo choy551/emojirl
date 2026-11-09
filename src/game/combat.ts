@@ -127,7 +127,7 @@ export function resolveCombat(
   player: Player,
   enemy: Enemy,
   addLog: (msg: string) => void,
-  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean; floor?: number; blinkStrike?: boolean; bonusDamage?: number; damageMult?: number; critBonus?: number; parryChance?: number; incomingMult?: number } = {}
+  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean; floor?: number; blinkStrike?: boolean; bonusDamage?: number; damageMult?: number; critBonus?: number; parryChance?: number; incomingMult?: number; noCounter?: boolean } = {}
 ): CombatResult {
   const cls = player.characterClass;
   const mods = getMoodModifiers(opts.mood ?? 'neutral', player.stats.hp, player.stats.maxHp, opts.cowboyMoodValue);
@@ -306,7 +306,7 @@ export function resolveCombat(
   const defense = (player.stats.defense ?? 0) + royalDefenseBonus(player);
   const incomingScale = (opts.incomingMult ?? 1) * royalIncomingMult(player);
 
-  if (newEnemyHp > 0 && !stunned) {
+  if (!opts.noCounter && newEnemyHp > 0 && !stunned) {
     const fastEnemy = enemy.speed > (player.stats.speed ?? 1);
 
     const tryCrowSteal = () => {

@@ -4,7 +4,7 @@ import { getMood } from '../../game/moods';
 import { isHostileCombatTarget, resolveCombat } from '../../game/combat';
 import type { GameRefs, GameSetters, AddLog } from './types';
 import type { Player } from '../../game/types';
-import { isArcaneCaster, isFencer, isHitman, isRoyalGuard, activateGuardianStance, planBackdash, planLunge, nearestExecuteTarget, fencerOutgoingMult } from '../../game/prestige';
+import { isArcaneCaster, isFencer, isHitman, isRoyalGuard, activateGuardianStance, planBackdash, planLunge, nearestExecuteTarget, footworkCombo, lungeHitMults } from '../../game/prestige';
 import { guardHasRangedWeapon } from '../../game/royalGuard';
 import { applyLungeStrike } from '../../game/lunge';
 import { FENCER_BACKDASH_CD, FENCER_LUNGE_CD, FENCER_LUNGE_MULT } from '../../game/prestigeConstants';
@@ -168,11 +168,33 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
     if (!dest) { addLog('🤺 No room to backdash.'); return; }
     setGameState(prev => {
       if (!prev || prev.gameOver) return prev;
-      const player = { ...prev.player, pos: dest, stats: { ...prev.player.stats, backdashCooldown: FENCER_BACKDASH_CD } };
-      const mid = { ...prev, player, turn: prev.turn + 1 };
+      const combo = footworkCombo(prev.player.stats, prev.turn, 'lunge');
+      const parries = combo ? 2 : 1;
+      const riposteCharges = (prev.player.stats.riposteCharges ?? 0) + (prev.player.stats.riposteReady ? 1 : 0) + parries;
+      const text = combo
+        ? '🤺 Lunge into Backdash — auto-parry 2, Riposte ×2.'
+        : '🤺 Backdash! Auto-parry ready. Riposte ready.';
+      const player = {
+        ...prev.player,
+        pos: dest,
+        stats: {
+          ...prev.player.stats,
+          backdashCooldown: FENCER_BACKDASH_CD,
+          fencerParries: parries,
+          riposteCharges,
+          riposteReady: false,
+          fencerLastAct: 'backdash' as const,
+          fencerLastActTurn: prev.turn,
+        },
+      };
+      const mid = {
+        ...prev,
+        player,
+        logs: [{ id: `backdash-${prev.turn}`, text, turn: prev.turn }, ...prev.logs].slice(0, 24),
+        turn: prev.turn + 1,
+      };
       return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
     });
-    addLog('🤺 Backdash!');
   }, [addLog, gameStateRef, setGameState]);
 
   const handleLunge = useCallback(() => {
@@ -186,13 +208,33 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
     if (!plan) { addLog('🤺 Nobody in lunge range.'); return; }
     setGameState(prev => {
       if (!prev || prev.gameOver) return prev;
-      const swing = fencerOutgoingMult(prev.player.stats);
+      const combo = footworkCombo(prev.player.stats, prev.turn, 'backdash');
+      const swings = lungeHitMults(prev.player.stats, combo ? 2 : 1, combo);
       const banquetFloor = prev.player.banquet && prev.player.banquet.turnsLeft > 0 ? prev.player.banquet.floor : 0;
       const houseFloor = prev.player.houseRound && prev.player.houseRound.turnsLeft > 0 ? prev.player.houseRound.floor : 0;
       const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false, 0, Math.max(banquetFloor, houseFloor));
       const attacker = applyEquipmentAndPassives({ ...prev.player, pos: plan.pos });
-      const result = resolveCombat(attacker, plan.target, addLog, { mood, damageMult: FENCER_LUNGE_MULT * swing.mult, floor: prev.currentFloor });
-      const cooled: Player = { ...prev.player, pos: plan.pos, stats: { ...prev.player.stats, hp: result.playerHp, lungeCooldown: FENCER_LUNGE_CD, flourishCount: swing.nextFlourish, riposteReady: result.parried } };
+      const combatLogs: string[] = [];
+      const note = (text: string) => { combatLogs.push(text); };
+      let result = resolveCombat(attacker, plan.target, note, { mood, damageMult: FENCER_LUNGE_MULT * swings.mults[0], floor: prev.currentFloor });
+      if (combo && !result.enemyDied && result.enemyHp > 0) {
+        const follow = resolveCombat(attacker, { ...plan.target, hp: result.enemyHp }, note, { mood, damageMult: FENCER_LUNGE_MULT * swings.mults[1], floor: prev.currentFloor, noCounter: true });
+        result = { ...result, enemyHp: follow.enemyHp, enemyDied: follow.enemyDied };
+      }
+      const cooled: Player = {
+        ...prev.player,
+        pos: plan.pos,
+        stats: {
+          ...prev.player.stats,
+          hp: result.playerHp,
+          lungeCooldown: FENCER_LUNGE_CD,
+          flourishCount: swings.flourish,
+          riposteCharges: swings.riposteCharges + (result.parried ? 1 : 0),
+          riposteReady: false,
+          fencerLastAct: 'lunge',
+          fencerLastActTurn: prev.turn,
+        },
+      };
       const settled = applyLungeStrike({
         player: cooled,
         enemies: prev.enemies,
@@ -204,6 +246,8 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
         floor: prev.currentFloor,
         difficultyTier: prev.difficultyTier,
       });
+      if (combo) settled.logs.push('🤺 Backdash into Lunge — double attack.');
+      settled.logs.push(...combatLogs);
       const logEntries = [...settled.logs].reverse().map(text => ({ id: Math.random().toString(), text, turn: prev.turn }));
       const mid = {
         ...prev,

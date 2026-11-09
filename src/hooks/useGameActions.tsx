@@ -638,11 +638,12 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           newPlayer = { ...newPlayer, stats: flow.stats };
         }
         if (fencerSwing && (combatResult.enemyDied || combatResult.enemyHp < enemy.hp)) {
-          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, flourishCount: fencerSwing.nextFlourish, riposteReady: false } };
+          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, flourishCount: fencerSwing.nextFlourish, riposteCharges: fencerSwing.riposteCharges, riposteReady: false } };
           if (fencerSwing.nextFlourish === 0 && (player.stats.flourishCount ?? 0) > 0) addLog(`🤺 Blade Flourish!`);
         }
         if (combatResult.parried) {
-          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, riposteReady: true } };
+          const banked = (newPlayer.stats.riposteCharges ?? 0) + 1;
+          newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, riposteCharges: banked, riposteReady: false } };
           addLog(`🤺 Riposte ready.`);
         }
         if (combatResult.goldStolen && combatResult.goldStolen > 0) {

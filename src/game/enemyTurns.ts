@@ -73,6 +73,13 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   const playerVisionRadius = Math.max(1, visionRadiusFor(player.characterClass, player.stats.level) + playerBagPassives(player).losBonus);
   const newEnemies = [...state.enemies];
   let playerHp = player.stats.hp;
+  let fencerParries = player.characterClass === '🤺' ? (player.stats.fencerParries ?? 0) : 0;
+  const turnAside = (enemy: { emoji: string; name: string }): boolean => {
+    if (fencerParries <= 0) return false;
+    fencerParries -= 1;
+    log(`🤺 Auto-parry! ${enemy.emoji} ${enemy.name}'s attack is turned aside.`);
+    return true;
+  };
   let voidSlotBurden = player.voidSlotBurden;
   let playerDied = false;
   let depthBossKills = 0;
@@ -703,7 +710,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
           : enemy.name.toLowerCase().includes('eye')
             ? 'fires a beam'
             : 'shoots an arrow';
-        if (Math.random() * 100 < dodgeChance) {
+        if (turnAside(enemy)) {
+          // one Backdash parry, even if more attacks follow
+        } else if (Math.random() * 100 < dodgeChance) {
           log(`The ${enemy.name} ${rangedVerb} — you dodge!`);
         } else {
           const dmg = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
@@ -718,7 +727,8 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             life: 2,
           });
           if (enemy.berserker && !playerDied) {
-            if (Math.random() * 100 < dodgeChance) {
+            if (turnAside(enemy)) {
+            } else if (Math.random() * 100 < dodgeChance) {
               log(`🔥 The ${enemy.name} ${rangedVerb} again — you dodge!`);
             } else {
               const dmg2 = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
@@ -747,7 +757,8 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
           moodDrain += 1;
           log(`👻 ${enemy.name}'s ethereal touch chills your soul! (mood −1)`);
         }
-        if (Math.random() * 100 < dodgeChance) {
+        if (turnAside(enemy)) {
+        } else if (Math.random() * 100 < dodgeChance) {
           log(`${enemy.emoji} ${enemy.name} attacks — you dodge!`);
         } else {
           const dmg = soften(enemy.crow
@@ -765,7 +776,8 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
           });
           if (!playerDied) stealGoldOnCrowHit(enemy);
           if (enemy.berserker && !playerDied) {
-            if (Math.random() * 100 < dodgeChance) {
+            if (turnAside(enemy)) {
+            } else if (Math.random() * 100 < dodgeChance) {
               log(`🔥 ${enemy.emoji} ${enemy.name} attacks again — you dodge!`);
             } else {
               const dmg2 = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
@@ -797,7 +809,8 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
               moodDrain += 1;
               log(`👻 ${enemy.name}'s ethereal touch chills your soul! (mood −1)`);
             }
-            if (Math.random() * 100 < dodgeChance) {
+            if (turnAside(enemy)) {
+            } else if (Math.random() * 100 < dodgeChance) {
               log(`${enemy.emoji} ${enemy.name} lunges — you dodge!`);
             } else {
               const dmg = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
@@ -812,7 +825,8 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
                 life: 2,
               });
               if (enemy.berserker && !playerDied) {
-                if (Math.random() * 100 < dodgeChance) {
+                if (turnAside(enemy)) {
+                } else if (Math.random() * 100 < dodgeChance) {
                   log(`🔥 ${enemy.emoji} ${enemy.name} attacks again — you dodge!`);
                 } else {
                   const dmg2 = soften(Math.max(1, effectiveAttack - Math.floor((effectivePlayer.stats.defense ?? 0) / 2)));
@@ -965,6 +979,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
       pendingBeam,
       player: {
         ...state.player,
+        stats: { ...state.player.stats, fencerParries: 0 },
         trailblazerCooldown: result.trailblazerCooldown,
         voidSlotBurden: result.voidSlotBurden ?? state.player.voidSlotBurden,
       },
@@ -978,7 +993,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
       player: {
         ...state.player,
         pos: result.kitePos ?? state.player.pos,
-        stats: { ...state.player.stats, hp: result.playerHp, moodValue: newMoodValue, gold: newGold },
+        stats: { ...state.player.stats, hp: result.playerHp, moodValue: newMoodValue, gold: newGold, fencerParries: 0 },
         inventory: newInventory,
         bank: newBank,
         trailblazerCooldown: result.trailblazerCooldown,

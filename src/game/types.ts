@@ -105,7 +105,14 @@ export interface PlayerStats {
   guardianStanceTurns?: number;
   guardianStanceCooldown?: number;
   flourishCount?: number;
+  /** Legacy flag. Schema 10 folds a true value into riposteCharges. */
   riposteReady?: boolean;
+  /** Banked Riposte hits. Each spent melee hit deals extra damage. */
+  riposteCharges?: number;
+  /** Auto-parries left for the enemy phase after Backdash. */
+  fencerParries?: number;
+  fencerLastAct?: 'backdash' | 'lunge';
+  fencerLastActTurn?: number;
   contractKills?: number;
   contractGoal?: number;
   contractDone?: boolean;
