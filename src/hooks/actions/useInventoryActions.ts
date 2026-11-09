@@ -6,7 +6,7 @@ import { isStackableBagPassive } from '../../game/passives';
 import {
   moodMax, levelFromXP, addToPlayerBag, activeKindLabel, sortBagSlots, buildHotbarSlots, computeBagPassives,
   isNonStackableBagPassiveDuplicate, isActiveKindDuplicate, runEnemyTurns, applyEnemyTurns, cookedEatHeal, livingMaxHp,
-  healHp, applySoulHp,
+  healHp, applySoulHp, applyBankToHotbarSlot,
 } from '../../game/gameHelpers';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 import { _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../../game/flashSignals';
@@ -57,22 +57,9 @@ export function useInventoryActions(
             }
           }
         } else if (srcBankIdx !== -1) {
-          const srcItem = bank[srcBankIdx];
-          if (isNonStackableBagPassiveDuplicate(srcItem, inv) || isActiveKindDuplicate(srcItem, inv)) {
-            return prev; // prevent pulling duplicate non-stackable or active into hotbar
-          }
-          if (!dstCell && bagItems.length >= cap) return prev;
-          const [srcItemMoved] = bank.splice(srcBankIdx, 1);
-          if (dstCell && !dstCell.isVoidGhost) {
-            const dstActualIdx = inv.findIndex(i => i.id === dstCell.id);
-            if (dstActualIdx === -1) { bank.push(srcItemMoved); }
-            else {
-              bank.push(inv[dstActualIdx]);
-              inv[dstActualIdx] = srcItemMoved;
-            }
-          } else {
-            inv.push(srcItemMoved);
-          }
+          const next = applyBankToHotbarSlot(prev.player, sourceId, dest);
+          if (next === prev.player) return prev;
+          return { ...prev, player: next };
         }
       } else {
         const dstInvIdx  = inv.findIndex(i => i.id === dest);

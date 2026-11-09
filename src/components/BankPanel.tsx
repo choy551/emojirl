@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { EmojiItem, Player } from '../game/types';
 import { hasBagPassive, getPassiveTooltipSuffix, hotbarCountBadge, isStackableBagPassive, getStackableBonusLabel } from '../game/passives';
 import { soulHelpText } from '../game/emojis';
-import { isNonStackableBagPassiveDuplicate, isActiveKindDuplicate } from '../game/gameHelpers';
+import { bankSelectionAfterTap, isNonStackableBagPassiveDuplicate, isActiveKindDuplicate } from '../game/gameHelpers';
 import { foodHealDescription } from '../game/economy';
 import { drinkEffectForClass } from '../game/drinks';
 import { activeKindEmoji } from './itemUtils';
@@ -68,11 +68,19 @@ export function BankPanel({
               ? player.bank.filter(b => !b.isEquipment && !b.consumed && b.emoji === hItem.emoji).length
               : 0;
             const countBadge = hItem ? hotbarCountBadge(hItem, hBankDupes) : null;
+            const bankSelected = !!selectedItemId && player.bank.some(b => b.id === selectedItemId && !b.isEquipment);
             return (
-              <div
+              <button
+                type="button"
                 key={i}
+                onClick={() => {
+                  if (!bankSelected || !selectedItemId || hItem?.isVoidGhost) return;
+                  onMove(selectedItemId, i);
+                  onSelect(null);
+                }}
                 title={hItem ? `[${i + 1}] ${hItem.name}: ${hItem.description.replace(/ · Bag: [^·]+$/, '')}${getPassiveTooltipSuffix(hItem)}${hBankDupes > 0 ? ` · ${hBankDupes} more in Bank` : ''}${rarityTooltipSuffix(hItem)}` : `Empty slot ${i + 1}`}
                 className={`relative aspect-square rounded flex items-center justify-center text-sm border select-none
+                  ${bankSelected && !hItem?.isVoidGhost ? 'cursor-pointer hover:border-sky-400/70' : ''}
                   ${hItem?.isVoidGhost ? 'opacity-40 border-violet-400/40 bg-violet-950/20' : hItem ? 'border-border/60 bg-black/30' : 'border-border/20 bg-black/10'}`}
               >
                 {hItem ? hItem.emoji : <span className="text-[8px] text-muted-foreground/20">{i + 1}</span>}
@@ -87,7 +95,7 @@ export function BankPanel({
                 {hItem && hItem.charges !== undefined && hItem.charges >= 0 && !hItem.isVoidGhost && (
                   <span className="absolute top-0 right-0.5 text-[7px] text-amber-400/80 font-bold leading-none">×{hItem.charges}</span>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
@@ -232,8 +240,10 @@ export function BankPanel({
                   key={item.id}
                   onClick={() => {
                     if (isSelected) { onSelect(null); }
-                    else if (selectedItemId) { onMove(selectedItemId, item.id); onSelect(null); }
-                    else { onSelect(item.id); }
+                    else if (selectedItemId && player.bank.some(b => b.id === selectedItemId)) {
+                      onMove(selectedItemId, item.id);
+                      onSelect(null);
+                    } else { onSelect(bankSelectionAfterTap(selectedItemId, item.id)); }
                   }}
                   {...itemInspectProps(item)}
                   title={`${item.name}${items.length > 1 ? ` ×${items.length}` : ''}: ${item.healAmount !== undefined ? foodHealDescription(item, chefLessonCount, player.stats.maxHp) : item.description}${passiveComputedSuffix}${isStackableBagPassive(item) ? ' · Stackable — compounding power per copy' : ''}${rarityTooltipSuffix(item)}`}
@@ -275,6 +285,8 @@ export function BankPanel({
           })()}
         </div>
       )}
+
+      <p className="mt-2 text-[10px] text-muted-foreground/70">Tap an emoji, then tap a hotbar slot to swap.</p>
 
       {player.bank.some(i => !i.isEquipment && isStackableBagPassive(i)) && (
         <div className="mt-2">
