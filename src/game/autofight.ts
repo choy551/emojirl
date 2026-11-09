@@ -63,12 +63,17 @@ function occupied(enemies: Enemy[], exceptId?: string): Set<string> {
   return set;
 }
 
-function visibleHostiles(input: AutofightInput): Enemy[] {
-  return input.enemies.filter(e =>
+/** Same foes Tab autofight will chase: living hostiles on a visible tile. */
+export function foesInSight(map: MapGrid, enemies: Enemy[]): Enemy[] {
+  return enemies.filter(e =>
     e.hp > 0
     && isHostileCombatTarget(e)
-    && !!input.map[e.pos.y]?.[e.pos.x]?.visible,
+    && !!map[e.pos.y]?.[e.pos.x]?.visible,
   );
+}
+
+function visibleHostiles(input: AutofightInput): Enemy[] {
+  return foesInSight(input.map, input.enemies);
 }
 
 function nearest(from: Position, foes: Enemy[]): Enemy {

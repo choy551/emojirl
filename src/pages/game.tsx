@@ -3,6 +3,7 @@ import { generateMap } from '../game/mapgen';
 import { Player, Enemy, EmojiItem, GameState, Position, EquipSlot } from '../game/types';
 import { getCowboyUnarmedBonus, getMoodModifiers, isHostileCombatTarget, playerDodgeChance } from '../game/combat';
 import { planAutofight } from '../game/autofight';
+import { resolveContextAction, resolveMobileContext } from '../game/contextAction';
 import { softCapTitles } from '../game/softCap';
 import {
   blinkNoTargetLog,
@@ -58,7 +59,6 @@ import { CloseHintButton } from '../components/CloseHintButton';
 import { useControlSettings } from '../hooks/useControlSettings';
 import { closeTopOverlay, useAndroidBackButton } from '../hooks/useAndroidBackButton';
 import { useTouchGestures } from '../hooks/useTouchGestures';
-import { resolveContextAction } from '../game/contextAction';
 import { ContextActionButton } from '../components/mobile/ContextActionButton';
 import { AbilityButtons } from '../components/mobile/AbilityButtons';
 import { MobileConsumableUseButtons } from '../components/mobile/MobileConsumableUseButtons';
@@ -1560,11 +1560,14 @@ export default function Game() {
         setAutoRest(false);
         setAutoExplore(v => !v);
         break;
+      case 'autofight':
+        doAutofight();
+        break;
       default:
         handleManualWait();
         break;
     }
-  }, [handleCloseDoor, handleCook, handleManualMove, handleManualWait]);
+  }, [handleCloseDoor, handleCook, handleManualMove, handleManualWait, doAutofight]);
 
   // ── auto-rest interval ────────────────────────────────────────────────────
   // Heals faster (shorter tick interval) the more HP the player currently has.
@@ -2356,11 +2359,7 @@ export default function Game() {
   })();
 
   // ── Mobile touch action data (context button / ability buttons / actions menu) ──
-  const mobileContextDescriptor = (() => {
-    const d = resolveContextAction(gameState, 'explore');
-    if (d.kind === 'explore' && autoExplore) return { kind: 'explore' as const, label: 'Stop', icon: '⏹' };
-    return d;
-  })();
+  const mobileContextDescriptor = resolveMobileContext(gameState, autoExplore);
   const mobileAbilities = getClassAbilities({
     player,
     turn: gameState.turn,
@@ -4400,23 +4399,20 @@ export default function Game() {
 
       {/* Virtual D-pad — touch/mobile only */}
       {isMobile && !gameState.gameOver && (() => {
-        const autofightButton = (
-          <button
-            data-testid="mobile-autofight"
-            onPointerDown={e => { e.preventDefault(); e.stopPropagation(); doAutofight(); }}
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-amber-300/40 bg-amber-800/70 text-xs font-bold text-white shadow-2xl select-none touch-none transition-transform duration-75 active:scale-90"
-            aria-label="Autofight"
-            title="Autofight (Tab)"
-          >
-            Tab
-          </button>
-        );
+        const onMobileContext = () => {
+          const state = gameStateRef.current;
+          if (state && resolveMobileContext(state, autoExplore).kind === 'autofight') {
+            doAutofight();
+            return;
+          }
+          doContextAction('explore');
+        };
         const contextRow = controlSettings.showContextButtons ? (
           <div className="flex items-end gap-1.5">
             {ctxSide === 'left' && (
               <ContextActionButton
                 descriptor={mobileContextDescriptor}
-                onAct={() => doContextAction('explore')}
+                onAct={onMobileContext}
                 exploring={autoExplore && mobileContextDescriptor.kind === 'explore'}
               />
             )}
@@ -4439,7 +4435,7 @@ export default function Game() {
             {ctxSide === 'right' && (
               <ContextActionButton
                 descriptor={mobileContextDescriptor}
-                onAct={() => doContextAction('explore')}
+                onAct={onMobileContext}
                 exploring={autoExplore && mobileContextDescriptor.kind === 'explore'}
               />
             )}
@@ -4494,7 +4490,6 @@ export default function Game() {
               }}
             >
               {abilityStack}
-              {autofightButton}
               {contextRow}
               {quickUseStack}
               {closeDoor}
@@ -4525,7 +4520,6 @@ export default function Game() {
               }}
             >
               {abilityStack}
-              {autofightButton}
               {contextRow}
             </div>
           </>
