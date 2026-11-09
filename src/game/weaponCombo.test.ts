@@ -62,8 +62,13 @@ describe('weapon and ammo combos', () => {
     expect(legalEquipSlots(iceBullets, HITMAN)).toEqual(['offHand']);
     expect(legalEquipSlots(rounds, ROYAL_GUARD)).toEqual(['offHand']);
     expect(legalEquipSlots(arrows, ROYAL_GUARD)).toEqual(['offHand']);
-    expect(canEquipItem(rounds, VOID)).toBe(false);
-    expect(canEquipItem(arrows, VOID)).toBe(false);
+    expect(legalEquipSlots(rounds, VOID)).toEqual(['offHand']);
+    expect(legalEquipSlots(arrows, VOID)).toEqual(['offHand']);
+    expect(legalEquipSlots(iceBullets, VOID)).toEqual(['offHand']);
+    expect(emptyLegalEquipSlot(arrows, VOID, { mainHand: gun })).toBeUndefined();
+    expect(emptyLegalEquipSlot(rounds, VOID, { mainHand: gun })).toBe('offHand');
+    expect(emptyLegalEquipSlot(rounds, VOID, { mainHand: bow })).toBeUndefined();
+    expect(emptyLegalEquipSlot(arrows, VOID, { mainHand: bow })).toBe('offHand');
 
     expect(getItemSellValue(arrows)).toBe(GEAR_SELL_VALUE);
     expect(getItemSellValue(iceArrows)).toBe(15);

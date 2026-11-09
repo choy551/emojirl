@@ -170,6 +170,7 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
       { label: 'Hollow Roster', detail: 'Active ghosts: 1 on D:1–4, +1 after each depth boss (D:5/10/15…), cap 9. Extra unlocks live in the Bank. Ghosts do not cause Inverted Burden.' },
       { label: 'Null Momentum', detail: 'Incoming damage is reduced by 1% + 1% per level, hard cap 44% (level 1 is 2%). Rounded down, and a hit still deals at least 1. Shown as DR in Stats. Does not reduce Void pressure.' },
       { label: 'Entropic Tithe', detail: 'An enemy killed by a ghost passive (chain arc, thorns, or burn) drops no loot. That ghost emoji instead gains +1 consume toward its next unlock, as if you had spent it once.' },
+      { label: 'Blood Price', detail: 'Wizard autos cost 1 HP per attack, plus 1 HP for each depth boss beaten (D:5, D:10, and so on). Ranger autos spend carried ammo first — arrows or bullets — then that same HP cost. Below 25% HP, or if paying would be lethal, that attack switches to melee and spends nothing. Arrows, including Fire and Ice Arrows, need a bow. Bullets, including Incendiary Rounds and Ice Bullets, need a gun.' },
     ],
     active: { label: 'Unmake', detail: 'Once per floor (U, or the mobile button): target a tile or enemy in line of sight. An enemy takes Void damage equal to empty hotbar slots × floor. Walls and terrain are deleted. Costs HP equal to the number of filled hotbar slots. Resets when you descend.' },
   },

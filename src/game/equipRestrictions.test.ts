@@ -180,14 +180,15 @@ describe('class weapon locks', () => {
     expect(preferredEquipSlot(bow, ROYAL_GUARD, { mainHand: gun })).toBe('offHand');
   });
 
-  it('lets the void wear usual weapons, not muskets or special arrows', () => {
+  it('lets the void wear usual weapons and paired special ammo, not muskets', () => {
     expect(slotsOf(bow, VOID)).toEqual(['mainHand']);
     expect(slotsOf(gun, VOID)).toEqual(['mainHand', 'offHand']);
     expect(slotsOf(blade, VOID)).toEqual(['mainHand', 'offHand']);
     expect(slotsOf(staff, VOID)).toEqual(['mainHand']);
     expect(slotsOf(parasol, VOID)).toEqual(['mainHand', 'offHand']);
     expect(canEquipItem(musket, VOID)).toBe(false);
-    expect(canEquipItem(arrows, VOID)).toBe(false);
+    expect(slotsOf(arrows, VOID)).toEqual(['offHand']);
+    expect(canEquipItem(arrows, VOID)).toBe(true);
     expect(slotsOf(shield, VOID)).toEqual(['offHand']);
     expect(slotsOf(armor, VOID)).toEqual(['body']);
     expect(slotsOf(ring, VOID)).toEqual(['accessory']);

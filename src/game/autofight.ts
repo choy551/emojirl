@@ -6,6 +6,7 @@ import { chooseGuardShot } from './royalGuard';
 import { bfsStepToward, hasLOS, hasLOSBetween } from './pathfinding';
 import { PLAYER_PASSABLE_TILES } from './tiles';
 import { eagleEyeRange, VISION_RADIUS } from './vision';
+import { voidRangedSpend } from './voidAttackCost';
 
 /** Refuse autofight when current HP is strictly below half of max HP. */
 export const AUTOFIGHT_HP_FRACTION = 0.5;
@@ -14,8 +15,8 @@ export const LOW_HP_LOG = 'Too injured to autofight — below 50% HP.';
 
 export type AutofightAction =
   | { kind: 'idle'; log: string }
-  | { kind: 'move'; dx: number; dy: number }
-  | { kind: 'wait' };
+  | { kind: 'move'; dx: number; dy: number; log?: string }
+  | { kind: 'wait'; log?: string };
 
 const DIRS: [number, number][] = [
   [0, -1], [0, 1], [-1, 0], [1, 0],
@@ -29,6 +30,8 @@ export interface AutofightInput {
   maxHp: number;
   rangerMode?: 'ranged' | 'melee' | 'flee';
   voidAttackMode?: 'melee' | 'ranger' | 'wizard';
+  /** Depth bosses beaten. Void HP prices use this, not the floor number. */
+  voidBossesCleared?: number;
   holdFire?: boolean;
 }
 
@@ -93,6 +96,16 @@ function styleOf(input: AutofightInput): 'melee' | 'ranged' | 'wizard' {
 
 function shotRange(input: AutofightInput): number {
   return gunshotPlan(input.player)?.range ?? eagleEyeRange(input.player.stats.level);
+}
+
+function voidSpend(input: AutofightInput, style: 'wizard' | 'ranger') {
+  return voidRangedSpend({
+    style,
+    hp: input.player.stats.hp,
+    maxHp: input.maxHp,
+    ammo: input.player.ammo ?? 0,
+    bossesCleared: input.voidBossesCleared ?? input.player.voidBossesCleared ?? 0,
+  });
 }
 
 /** Bow or gun in one hand and a blade in the other. */
@@ -172,9 +185,12 @@ export function planAutofight(input: AutofightInput): AutofightAction {
     }
     const guns = gunshotPlan(input.player);
     const ammo = input.player.ammo ?? 0;
+    const voidRanger = input.player.characterClass === '👤';
     const armed = isRoyalGuard(input.player.characterClass)
       ? chooseGuardShot(input.player) !== null
-      : (guns ? ammo >= guns.ammoCost : ammo > 0);
+      : voidRanger
+        ? voidSpend(input, 'ranger').kind !== 'melee'
+        : (guns ? ammo >= guns.ammoCost : ammo > 0);
     const range = shotRange(input);
     if (armed && clearShot(input.map, from, foe.pos, range)) {
       return {
@@ -188,6 +204,15 @@ export function planAutofight(input: AutofightInput): AutofightAction {
       const step = stepToGoal(input.map, from, passableFor(), blocked, (p) => clearShot(input.map, p, foe.pos, range));
       if (step) return asMove(from, step);
     }
+    if (voidRanger) {
+      const spend = voidSpend(input, 'ranger');
+      const step = melee(input, foe);
+      if (spend.kind !== 'melee' || step.kind !== 'move') return step;
+      const lined = clearShot(input.map, from, foe.pos, range)
+        && step.dx === Math.sign(foe.pos.x - from.x)
+        && step.dy === Math.sign(foe.pos.y - from.y);
+      return lined ? step : { ...step, log: spend.log };
+    }
     return melee(input, foe);
   }
 
@@ -195,7 +220,13 @@ export function planAutofight(input: AutofightInput): AutofightAction {
     const dist = chebyshev(from, foe.pos);
     const mana = input.player.stats.mana ?? 0;
     const voidWizard = input.player.characterClass === '👤';
-    const canCast = !input.holdFire && (voidWizard || mana > 0)
+    const pay = voidWizard ? voidSpend(input, 'wizard') : null;
+    if (pay?.kind === 'melee') {
+      const step = melee(input, foe);
+      if (step.kind === 'move' && chebyshev(from, foe.pos) === 1) return { ...step, log: pay.log };
+      return step;
+    }
+    const canCast = !input.holdFire && (voidWizard ? pay?.kind === 'hp' : mana > 0)
       && dist > 1 && dist <= VISION_RADIUS
       && hasLOSBetween(input.map, from, foe.pos);
     if (canCast) {

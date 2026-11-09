@@ -51,6 +51,7 @@ import { DevConsoleBar, DevConsoleButton, DevConsoleConfirm } from '../component
 import { readVoidModeProgress, startingVoidLoadout } from '../game/voidMeta';
 import { VOID_DEATH_TEXT, VOID_UNLOCK_TEXT, nullMomentumPercent } from '../game/voidDamage';
 import { nextVoidAttackMode, resolveUnmake, voidAttackModeLabel, type VoidAttackMode } from '../game/voidAbilities';
+import { voidHpAttackTooltip, voidRangedSpend } from '../game/voidAttackCost';
 import { saveGame, loadGame, clearSave, getRawSave, SAVE_SCHEMA_VERSION } from '../game/save';
 import { isStackableBagPassive } from '../game/passives';
 import { useIsMobile } from '../hooks/use-mobile';
@@ -1418,12 +1419,14 @@ export default function Game() {
       maxHp: livingMaxHp(gs.player),
       rangerMode: rangerModeRef.current,
       voidAttackMode: gs.voidAttackMode ?? voidAttackModeRef.current,
+      voidBossesCleared: gs.voidBossesCleared ?? gs.player.voidBossesCleared ?? 0,
       holdFire: wizardTacticsRef.current.mode === 'holdfire',
     });
     if (plan.kind === 'idle') {
       addLog(plan.log);
       return;
     }
+    if (plan.log) addLog(plan.log);
     setAutoExplore(false);
     setAutoRest(false);
     setTravelTarget(null);
@@ -2439,7 +2442,15 @@ export default function Game() {
 
   const rangerTargetKeys = new Set<string>();
   const guardCanShoot = isRoyalGuard(player.characterClass) && chooseGuardShot(player) !== null;
-  if ((((player.characterClass === '🧝' && rangerMode === 'ranged') || (isRoyalGuard(player.characterClass) && rangerMode === 'ranged' && guardHasRangedWeapon(player) && guardCanShoot)) || (player.characterClass === '👤' && (gameState.voidAttackMode ?? 'melee') === 'ranger')) && (isRoyalGuard(player.characterClass) || player.ammo > 0)) {
+  const voidRangerHud = player.characterClass === '👤' && (gameState.voidAttackMode ?? 'melee') === 'ranger';
+  const voidRangerArmed = voidRangerHud && voidRangedSpend({
+    style: 'ranger',
+    hp: player.stats.hp,
+    maxHp: livingMaxHp(player),
+    ammo: player.ammo ?? 0,
+    bossesCleared: gameState.voidBossesCleared ?? player.voidBossesCleared ?? 0,
+  }).kind !== 'melee';
+  if ((((player.characterClass === '🧝' && rangerMode === 'ranged') || (isRoyalGuard(player.characterClass) && rangerMode === 'ranged' && guardHasRangedWeapon(player) && guardCanShoot)) || voidRangerHud) && (isRoyalGuard(player.characterClass) || player.ammo > 0 || voidRangerArmed)) {
     const _maxRange = eagleEyeRange(player.stats.level);
     for (const e of gameState.enemies) {
       if (e.isSpectator) continue;
@@ -3192,7 +3203,11 @@ export default function Game() {
                 </span>
               )}
               {player.characterClass === '🧝' && (rangerMode === 'ranged' ? '🏹 Ranged' : rangerMode === 'flee' ? '💨 Flee' : '⚔️ Melee')}
-              {player.characterClass === '👤' && voidAttackModeLabel((gameState.voidAttackMode ?? 'melee') as VoidAttackMode)}
+              {player.characterClass === '👤' && (
+                <span title={voidHpAttackTooltip(gameState.voidBossesCleared ?? player.voidBossesCleared ?? 0)}>
+                  {voidAttackModeLabel((gameState.voidAttackMode ?? 'melee') as VoidAttackMode)}
+                </span>
+              )}
               {player.characterClass === '🤠' && (gameState.turn - yeehawTurn >= 45 ? '🤠 YEEHAW!' : `🤠 ${45 - (gameState.turn - yeehawTurn)}t`)}
             </div>
           </div>
@@ -3277,6 +3292,15 @@ export default function Game() {
             <div className="flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] shrink-0 bg-amber-950/30 border-amber-700/40 text-amber-300" data-testid="guard-ammo-hud" title="Bow and gun alternate. Arrows and bullets are separate. Special arrows affect bow shots. Special bullets affect gun shots.">
               <span className="font-bold tabular-nums">🏹{player.arrowAmmo ?? 0}</span>
               <span className="font-bold tabular-nums">🪙{player.bulletAmmo ?? 0}</span>
+            </div>
+          )}
+          {player.characterClass === '👤' && (
+            <div
+              title={voidHpAttackTooltip(gameState.voidBossesCleared ?? player.voidBossesCleared ?? 0)}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] shrink-0 ${(player.ammo ?? 0) > 0 ? 'bg-amber-950/30 border-amber-700/40 text-amber-300' : 'bg-red-950/30 border-red-700/40 text-red-400'}`}
+            >
+              <span className="text-sm leading-none">🎯</span>
+              <span className="font-bold tabular-nums">{(player.ammo ?? 0) > 0 ? player.ammo : '—'}</span>
             </div>
           )}
           {player.characterClass === '🤠' && player.equipment.mainHand?.weaponKind === 'gun' && player.equipment.offHand?.weaponKind === 'gun' && (

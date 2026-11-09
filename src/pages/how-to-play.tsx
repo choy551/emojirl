@@ -379,7 +379,7 @@ export default function HowToPlay({
                 • <strong>Ninja 🥷</strong>: 1 enter Blink target mode / 2–3 stealth modes / 4 toggle auto-stealth<br />
                 • <strong>Ranger 🧝</strong>: 1 ranged / 2 melee / 3 flee (Trailblaze)<br />
                 • <strong>Cowboy 🤠</strong>: 1 yeehaw tactics (special flavor/ability)<br />
-                • <strong>The Void 👤</strong>: <em>t</em> cycles Melee → Ranger autos → Wizard autos (locked styles are skipped, with a progress line such as “Wizard autos: 4/10 magic emoji”). Ranger autos unlock after 10 ranged emoji (bows, arrows, guns, bullets, boomerangs). Wizard autos unlock after 10 magic emoji (potions, crystals, stars, spellbooks, wands). <em>U</em> aims Unmake.<br />
+                • <strong>The Void 👤</strong>: <em>t</em> cycles Melee → Ranger autos → Wizard autos (locked styles are skipped, with a progress line such as “Wizard autos: 4/10 magic emoji”). Ranger autos unlock after 10 ranged emoji (bows, arrows, guns, bullets, boomerangs). Wizard autos unlock after 10 magic emoji (potions, crystals, stars, spellbooks, wands). Wizard autos cost 1 HP per attack, plus 1 HP for each depth boss beaten. Ranger autos spend ammo first, then that same HP cost. Below 25% HP, or if paying would be lethal, both switch to melee. <em>U</em> aims Unmake.<br />
                 • <strong>Genie 🧞‍♀️</strong>: same aim keys as the Wizard; 4 is Blink. 5 toggles Bloodcast and 6 toggles Overchannel (both start on). 7 toggles Safe fireballs (starts off). Fireball replaces the bolt.<br />
                 • <strong>Fencer 🤺</strong>: 1 Backdash (up to 2 tiles, auto-parry 1, Riposte) / 2 Lunge (X lunges). Backdash then Lunge is a double attack. Lunge then Backdash auto-parries 2 and banks 2 Ripostes.<br />
                 • <strong>Levitating Hitman 🕴️</strong>: 1 Execute Contract (X) / 2 stealth<br />
@@ -504,7 +504,7 @@ export default function HowToPlay({
           Null Momentum reduces incoming damage by 1% + 1% per level (hard cap 44%) and shows up as DR in Stats.
           A kill from a ghost's arc, thorns, or burn drops nothing and instead counts as one consume of that emoji.
           Press <em>t</em> to cycle Melee, Ranger autos, and Wizard autos — the ranged styles start locked until you consume 10 matching emoji.
-          Ranger autos are the Ranger’s directional shot and spend ammo. Wizard autos use the Wizard’s nearest / furthest / manual targeting and do not spend mana.
+          Ranger autos are the Ranger’s directional shot. They spend carried ammo first (arrows or bullets you pick up), then HP: 1, plus 1 for each depth boss beaten (D:5, D:10, and so on — bosses beaten, not the floor number). Wizard autos use the Wizard’s nearest / furthest / manual targeting, spend no mana, and cost that same HP per attack. Below 25% HP, or if the payment would kill you, both switch to melee and pay nothing. Tab and the mobile Attack button follow the same cost. Arrows, including Fire and Ice Arrows, need a bow. Bullets, including Incendiary Rounds and Ice Bullets, need a gun.
           Press <em>U</em> for Unmake, once per floor.
         </p>
         <div className="mb-3 bg-card/50 border border-border/50 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">

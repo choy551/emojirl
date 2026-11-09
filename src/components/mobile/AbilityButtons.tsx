@@ -26,7 +26,7 @@ export function AbilityButtons({ abilities, align }: AbilityButtonsProps) {
                 ? 'bg-violet-700/55 border-violet-300/40 text-white'
                 : 'bg-indigo-800/50 border-indigo-300/35 text-white',
           ].join(' ')}
-          title={`${a.label}${a.detail ? ` — ${a.detail}` : ''}`}
+          title={a.title ?? `${a.label}${a.detail ? ` — ${a.detail}` : ''}`}
           aria-label={a.label}
         >
           <span style={{ fontSize: '1rem', lineHeight: 1 }}>{a.icon}</span>
