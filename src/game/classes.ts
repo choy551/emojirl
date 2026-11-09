@@ -76,7 +76,7 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
     ],
     active: {
       label: 'Blink Strike',
-      detail: `Teleport to the nearest visible enemy within 6 tiles and strike for ${blinkStrikeMultiplierPercent(critStat(2))}% damage at base CRIT ${critStat(2)} (soft cap ${CRIT_STAT_SOFT_CAP}). ${blinkStrikeRulesBlurb()} Cooldown: 8 turns. Each melee kill reduces cooldown by 1; instakills reduce it by 2. Talents unlock every ${BLINK_TALENT_CREDITS_PER_TIER} Blink credits.`,
+      detail: `Teleport to the nearest visible enemy within 6 tiles and strike for ${blinkStrikeMultiplierPercent(critStat(2))}% damage at base CRIT ${critStat(2)} (soft cap ${CRIT_STAT_SOFT_CAP}). ${blinkStrikeRulesBlurb()} Cooldown: 8 turns. Each melee kill reduces cooldown by 1; instakills reduce it by 2. Every ${BLINK_TALENT_CREDITS_PER_TIER} Blink credits earns 1 Talent Token. Tier N costs N tokens and is visible once N tokens are earned.`,
     },
   },
   '🧝': {

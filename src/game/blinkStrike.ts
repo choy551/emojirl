@@ -19,7 +19,9 @@ import type { BlinkStrikeMark, BlinkTalentId, Player, PlayerStats } from './type
  *   instakill (full-HP target slain by the Blink) = 2
  *   any other Blink (fizzle or a non-instakill hit) = 1 if that target dies
  *   while 0 ≤ deathTurn − blinkTurn ≤ BLINK_TALENT_DELAYED_KILL_TURNS
- * Every BLINK_TALENT_CREDITS_PER_TIER credits opens one permanent pick.
+ * Every BLINK_TALENT_CREDITS_PER_TIER credits earns one Talent Token.
+ * A Tier N talent costs N tokens. Tier N is visible once N tokens have been earned.
+ * Buying spends tokens still held. From 5 earned, the other branch of a tier can be bought too.
  */
 
 /** HUD / combat CRIT display cap. Effective CRIT for Blink scaling never exceeds this. */
@@ -54,8 +56,8 @@ export const BLINK_TALENT_DAMAGE_BONUS_PERCENT = 100;
 export const BLINK_OVERKILL_COOLDOWN = BLINK_BASE_COOLDOWN;
 /** Blink Strike targeting radius, in Chebyshev tiles. */
 export const BLINK_RANGE = 6;
-/** First N offers are locked to that tier. Later offers are any skipped talent. */
-export const BLINK_TALENT_LOCKED_TIERS = 4;
+/** Once this many tokens have been earned, the other branch of an earlier tier can be bought. */
+export const BLINK_SECOND_BRANCH_TOKENS = 5;
 
 export type { BlinkTalentId, BlinkStrikeMark };
 
@@ -448,41 +450,51 @@ export function applyFlowingStrike(stats: Player['stats']): { stats: Player['sta
   return { stats: next, log };
 }
 
-export function tierLabelForOffer(offerIndex: number): string {
-  if (offerIndex <= 0) return 'T1';
-  if (offerIndex === 1) return 'T2';
-  if (offerIndex === 2) return 'T3';
-  if (offerIndex === 3) return 'T4';
-  return 'T5+';
-}
-
-export function blinkTalentOffersEarned(credits: number): number {
+export function blinkTokensEarned(credits: number): number {
   if (credits <= 0) return 0;
-  return Math.min(BLINK_TALENTS.length, Math.floor(credits / BLINK_TALENT_CREDITS_PER_TIER));
+  return Math.floor(credits / BLINK_TALENT_CREDITS_PER_TIER);
 }
 
-/** Choices for the next unpicked offer. T1–T4 are tier-locked; later offers are any leftover talent. */
-export function blinkTalentChoices(picked: readonly string[] | undefined): BlinkTalentDef[] {
-  const owned = ownedList(picked);
-  if (owned.length >= BLINK_TALENTS.length) return [];
-  if (owned.length < BLINK_TALENT_LOCKED_TIERS) {
-    const tier = (owned.length + 1) as 1 | 2 | 3 | 4;
-    const locked = BLINK_TALENTS.filter(t => t.tier === tier && !owned.includes(t.id));
-    if (locked.length > 0) return locked;
-  }
-  return BLINK_TALENTS.filter(t => !owned.includes(t.id));
+/** @deprecated Name from the offer system. Tokens earned are not capped at eight. */
+export function blinkTalentOffersEarned(credits: number): number {
+  return blinkTokensEarned(credits);
 }
 
-export function pendingBlinkTalentOffer(
+export function blinkTokensSpent(picked: readonly string[] | null | undefined): number {
+  return ownedList(picked).reduce((sum, id) => sum + blinkTalentById(id).tier, 0);
+}
+
+/** Tokens still available. Never negative, even if owned talents cost more than earned. */
+export function blinkTokensHeld(credits: number, picked: readonly string[] | null | undefined): number {
+  return Math.max(0, blinkTokensEarned(credits) - blinkTokensSpent(picked));
+}
+
+export type BlinkTalentAvailability = 'owned' | 'buy' | 'short' | 'branch-locked' | 'tier-locked';
+
+export function blinkTalentAvailability(
   credits: number,
-  picked: readonly string[] | undefined,
-): { tierLabel: string; choices: BlinkTalentDef[] } | null {
+  picked: readonly string[] | null | undefined,
+  talent: BlinkTalentDef,
+): BlinkTalentAvailability {
   const owned = ownedList(picked);
-  const earned = blinkTalentOffersEarned(credits);
-  if (owned.length >= earned || owned.length >= BLINK_TALENTS.length) return null;
-  const choices = blinkTalentChoices(owned);
-  if (choices.length === 0) return null;
-  return { tierLabel: tierLabelForOffer(owned.length), choices };
+  if (owned.includes(talent.id)) return 'owned';
+  const earned = blinkTokensEarned(credits);
+  if (earned < talent.tier) return 'tier-locked';
+  const siblingOwned = BLINK_TALENTS.some(other => other.tier === talent.tier && other.id !== talent.id && owned.includes(other.id));
+  if (siblingOwned && earned < BLINK_SECOND_BRANCH_TOKENS) return 'branch-locked';
+  if (blinkTokensHeld(credits, picked) < talent.tier) return 'short';
+  return 'buy';
+}
+
+export function blinkTalentsBuyable(credits: number, picked: readonly string[] | null | undefined): BlinkTalentDef[] {
+  return BLINK_TALENTS.filter(talent => blinkTalentAvailability(credits, picked, talent) === 'buy');
+}
+
+export function buyBlinkTalent(stats: PlayerStats, id: BlinkTalentId): PlayerStats | null {
+  const talent = TALENT_BY_ID.get(id);
+  if (!talent) return null;
+  if (blinkTalentAvailability(stats.blinkStrikeCredits ?? 0, stats.blinkTalents, talent) !== 'buy') return null;
+  return { ...stats, blinkTalents: [...ownedList(stats.blinkTalents), id] };
 }
 
 /** New Tier 3 pair offered once to a migrated Ninja. Null when the flag is off or both are owned. */
@@ -514,9 +526,7 @@ export function blinkTalentPrompt(opts: {
   if (opts.characterClass !== '🥷') return null;
   const respec = blinkT3RespecOffer(opts.respecPending, opts.talents);
   if (respec) return { kind: 'respec', tierLabel: respec.tierLabel, choices: respec.choices, note: respec.note };
-  const offer = pendingBlinkTalentOffer(opts.credits, opts.talents ?? undefined);
-  if (!offer) return null;
-  return { kind: 'offer', tierLabel: offer.tierLabel, choices: offer.choices };
+  return null;
 }
 
 /**
@@ -531,7 +541,7 @@ export function grantBlinkT3Respec(stats: PlayerStats, id: BlinkTalentId): Playe
   return {
     ...stats,
     blinkTalents: [...owned, id],
-    blinkStrikeCredits: (stats.blinkStrikeCredits ?? 0) + BLINK_TALENT_CREDITS_PER_TIER,
+    blinkStrikeCredits: (stats.blinkStrikeCredits ?? 0) + 3 * BLINK_TALENT_CREDITS_PER_TIER,
   };
 }
 
@@ -559,7 +569,8 @@ export function blinkTalentProgress(
   const needed = BLINK_TALENT_CREDITS_PER_TIER;
   const safeCredits = Math.max(0, credits);
   const owned = ownedList(picked);
-  const earned = blinkTalentOffersEarned(safeCredits);
+  const earned = blinkTokensEarned(safeCredits);
+  const held = blinkTokensHeld(safeCredits, picked);
   if (owned.length >= BLINK_TALENTS.length) {
     return {
       current: needed,
@@ -570,26 +581,28 @@ export function blinkTalentProgress(
       complete: true,
       hudLabel: '⚡ Blink talents complete',
       statsLabel: 'Blink talents: complete',
-      nextLabel: 'All talents taken',
+      nextLabel: 'All eight talents taken',
       compactLabel: '⚡ done',
     };
   }
-  const pending = earned > owned.length;
-  const nextTier = tierLabelForOffer(pending ? owned.length : earned);
-  const current = pending ? needed : safeCredits % needed;
+  const current = safeCredits % needed;
   const ratio = `${current}/${needed}`;
-  const nextLabel = pending ? `Choose ${nextTier}` : `Next: ${nextTier}`;
+  const buyable = blinkTalentsBuyable(safeCredits, picked);
+  const nextTier = earned + 1 <= 4 ? `T${earned + 1}` : null;
+  const nextLabel = buyable.length > 0
+    ? `${held} held · ${earned} earned`
+    : `Next token ${ratio}`;
   return {
     current,
     needed,
     ratio,
     nextTier,
-    readyToPick: pending,
+    readyToPick: buyable.length > 0,
     complete: false,
-    hudLabel: `⚡ Blink talents ${ratio}`,
-    statsLabel: `Blink talents: ${ratio}`,
+    hudLabel: `⚡ ${held} held · ${earned} earned · ${ratio}`,
+    statsLabel: `Blink tokens: ${held} held, ${earned} earned, ${ratio} to next`,
     nextLabel,
-    compactLabel: `⚡${ratio}`,
+    compactLabel: `⚡${held}h/${earned}e`,
   };
 }
 
@@ -597,11 +610,11 @@ export function creditLogLines(prevCredits: number, gained: number, picked: read
   if (gained <= 0) return [];
   const next = prevCredits + gained;
   const progress = blinkTalentProgress(next, picked);
-  const lines = [`🥷 Blink talent +${gained} (${progress.ratio}).`];
-  const prevOffers = blinkTalentOffersEarned(prevCredits);
-  const nextOffers = blinkTalentOffersEarned(next);
-  if (nextOffers > prevOffers && (picked ?? []).length < nextOffers) {
-    lines.push(`🥷 Blink talent ready — choose ${tierLabelForOffer((picked ?? []).length)}.`);
+  const lines = [`🥷 Blink credit +${gained} (${progress.ratio} to the next token).`];
+  const prevEarned = blinkTokensEarned(prevCredits);
+  const nextEarned = blinkTokensEarned(next);
+  if (nextEarned > prevEarned) {
+    lines.push(`🥷 Talent token. ${progress.hudLabel}.`);
   }
   return lines;
 }
@@ -684,6 +697,22 @@ export function settleBlinkStrikeMarks(
     },
     logs,
   };
+}
+
+/** Schema 9. Credits stay, so the remainder is still progress. Talents are not removed. */
+export function applyBlinkTokenSaveMigration(raw: Record<string, unknown>): void {
+  const player = raw.player;
+  if (!player || typeof player !== 'object') return;
+  const record = player as Record<string, unknown>;
+  if (record.characterClass !== '🥷') return;
+  const stats = record.stats && typeof record.stats === 'object'
+    ? record.stats as Record<string, unknown>
+    : null;
+  if (!stats) return;
+  const credits = typeof stats.blinkStrikeCredits === 'number' && Number.isFinite(stats.blinkStrikeCredits)
+    ? Math.max(0, Math.floor(stats.blinkStrikeCredits))
+    : 0;
+  stats.blinkStrikeCredits = credits;
 }
 
 export function blinkStrikeRulesBlurb(luck?: number, talents?: readonly BlinkTalentId[]): string {

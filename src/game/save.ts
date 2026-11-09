@@ -1,5 +1,5 @@
 import { GameState, Player, PlayerStats, EmojiItem, Equipment } from './types';
-import { applyBlinkTalentSaveMigration, knownBlinkTalents } from './blinkStrike';
+import { applyBlinkTalentSaveMigration, applyBlinkTokenSaveMigration, knownBlinkTalents } from './blinkStrike';
 import { applySoulCatalogCopy } from './emojis';
 import { normalizeBounty, normalizeVanity } from './goldSinks2';
 import { applyEquipmentRestrictionMigration } from '../components/itemUtils';
@@ -23,12 +23,15 @@ export const SAVE_KEY = 'emojirl_save_v1';
  *    passives refresh from the catalog in the same step.
  * 8: Royal Guard ammo splits into an arrow pool and a bullet pool. Half of the
  *    old shared stack becomes bullets. The odd remainder stays arrows.
+ * 9: Blink Strike credits become Talent Tokens. Every 44 credits is one token
+ *    earned. Owned talents stay, and their tier costs count as spent. Held
+ *    tokens clamp at 0 when the owned talents cost more than were earned.
  */
-export const SAVE_SCHEMA_VERSION = 8;
+export const SAVE_SCHEMA_VERSION = 9;
 const CURRENT_SCHEMA_VERSION = SAVE_SCHEMA_VERSION;
 
 /** Set of schema versions this build knows how to load (after migration). */
-const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8]);
+const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
 /**
  * Runs in-place migrations on the raw parsed JSON object so that
@@ -112,6 +115,7 @@ const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
   applyEquipmentRestrictionMigration,
   migrateEquippedCrown,
   migrateRoyalGuardAmmo,
+  applyBlinkTokenSaveMigration,
 ];
 
 function migrateRaw(raw: Record<string, unknown>): void {

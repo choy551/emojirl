@@ -5,14 +5,17 @@ import { BlinkTalentModal } from '../components/BlinkTalentModal';
 import {
   BLINK_T3_RESPEC_NOTE,
   BLINK_TALENT_CREDITS_PER_TIER,
+  BLINK_TALENTS,
   LONGER_CHAIN_MIGRATION_LOG,
   blinkT3RespecOffer,
+  blinkTalentAvailability,
   blinkTalentOffersEarned,
   blinkTalentPrompt,
+  blinkTokensHeld,
+  blinkTokensSpent,
   grantBlinkT3Respec,
   legacyBlinkRunNeedsT3Respec,
   migrateLegacyBlinkTalents,
-  pendingBlinkTalentOffer,
 } from './blinkStrike';
 import { SAVE_KEY, SAVE_SCHEMA_VERSION, loadGame, saveGame } from './save';
 
@@ -236,36 +239,35 @@ describe('one-time Tier 3 respec', () => {
       'overkill',
     );
     expect(picked?.blinkTalents).toEqual([...owned, 'overkill']);
-    expect(picked?.blinkStrikeCredits).toBe(176 + BLINK_TALENT_CREDITS_PER_TIER);
-    expect(blinkTalentOffersEarned(picked!.blinkStrikeCredits!) - picked!.blinkTalents!.length).toBe(pendingBefore);
+    expect(picked?.blinkStrikeCredits).toBe(176 + 3 * BLINK_TALENT_CREDITS_PER_TIER);
+    expect(blinkTokensHeld(picked!.blinkStrikeCredits!, picked!.blinkTalents)).toBe(blinkTokensHeld(176, [...owned]));
     const followUp = blinkTalentPrompt({
       characterClass: '🥷',
       credits: picked!.blinkStrikeCredits!,
       talents: picked!.blinkTalents,
       respecPending: false,
     });
-    expect(followUp?.kind).toBe('offer');
-    expect(followUp?.tierLabel).toBe('T5+');
+    expect(followUp).toBeNull();
 
     const quiet = grantBlinkT3Respec(
       { blinkTalents: [...owned], blinkStrikeCredits: 150 } as PlayerStats,
       'blink-truestrike',
     );
-    expect(quiet?.blinkStrikeCredits).toBe(194);
-    expect(194 % BLINK_TALENT_CREDITS_PER_TIER).toBe(150 % BLINK_TALENT_CREDITS_PER_TIER);
-    expect(pendingBlinkTalentOffer(quiet!.blinkStrikeCredits!, quiet!.blinkTalents)).toBeNull();
-    expect(blinkTalentOffersEarned(150) - owned.length).toBe(0);
+    expect(quiet?.blinkStrikeCredits).toBe(150 + 3 * BLINK_TALENT_CREDITS_PER_TIER);
+    expect(blinkTalentAvailability(quiet!.blinkStrikeCredits!, quiet!.blinkTalents, BLINK_TALENTS.find(t => t.id === 'overkill')!)).not.toBe('buy');
 
     expect(grantBlinkT3Respec({ blinkTalents: [...owned] } as PlayerStats, 'twin-strike')).toBeNull();
   });
 
-  it('renders the one-time note above the permanent-pick line', () => {
+  it('renders the one-time note above the token shop', () => {
     const html = renderToStaticMarkup(
       <BlinkTalentModal
-        tierLabel="T3"
-        choices={blinkT3RespecOffer(true, [...owned])!.choices}
+        earned={4}
+        held={1}
+        progressLabel="0/44"
+        rows={blinkT3RespecOffer(true, [...owned])!.choices.map(talent => ({ talent, state: 'buy' as const }))}
         note={BLINK_T3_RESPEC_NOTE}
-        onPick={() => {}}
+        onBuy={() => {}}
       />,
     );
     expect(html).toContain('data-testid="blink-t3-respec-note"');
@@ -273,6 +275,47 @@ describe('one-time Tier 3 respec', () => {
     expect(html).toContain('This prompt is shown once');
     expect(html).toContain('data-testid="blink-talent-overkill"');
     expect(html).toContain('data-testid="blink-talent-blink-truestrike"');
-    expect(html.indexOf('blink-t3-respec-note')).toBeLessThan(html.indexOf('permanent for this run'));
+    expect(html).toContain('1 held · 4 earned');
+  });
+});
+
+describe('talent token save migration', () => {
+  it('keeps owned talents and clamps held to 0 when they cost more than earned', () => {
+    const store = new Map<string, string>();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => { store.set(key, value); },
+        removeItem: (key: string) => { store.delete(key); },
+        clear: () => { store.clear(); },
+      },
+    });
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      schemaVersion: 8,
+      map: [[{ type: 'floor', emoji: '⬜', seen: true, visible: true }]],
+      player: {
+        characterClass: '🥷',
+        ammo: 0,
+        stats: {
+          blinkStrikeCredits: 100,
+          blinkTalents: ['shorter-cd', 'heavier-blink', 'twin-strike'],
+        },
+        inventory: [],
+        bank: [],
+        equipment: {},
+      },
+    }));
+    const loaded = loadGame();
+    expect(loaded.kind).toBe('ok');
+    if (loaded.kind !== 'ok') return;
+    expect(loaded.state.schemaVersion).toBe(9);
+    expect(loaded.state.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
+    const stats = loaded.state.player.stats;
+    expect(stats.blinkStrikeCredits).toBe(100);
+    expect(stats.blinkTalents).toEqual(['shorter-cd', 'heavier-blink', 'twin-strike']);
+    expect(blinkTokensSpent(stats.blinkTalents)).toBe(1 + 2 + 4);
+    expect(blinkTokensHeld(stats.blinkStrikeCredits!, stats.blinkTalents)).toBe(0);
+    expect(100 % BLINK_TALENT_CREDITS_PER_TIER).toBe(12);
   });
 });

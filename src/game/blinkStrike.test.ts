@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Player } from './types';
+import type { Player, PlayerStats } from './types';
 import { CHARACTER_CLASSES } from './classes';
 import {
   BLINK_TALENT_CREDITS_PER_TIER,
@@ -15,7 +15,6 @@ import {
   blinkStrikeMultiplierPercent,
   blinkStrikeRulesBlurb,
   blinkStrikeTargetCount,
-  blinkTalentChoices,
   blinkTalentProgress,
   creditsForBlinkTarget,
   critStat,
@@ -24,7 +23,11 @@ import {
   knownBlinkTalents,
   overkillBankAfterHit,
   overkillExcess,
-  pendingBlinkTalentOffer,
+  blinkTalentAvailability,
+  blinkTalentsBuyable,
+  blinkTokensEarned,
+  blinkTokensHeld,
+  buyBlinkTalent,
   resolveBlinkCooldown,
   resolveOverkillAfterBlink,
   settleBlinkStrikeMarks,
@@ -79,52 +82,45 @@ describe('Blink Strike multiplier', () => {
 });
 
 describe('Blink Strike talents', () => {
-  it('shows progress toward the next tier', () => {
+  it('earns one token every 44 credits and shows progress to the next', () => {
     const early = blinkTalentProgress(12, []);
-    expect(early.statsLabel).toBe('Blink talents: 12/44');
-    expect(early.hudLabel).toBe('⚡ Blink talents 12/44');
-    expect(early.compactLabel).toBe('⚡12/44');
-    expect(early.nextLabel).toBe('Next: T1');
+    expect(early.statsLabel).toBe('Blink tokens: 0 held, 0 earned, 12/44 to next');
+    expect(early.hudLabel).toBe('⚡ 0 held · 0 earned · 12/44');
+    expect(early.compactLabel).toBe('⚡0h/0e');
     expect(early.needed).toBe(BLINK_TALENT_CREDITS_PER_TIER);
+    expect(blinkTokensEarned(12)).toBe(0);
 
     const ready = blinkTalentProgress(44, []);
-    expect(ready.ratio).toBe('44/44');
-    expect(ready.nextLabel).toBe('Choose T1');
+    expect(ready.ratio).toBe('0/44');
+    expect(blinkTokensHeld(44, [])).toBe(1);
     expect(ready.readyToPick).toBe(true);
 
-    const towardT2 = blinkTalentProgress(50, ['shorter-cd']);
-    expect(towardT2.ratio).toBe('6/44');
-    expect(towardT2.nextLabel).toBe('Next: T2');
+    const towardNext = blinkTalentProgress(50, ['shorter-cd']);
+    expect(towardNext.ratio).toBe('6/44');
+    expect(blinkTokensHeld(50, ['shorter-cd'])).toBe(0);
+    expect(towardNext.nextLabel).toBe('Next token 6/44');
   });
 
-  it('unlocks tier pairs, then any unpicked talent', () => {
-    expect(pendingBlinkTalentOffer(43, [])).toBeNull();
-    expect(pendingBlinkTalentOffer(44, [])?.tierLabel).toBe('T1');
-    expect(pendingBlinkTalentOffer(44, [])?.choices.map(c => c.id)).toEqual(['shorter-cd', 'lifesteal']);
+  it('shows a tier at N earned and spends held tokens, including a skipped tier', () => {
+    expect(blinkTalentAvailability(43, [], BLINK_TALENTS[0])).toBe('tier-locked');
+    expect(blinkTalentsBuyable(44, []).map(t => t.id)).toEqual(['shorter-cd', 'lifesteal']);
+    expect(blinkTalentAvailability(44 * 4, ['shorter-cd'], BLINK_TALENTS.find(t => t.id === 'twin-strike')!)).toBe('short');
+    expect(blinkTokensEarned(44 * 4)).toBe(4);
+    expect(blinkTokensHeld(44 * 4, ['shorter-cd'])).toBe(3);
 
-    expect(blinkTalentChoices(['shorter-cd']).map(c => c.id)).toEqual(['flowing-strikes', 'heavier-blink']);
-    expect(pendingBlinkTalentOffer(88, ['shorter-cd'])?.tierLabel).toBe('T2');
-
-    expect(blinkTalentChoices(['shorter-cd', 'flowing-strikes']).map(c => c.id)).toEqual(['overkill', 'blink-truestrike']);
-    expect(pendingBlinkTalentOffer(132, ['shorter-cd', 'heavier-blink'])?.tierLabel).toBe('T3');
-
-    const afterT3 = ['shorter-cd', 'flowing-strikes', 'overkill'] as const;
-    expect(blinkTalentChoices(afterT3).map(c => c.id)).toEqual(['twin-strike', 'endless-chain']);
-    expect(pendingBlinkTalentOffer(132, afterT3)).toBeNull();
-    expect(pendingBlinkTalentOffer(176, afterT3)?.tierLabel).toBe('T4');
-
-    const afterT4 = ['shorter-cd', 'flowing-strikes', 'overkill', 'twin-strike'] as const;
-    expect(pendingBlinkTalentOffer(176, afterT4)).toBeNull();
-    expect(pendingBlinkTalentOffer(220, afterT4)?.tierLabel).toBe('T5+');
-    const leftover = pendingBlinkTalentOffer(220, afterT4)?.choices.map(c => c.id);
-    expect(leftover).toEqual(['lifesteal', 'heavier-blink', 'blink-truestrike', 'endless-chain']);
-    expect(leftover).not.toContain('shorter-cd');
+    const bought = buyBlinkTalent(
+      { blinkStrikeCredits: 44 * 4, blinkTalents: [] } as unknown as PlayerStats,
+      'twin-strike',
+    );
+    expect(bought?.blinkTalents).toEqual(['twin-strike']);
+    expect(blinkTokensHeld(44 * 4, bought?.blinkTalents)).toBe(0);
+    expect(blinkTalentAvailability(44 * 4, bought?.blinkTalents, BLINK_TALENTS.find(t => t.id === 'endless-chain')!)).toBe('branch-locked');
+    expect(blinkTalentAvailability(44 * 5, ['twin-strike'], BLINK_TALENTS.find(t => t.id === 'endless-chain')!)).toBe('short');
+    expect(blinkTalentsBuyable(44 * 5, []).map(t => t.tier)).toEqual([1, 1, 2, 2, 3, 3, 4, 4]);
 
     expect(BLINK_TALENTS.filter(t => t.tier === 3).map(t => t.id)).toEqual(['overkill', 'blink-truestrike']);
     expect(BLINK_TALENTS.filter(t => t.tier === 4).map(t => t.id)).toEqual(['twin-strike', 'endless-chain']);
     expect(BLINK_TALENTS.some(t => t.name === 'Longer Chain')).toBe(false);
-
-    expect(pendingBlinkTalentOffer(44 * BLINK_TALENTS.length, BLINK_TALENTS.map(t => t.id))).toBeNull();
     expect(blinkTalentProgress(44 * BLINK_TALENTS.length, BLINK_TALENTS.map(t => t.id)).complete).toBe(true);
     expect(knownBlinkTalents(['shorter-cd', 'longer-chain', 'twin-strike'])).toEqual(['shorter-cd', 'heavier-blink', 'twin-strike']);
   });
@@ -140,7 +136,7 @@ describe('Blink Strike talents', () => {
     });
     const inWindow = settleBlinkStrikeMarks(marked, [{ id: 'b' }], 10 + BLINK_TALENT_DELAYED_KILL_TURNS);
     expect(inWindow.player.stats.blinkStrikeCredits).toBe(13);
-    expect(inWindow.logs[0]).toBe('🥷 Blink talent +1 (13/44).');
+    expect(inWindow.logs[0]).toBe('🥷 Blink credit +1 (13/44 to the next token).');
     expect(inWindow.player.stats.blinkStrikeMarks?.map(m => m.enemyId)).toEqual(['b']);
 
     const expired = settleBlinkStrikeMarks(marked, [], 10 + BLINK_TALENT_DELAYED_KILL_TURNS + 1);
@@ -152,10 +148,8 @@ describe('Blink Strike talents', () => {
   it('logs an unlock once when credits cross a tier, without a line for zero gain', () => {
     const granted = grantBlinkCredits(ninja({ blinkStrikeCredits: 42 }), 2);
     expect(granted.player.stats.blinkStrikeCredits).toBe(44);
-    expect(granted.logs).toEqual([
-      '🥷 Blink talent +2 (44/44).',
-      '🥷 Blink talent ready — choose T1.',
-    ]);
+    expect(granted.logs[0]).toBe('🥷 Blink credit +2 (0/44 to the next token).');
+    expect(granted.logs[1]).toContain('Talent token');
     expect(grantBlinkCredits(ninja(), 0).logs).toEqual([]);
   });
 
