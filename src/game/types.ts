@@ -39,11 +39,13 @@ export interface Tile {
   visible: boolean;
   /** Remaining bed sleeps; only meaningful for type === 'bed'. */
   usesLeft?: number;
+  /** District-vault structure already surveyed into EmojiCB. */
+  surveyed?: boolean;
 }
 
 export type MapGrid = Tile[][];
 
-export type RoomTheme = 'normal' | 'shrine' | 'shop' | 'restaurant' | 'forest' | 'boss' | 'market' | 'monster-den' | 'treasure-vault' | 'bush-ambush' | 'volcano' | 'room-vault' | 'prairie';
+export type RoomTheme = 'normal' | 'shrine' | 'shop' | 'restaurant' | 'forest' | 'boss' | 'market' | 'monster-den' | 'treasure-vault' | 'bush-ambush' | 'volcano' | 'room-vault' | 'prairie' | 'district-vault';
 
 export type MoodType = 
   | 'happy' | 'very_happy' | 'sad' | 'crying' 

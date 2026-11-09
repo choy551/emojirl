@@ -6,6 +6,7 @@ import { shouldPlaceAuction, shouldPlaceBounty, shouldPlaceVanity } from './gold
 import { HOLLOW_EMOJI, shouldPlaceHollow } from './hollowMarket';
 import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, coolLavaWaterContacts } from './lava';
 import { BED_EMOJI, BED_MAX_USES } from './tiles';
+import { placeDistrictVault, VAULT_DISTRICTS } from './districtVault';
 import { FINALE_FLOOR } from './finaleConstants';
 
 const MAP_WIDTH = 50;
@@ -17,6 +18,8 @@ export interface Room {
   w: number;
   h: number;
   theme: RoomTheme;
+  /** Set when theme is a class-district vault. */
+  district?: (typeof VAULT_DISTRICTS)[number];
 }
 
 function roomCenter(r: Room): Position {
@@ -898,6 +901,7 @@ export function generateMap(floor: number, opts?: { voidRun?: boolean }): { map:
   let treasureAssigned    = false;
   let bushAmbushAssigned  = false;
   let volcanoAssigned     = false;
+  let districtAssigned    = false;
 
   // Nested bedroom: reserve a 4×4+ middle room (expand one if needed) first
   // so shrine/forest don't eat every candidate.
@@ -967,6 +971,12 @@ export function generateMap(floor: number, opts?: { voidRun?: boolean }): { map:
       volcanoAssigned = true;
       continue;
     }
+    if (!districtAssigned && r.w >= 3 && r.h >= 3 && Math.random() < treasureChance) {
+      const district = VAULT_DISTRICTS[Math.floor(Math.random() * VAULT_DISTRICTS.length)]!;
+      rooms[idx] = { ...r, theme: 'district-vault', district };
+      districtAssigned = true;
+      continue;
+    }
   }
 
   // Forest rooms: any remaining normal room with enough space
@@ -994,6 +1004,7 @@ export function generateMap(floor: number, opts?: { voidRun?: boolean }): { map:
     else if (room.theme === 'bush-ambush')    placeBushAmbush(map, room);
     else if (room.theme === 'volcano')        placeVolcanoVault(map, room);
     else if (room.theme === 'room-vault')     placeRoomVault(map, room);
+    else if (room.theme === 'district-vault' && room.district) placeDistrictVault(map, room, room.district);
     else if (room.theme === 'prairie')        placePrairie(map, room);
     // monster-den: no tile treatment — enemy packing is handled in spawning.ts
   }
