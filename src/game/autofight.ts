@@ -2,6 +2,7 @@ import type { Enemy, MapGrid, Player, Position } from './types';
 import { chebyshev } from './geo';
 import { isHostileCombatTarget } from './combat';
 import { gunshotPlan, isArcaneCaster, isHitman, isRoyalGuard } from './prestige';
+import { chooseGuardShot } from './royalGuard';
 import { bfsStepToward, hasLOS, hasLOSBetween } from './pathfinding';
 import { PLAYER_PASSABLE_TILES } from './tiles';
 import { eagleEyeRange, VISION_RADIUS } from './vision';
@@ -166,7 +167,9 @@ export function planAutofight(input: AutofightInput): AutofightAction {
     }
     const guns = gunshotPlan(input.player);
     const ammo = input.player.ammo ?? 0;
-    const armed = guns ? ammo >= guns.ammoCost : ammo > 0;
+    const armed = isRoyalGuard(input.player.characterClass)
+      ? chooseGuardShot(input.player) !== null
+      : (guns ? ammo >= guns.ammoCost : ammo > 0);
     const range = shotRange(input);
     if (armed && clearShot(input.map, from, foe.pos, range)) {
       return {

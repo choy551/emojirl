@@ -5,6 +5,7 @@ import { RESTAURANT_COOKED_SELL_LIMIT } from '../game/economy';
 import { executeHouseRound, roundCost, roundPlan } from '../game/goldSinks';
 import { goldWithLuck } from '../game/softCap';
 import { canEquipItem, emptyLegalEquipSlot } from './itemUtils';
+import { gainCarriedAmmo } from '../game/royalGuard';
 import { RarityLabel } from './RarityLabel';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -83,7 +84,8 @@ export function RestaurantModal({
                         const boughtItem = { ...item, id: `rest-bought-${Math.random().toString(36).slice(2)}` };
                         const newGold = prev.player.stats.gold - price;
                         if (boughtItem.ammoAmount) {
-                          return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, ammo: (prev.player.ammo ?? 0) + boughtItem.ammoAmount } };
+                          const gained = gainCarriedAmmo(prev.player, boughtItem);
+                          return { ...prev, player: { ...gained.player, stats: { ...prev.player.stats, gold: newGold } } };
                         }
                         const isUnequippable = boughtItem.isEquipment && !canEquipItem(boughtItem, prev.player.characterClass);
                         if (isUnequippable) {

@@ -1,17 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EmojiItem, Enemy, Player } from './types';
-import { SAVE_KEY, loadGame } from './save';
+import { SAVE_KEY, SAVE_SCHEMA_VERSION, loadGame } from './save';
 import { resolveCombat } from './combat';
 import { readFileSync } from 'node:fs';
 import {
+  afterGuardShot,
+  chooseGuardShot,
   crownStunChance,
   crownStuns,
+  gainCarriedAmmo,
   guardHasRangedWeapon,
   hotbarCrown,
   initialRangerMode,
   royalDualBlades,
   royalOffhandFraction,
+  splitPooledGuardAmmo,
 } from './royalGuard';
+import { specialAmmoForShot } from './weaponCombo';
 
 function piece(partial: Partial<EmojiItem> & Pick<EmojiItem, 'id' | 'emoji' | 'name'>): EmojiItem {
   return { description: '', consumed: false, ...partial };
@@ -85,7 +90,7 @@ describe('royal guard crowns and ranged', () => {
     const loaded = loadGame();
     expect(loaded.kind).toBe('ok');
     if (loaded.kind !== 'ok') return;
-    expect(loaded.state.schemaVersion).toBe(7);
+    expect(loaded.state.schemaVersion).toBe(8);
     expect(loaded.state.player.equipment.accessory).toBeUndefined();
     const crown = loaded.state.player.inventory.find(item => item.emoji === '👑');
     expect(crown?.isEquipment).toBeUndefined();
@@ -132,5 +137,88 @@ describe('royal guard dual blades', () => {
     const manual = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
     expect(manual).toContain('blade in each hand');
     expect(manual).toContain('level 50');
+  });
+});
+
+describe('royal guard split ammo', () => {
+  it('splits a shared pool in half and keeps the odd arrow', () => {
+    expect(splitPooledGuardAmmo(8)).toEqual({ arrowAmmo: 4, bulletAmmo: 4 });
+    expect(splitPooledGuardAmmo(7)).toEqual({ arrowAmmo: 4, bulletAmmo: 3 });
+    expect(splitPooledGuardAmmo(1)).toEqual({ arrowAmmo: 1, bulletAmmo: 0 });
+    expect(splitPooledGuardAmmo(0)).toEqual({ arrowAmmo: 0, bulletAmmo: 0 });
+  });
+
+  it('alternates bow and gun, and spends the matching pool', () => {
+    const bow = piece({ id: 'bow', emoji: '🏹', name: 'Bow', weaponKind: 'bow' });
+    const gun = piece({ id: 'gun', emoji: '🔫', name: 'Gun', weaponKind: 'gun' });
+    const both = {
+      characterClass: '💂',
+      equipment: { mainHand: bow, offHand: gun },
+      arrowAmmo: 2,
+      bulletAmmo: 2,
+      guardNextShot: 'bow' as const,
+    };
+    expect(chooseGuardShot(both)?.shot).toBe('bow');
+    const afterBow = afterGuardShot(both, 'bow', -1);
+    expect(afterBow.arrowAmmo).toBe(1);
+    expect(afterBow.bulletAmmo).toBe(2);
+    expect(afterBow.guardNextShot).toBe('gun');
+    expect(chooseGuardShot(afterBow)?.shot).toBe('gun');
+    const afterGun = afterGuardShot(afterBow, 'gun', -1);
+    expect(afterGun.bulletAmmo).toBe(1);
+    expect(afterGun.guardNextShot).toBe('bow');
+
+    const arrows = piece({ id: 'arrows', emoji: '🔥', name: 'Fire Arrows', specialAmmoKind: 'fire', ammoCarrier: 'arrow' });
+    const rounds = piece({ id: 'rounds', emoji: '🧨', name: 'Incendiary Rounds', specialAmmoKind: 'fire', ammoCarrier: 'bullet' });
+    expect(specialAmmoForShot({ equipment: { mainHand: bow, offHand: arrows } }, 'bow')?.carrier).toBe('arrow');
+    expect(specialAmmoForShot({ equipment: { mainHand: bow, offHand: arrows } }, 'gun')).toBeNull();
+    expect(specialAmmoForShot({ equipment: { mainHand: gun, offHand: rounds } }, 'gun')?.carrier).toBe('bullet');
+    expect(specialAmmoForShot({ equipment: { mainHand: gun, offHand: rounds } }, 'bow')).toBeNull();
+
+    const picked = gainCarriedAmmo({ characterClass: '💂', ammo: 0, arrowAmmo: 1, bulletAmmo: 0 }, { emoji: '🪙', ammoAmount: 5 });
+    expect(picked.player.bulletAmmo).toBe(5);
+    expect(picked.player.arrowAmmo).toBe(1);
+    expect(picked.word).toBe('bullets');
+  });
+
+  it('migrates a schema 7 Royal Guard save into separate pools', () => {
+    const store = new Map<string, string>();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => { store.set(key, value); },
+        removeItem: (key: string) => { store.delete(key); },
+        clear: () => { store.clear(); },
+      },
+    });
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      schemaVersion: 7,
+      map: [[{ type: 'floor', emoji: '⬜', seen: true, visible: true }]],
+      player: { characterClass: '💂', ammo: 7, stats: {}, inventory: [], bank: [], equipment: {} },
+    }));
+    const loaded = loadGame();
+    expect(loaded.kind).toBe('ok');
+    if (loaded.kind !== 'ok') return;
+    expect(loaded.state.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
+    expect(loaded.state.schemaVersion).toBe(8);
+    expect(loaded.state.player.ammo).toBe(0);
+    expect(loaded.state.player.arrowAmmo).toBe(4);
+    expect(loaded.state.player.bulletAmmo).toBe(3);
+    expect(loaded.state.player.guardNextShot).toBe('bow');
+
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      schemaVersion: 7,
+      map: [[{ type: 'floor', emoji: '⬜', seen: true, visible: true }]],
+      player: { characterClass: '🧝', ammo: 7, stats: {}, inventory: [], bank: [], equipment: {} },
+    }));
+    const ranger = loadGame();
+    expect(ranger.kind).toBe('ok');
+    if (ranger.kind !== 'ok') return;
+    expect(ranger.state.player.ammo).toBe(7);
+    expect(ranger.state.player.arrowAmmo).toBeUndefined();
+    const manual = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
+    expect(manual).toContain('alternates');
+    expect(manual).toContain('separate pools');
   });
 });

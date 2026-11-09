@@ -75,7 +75,11 @@ export function MobileTopBar({ player, className, level, currentFloor, xpProgres
             {bountyLabel && (
               <span className="font-bold text-amber-200 shrink-0" data-testid="hud-bounty">{bountyLabel}</span>
             )}
-            {showAmmo && (
+            {player.characterClass === '💂' ? (
+              <span className="font-bold tabular-nums text-amber-300/90 shrink-0" data-testid="guard-ammo-mobile" title="Arrows for the bow. Bullets for the gun. They alternate when both are equipped.">
+                🏹{player.arrowAmmo ?? 0} 🪙{player.bulletAmmo ?? 0}
+              </span>
+            ) : showAmmo && (
               <span className="font-bold tabular-nums text-amber-300/90 shrink-0">
                 {ammoIcon(player.characterClass, player.equipment)}{player.ammo}
               </span>

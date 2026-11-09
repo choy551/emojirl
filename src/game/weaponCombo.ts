@@ -62,3 +62,15 @@ export function legalSpecialAmmo(player: Pick<Player, 'equipment'>): { kind: Spe
   if (!ammo?.specialAmmoKind || !main || ammoConflicts(main, ammo)) return null;
   return { kind: ammo.specialAmmoKind, carrier: ammoCarrierOf(ammo)! };
 }
+
+/** Arrows affect bow shots only. Bullets affect gun shots only. */
+export function specialAmmoForShot(
+  player: Pick<Player, 'equipment'>,
+  shot: 'bow' | 'gun',
+): { kind: SpecialAmmoKind; carrier: AmmoCarrier } | null {
+  const ammo = legalSpecialAmmo(player);
+  if (!ammo) return null;
+  if (ammo.carrier === 'arrow' && shot !== 'bow') return null;
+  if (ammo.carrier === 'bullet' && shot !== 'gun') return null;
+  return ammo;
+}

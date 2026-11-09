@@ -31,10 +31,85 @@ export function royalDualBlades(player: Pick<Player, 'characterClass' | 'equipme
     && player.equipment.offHand?.weaponKind === 'blade';
 }
 
+export function guardHasBow(player: Pick<Player, 'equipment'>): boolean {
+  return [player.equipment.mainHand, player.equipment.offHand].some(item => item?.weaponKind === 'bow');
+}
+
+export function guardHasGun(player: Pick<Player, 'equipment'>): boolean {
+  return [player.equipment.mainHand, player.equipment.offHand].some(item => item?.weaponKind === 'gun');
+}
+
 export function guardHasRangedWeapon(player: Pick<Player, 'equipment'>): boolean {
-  return [player.equipment.mainHand, player.equipment.offHand].some(
-    item => item?.weaponKind === 'bow' || item?.weaponKind === 'gun',
-  );
+  return guardHasBow(player) || guardHasGun(player);
+}
+
+/** Odd remainder stays with the arrows. 7 → 4 arrows and 3 bullets. */
+export function splitPooledGuardAmmo(total: number): { arrowAmmo: number; bulletAmmo: number } {
+  const n = Math.max(0, Math.floor(Number.isFinite(total) ? total : 0));
+  const bulletAmmo = Math.floor(n / 2);
+  return { arrowAmmo: n - bulletAmmo, bulletAmmo };
+}
+
+export type GuardShot = 'bow' | 'gun';
+
+export function guardArrowCount(player: Pick<Player, 'arrowAmmo'>): number {
+  return Math.max(0, player.arrowAmmo ?? 0);
+}
+
+export function guardBulletCount(player: Pick<Player, 'bulletAmmo'>): number {
+  return Math.max(0, player.bulletAmmo ?? 0);
+}
+
+/**
+ * Bow and gun together take turns. A dry weapon yields to the one that still has ammo.
+ * A lone bow uses arrows. A lone gun uses bullets.
+ */
+export function chooseGuardShot(player: Pick<Player, 'equipment' | 'arrowAmmo' | 'bulletAmmo' | 'guardNextShot'>): { shot: GuardShot; ammo: number } | null {
+  const bow = guardHasBow(player) && guardArrowCount(player) > 0;
+  const gun = guardHasGun(player) && guardBulletCount(player) > 0;
+  const both = guardHasBow(player) && guardHasGun(player);
+  if (both) {
+    const prefer: GuardShot = player.guardNextShot === 'gun' ? 'gun' : 'bow';
+    if (prefer === 'bow' && bow) return { shot: 'bow', ammo: guardArrowCount(player) };
+    if (prefer === 'gun' && gun) return { shot: 'gun', ammo: guardBulletCount(player) };
+    if (bow) return { shot: 'bow', ammo: guardArrowCount(player) };
+    if (gun) return { shot: 'gun', ammo: guardBulletCount(player) };
+    return null;
+  }
+  if (bow) return { shot: 'bow', ammo: guardArrowCount(player) };
+  if (gun) return { shot: 'gun', ammo: guardBulletCount(player) };
+  return null;
+}
+
+export function afterGuardShot<T extends Pick<Player, 'arrowAmmo' | 'bulletAmmo' | 'guardNextShot' | 'equipment'>>(
+  player: T,
+  shot: GuardShot,
+  ammoDelta: number,
+): T {
+  const next: T = { ...player };
+  if (shot === 'bow') next.arrowAmmo = Math.max(0, guardArrowCount(player) + ammoDelta);
+  else next.bulletAmmo = Math.max(0, guardBulletCount(player) + ammoDelta);
+  if (guardHasBow(player) && guardHasGun(player)) next.guardNextShot = shot === 'bow' ? 'gun' : 'bow';
+  return next;
+}
+
+/** Quivers fill arrows. Bullet stacks fill bullets. Other classes keep the shared pool. */
+export function gainCarriedAmmo<T extends Pick<Player, 'characterClass' | 'ammo' | 'arrowAmmo' | 'bulletAmmo'>>(
+  player: T,
+  item: { emoji: string; ammoAmount?: number },
+): { player: T; total: number; word: 'arrows' | 'bullets' } {
+  const amount = Math.max(0, item.ammoAmount ?? 0);
+  const bullets = item.emoji === '🪙';
+  if (player.characterClass === ROYAL_GUARD) {
+    if (bullets) {
+      const bulletAmmo = guardBulletCount(player) + amount;
+      return { player: { ...player, bulletAmmo }, total: bulletAmmo, word: 'bullets' };
+    }
+    const arrowAmmo = guardArrowCount(player) + amount;
+    return { player: { ...player, arrowAmmo }, total: arrowAmmo, word: 'arrows' };
+  }
+  const ammo = (player.ammo ?? 0) + amount;
+  return { player: { ...player, ammo }, total: ammo, word: bullets ? 'bullets' : 'arrows' };
 }
 
 /** Rangers stay on ranged. The Royal Guard starts in melee. */

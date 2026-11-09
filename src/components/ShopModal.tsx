@@ -7,6 +7,7 @@ import { canBuyAndUse } from '../game/shopUse';
 import { insuranceCost, rerollCost } from '../game/goldSinks';
 import { drinkEffectForClass } from '../game/drinks';
 import { canEquipItem, emptyLegalEquipSlot } from './itemUtils';
+import { gainCarriedAmmo } from '../game/royalGuard';
 import { RarityLabel } from './RarityLabel';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -98,9 +99,9 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                         const boughtItem = { ...item, id: `bought-${Math.random().toString(36).slice(2)}` };
                         const newGold = prev.player.stats.gold - price;
                         if (boughtItem.ammoAmount) {
-                          const newAmmo = (prev.player.ammo ?? 0) + boughtItem.ammoAmount;
-                          shopAmmoTotal = newAmmo;
-                          return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: newGold }, ammo: newAmmo } };
+                          const gained = gainCarriedAmmo(prev.player, boughtItem);
+                          shopAmmoTotal = gained.total;
+                          return { ...prev, player: { ...gained.player, stats: { ...prev.player.stats, gold: newGold } } };
                         }
                         const isUnequippable = boughtItem.isEquipment && !canEquipItem(boughtItem, prev.player.characterClass);
                         if (isUnequippable) {

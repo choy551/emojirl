@@ -510,6 +510,7 @@ export default function HowToPlay({
         <div className="mb-3 bg-card/50 border border-border/50 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
           <div className="font-bold text-foreground mb-1">Weapon restrictions</div>
           {classWeaponRulesBlurb()}
+          <p className="mt-2">A Royal Guard who holds a bow and a gun alternates: one attack is a bow shot, the next is a gun shot. Arrows and bullets are separate pools. Fire Arrows and Ice Arrows affect only bow shots. Incendiary Rounds and Ice Bullets affect only gun shots.</p>
         </div>
         <div className="mb-3 bg-card/50 border border-violet-500/30 rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed">
           <div className="font-bold text-violet-200 mb-1">The Void — Hollow Market and grace</div>
