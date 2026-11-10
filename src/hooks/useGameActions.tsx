@@ -29,6 +29,7 @@ import {
 import { lightningArcDamage } from '../game/passives';
 import { butterflyHeal, diamondThorns, heartHeal, igniteFields, mushroomHeal, starXpGain } from '../game/emojiBalance';
 import { afterGuardShot, chooseGuardShot, gainCarriedAmmo, guardHasBow, guardHasGun, guardHasRangedWeapon } from '../game/royalGuard';
+import { equippedGuns, isLongGun, longGunRange, nextStill, pickOffhandTarget } from '../game/sharpshooter';
 import { legalSpecialAmmo, specialAmmoForShot } from '../game/weaponCombo';
 import { canEquipItem, emptyLegalEquipSlot } from '../components/itemUtils';
 import { creditVoidBoss } from '../game/voidDamage';
@@ -167,7 +168,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       const cls = player.characterClass;
 
       const cowboyDualGuns = cls === '🤠' && player.equipment.mainHand?.weaponKind === 'gun' && player.equipment.offHand?.weaponKind === 'gun';
-      const shotPlan = gunshotPlan(player);
+      const stoodTile = prev.map[player.pos.y]?.[player.pos.x]?.type;
+      const shotPlan = gunshotPlan(player, stoodTile);
       if (shotPlan) {
         for (let range = 2; range <= shotPlan.range; range++) {
           const tx = player.pos.x + dx * range;
@@ -194,6 +196,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const cBeam = { positions: _cBeam, color: '#fbbf24' };
           let cEnemies = [...prev.enemies];
           let cPlayer: Player = { ...player, ammo: player.ammo - shotPlan.ammoCost, stats: { ...player.stats, hp: cResult.playerHp } };
+          if (cls === '🕴️') {
+            cPlayer = { ...cPlayer, stats: { ...cPlayer.stats, stillStacks: nextStill(player.stats.stillStacks ?? 0, false, cls, stoodTile) } };
+          }
           let cSkip: string | undefined;
           let cKillCounts = { ...prev.killCounts };
           if (cResult.enemyDied) {
@@ -228,6 +233,26 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             cEnemies[enemyIdx] = { ...enemy, hp: cResult.enemyHp, engaged: true, ..._cBurning };
             cSkip = enemy.id;
           }
+          if (cls === '🕴️' && shotPlan.ammoCost === 2 && !cResult.playerDied) {
+            const off = pickOffhandTarget(player.pos, prev.enemies, enemy.id, (to) => hasLOSBetween(prev.map, player.pos, to));
+            const secondId = off?.id ?? (cEnemies.some(e => e.id === enemy.id && e.hp > 0) ? enemy.id : null);
+            const secondIdx = secondId ? cEnemies.findIndex(e => e.id === secondId && e.hp > 0) : -1;
+            if (secondIdx >= 0) {
+              const second = cEnemies[secondIdx];
+              const sResult = resolveCombat(effectiveCowboy, second, addLog, { mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true, damageMult: 1 });
+              addLog(off ? `🕴️ Offhand — ${second.emoji} ${second.name}.` : '🕴️ Offhand — same target.');
+              cPlayer = { ...cPlayer, stats: { ...cPlayer.stats, hp: sResult.playerHp } };
+              if (sResult.enemyDied) {
+                markEnemyKilled(second.emoji);
+                cKillCounts = { ...cKillCounts, [second.emoji]: (cKillCounts[second.emoji] ?? 0) + 1 };
+                cEnemies.splice(secondIdx, 1);
+                cPlayer.stats.xp = cPlayer.stats.xp + starXpGain(second.isBoss ? 25 : 5, cPlayer.stats.xpBoostTurns);
+                if (second.id === enemy.id) cSkip = undefined;
+              } else {
+                cEnemies[secondIdx] = { ...second, hp: sResult.enemyHp, engaged: true };
+              }
+            }
+          }
           if (cResult.playerDied) return { ...prev, killCounts: cKillCounts, player: cPlayer, enemies: cEnemies, floatingTexts: cFloats, gameOver: true, killer: { name: enemy.name, emoji: enemy.emoji } };
           const cMid = { ...prev, killCounts: cKillCounts, player: cPlayer, enemies: cEnemies, turn: prev.turn + 1, floatingTexts: cFloats, pendingBeam: cBeam };
           return applyEnemyTurns(cMid, runEnemyTurns(cMid, cSkip));
@@ -236,8 +261,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
       const voidRanged = cls === '👤' && voidAttackModeRef.current === 'ranger';
       const guardShoots = isRoyalGuard(cls) && rangerModeRef.current === 'ranged' && guardHasRangedWeapon(player);
+      const guardMusket = guardShoots && chooseGuardShot(player)?.shot === 'gun' && equippedGuns(player).some(isLongGun);
+      const rangedCap = guardMusket ? longGunRange(player.stats.stillStacks ?? 0) : eagleEyeRange(player.stats.level);
       if (((cls === '🧝' && rangerModeRef.current === 'ranged') || guardShoots) || voidRanged) {
-        for (let range = 2; range <= eagleEyeRange(player.stats.level); range++) {
+        for (let range = 2; range <= rangedCap; range++) {
           const tx = player.pos.x + dx * range;
           const ty = player.pos.y + dy * range;
           const enemyIdx = prev.enemies.findIndex(e => e.pos.x === tx && e.pos.y === ty);
@@ -903,7 +930,14 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         return applyEnemyTurns(newState, runEnemyTurns(newState, skipFightId));
       }
 
-      let newPlayer: Player = { ...player, pos: newPos, stats: { ...player.stats } };
+      let newPlayer: Player = {
+        ...player,
+        pos: newPos,
+        stats: {
+          ...player.stats,
+          ...(cls === '🕴️' && (newPos.x !== player.pos.x || newPos.y !== player.pos.y) ? { stillStacks: 0 } : {}),
+        },
+      };
 
       const hpRatio = newPlayer.stats.hp / livingMaxHp(newPlayer);
       if (hpRatio < 0.3) newPlayer.stats.moodValue = Math.max(-100, newPlayer.stats.moodValue - 3);
@@ -1257,6 +1291,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       );
       const onCampfire = nearCampfire || nearRest;
       const stats = { ...prev.player.stats };
+      if (cls === '🕴️') {
+        stats.stillStacks = nextStill(stats.stillStacks ?? 0, false, cls, prev.map[py]?.[px]?.type);
+      }
       const waitPassives = playerBagPassives(prev.player);
       const regen = waitPassives.combatRegen || 0;
       const pool = livingMaxHp(prev.player);

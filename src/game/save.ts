@@ -28,12 +28,13 @@ export const SAVE_KEY = 'emojirl_save_v1';
  *    tokens clamp at 0 when the owned talents cost more than were earned.
  * 10: A ready Fencer Riposte becomes one riposte charge.
  * 11: Food leaves the hotbar and the Bank for an uncapped food store.
+ * 12: Hitman Still stacks. Missing means 0.
  */
-export const SAVE_SCHEMA_VERSION = 11;
+export const SAVE_SCHEMA_VERSION = 12;
 const CURRENT_SCHEMA_VERSION = SAVE_SCHEMA_VERSION;
 
 /** Set of schema versions this build knows how to load (after migration). */
-const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 
 /**
  * Runs in-place migrations on the raw parsed JSON object so that
@@ -146,6 +147,14 @@ const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
     record.bank = pull(record.bank);
     record.food = food;
   },
+  raw => {
+    const player = raw.player;
+    if (!player || typeof player !== 'object') return;
+    const stats = (player as { stats?: Record<string, unknown> }).stats;
+    if (!stats) return;
+    const stacks = Number(stats.stillStacks);
+    stats.stillStacks = Number.isFinite(stacks) && stacks > 0 ? Math.floor(stacks) : 0;
+  },
 ];
 
 function migrateRaw(raw: Record<string, unknown>): void {
@@ -204,6 +213,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     fencerParries:                 typeof rawStats.fencerParries === 'number' ? rawStats.fencerParries : undefined,
     fencerLastAct:                 rawStats.fencerLastAct === 'backdash' || rawStats.fencerLastAct === 'lunge' ? rawStats.fencerLastAct : undefined,
     fencerLastActTurn:             typeof rawStats.fencerLastActTurn === 'number' ? rawStats.fencerLastActTurn : undefined,
+    stillStacks:                   typeof rawStats.stillStacks === 'number' && rawStats.stillStacks > 0 ? Math.floor(rawStats.stillStacks) : 0,
     contractKills:                 rawStats.contractKills                 as number | undefined,
     contractGoal:                  rawStats.contractGoal                  as number | undefined,
     contractDone:                  rawStats.contractDone                  as boolean | undefined,

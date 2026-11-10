@@ -1,5 +1,6 @@
 import type { Enemy, Equipment, Player, Position } from './types';
 import { goldWithLuck } from './softCap';
+import { DUAL_PISTOL_RANGE, executeDamageMult, equippedGuns, isLongGun, stillDamageMult, weaponRange } from './sharpshooter';
 import {
   COWBOY,
   FENCER,
@@ -34,16 +35,10 @@ import {
   HITMAN_CONTRACT_GOLD_BASE,
   HITMAN_CONTRACT_GOLD_PER_FLOOR,
   HITMAN_CONTRACT_KILLS,
-  HITMAN_DUAL_MULT,
-  HITMAN_DUAL_RANGE,
   HITMAN_EXECUTE_BULLETS,
   HITMAN_EXECUTE_CD,
   HITMAN_EXECUTE_GOLD,
   HITMAN_EXECUTE_HP_PCT,
-  HITMAN_EXECUTE_MULT,
-  HITMAN_EXECUTE_RANGE,
-  HITMAN_SINGLE_MULT,
-  HITMAN_SINGLE_RANGE,
   RANGER,
   ROYAL_AURA_DEF,
   ROYAL_BARE_MELEE_MULT,
@@ -99,34 +94,34 @@ export interface GunshotPlan {
 }
 
 /** Ranged auto-shot. Cowboy shoots only with two guns. Hitman shoots one or two. */
-export function gunshotPlan(player: Player): GunshotPlan | null {
-  const main = player.equipment.mainHand?.weaponKind === 'gun';
-  const off = player.equipment.offHand?.weaponKind === 'gun';
-  const guns = (main ? 1 : 0) + (off ? 1 : 0);
+export function gunshotPlan(player: Player, tile?: string): GunshotPlan | null {
+  const guns = equippedGuns(player);
   const ammo = player.ammo ?? 0;
   if (player.characterClass === COWBOY) {
-    if (guns === 2 && ammo >= 2) {
+    if (guns.length === 2 && ammo >= 2) {
       return { ammoCost: 2, range: 4, damageMult: 1, label: '🤠 Dual guns — BANG BANG!' };
     }
     return null;
   }
   if (player.characterClass === HITMAN) {
-    if (guns === 2 && ammo >= 2) {
-      const each = Math.round(HITMAN_DUAL_MULT * 100);
-      const total = Math.round(HITMAN_DUAL_MULT * 2 * 100);
+    const musket = guns.some(isLongGun);
+    if (guns.length === 2 && !musket) {
+      if (ammo < 2) return null;
       return {
         ammoCost: 2,
-        range: HITMAN_DUAL_RANGE,
-        damageMult: HITMAN_DUAL_MULT * 2,
-        label: `🕴️ Sharpshooter — both guns, ${each}% each (${total}% total).`,
+        range: DUAL_PISTOL_RANGE,
+        damageMult: 1,
+        label: '🕴️ Sharpshooter — two shots, 100% each. Offhand seeks another foe within 3.',
       };
     }
-    if (guns === 1 && ammo >= 1) {
+    if (guns.length >= 1 && ammo >= 1) {
+      const mult = stillDamageMult(player.stats.stillStacks ?? 0, player.characterClass, tile);
+      const pct = Math.round(mult * 100);
       return {
         ammoCost: 1,
-        range: HITMAN_SINGLE_RANGE,
-        damageMult: HITMAN_SINGLE_MULT,
-        label: `🕴️ Sharpshooter — one gun (${Math.round(HITMAN_SINGLE_MULT * 100)}%).`,
+        range: weaponRange(player),
+        damageMult: mult,
+        label: `🕴️ Sharpshooter — ${pct}% (${player.stats.stillStacks ?? 0} Still).`,
       };
     }
   }
@@ -456,10 +451,11 @@ export function notePrestigeKill(player: Player, floor: number, rawLuck = player
   return { player: next, logs };
 }
 
-export function executeStrike(attack: number, enemyHp: number, enemyMax: number, defense: number): { damage: number; executed: boolean } {
+export function executeStrike(attack: number, enemyHp: number, enemyMax: number, defense: number, stillStacks = 0): { damage: number; executed: boolean } {
   const frac = enemyHp / Math.max(1, enemyMax);
   if (frac <= HITMAN_EXECUTE_HP_PCT) return { damage: enemyHp, executed: true };
-  return { damage: Math.max(1, Math.round(attack * HITMAN_EXECUTE_MULT) - Math.max(0, defense)), executed: false };
+  const mult = executeDamageMult(stillStacks);
+  return { damage: Math.max(1, Math.round(attack * mult) - Math.max(0, defense)), executed: false };
 }
 
 export function tickPrestigeTimers(player: Player): Player {
@@ -566,7 +562,7 @@ export function nearestExecuteTarget(
   const foes = enemies.filter(e =>
     isFoe(e) &&
     chebyshev(player.pos, e.pos) > 0 &&
-    chebyshev(player.pos, e.pos) <= HITMAN_EXECUTE_RANGE &&
+    chebyshev(player.pos, e.pos) <= weaponRange(player) &&
     los(player.pos, e.pos)
   );
   if (foes.length === 0) return null;
