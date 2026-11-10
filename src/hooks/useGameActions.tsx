@@ -36,7 +36,7 @@ import { voidBossesBeaten, voidHpAttackPaidLog, voidRangedSpend } from '../game/
 import { applyEntropicTithe } from '../game/voidAbilities';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
 import { descendFloor } from '../game/descend';
-import { stepDistrictStructure } from '../game/districtVault';
+import { applyStructureStep } from '../game/districtVault';
 import { shouldPromptFinaleStairs, spectatorBumpText } from '../game/finale';
 import type { GameRefs, GameSetters } from './actions/types';
 import { useTacticsActions } from './actions/useTacticsActions';
@@ -911,12 +911,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
       if (newPlayer.stats.moodValue > 0) newPlayer.stats.moodValue = Math.max(0, newPlayer.stats.moodValue - 1);
       else if (newPlayer.stats.moodValue < 0) newPlayer.stats.moodValue = Math.min(0, newPlayer.stats.moodValue + 1);
 
-      const stepped = stepDistrictStructure(newState.map, newPos.x, newPos.y, newPlayer);
-      if (stepped) {
-        newState.map = stepped.map;
-        newPlayer = stepped.player;
-        for (const line of stepped.logs) addLog(line);
-      }
+      newState = applyStructureStep({ ...newState, player: newPlayer }, newPos.x, newPos.y);
+      newPlayer = newState.player;
 
       const itemIndex = prev.items.findIndex(it => it.pos.x === newPos.x && it.pos.y === newPos.y);
       if (itemIndex !== -1) {
