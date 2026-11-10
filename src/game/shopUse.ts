@@ -197,7 +197,13 @@ export function applyInstantItemUse(
     return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
   }
 
-  if (effect?.instakillNearest && !hasVisibleEnemy(s)) {
+  if (effect?.instakillNearest && !s.enemies.some(e => !e.isSpectator && s.map[e.pos.y]?.[e.pos.x]?.visible)) {
+    if (cls === '👤' && item.emoji === '⚡') {
+      _flashSignals.lightningFlashPending = true;
+      log('The Lightning narrowly misses The Void.');
+      const mid = { ...s, turn: s.turn + 1 };
+      return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
+    }
     log(`${item.emoji} No visible enemies to strike!`);
     return null;
   }

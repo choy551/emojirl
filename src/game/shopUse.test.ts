@@ -190,6 +190,30 @@ describe('applyInstantItemUse', () => {
     expect(logs.some(l => l.includes('ZAP!'))).toBe(false);
   });
 
+  it('lets The Void spend Lightning when nothing is on screen', () => {
+    const logs: string[] = [];
+    const s = state({
+      enemies: [],
+      player: { ...playerAt({ hp: 12, maxHp: 20 }), emoji: '👤', characterClass: '👤', inventory: [] },
+    });
+    const next = applyInstantItemUse(s, lightning, { source: 'bag', addLog: t => logs.push(t), applyMonkeyDropOnKill: (_k, p) => p });
+    expect(next).not.toBeNull();
+    expect(next!.player.stats.hp).toBe(12);
+    expect(next!.enemies).toHaveLength(0);
+    expect(next!.turn).toBe(s.turn + 1);
+    expect(_flashSignals.lightningFlashPending).toBe(true);
+    expect(logs).toContain('The Lightning narrowly misses The Void.');
+    expect(next!.logs.some(line => line.text === 'The Lightning narrowly misses The Void.')).toBe(true);
+  });
+
+  it('still refuses Lightning with no foe for every other class', () => {
+    const logs: string[] = [];
+    const next = applyInstantItemUse(state(), lightning, { source: 'bag', addLog: t => logs.push(t), applyMonkeyDropOnKill: (_k, p) => p });
+    expect(next).toBeNull();
+    expect(_flashSignals.lightningFlashPending).toBe(false);
+    expect(logs.some(line => line.includes('No visible enemies'))).toBe(true);
+  });
+
   it('bag lightning uses ZAP log and flashes', () => {
     const logs: string[] = [];
     const s = state({ enemies: [goblin()] });
