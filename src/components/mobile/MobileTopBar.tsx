@@ -1,6 +1,8 @@
 import { Player } from '../../game/types';
 import { livingMaxHp } from '../../game/inventory';
-import { ammoIcon, isArcaneCaster, usesArrows, usesBullets } from '../../game/prestige';
+import { ammoIcon, isArcaneCaster, isFencer, usesArrows, usesBullets } from '../../game/prestige';
+import { applyEquipmentAndPassives } from '../../game/inventory';
+import { FencerHudBadges } from '../FencerHudBadges';
 import { voidHpAttackTooltip } from '../../game/voidAttackCost';
 
 interface MobileTopBarProps {
@@ -87,6 +89,9 @@ export function MobileTopBar({ player, className, level, currentFloor, xpProgres
               >
                 {ammoIcon(player.characterClass, player.equipment)}{player.ammo}
               </span>
+            )}
+            {isFencer(player.characterClass) && (
+              <FencerHudBadges stats={player.stats} evasion={applyEquipmentAndPassives(player).stats.evasion} />
             )}
             {blinkTalentCompact && (
               <span
