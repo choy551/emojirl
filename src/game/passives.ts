@@ -98,7 +98,7 @@ export function getStackableBonusLabel(item: EmojiItem): string | null {
   // regeneration: +1 HP every (6 − copies) turns, min 1-turn interval
   if (p.regeneration) return '5% max HP / 5 turns, up to 10% at ×5';
   if (p.starGaze) return '+1 sight and detection per ×; map-wide at ×5';
-  if (p.royalAura) return 'Royal Guard: +5% stun per ×';
+  if (p.royalAura) return '20% flee on sight · Royal Guard stuns 5% per × instead';
   if (p.vampiricStrike) return '+1 HP per hit per ×';
   if (p.dodgeHeal)      return '+1 HP on dodge per ×';
   if (p.ninjaCombo)     return 'Ninja only: +15% combo chance per × (base 25%)';
@@ -117,7 +117,7 @@ export function getStackableCumulativeLabel(item: EmojiItem): string | null {
   if (p.thorns)       return `+${n} reflect dmg per hit`;
   if (p.regeneration) return `${5 + (Math.min(5, n) - 1) * 1.25}% max HP every 5 turns`;
   if (p.starGaze) return n >= 5 ? 'no stealth · foes path across the map' : `+${n} sight · +${n} detection`;
-  if (p.royalAura) return `Royal Guard stun ${Math.min(5, n) * 5}%`;
+  if (p.royalAura) return `20% flee · Royal Guard stun ${Math.min(5, n) * 5}% instead`;
   if (p.vampiricStrike) return `+${n} HP per hit`;
   if (p.dodgeHeal)      return `+${n} HP on dodge`;
   if (p.ninjaCombo)     return `Ninja only: ${25 + (n-1)*15}% chance of bonus melee strike`;
