@@ -1,7 +1,7 @@
 import { BUILDINGS, buildingOf, structureSurvey, type BuildingDistrict } from './cityBuildings';
 import { recordRunEmojiConsume } from './meta';
 import { moodMax } from './progression';
-import type { MapGrid, Player, Tile } from './types';
+import type { GameState, MapGrid, Player, Tile } from './types';
 
 /** One vault theme per class district. A floor keeps at most one. */
 export const VAULT_DISTRICTS = ['thieves', 'arcane', 'grove', 'saloon', 'void'] as const satisfies readonly BuildingDistrict[];
@@ -161,5 +161,22 @@ export function stepDistrictStructure(
     map: next,
     player: { ...player, stats: { ...player.stats, moodValue: surveyed.moodValue } },
     logs,
+  };
+}
+
+/** Same-turn step: survey or flavor is part of the returned state, not a later log update. */
+export function applyStructureStep(state: GameState, x: number, y: number): GameState {
+  const stepped = stepDistrictStructure(state.map, x, y, state.player);
+  if (!stepped) return state;
+  const lines = stepped.logs.map((text, i) => ({
+    id: `structure-${state.turn}-${x}-${y}-${i}`,
+    text,
+    turn: state.turn,
+  }));
+  return {
+    ...state,
+    map: stepped.map,
+    player: stepped.player,
+    logs: [...lines, ...state.logs].slice(0, 24),
   };
 }
