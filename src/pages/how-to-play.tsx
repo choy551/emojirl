@@ -351,7 +351,7 @@ export default function HowToPlay({
               <div className="flex items-center gap-2">
                 <Kbd>B</Kbd>
                 <span className="text-muted-foreground">
-                  — open full Bag (Hotbar / Equipment / Bank tabs). Inside: arrows/WASD/numpad to navigate, Tab to switch tabs, Enter/Space to act or assign, 1–9 to quick-assign selected to hotbar.
+                  — b opens the Bag on Equipment. Shift+B opens the Bag on Bank. Inside, b closes the bag; arrows/WASD/numpad navigate, Tab switches tabs, Enter/Space acts or assigns, and 1–9 quick-assigns the selection to the hotbar.
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -815,7 +815,7 @@ export default function HowToPlay({
               name: "Crown",
               effect: "Royal Stun",
               detail:
-                "Stacks to 5. A Royal Guard stuns for 5% per crown (25% at 5): the enemy skips its turn. This replaces the old 20% flee.",
+                "Stacks to 5. Other classes: 20% chance an enemy flees when it spots you. Royal Guard gets stun instead, 5% per crown (25% at 5), and the enemy skips its turn.",
               color: "text-yellow-300",
             },
             {

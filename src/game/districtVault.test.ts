@@ -1,14 +1,16 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildingOf } from './cityBuildings';
 import {
+  applyStructureStep,
   districtStructures,
   placeDistrictVault,
   stepDistrictStructure,
   structureFlavor,
   VAULT_DISTRICTS,
 } from './districtVault';
+import type { GameState, MapGrid, Player, Tile } from './types';
 import { loadMeta, setMetaStore, type KeyValueStore } from './meta';
-import type { MapGrid, Player, Tile } from './types';
 
 function memoryStore(): KeyValueStore {
   const mem = new Map<string, string>();
@@ -73,6 +75,26 @@ describe('class district vaults', () => {
     expect(loadMeta().emojiConsumes?.['🏦']).toBe(1);
     expect(structureFlavor('🏗️')).toBe('Long-forgotten construction equipment, from when the Dungeon was first built.');
     expect(structureFlavor('❓')).toBe('The old stone has nothing left to say.');
+
+    const direct = floor(2, 1);
+    direct[0][1] = { type: 'floor', emoji: '🏦', seen: true, visible: true };
+    const stepped = applyStructureStep({
+      turn: 4,
+      map: direct,
+      player: { ...player, pos: { x: 1, y: 0 } },
+      logs: [{ id: 'old', text: 'earlier', turn: 3 }],
+    } as GameState, 1, 0);
+    expect(stepped.map[0][1]).toMatchObject({ emoji: '🏦', surveyed: true, type: 'floor' });
+    expect(loadMeta().emojiConsumes?.['🏦']).toBe(2);
+    expect(stepped.logs[0]?.text).toContain('surveyed');
+    expect(stepped.logs[0]?.text).toContain('EmojiCB gains a token');
+    expect(stepped.logs[1]?.text).toBe('earlier');
+    const flavorNow = applyStructureStep(stepped, 1, 0);
+    expect(flavorNow.logs[0]?.text).toBe('🏦 The Bank looks like it was emptied long ago.');
+    expect(loadMeta().emojiConsumes?.['🏦']).toBe(2);
+    const move = readFileSync(new URL('../hooks/useGameActions.tsx', import.meta.url), 'utf8');
+    expect(move).toContain('applyStructureStep');
+    expect(move).not.toContain('stepped.logs) addLog');
     for (const district of VAULT_DISTRICTS) {
       for (const building of districtStructures(district)) {
         expect(structureFlavor(building.emoji), building.emoji).not.toBe('The old stone has nothing left to say.');

@@ -9,7 +9,7 @@ import { resolveProjectileFlight } from './projectiles';
 import { withVisibility, visionRadiusFor } from './vision';
 import { bfsStepToward, fleeStep, hasLOSBetween, detectionRadius } from './pathfinding';
 import { diamondThorns, foeDetectionRadius, pillRegenAmount, starXpGain, tickStarXpBoost } from './emojiBalance';
-import { crownStuns } from './royalGuard';
+import { crownFlees, crownStuns } from './royalGuard';
 import { PLAYER_PASSABLE_TILES } from './tiles';
 import { passableTilesForEnemy } from './enemies';
 import { tickVolcanoAndLava } from './lava';
@@ -565,6 +565,18 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
       : (dist <= enemyDetectionRadius || enemy.engaged);
     if (entersCombat) {
       if (!enemy.engaged && dist <= enemyDetectionRadius && enemy.tag !== 'Neutral') {
+        if (crownFlees(_freezePassives.crownStacks, Math.random(), state.player.characterClass)) {
+          const fleePos = fleeStep(map, enemy.pos, player.pos, occupied, passable);
+          if (fleePos) {
+            openDoorIfNeeded(fleePos, enemy);
+            newEnemies[i] = { ...newEnemies[i], pos: fleePos, patrolTarget: undefined };
+            occupied.add(`${fleePos.x},${fleePos.y}`);
+          } else {
+            occupied.add(`${enemy.pos.x},${enemy.pos.y}`);
+          }
+          log(`👑 ${enemy.emoji} ${enemy.name} flees from the crown!`);
+          continue;
+        }
         const traitHint = enemy.cowardly
           ? ' ...it looks ready to bolt!'
           : enemy.berserker
