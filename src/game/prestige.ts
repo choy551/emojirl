@@ -13,6 +13,7 @@ import {
   FENCER_FLOURISH_EVERY,
   FENCER_FLOURISH_MULT,
   FENCER_LUNGE_CD,
+  FENCER_LUNGE_CHAIN_RANGE,
   FENCER_LUNGE_RANGE,
   FENCER_RIPOSTE_MULT,
   GENIE,
@@ -524,21 +525,30 @@ export function planBackdash(player: Player, enemies: Enemy[], map: { type: stri
   return step2;
 }
 
-export function planLunge(player: Player, enemies: Enemy[], map: { type: string }[][]): { pos: Position; target: Enemy } | null {
+export function lungeReach(stats: Player['stats'], turn: number): number {
+  return footworkCombo(stats, turn, 'backdash') ? FENCER_LUNGE_CHAIN_RANGE : FENCER_LUNGE_RANGE;
+}
+
+export function planLunge(player: Player, enemies: Enemy[], map: { type: string }[][], turn = 0): { pos: Position; target: Enemy } | null {
   if ((player.stats.lungeCooldown ?? 0) > 0) return null;
-  const foes = enemies.filter(e => isFoe(e) && chebyshev(player.pos, e.pos) <= FENCER_LUNGE_RANGE && chebyshev(player.pos, e.pos) > 0);
+  const reach = lungeReach(player.stats, turn);
+  const foes = enemies.filter(e => {
+    const dist = chebyshev(player.pos, e.pos);
+    return isFoe(e) && dist > 0 && dist <= reach;
+  });
   if (foes.length === 0) return null;
   const target = [...foes].sort((a, b) => chebyshev(player.pos, a.pos) - chebyshev(player.pos, b.pos))[0];
-  const dist = chebyshev(player.pos, target.pos);
-  if (dist <= 1) return { pos: player.pos, target };
-  const step = {
-    x: player.pos.x + Math.sign(target.pos.x - player.pos.x),
-    y: player.pos.y + Math.sign(target.pos.y - player.pos.y),
-  };
-  if (step.x === target.pos.x && step.y === target.pos.y) return { pos: player.pos, target };
-  if (!tileOpen(map, step, enemies, player.pos)) return null;
-  if (chebyshev(step, target.pos) > 1) return null;
-  return { pos: step, target };
+  let pos = player.pos;
+  while (chebyshev(pos, target.pos) > 1) {
+    const step = {
+      x: pos.x + Math.sign(target.pos.x - pos.x),
+      y: pos.y + Math.sign(target.pos.y - pos.y),
+    };
+    if (step.x === target.pos.x && step.y === target.pos.y) return { pos, target };
+    if (!tileOpen(map, step, enemies, player.pos)) return null;
+    pos = step;
+  }
+  return { pos, target };
 }
 
 export { FENCER_BACKDASH_CD, FENCER_LUNGE_CD, HITMAN_EXECUTE_CD, HITMAN_EXECUTE_GOLD, HITMAN_EXECUTE_BULLETS };
