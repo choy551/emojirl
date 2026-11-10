@@ -815,7 +815,7 @@ export default function HowToPlay({
               name: "Crown",
               effect: "Royal Stun",
               detail:
-                "Stacks to 5. A Royal Guard stuns for 5% per crown (25% at 5): the enemy skips its turn. This replaces the old 20% flee.",
+                "Stacks to 5. Other classes: 20% chance an enemy flees when it spots you. Royal Guard gets stun instead, 5% per crown (25% at 5), and the enemy skips its turn.",
               color: "text-yellow-300",
             },
             {
