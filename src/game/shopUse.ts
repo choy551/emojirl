@@ -16,6 +16,7 @@ import { isArcaneCaster } from './prestige';
 import { applyStarConsume, pillOverhealHp, starXpGain } from './emojiBalance';
 import { buildingOf, structureSurvey } from './cityBuildings';
 import { recordRunEmojiConsume } from './meta';
+import { isStackableBagPassive } from './passives';
 
 export type ShopUseBlockReason =
   | 'Not enough gold'
@@ -315,4 +316,52 @@ export function applyInstantItemUse(
     if (slain?.isBoss) midState = creditVoidBoss(midState, slain);
   }
   return withVisibility(applyEnemyTurns(midState, runEnemyTurns(midState)));
+}
+
+/**
+ * Bank Consume. Same on-use effect as the hotbar, then the Bank copy is spent.
+ * A refused use (full HP, no lightning target) leaves the item and returns null;
+ * refusal lines are reported through addLog because they are not part of a new state.
+ */
+export function consumeBankItem(
+  state: GameState,
+  itemId: string,
+  opts: {
+    addLog: (text: string) => void;
+    applyMonkeyDropOnKill: (killed: Enemy, player: Player) => Player;
+    rng?: () => number;
+  },
+): GameState | null {
+  const item = state.player.bank.find(entry => entry.id === itemId);
+  if (!item || item.consumed || item.isEquipment || item.isStructure) return null;
+
+  const refused: string[] = [];
+  const applied = applyInstantItemUse(state, item, {
+    source: 'bag',
+    addLog: text => { refused.push(text); },
+    applyMonkeyDropOnKill: opts.applyMonkeyDropOnKill,
+  });
+  if (!applied) {
+    refused.forEach(opts.addLog);
+    return null;
+  }
+  // A money bag only logs a hint. It is not spent and the turn does not pass.
+  if (applied.turn === state.turn) return applied;
+
+  const echo = state.player.characterClass === '🧙' && (opts.rng ?? Math.random)() < 0.25;
+  let bank = applied.player.bank;
+  let logs = applied.logs;
+  if (echo) {
+    _flashSignals.spellEchoFlashPending = true;
+    logs = [{
+      id: `echo-${applied.turn}-${item.id}`,
+      text: `🧙 Spell Echo! ${item.emoji} resonates — not consumed.`,
+      turn: applied.turn,
+    }, ...logs].slice(0, 24);
+  } else if (isStackableBagPassive(item) && (item.stackCount ?? 1) > 1) {
+    bank = bank.map(entry => entry.id === itemId ? { ...entry, stackCount: (entry.stackCount ?? 1) - 1 } : entry);
+  } else {
+    bank = bank.filter(entry => entry.id !== itemId);
+  }
+  return { ...applied, logs, player: { ...applied.player, bank } };
 }
