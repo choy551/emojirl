@@ -381,7 +381,7 @@ export default function HowToPlay({
                 • <strong>Cowboy 🤠</strong>: 1 yeehaw tactics (special flavor/ability)<br />
                 • <strong>The Void 👤</strong>: <em>t</em> cycles Melee → Ranger autos → Wizard autos (locked styles are skipped, with a progress line such as “Wizard autos: 4/10 magic emoji”). Ranger autos unlock after 10 ranged emoji (bows, arrows, guns, bullets, boomerangs). Wizard autos unlock after 10 magic emoji (potions, crystals, stars, spellbooks, wands). Wizard autos cost 1 HP per attack, plus 1 HP for each depth boss beaten. Ranger autos spend ammo first, then that same HP cost. Below 25% HP, or if paying would be lethal, both switch to melee. <em>U</em> aims Unmake.<br />
                 • <strong>Genie 🧞‍♀️</strong>: same aim keys as the Wizard; 4 is Blink. 5 toggles Bloodcast and 6 toggles Overchannel (both start on). 7 toggles Safe fireballs (starts off). Fireball replaces the bolt.<br />
-                • <strong>Fencer 🤺</strong>: 1 Backdash (up to 2 tiles, auto-parry 1, Riposte) / 2 Lunge (X lunges). Backdash then Lunge is a double attack. Lunge then Backdash auto-parries 2 and banks 2 Ripostes.<br />
+                • <strong>Fencer 🤺</strong>: 1 Backdash (up to 2 tiles, auto-parry 1, Riposte) / 2 Lunge (up to 3 tiles, or 5 the turn after a Backdash). Backdash then Lunge is a double attack and always reaches that 5-tile chain. Lunge then Backdash auto-parries 2 and banks 2 Ripostes.<br />
                 • <strong>Levitating Hitman 🕴️</strong>: 1 Execute Contract (X) / 2 stealth<br />
                 • <strong>Royal Guard 💂</strong>: starts in melee. 1 ranged (only with a bow or gun equipped) / 2 melee / 4 Guardian Stance (X)
               </div>

@@ -1,7 +1,7 @@
 import { Player } from '../../game/types';
 import { applyEquipmentAndPassives } from '../../game/inventory';
 import { blinkStrikeMultiplierPercent, critStat, overkillStatusPhrase } from '../../game/blinkStrike';
-import { genieBloodcastEnabled, genieOverchannelEnabled, genieSafeFireballEnabled, isArcaneCaster, isFencer, isHitman, isRoyalGuard, type GenieCastToggle } from '../../game/prestige';
+import { genieBloodcastEnabled, genieOverchannelEnabled, genieSafeFireballEnabled, isArcaneCaster, isFencer, isHitman, isRoyalGuard, lungeReach, type GenieCastToggle } from '../../game/prestige';
 import { voidHpAttackTooltip, voidRangedHpCost } from '../../game/voidAttackCost';
 
 // Mirrors the cooldown constants in useTacticsActions.ts (BLINK_ACTIVE + BLINK_CD).
@@ -108,7 +108,7 @@ export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
     const lunge = player.stats.lungeCooldown ?? 0;
     return [
       { id: 'fencer-back', icon: '🤺', label: 'Backdash', detail: back > 0 ? `${back}t` : 'Ready', disabled: back > 0, onUse: handleBackdash },
-      { id: 'fencer-lunge', icon: '⚔️', label: 'Lunge', detail: lunge > 0 ? `${lunge}t` : 'Ready', disabled: lunge > 0, onUse: handleLunge },
+      { id: 'fencer-lunge', icon: '⚔️', label: 'Lunge', detail: lunge > 0 ? `${lunge}t` : `${lungeReach(player.stats, turn)} tiles`, title: 'Lunge reaches 3 tiles. The turn after a Backdash it reaches 5, and that chain is a double attack.', disabled: lunge > 0, onUse: handleLunge },
     ];
   }
   if (isHitman(player.characterClass)) {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { Enemy, Player } from './types';
-import { fencerStatusBadges, footworkCombo, lungeHitMults, planBackdash } from './prestige';
+import { fencerStatusBadges, footworkCombo, lungeHitMults, planBackdash, planLunge } from './prestige';
 import { FENCER_EVA_CAP, FENCER_FLOURISH_EVERY, FENCER_LUNGE_MULT, FENCER_RIPOSTE_MULT } from './prestigeConstants';
 import { SAVE_KEY, SAVE_SCHEMA_VERSION, loadGame } from './save';
 
@@ -60,6 +60,28 @@ describe('fencer footwork', () => {
     expect(planBackdash(fencer(), [foe(2, 3)], map)).toEqual({ x: 2, y: 1 });
     map[1][2] = { type: 'wall' };
     expect(planBackdash(fencer(), [foe(2, 3)], map)).toBeNull();
+  });
+
+  it('lunges 3 tiles, and 5 the turn after a Backdash', () => {
+    const lane = [Array.from({ length: 8 }, () => ({ type: 'floor' as const }))];
+    const hero = fencer({ pos: { x: 0, y: 0 } });
+    const at = (x: number) => [foe(x, 0)];
+    const base3 = planLunge(hero, at(3), lane, 5);
+    expect(base3?.target.pos).toEqual({ x: 3, y: 0 });
+    expect(base3?.pos).toEqual({ x: 2, y: 0 });
+    expect(planLunge(hero, at(4), lane, 5)).toBeNull();
+
+    const chained = fencer({
+      pos: { x: 0, y: 0 },
+      stats: { ...hero.stats, fencerLastAct: 'backdash', fencerLastActTurn: 4 },
+    });
+    const reach5 = planLunge(chained, at(5), lane, 5);
+    expect(reach5?.target.pos).toEqual({ x: 5, y: 0 });
+    expect(reach5?.pos).toEqual({ x: 4, y: 0 });
+    expect(planLunge(chained, at(6), lane, 5)).toBeNull();
+    expect(planLunge(chained, at(5), lane, 6)).toBeNull();
+    const manual = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
+    expect(manual).toContain('up to 3 tiles, or 5 the turn after a Backdash');
   });
 
   it('doubles a lunge after a backdash, and banks two ripostes the other way', () => {

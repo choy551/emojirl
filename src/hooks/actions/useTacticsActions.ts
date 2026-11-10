@@ -204,7 +204,7 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
       addLog(`🤺 Lunge cooling down (${state.player.stats.lungeCooldown}t).`);
       return;
     }
-    const plan = planLunge(state.player, state.enemies, state.map);
+    const plan = planLunge(state.player, state.enemies, state.map, state.turn);
     if (!plan) { addLog('🤺 Nobody in lunge range.'); return; }
     setGameState(prev => {
       if (!prev || prev.gameOver) return prev;

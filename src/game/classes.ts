@@ -6,6 +6,8 @@ import {
   FENCER_EVA_AT_EMPTY,
   FENCER_FLOURISH_EVERY,
   FENCER_LUNGE_CD,
+  FENCER_LUNGE_CHAIN_RANGE,
+  FENCER_LUNGE_RANGE,
   FENCER_PARRY_CHANCE,
   FENCER_RIPOSTE_MULT,
   GENIE_BASE_MP,
@@ -130,7 +132,7 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
       { label: 'Riposte', detail: `After a parry, or a Backdash, your next melee hit deals ${Math.round(FENCER_RIPOSTE_MULT * 100)}% damage. Charges stack.` },
       { label: 'Blade Flourish', detail: `Every ${FENCER_FLOURISH_EVERY}rd melee hit is a flourish and deals extra damage.` },
     ],
-    active: { label: 'Footwork', detail: `Backdash steps up to 2 tiles away from the nearest foe, stopping early if blocked, and auto-parries the next attack (${FENCER_BACKDASH_CD} turn cooldown). Lunge closes and strikes (${FENCER_LUNGE_CD} turn cooldown). Backdash then Lunge is a double attack. Lunge then Backdash auto-parries 2 attacks and banks 2 Ripostes.` },
+    active: { label: 'Footwork', detail: `Backdash steps up to 2 tiles away from the nearest foe, stopping early if blocked, and auto-parries the next attack (${FENCER_BACKDASH_CD} turn cooldown). Lunge closes up to ${FENCER_LUNGE_RANGE} tiles and strikes (${FENCER_LUNGE_CD} turn cooldown). The turn after a Backdash, that Lunge reaches ${FENCER_LUNGE_CHAIN_RANGE} tiles and is a double attack. Lunge then Backdash auto-parries 2 attacks and banks 2 Ripostes.` },
   },
   '🕴️': {
     name: 'Levitating Hitman',

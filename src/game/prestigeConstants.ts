@@ -85,7 +85,9 @@ export const FENCER_FLOURISH_EVERY = 3;
 export const FENCER_FLOURISH_MULT = 1.5;
 export const FENCER_BACKDASH_CD = 6;
 export const FENCER_LUNGE_CD = 6;
-export const FENCER_LUNGE_RANGE = 2;
+export const FENCER_LUNGE_RANGE = 3;
+/** Reach on the turn after a Backdash. */
+export const FENCER_LUNGE_CHAIN_RANGE = 5;
 export const FENCER_LUNGE_MULT = 1.6;
 
 // ── Royal Guard (hybrid, 3 passives + Guardian Stance) ──────────────────────
