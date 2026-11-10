@@ -188,6 +188,43 @@ export function riposteChargeCount(stats: Player['stats']): number {
   return Math.max(0, stats.riposteCharges ?? 0) + (stats.riposteReady ? 1 : 0);
 }
 
+export interface FencerStatusBadge {
+  id: 'flourish' | 'riposte' | 'poise';
+  label: string;
+  title: string;
+  dim: boolean;
+}
+
+/** Top-bar Flourish progress, Riposte charges, and current Poise dodge. */
+export function fencerStatusBadges(stats: Player['stats'], totalEvasion: number): FencerStatusBadge[] {
+  const flourish = Math.max(0, Math.floor(stats.flourishCount ?? 0));
+  const riposte = riposteChargeCount(stats);
+  const crit = fencerCritBonus(stats.hp, stats.maxHp);
+  const poise = fencerEvasion(stats.hp, stats.maxHp, totalEvasion);
+  return [
+    {
+      id: 'flourish',
+      label: `Flourish ${flourish}/${FENCER_FLOURISH_EVERY}`,
+      title: `Blade Flourish: ${flourish} of every ${FENCER_FLOURISH_EVERY} melee hits. The next flourish deals extra damage.`,
+      dim: flourish === 0,
+    },
+    {
+      id: 'riposte',
+      label: `Riposte ${riposte}`,
+      title: riposte === 0
+        ? 'No Riposte charges. A parry or Backdash banks one for the next melee hit.'
+        : `${riposte} Riposte charge${riposte === 1 ? '' : 's'}. The next melee hit deals ${Math.round(FENCER_RIPOSTE_MULT * 100)}% damage.`,
+      dim: riposte === 0,
+    },
+    {
+      id: 'poise',
+      label: `Poise ${poise}%`,
+      title: `Poise from current HP: ${poise}% dodge (cap ${FENCER_EVA_CAP}%) and +${crit} crit.`,
+      dim: poise === 0,
+    },
+  ];
+}
+
 export function fencerOutgoingMult(stats: Player['stats']): { mult: number; nextFlourish: number; riposteCharges: number } {
   let mult = 1;
   let flourish = stats.flourishCount ?? 0;

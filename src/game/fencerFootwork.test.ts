@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { Enemy, Player } from './types';
-import { footworkCombo, lungeHitMults, planBackdash } from './prestige';
-import { FENCER_LUNGE_MULT, FENCER_RIPOSTE_MULT } from './prestigeConstants';
+import { fencerStatusBadges, footworkCombo, lungeHitMults, planBackdash } from './prestige';
+import { FENCER_EVA_CAP, FENCER_FLOURISH_EVERY, FENCER_LUNGE_MULT, FENCER_RIPOSTE_MULT } from './prestigeConstants';
 import { SAVE_KEY, SAVE_SCHEMA_VERSION, loadGame } from './save';
 
 function fencer(over: Partial<Player> = {}): Player {
@@ -29,6 +29,28 @@ function foe(x: number, y: number): Enemy {
 function openMap() {
   return Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => ({ type: 'floor' })));
 }
+
+describe('fencer status badges', () => {
+  it('dims empty Flourish and Riposte and shows live Poise', () => {
+    const quiet = fencerStatusBadges(fencer().stats, 8);
+    expect(quiet.find(b => b.id === 'flourish')).toMatchObject({ label: `Flourish 0/${FENCER_FLOURISH_EVERY}`, dim: true });
+    expect(quiet.find(b => b.id === 'riposte')).toMatchObject({ label: 'Riposte 0', dim: true });
+    expect(quiet.find(b => b.id === 'poise')?.label).toBe('Poise 10%');
+    expect(quiet.find(b => b.id === 'poise')?.title).toContain('+25 crit');
+    expect(quiet.find(b => b.id === 'poise')?.title).toContain(`${FENCER_EVA_CAP}%`);
+
+    const hot = fencerStatusBadges({
+      ...fencer().stats,
+      hp: 1,
+      flourishCount: 2,
+      riposteCharges: 3,
+    }, 8);
+    expect(hot.find(b => b.id === 'flourish')).toMatchObject({ label: 'Flourish 2/3', dim: false });
+    expect(hot.find(b => b.id === 'riposte')).toMatchObject({ label: 'Riposte 3', dim: false });
+    expect(hot.find(b => b.id === 'poise')?.label).toBe('Poise 39%');
+    expect(hot.find(b => b.id === 'poise')?.dim).toBe(false);
+  });
+});
 
 describe('fencer footwork', () => {
   it('backdashes two tiles and stops early when the second tile is blocked', () => {

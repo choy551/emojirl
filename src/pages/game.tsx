@@ -29,6 +29,7 @@ import { MOODS } from '../game/moods';
 import { cowboyCombatMoodValue, isDrinkStealthActive, playerMood } from '../game/drinks';
 import { getClassDef } from '../game/classes';
 import { classFlies, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, startFloorContract, toggleGenieCast, type GenieCastToggle } from '../game/prestige';
+import { FencerHudBadges } from '../components/FencerHudBadges';
 import { chooseGuardShot, guardHasRangedWeapon, hotbarCrown, initialRangerMode, splitPooledGuardAmmo } from '../game/royalGuard';
 import { GENIE_BASE_MP } from '../game/prestigeConstants';
 import { saveScore, leaderboardEntryFromRun } from '../game/leaderboard';
@@ -3186,7 +3187,12 @@ export default function Game() {
             </div>
             <div className="text-[9px] text-muted-foreground/60 leading-tight">
               {isArcaneCaster(player.characterClass) && (wizardTactics.mode === 'nearest' ? '🎯 Nearest' : wizardTactics.mode === 'furthest' ? '🎯 Furthest' : wizardTactics.mode === 'manual' ? (wizardTactics.manualTargetId ? '🎯 Locked' : '🎯 Manual') : '✨ Blink')}
-              {isFencer(player.characterClass) && `🤺 ${(player.stats.lungeCooldown ?? 0) === 0 ? 'Lunge' : player.stats.lungeCooldown + 't'}`}
+              {isFencer(player.characterClass) && (
+                <span className="inline-flex items-center gap-1">
+                  <span>🤺 {(player.stats.lungeCooldown ?? 0) === 0 ? 'Lunge' : `${player.stats.lungeCooldown}t`}</span>
+                  <FencerHudBadges stats={player.stats} evasion={applyEquipmentAndPassives(player).stats.evasion} />
+                </span>
+              )}
               {isHitman(player.characterClass) && `🕴️ ${(player.stats.contractKills ?? 0)}/${player.stats.contractGoal ?? 0}${gameState.stealthMode ? ' · stealth' : ''}`}
               {isRoyalGuard(player.characterClass) && `${rangerMode === 'ranged' ? '🏹 Ranged' : '⚔️ Melee'}${(player.stats.guardianStanceTurns ?? 0) > 0 ? ' · stance' : ''}`}
               {player.characterClass === '🥷' && (
