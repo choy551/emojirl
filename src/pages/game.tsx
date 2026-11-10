@@ -4,6 +4,7 @@ import { Player, Enemy, EmojiItem, GameState, Position, EquipSlot } from '../gam
 import { getCowboyUnarmedBonus, getMoodModifiers, isHostileCombatTarget, playerDodgeChance } from '../game/combat';
 import { planAutofight } from '../game/autofight';
 import { resolveContextAction, resolveMobileContext } from '../game/contextAction';
+import { bagHotkey } from '../game/bagHotkey';
 import { softCapTitles } from '../game/softCap';
 import {
   blinkNoTargetLog,
@@ -1788,8 +1789,10 @@ export default function Game() {
           setBagTab(tabs[next]); setFocusedBagIdx(0); return;
         }
 
-        // B: close modal
-        if (e.key === 'b') { setBankOpen(false); setSelectedItemId(null); return; }
+        // b closes the bag. Shift+B stays open and shows the Bank tab.
+        const bagKey = bagHotkey(e.key, true);
+        if (bagKey === 'close') { setBankOpen(false); setSelectedItemId(null); return; }
+        if (bagKey === 'bank') { setBagTab('bank'); setFocusedBagIdx(0); setSelectedItemId(null); return; }
         // Esc: deselect first, then close
         if (e.key === 'Escape') {
           if (selectedItemIdRef.current) { setSelectedItemId(null); return; }
@@ -2226,8 +2229,18 @@ export default function Game() {
       }
 
 
-      // ── Bag: open with B ──────────────────────────────────────────────────
-      if (e.key === 'b') { e.preventDefault(); setBankOpen(true); setSelectedItemId(null); return; }
+      // ── Bag: b opens Equipment, Shift+B opens Bank ───────────────────────
+      {
+        const bagKey = bagHotkey(e.key, false);
+        if (bagKey === 'equipment' || bagKey === 'bank') {
+          e.preventDefault();
+          setBagTab(bagKey);
+          setFocusedBagIdx(0);
+          setBankOpen(true);
+          setSelectedItemId(null);
+          return;
+        }
+      }
       // ── Combat log: open with / ───────────────────────────────────────────
       if (logOpenRef.current && e.key !== 'Escape') {
         e.preventDefault();
