@@ -1,20 +1,16 @@
 import { useCallback } from 'react';
 import { EquipSlot } from '../../game/types';
-import { rollKillDrop } from '../../game/dropTable';
-import { markEnemySeen, markEnemyKilled } from '../../game/discoveries';
-import { isStackableBagPassive } from '../../game/passives';
 import {
-  moodMax, levelFromXP, addToPlayerBag, activeKindLabel, sortBagSlots, buildHotbarSlots, computeBagPassives,
-  isNonStackableBagPassiveDuplicate, isActiveKindDuplicate, runEnemyTurns, applyEnemyTurns, cookedEatHeal, livingMaxHp,
-  healHp, applySoulHp, applyBankToHotbarSlot,
+  addToPlayerBag, activeKindLabel, sortBagSlots, buildHotbarSlots,
+  isNonStackableBagPassiveDuplicate, isActiveKindDuplicate, runEnemyTurns, applyEnemyTurns,
+  applyBankToHotbarSlot,
 } from '../../game/gameHelpers';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 import { _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../../game/flashSignals';
 import { canEquipInSlot, equipRestrictionReason } from '../../components/itemUtils';
 import { settleHandEquip } from '../../game/weaponCombo';
-import { applyDrinkToPlayer } from '../../game/drinks';
-import { creditVoidBoss, hotbarCapFor } from '../../game/voidDamage';
-import { surveyBankedBlueprint } from '../../game/shopUse';
+import { hotbarCapFor } from '../../game/voidDamage';
+import { consumeBankItem, surveyBankedBlueprint } from '../../game/shopUse';
 
 export function useInventoryActions(
   setters: GameSetters,
@@ -104,105 +100,9 @@ export function useInventoryActions(
         return applyEnemyTurns(mid, runEnemyTurns(mid));
       }
 
-      const stats = { ...prev.player.stats };
-
-      if (item.healAmount !== undefined) {
-        const pool = livingMaxHp(prev.player);
-        if (stats.hp >= pool) { addLog('Already at full HP.'); return prev; }
-        const amount = cookedEatHeal(item, prev.chefLessonCount ?? 0, pool);
-        const wasLow = stats.hp / pool <= 0.3;
-        stats.hp = healHp(stats.hp, pool, amount);
-        stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + (wasLow ? 40 : 10));
-        addLog(wasLow
-          ? `${item.emoji} ${item.name}: +${amount} HP — relief floods through you! Mood surges!`
-          : `${item.emoji} ${item.name}: +${amount} HP restored.`);
-        const newBank = prev.player.bank.filter(i => i.id !== itemId);
-        const mid = { ...prev, player: { ...prev.player, stats, bank: newBank }, turn: prev.turn + 1 };
-        return applyEnemyTurns(mid, runEnemyTurns(mid));
-      }
-
-      if (item.drinkTier !== undefined) {
-        const drank = applyDrinkToPlayer(prev.player, item);
-        if (!drank.ok) { addLog(drank.log); return prev; }
-        addLog(drank.log);
-        const newBank = prev.player.bank.filter(i => i.id !== itemId);
-        const mid = { ...prev, player: { ...drank.player, bank: newBank }, turn: prev.turn + 1 };
-        return applyEnemyTurns(mid, runEnemyTurns(mid));
-      }
-
-      const effect = (item as any).effect;
-      if (effect?.instakillNearest) {
-        const anyVisible = prev.enemies.some(e => prev.map[e.pos.y]?.[e.pos.x]?.visible);
-        if (!anyVisible) { addLog(`${item.emoji} No visible enemies to strike!`); return prev; }
-      }
-      if (effect) {
-        const souled = applySoulHp({ ...prev.player, stats }, effect);
-        stats.hp = souled.stats.hp;
-        stats.maxHp = souled.stats.maxHp;
-        stats.defense = souled.stats.defense;
-        if (effect.attackBonus)  stats.attack    = stats.attack  + effect.attackBonus;
-        if (effect.speedBonus)   stats.speed     = (stats.speed   ?? 0) + effect.speedBonus;
-        if (effect.evasionBonus) stats.evasion   = (stats.evasion ?? 0) + effect.evasionBonus;
-        if (effect.luckBonus)    stats.luck      = (stats.luck    ?? 0) + effect.luckBonus;
-        if (effect.moodBonus)    stats.moodValue = Math.min(moodMax(prev.player.characterClass), stats.moodValue + effect.moodBonus);
-        if (effect.xpBonus) {
-          const newXP = stats.xp + effect.xpBonus;
-          const newLevel = levelFromXP(newXP);
-          if (newLevel > stats.level) addLog(`✨ Level up! You are now level ${newLevel}!`);
-          stats.xp = newXP; stats.level = newLevel;
-        }
-        addLog(`${item.emoji} ${effect.label}`);
-      } else {
-        addLog(`${item.emoji} ${item.name} activated!`);
-      }
-
-      const isWizard = prev.player.characterClass === '🧙';
-      const echo = isWizard && Math.random() < 0.25;
-      let newBank = prev.player.bank;
-      if (echo) {
-        _flashSignals.spellEchoFlashPending = true;
-        addLog(`🧙 Spell Echo! ${item.emoji} resonates — not consumed.`);
-      } else if (isStackableBagPassive(item) && (item.stackCount ?? 1) > 1) {
-        newBank = prev.player.bank.map(it => it.id === itemId ? { ...it, stackCount: (it.stackCount ?? 1) - 1 } : it);
-      } else {
-        newBank = prev.player.bank.filter(i => i.id !== itemId);
-      }
-
-      let newPlayer = { ...prev.player, stats, bank: newBank };
-      let newEnemies = prev.enemies;
-      let newItems = prev.items;
-
-      if (effect?.instakillNearest) {
-        const visible = prev.enemies.filter(e => prev.map[e.pos.y]?.[e.pos.x]?.visible);
-        const target = visible.reduce((closest, e) => {
-          const d1 = Math.abs(e.pos.x - prev.player.pos.x) + Math.abs(e.pos.y - prev.player.pos.y);
-          const d2 = Math.abs(closest.pos.x - prev.player.pos.x) + Math.abs(closest.pos.y - prev.player.pos.y);
-          return d1 < d2 ? e : closest;
-        });
-        markEnemySeen(target.emoji); markEnemyKilled(target.emoji);
-        addLog(`⚡ ZAP! ${target.emoji} ${target.name} is obliterated!`);
-        newEnemies = prev.enemies.filter(e => e.id !== target.id);
-        newPlayer = applyMonkeyDropOnKill(target, newPlayer);
-        const drop = rollKillDrop({
-          boss: !!target.isBoss,
-          clover: computeBagPassives(newPlayer.inventory).bonusLoot,
-          floor: prev.currentFloor,
-          playerClass: newPlayer.characterClass,
-          cowboyDualGuns: newPlayer.characterClass === '🤠' && newPlayer.equipment.mainHand?.weaponKind === 'gun' && newPlayer.equipment.offHand?.weaponKind === 'gun',
-        });
-        if (drop) {
-          newItems = [...newItems, { ...drop, id: `zap-drop-${Math.random()}`, consumed: false, pos: target.pos }];
-        }
-      }
-
-      let mid = { ...prev, player: newPlayer, enemies: newEnemies, items: newItems, turn: prev.turn + 1 };
-      if (effect?.instakillNearest) {
-        const slain = prev.enemies.find(e => !newEnemies.some(n => n.id === e.id));
-        if (slain?.isBoss) mid = creditVoidBoss(mid, slain);
-      }
-      return applyEnemyTurns(mid, runEnemyTurns(mid));
+      return consumeBankItem(prev, itemId, { addLog, applyMonkeyDropOnKill }) ?? prev;
     });
-  }, [addLog, setGameState]);
+  }, [addLog, applyMonkeyDropOnKill, setGameState]);
 
   const handleEquip = useCallback((itemId: string, slot: EquipSlot) => {
     setGameState(prev => {
