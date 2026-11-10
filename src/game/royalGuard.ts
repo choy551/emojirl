@@ -19,6 +19,14 @@ export function crownStuns(stacks: number, roll: number, characterClass: string)
   return chance > 0 && roll < chance;
 }
 
+/** Other classes. One or more Crowns is a 20% chance an enemy flees when it spots you. */
+export const CROWN_FLEE_CHANCE = 0.2;
+
+export function crownFlees(stacks: number, roll: number, characterClass: string): boolean {
+  if (characterClass === ROYAL_GUARD || stacks <= 0) return false;
+  return roll < CROWN_FLEE_CHANCE;
+}
+
 /** Off-hand share of ATK when both hands are blades. 50% + 1% per level, 100% at level 50. */
 export function royalOffhandFraction(level: number): number {
   const lv = Math.max(0, Math.floor(level));

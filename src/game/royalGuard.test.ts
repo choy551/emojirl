@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EmojiItem, Enemy, Player } from './types';
+import type { EmojiItem, Enemy, GameState, MapGrid, Player, Tile } from './types';
+import { applyEnemyTurns, runEnemyTurns } from './enemyTurns';
 import { SAVE_KEY, SAVE_SCHEMA_VERSION, loadGame } from './save';
 import { resolveCombat } from './combat';
 import { readFileSync } from 'node:fs';
 import {
   afterGuardShot,
   chooseGuardShot,
+  crownFlees,
   crownStunChance,
   crownStuns,
   gainCarriedAmmo,
@@ -31,8 +33,65 @@ describe('royal guard crowns and ranged', () => {
     expect(crownStuns(1, 0.049, '💂')).toBe(true);
     expect(crownStuns(1, 0.05, '💂')).toBe(false);
     expect(crownStuns(5, 0.2, '🧙')).toBe(false);
+    expect(crownFlees(1, 0, '🧙')).toBe(true);
+    expect(crownFlees(1, 0.2, '🧙')).toBe(false);
+    expect(crownFlees(0, 0, '🧙')).toBe(false);
+    expect(crownFlees(3, 0, '💂')).toBe(false);
     expect(hotbarCrown().isEquipment).toBeUndefined();
     expect(hotbarCrown().bagPassive?.royalAura).toBe(true);
+  });
+
+  it('sends a spotted enemy fleeing for other classes and stuns for the Royal Guard', () => {
+    const floor = (): Tile => ({ type: 'floor', emoji: '⬜', seen: true, visible: true });
+    const map: MapGrid = Array.from({ length: 3 }, () => Array.from({ length: 5 }, floor));
+    const crown: EmojiItem = {
+      id: 'crown', emoji: '👑', name: 'Crown', description: '', consumed: false,
+      bagPassive: { description: 'aura', royalAura: true },
+    };
+    const enemy: Enemy = {
+      id: 'gob', emoji: '👺', name: 'Goblin', pos: { x: 2, y: 1 },
+      hp: 8, maxHp: 8, attack: 1, defense: 0, speed: 1, engaged: false,
+    };
+    const state = (cls: string): GameState => ({
+      schemaVersion: 1,
+      player: {
+        pos: { x: 1, y: 1 }, emoji: cls, characterClass: cls, ammo: 0,
+        stats: { hp: 20, maxHp: 20, attack: 2, defense: 0, speed: 1, evasion: 0, luck: 0, level: 1, xp: 0, moodValue: 0, gold: 0 },
+        inventory: [crown], bank: [], equipment: {},
+      },
+      currentFloor: 1,
+      map,
+      enemies: [{ ...enemy }],
+      items: [],
+      turn: 2,
+      logs: [],
+      floatingTexts: [],
+      gameOver: false,
+      victory: false,
+      levelUpPending: false,
+      cameraOffset: { x: 0, y: 0 },
+      placedBombs: [],
+      activeProjectile: null,
+      killCounts: {},
+      difficultyTier: 0,
+      highestPressureTierWarned: 0,
+    });
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      const fled = applyEnemyTurns(state('🧙'), runEnemyTurns(state('🧙')));
+      expect(fled.logs.some(line => line.text.includes('flees from the crown'))).toBe(true);
+      expect(fled.enemies[0]?.pos).toEqual({ x: 3, y: 1 });
+      expect(fled.logs.some(line => line.text.includes('stunned'))).toBe(false);
+      const stunned = applyEnemyTurns(state('💂'), runEnemyTurns(state('💂')));
+      expect(stunned.logs.some(line => line.text.includes('stunned by the crown'))).toBe(true);
+      expect(stunned.enemies[0]?.pos).toEqual({ x: 2, y: 1 });
+      expect(stunned.logs.some(line => line.text.includes('flees from the crown'))).toBe(false);
+    } finally {
+      random.mockRestore();
+    }
+    const manual = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
+    expect(manual).toContain('20% chance an enemy flees');
+    expect(manual).toContain('Royal Guard gets stun instead');
   });
 
   it('starts in melee and shoots only with a bow or gun', () => {
