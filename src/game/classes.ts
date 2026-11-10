@@ -23,10 +23,8 @@ import {
   GUARDIAN_STANCE_CD,
   GUARDIAN_STANCE_TURNS,
   HITMAN_CONTRACT_KILLS,
-  HITMAN_DUAL_MULT,
   HITMAN_EXECUTE_CD,
   HITMAN_EXECUTE_HP_PCT,
-  HITMAN_SINGLE_MULT,
   HITMAN_START_AMMO,
   ROYAL_AURA_DEF,
   ROYAL_BARE_MELEE_MULT,
@@ -143,9 +141,9 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
     passives: [
       { label: 'Contracts', detail: `Each floor posts a contract: ${HITMAN_CONTRACT_KILLS} kills pay bullets and gold.` },
       { label: 'Levitate', detail: 'Flying — cross water and lava, and lava does not burn you. Stealth (T) hides you in the open; you do not need a wall.' },
-      { label: 'Sharpshooter', detail: `Both guns fire together: each deals ${Math.round(HITMAN_DUAL_MULT * 100)}% damage, ${Math.round(HITMAN_DUAL_MULT * 2 * 100)}% total, and the shot spends 2 bullets. One gun deals ${Math.round(HITMAN_SINGLE_MULT * 100)}% and spends 1 bullet. Enemies on your eight straight lines — orthogonal and diagonal — stay visible at any range. Walls and solid terrain block the line. Ground beyond normal sight stays hidden. Muskets count as one gun.` },
+      { label: 'Sharpshooter', detail: 'One pistol: 125% ATK, plus 25% per Still stack, max 200%. Still builds each turn you do not move, including when you shoot, and moving clears it. Levitating over lava or water caps Still at 150%. Two pistols: two 100% shots, 2 bullets. The offhand hits the nearest other foe in line of sight within 3 tiles, or the same target if nobody else is there. A long gun starts at range 5 and gains +1 per Still stack up to 7. That range is the weapon\'s, so a Royal Guard musket gets it too, without the damage ramp. Enemies on your eight straight lines stay visible at any range. Walls block the line. Ground beyond normal sight stays hidden.' },
     ],
-    active: { label: 'Execute Contract', detail: `Shot at a foe within range (${HITMAN_EXECUTE_CD} turn cooldown). A target at or below ${Math.round(HITMAN_EXECUTE_HP_PCT * 100)}% HP is executed for bonus gold and bullets. Healthier targets take a heavy hit.` },
+    active: { label: 'Execute Contract', detail: `Shot at a foe within the equipped gun's current range (${HITMAN_EXECUTE_CD} turn cooldown). A target at or below ${Math.round(HITMAN_EXECUTE_HP_PCT * 100)}% HP is executed. Healthier targets take 200% ATK, plus 25% ATK per Still stack, and the shot spends those stacks.` },
   },
   '💂': {
     name: 'Royal Guard',
@@ -154,7 +152,7 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
     startingEmojiSlots: 3,
     startingAmmo: ROYAL_START_AMMO,
     passives: [
-      { label: 'Versatile Armory', detail: `Two blades: each bump hits with the main hand at 100% ATK and the off hand at 50% ATK plus 1% per level, capped at 100% at level 50. A bow and a gun together take turns: one attack is a bow shot, the next is a gun shot. Arrows and bullets are separate pools. Fire Arrows and Ice Arrows affect bow shots only. Incendiary Rounds and Ice Bullets affect gun shots only. Bow and sword together: melee deals ${Math.round(ROYAL_SWORD_MELEE_MULT * 100)}% ATK. With no sword, melee is ${Math.round(ROYAL_BARE_MELEE_MULT * 100)}% ATK. Muskets are yours.` },
+      { label: 'Versatile Armory', detail: `Two blades: each bump hits with the main hand at 100% ATK and the off hand at 50% ATK plus 1% per level, capped at 100% at level 50. A bow and a gun together take turns: one attack is a bow shot, the next is a gun shot. Arrows and bullets are separate pools. Fire Arrows and Ice Arrows affect bow shots only. Incendiary Rounds and Ice Bullets affect gun shots only. Bow and sword together: melee deals ${Math.round(ROYAL_SWORD_MELEE_MULT * 100)}% ATK. With no sword, melee is ${Math.round(ROYAL_BARE_MELEE_MULT * 100)}% ATK. Muskets are yours. A musket's range is 5, plus 1 per Still stack up to 7, and that range does not add Still damage.` },
       { label: 'Royal Aura', detail: `+${ROYAL_AURA_DEF} DEF while you stand your post. You begin with a Crown in the hotbar. Each Crown is a 5% chance an enemy skips its turn (max 5, 25%). You start in melee and can shoot only with a bow or gun equipped.` },
       { label: 'Piercing', detail: 'Shots and slashes pierce into the tile behind the target for half the damage dealt.' },
     ],

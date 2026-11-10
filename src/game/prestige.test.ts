@@ -37,9 +37,7 @@ import {
   GENIE_SELF_SPLASH,
   HITMAN,
   HITMAN_CONTRACT_KILLS,
-  HITMAN_DUAL_MULT,
   HITMAN_EXECUTE_HP_PCT,
-  HITMAN_SINGLE_MULT,
   NINJA,
   RANGER,
   ROYAL_GUARD,
@@ -369,13 +367,12 @@ describe('prestige kits', () => {
       equipment: { mainHand: { id: 'a', emoji: '🔫', name: 'Musket', description: '', consumed: false, weaponKind: 'gun', gunTier: 'musket' } },
     }));
     expect(dual?.ammoCost).toBe(2);
-    expect(dual?.damageMult).toBe(HITMAN_DUAL_MULT * 2);
-    expect(dual?.label).toContain('75%');
-    expect(dual?.label).toContain('150%');
-    expect(dual?.label).not.toContain('−25%');
+    expect(dual?.range).toBe(3);
+    expect(dual?.damageMult).toBe(1);
+    expect(dual?.label).toContain('100%');
     expect(single?.ammoCost).toBe(1);
-    expect(single?.damageMult).toBe(HITMAN_SINGLE_MULT);
-    expect(single!.damageMult).toBeGreaterThan(dual!.damageMult);
+    expect(single?.damageMult).toBe(1.25);
+    expect(single?.range).toBe(5);
     const oneBullet = gunshotPlan(player({
       characterClass: HITMAN,
       ammo: 1,

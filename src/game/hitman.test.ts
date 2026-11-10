@@ -102,15 +102,14 @@ describe('Execute Contract', () => {
 });
 
 describe('Sharpshooter', () => {
-  it('describes both guns as 75% each for 150% total, and the line reveal, in the class catalog RTFM uses', () => {
+  it('describes Still, two 100% shots, and the line reveal in the class catalog RTFM uses', () => {
     const detail = CHARACTER_CLASSES['🕴️'].passives.find(p => p.label === 'Sharpshooter')?.detail ?? '';
-    expect(detail).toContain('75%');
+    expect(detail).toContain('125%');
+    expect(detail).toContain('200%');
     expect(detail).toContain('150%');
     expect(detail).toContain('2 bullets');
-    expect(detail).toContain('1 bullet');
     expect(detail).toContain('eight straight lines');
-    expect(detail).not.toContain('−25%');
-    expect(detail).not.toContain('(-25%)');
+    expect(detail).toContain('Royal Guard');
   });
 
   it('reveals enemies on the eight lines at any range and stops at solid terrain', () => {

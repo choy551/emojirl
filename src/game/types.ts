@@ -115,6 +115,8 @@ export interface PlayerStats {
   fencerParries?: number;
   fencerLastAct?: 'backdash' | 'lunge';
   fencerLastActTurn?: number;
+  /** Hitman Sharpshooter. Stationary turns add a stack. Moving clears it. */
+  stillStacks?: number;
   contractKills?: number;
   contractGoal?: number;
   contractDone?: boolean;

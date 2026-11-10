@@ -48,9 +48,10 @@ export function resolveExecuteContract(input: {
   const logs: string[] = [];
   const enemies = input.enemies.map(e => ({ ...e }));
   const idx = enemies.findIndex(e => e.id === input.target.id);
+  const spentStill = input.player.stats.stillStacks ?? 0;
   let player: Player = {
     ...input.player,
-    stats: { ...input.player.stats, executeCooldown: HITMAN_EXECUTE_CD },
+    stats: { ...input.player.stats, executeCooldown: HITMAN_EXECUTE_CD, stillStacks: 0 },
   };
   const base: ExecuteContractResult = {
     player,
@@ -64,7 +65,7 @@ export function resolveExecuteContract(input: {
   if (idx < 0) return base;
 
   const target = enemies[idx];
-  const strike = executeStrike(input.attack, target.hp, target.maxHp, target.defense ?? 0);
+  const strike = executeStrike(input.attack, target.hp, target.maxHp, target.defense ?? 0, spentStill);
   const lethal = target.hp - strike.damage <= 0;
 
   if (lethal && target.godBlessed) {
@@ -81,9 +82,10 @@ export function resolveExecuteContract(input: {
 
   if (!lethal) {
     enemies[idx] = { ...target, hp: target.hp - strike.damage, engaged: true };
+    const stillNote = !strike.executed && spentStill > 0 ? ` Still +${spentStill * 25}% ATK, stacks spent.` : '';
     logs.push(strike.executed
-      ? '🕴️ The mark survives on a thread.'
-      : `🕴️ Execute Contract — ${strike.damage} damage.`);
+      ? `🕴️ The mark survives on a thread.${spentStill > 0 ? ' Still stacks spent.' : ''}`
+      : `🕴️ Execute Contract — ${strike.damage} damage.${stillNote}`);
     return { ...base, enemies };
   }
 

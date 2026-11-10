@@ -120,7 +120,7 @@ describe('fencer footwork', () => {
     expect(loaded.kind).toBe('ok');
     if (loaded.kind !== 'ok') return;
     expect(loaded.state.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
-    expect(loaded.state.schemaVersion).toBe(11);
+    expect(loaded.state.schemaVersion).toBe(12);
     expect(loaded.state.player.stats.riposteCharges).toBe(1);
     expect(loaded.state.player.stats.riposteReady).toBeUndefined();
   });
