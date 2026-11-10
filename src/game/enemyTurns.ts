@@ -8,12 +8,12 @@ import { stealOneSoulEmoji, applySoulThefts, stolenEmojiSummary } from './monkey
 import { resolveProjectileFlight } from './projectiles';
 import { withVisibility, visionRadiusFor } from './vision';
 import { bfsStepToward, fleeStep, hasLOSBetween, detectionRadius } from './pathfinding';
-import { foeDetectionRadius, pillRegenAmount, starXpGain, tickStarXpBoost } from './emojiBalance';
+import { diamondThorns, foeDetectionRadius, pillRegenAmount, starXpGain, tickStarXpBoost } from './emojiBalance';
 import { crownStuns } from './royalGuard';
 import { PLAYER_PASSABLE_TILES } from './tiles';
 import { passableTilesForEnemy } from './enemies';
 import { tickVolcanoAndLava } from './lava';
-import { _flashSignals } from './flashSignals';
+import { _flashSignals, handleGodBlessedImmunity } from './flashSignals';
 import { nearRestaurant, crowGoldSteal } from './economy';
 import { companionBountyShare, companionBountyPercent, companionKillXp, companionKillLogText, applyCompanionLevelUp, tickCompanionBountyOoc, levelFromXP, COMPANION_BOUNTY_REFRESH_LOG } from './progression';
 import { tickBossrush } from './finale';
@@ -687,6 +687,38 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
       if (monkeyBonus > 0) log(`🐒 ${enemy.emoji} ${enemy.name} fights with your stolen emojis! (+${monkeyBonus} ATK)`);
       const effectiveAttack = Math.round((enemy.attack + packBonus + monkeyBonus) * divineMult);
 
+      const reflectThorns = (): boolean => {
+        if (playerDied || _freezePassives.thorns <= 0) return true;
+        const reflect = diamondThorns(_freezePassives.thorns, state.currentFloor, effectivePlayer.stats.attack);
+        if (reflect <= 0) return true;
+        log(`💎 Thorns deals ${reflect} to ${updated.name}.`);
+        if (updated.hp - reflect <= 0 && updated.godBlessed) {
+          const saved = handleGodBlessedImmunity(updated, newEnemies, i, playerHp, state.turn, log, newFloatingTexts);
+          if (saved.proc) {
+            playerHp = saved.newPlayerHp;
+            for (let k = 0; k < newEnemies.length; k++) newEnemies[k] = saved.newEnemies[k]!;
+            updated = newEnemies[i]!;
+            if (playerHp <= 0) {
+              playerDied = true;
+              killer ??= { name: updated.name, emoji: updated.emoji };
+            }
+            return false;
+          }
+        }
+        if (updated.hp - reflect <= 0) {
+          markEnemyKilled(updated.emoji);
+          playerXpGain += starXpGain(updated.isBoss ? 25 : 5, player.stats.xpBoostTurns);
+          if (updated.isBoss && !updated.isEcho && state.currentFloor % 5 === 0) depthBossKills++;
+          log(updated.isBoss
+            ? `🏆 You defeated ${updated.name}!`
+            : `💎 Thorns finish off ${updated.emoji} ${updated.name}!`);
+          updated = { ...updated, hp: 0 };
+          return false;
+        }
+        updated = { ...updated, hp: updated.hp - reflect };
+        return true;
+      };
+
       if (!sleeping && enemy.ranged && hasLOSBetween(map, enemy.pos, player.pos) && chebyshev(enemy.pos, player.pos) <= playerVisionRadius && !playerDied) {
         // Simple visual line/flash for the arrow shot (reuses the pendingBeam system used by player ranger/wizard attacks)
         const dx = player.pos.x - enemy.pos.x;
@@ -774,8 +806,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             color: '#f97316',
             life: 2,
           });
-          if (!playerDied) stealGoldOnCrowHit(enemy);
-          if (enemy.berserker && !playerDied) {
+          const standing = reflectThorns();
+          if (standing && !playerDied) stealGoldOnCrowHit(enemy);
+          if (standing && enemy.berserker && !playerDied) {
             if (turnAside(enemy)) {
             } else if (Math.random() * 100 < dodgeChance) {
               log(`🔥 ${enemy.emoji} ${enemy.name} attacks again — you dodge!`);
@@ -791,6 +824,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
                 color: '#dc2626',
                 life: 2,
               });
+              reflectThorns();
             }
             _flashSignals.berserkFlashPending = enemy.id;
           }
@@ -824,7 +858,8 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
                 color: '#f97316',
                 life: 2,
               });
-              if (enemy.berserker && !playerDied) {
+              const lunging = reflectThorns();
+              if (lunging && enemy.berserker && !playerDied) {
                 if (turnAside(enemy)) {
                 } else if (Math.random() * 100 < dodgeChance) {
                   log(`🔥 ${enemy.emoji} ${enemy.name} attacks again — you dodge!`);
@@ -840,6 +875,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
                     color: '#dc2626',
                     life: 2,
                   });
+                  reflectThorns();
                 }
                 _flashSignals.berserkFlashPending = enemy.id;
               }

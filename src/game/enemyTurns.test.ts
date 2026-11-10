@@ -357,3 +357,51 @@ describe('companion kill XP and bounty', () => {
     expect(next.logs.some(l => l.text === COMPANION_BOUNTY_REFRESH_LOG)).toBe(false);
   });
 });
+
+describe('diamond thorns on enemy hits', () => {
+  function withThorns(): Player {
+    const wearer = playerAt(1, 1);
+    wearer.stats = { ...wearer.stats, attack: 0, hp: 40, maxHp: 40 };
+    wearer.inventory = [{
+      id: 'gem', emoji: '💎', name: 'Diamond', description: '', consumed: false,
+      bagPassive: { description: 'thorns', thorns: true },
+    }];
+    return wearer;
+  }
+  function room(): MapGrid {
+    return Array.from({ length: 3 }, () => Array.from({ length: 5 }, () => tile('floor', '⬜')));
+  }
+
+  it('reflects a melee hit and both swings of a Dragon', () => {
+    const goblin = foe({ emoji: '👺', name: 'Goblin', pos: { x: 2, y: 1 }, engaged: true, attack: 1, speed: 1 });
+    const melee = { ...base([goblin]), map: room(), player: withThorns() };
+    const hit = applyEnemyTurns(melee, runEnemyTurns(melee));
+    expect(hit.logs.some(l => l.text === '💎 Thorns deals 1 to Goblin.')).toBe(true);
+    expect(hit.enemies[0]?.hp).toBe(7);
+
+    const dragon = foe({
+      id: 'drag', emoji: '🐉', name: 'Dragon', pos: { x: 2, y: 1 },
+      engaged: true, attack: 1, hp: 30, maxHp: 30, berserker: true, isBoss: true, godBlessed: true, speed: 1,
+    });
+    const boss = { ...base([dragon]), map: room(), player: withThorns() };
+    const bitten = applyEnemyTurns(boss, runEnemyTurns(boss));
+    expect(bitten.logs.filter(l => l.text.startsWith('💎 Thorns deals')).map(l => l.text)).toEqual([
+      '💎 Thorns deals 1 to Dragon.',
+      '💎 Thorns deals 1 to Dragon.',
+    ]);
+    expect(bitten.enemies[0]?.hp).toBe(28);
+  });
+
+  it('removes an enemy thorns kills and grants the kill xp', () => {
+    const goblin = foe({
+      emoji: '👺', name: 'Goblin', pos: { x: 2, y: 1 },
+      engaged: true, attack: 1, hp: 1, maxHp: 8, speed: 1,
+    });
+    const state = { ...base([goblin]), map: room(), player: withThorns() };
+    const next = applyEnemyTurns(state, runEnemyTurns(state));
+    expect(next.enemies).toHaveLength(0);
+    expect(next.logs.some(l => l.text === '💎 Thorns deals 1 to Goblin.')).toBe(true);
+    expect(next.logs.some(l => l.text === '💎 Thorns finish off 👺 Goblin!')).toBe(true);
+    expect(next.player.stats.xp).toBe(5);
+  });
+});
