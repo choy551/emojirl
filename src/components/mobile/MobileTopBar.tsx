@@ -1,8 +1,8 @@
 import { Player } from '../../game/types';
 import { livingMaxHp } from '../../game/inventory';
-import { ammoIcon, isArcaneCaster, isFencer, usesArrows, usesBullets } from '../../game/prestige';
+import { ammoIcon, isArcaneCaster, usesArrows, usesBullets } from '../../game/prestige';
 import { applyEquipmentAndPassives } from '../../game/inventory';
-import { FencerHudBadges } from '../FencerHudBadges';
+import { ClassHudBadges } from '../ClassHudBadges';
 import { voidHpAttackTooltip } from '../../game/voidAttackCost';
 
 interface MobileTopBarProps {
@@ -18,6 +18,8 @@ interface MobileTopBarProps {
   /** Ninja-only compact Blink talent progress, e.g. "⚡12/44". */
   blinkTalentCompact?: string;
   blinkTalentTitle?: string;
+  stealth?: boolean;
+  tile?: string;
   /** Cosmetic title. No combat effect. */
   vanityTitle?: string;
   /** Active bounty progress, e.g. "📜 1/2". */
@@ -42,7 +44,7 @@ function MiniBar({ pct, color, label, value }: { pct: number; color: string; lab
 }
 
 /** Slim always-visible stat strip for touch devices. Tapping it opens the full StatsModal. */
-export function MobileTopBar({ player, className, level, currentFloor, xpProgress, onExpand, onMenu, menuSide = 'right', blinkTalentCompact, blinkTalentTitle, vanityTitle, bountyLabel }: MobileTopBarProps) {
+export function MobileTopBar({ player, className, level, currentFloor, xpProgress, onExpand, onMenu, menuSide = 'right', blinkTalentCompact, blinkTalentTitle, vanityTitle, bountyLabel, stealth, tile }: MobileTopBarProps) {
   const hp = player.stats.hp;
   const maxHp = livingMaxHp(player);
   const overheal = hp > maxHp;
@@ -90,9 +92,12 @@ export function MobileTopBar({ player, className, level, currentFloor, xpProgres
                 {ammoIcon(player.characterClass, player.equipment)}{player.ammo}
               </span>
             )}
-            {isFencer(player.characterClass) && (
-              <FencerHudBadges stats={player.stats} evasion={applyEquipmentAndPassives(player).stats.evasion} />
-            )}
+            <ClassHudBadges
+              player={player}
+              evasion={applyEquipmentAndPassives(player).stats.evasion}
+              stealth={stealth}
+              tile={tile}
+            />
             {blinkTalentCompact && (
               <span
                 className="font-bold tabular-nums text-violet-200 shrink-0"
