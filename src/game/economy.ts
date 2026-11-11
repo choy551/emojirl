@@ -52,6 +52,15 @@ export function cookedHealCount(items: EmojiItem[]): number {
   return items.filter(isCookedHeal).length;
 }
 
+/** Food storage, then the hotbar, then the Bank. Sell lists read all three. */
+export function carriedSellables(player: { food?: EmojiItem[]; inventory: EmojiItem[]; bank: EmojiItem[] }): EmojiItem[] {
+  return [
+    ...(player.food ?? []),
+    ...player.inventory,
+    ...player.bank,
+  ].filter(item => !item.consumed);
+}
+
 /** Weak dedicated heals (onion) plus, when overflow, potions/hearts. Never cooked or raw cookables. */
 export function isHealJunk(i: EmojiItem, overflowHeals: boolean): boolean {
   if (i.healAmount === undefined || i.consumed) return false;

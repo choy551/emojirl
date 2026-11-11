@@ -312,6 +312,34 @@ export function refillBagFromBank(inventory: EmojiItem[], bank: EmojiItem[], loc
   return { inventory: [...inventory, pulled], bank: newBank };
 }
 
+/** Drop one carried item. Food storage first, then the hotbar (which refills), then the Bank. */
+export function removeCarriedId(player: Player, id: string): Player | null {
+  if ((player.food ?? []).some(item => item.id === id)) {
+    return { ...player, food: (player.food ?? []).filter(item => item.id !== id) };
+  }
+  if (player.inventory.some(item => item.id === id)) {
+    const next = removeAndRefillBag(player.inventory, player.bank, id, player.hotbarLocked === true);
+    return { ...player, inventory: next.inventory, bank: next.bank };
+  }
+  if (player.bank.some(item => item.id === id)) {
+    return { ...player, bank: player.bank.filter(item => item.id !== id) };
+  }
+  return null;
+}
+
+/** Take the first unspent copy of an emoji from food storage, the hotbar, or the Bank. */
+export function removeFirstCarriedEmoji(player: Player, emoji: string): Player | null {
+  const foodIdx = (player.food ?? []).findIndex(item => !item.consumed && item.emoji === emoji);
+  if (foodIdx !== -1) {
+    return { ...player, food: (player.food ?? []).filter((_, i) => i !== foodIdx) };
+  }
+  const bagIdx = player.inventory.findIndex(item => !item.consumed && item.emoji === emoji);
+  if (bagIdx !== -1) return removeCarriedId(player, player.inventory[bagIdx].id);
+  const bankIdx = player.bank.findIndex(item => !item.consumed && item.emoji === emoji);
+  if (bankIdx !== -1) return removeCarriedId(player, player.bank[bankIdx].id);
+  return null;
+}
+
 /** Consume an inventory item and refill from Bank without reshuffling 1–9 hotbar keys. */
 export function removeAndRefillBag(
   inventory: EmojiItem[],

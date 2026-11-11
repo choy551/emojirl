@@ -13,6 +13,7 @@ import {
   CROP_EMOJIS,
   GRASS_EMOJI,
   executeFarmerTrade,
+  payableFarmerItems,
   farmDenizenIntent,
   farmerAskPrice,
   farmerPayKind,
@@ -167,6 +168,32 @@ describe('farmer trade values', () => {
     );
     expect(short.ok).toBe(false);
     expect(short.player).toBeUndefined();
+
+    const apples = Array.from({ length: 40 }, (_, i) => item({
+      id: `apple-${i}`, emoji: '🍎', name: 'Apple', healAmount: 2,
+    }));
+    const stocked = {
+      ...playerWith([], 40),
+      food: [
+        ...apples,
+        item({ id: 'onion', emoji: '🧅', name: 'Onion', healAmount: 1 }),
+        item({ id: 'steak-store', emoji: '🥩', name: 'Grilled Steak', healAmount: 12, isCooked: true }),
+        item({ id: 'pot-store', emoji: '🧪', name: 'Potion', healAmount: 6 }),
+        item({ id: 'organ', emoji: '🫀', name: 'Heart', healAmount: 8 }),
+      ],
+    };
+    const offers = payableFarmerItems(stocked);
+    expect(offers).toHaveLength(44);
+    expect(offers.filter(i => i.emoji === '🍎')).toHaveLength(40);
+    expect(farmerTradeValue(offers.find(i => i.id === 'steak-store')!)).toBe(15);
+    expect(farmerTradeValue(offers.find(i => i.id === 'apple-0')!)).toBe(2);
+    expect(farmerTradeValue(offers.find(i => i.id === 'pot-store')!)).toBe(4.5);
+    expect(farmerTradeValue(offers.find(i => i.id === 'organ')!)).toBe(8);
+    const traded = executeFarmerTrade(stocked, stock, 'ask', ['apple-0', 'apple-1', 'apple-2', 'pot-store', 'onion']);
+    expect(traded.ok).toBe(true);
+    expect(traded.player?.stats.gold).toBe(40);
+    expect(traded.player?.food?.some(i => i.id === 'apple-0' || i.id === 'pot-store' || i.id === 'onion')).toBe(false);
+    expect(traded.player?.food?.filter(i => i.emoji === '🍎')).toHaveLength(37);
 
     const exact = executeFarmerTrade(
       playerWith([

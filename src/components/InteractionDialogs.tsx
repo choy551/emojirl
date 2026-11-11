@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { GameState, Enemy, EmojiItem } from '../game/types';
 import { restoreStolenEmojis, stolenEmojiSummary, cookedEatHeal } from '../game/gameHelpers';
-import { applyPlayerHeal } from '../game/inventory';
+import { applyPlayerHeal, removeCarriedId, removeFirstCarriedEmoji } from '../game/inventory';
 import { executeFeast, feastBuffLabel, sinkFoods } from '../game/foodSinks';
 import { useDialogHotkeys } from '../hooks/useDialogHotkeys';
 import { useDismissGuard } from '../hooks/useDismissGuard';
@@ -21,23 +21,22 @@ export function MonkeyInteractionDialog({ gameState, setGameState, interaction, 
   if (!monkey) return null;
   const { wants } = interaction;
   const stolenCount = monkey.stolenEmojis?.length ?? 0;
-  const wantsItemIdx = gameState.player.inventory.findIndex(i => !i.consumed && i.emoji === wants);
-  const playerHasIt = wantsItemIdx !== -1;
+  const playerHasIt = [gameState.player.food ?? [], gameState.player.inventory, gameState.player.bank]
+    .some(pile => pile.some(i => !i.consumed && i.emoji === wants));
 
   const handleGive = () => {
     if (!playerHasIt) return;
     setGameState(prev => {
       if (!prev) return prev;
-      const itemIdx = prev.player.inventory.findIndex(i => !i.consumed && i.emoji === wants);
-      if (itemIdx === -1) return prev;
-      const remainingInv = prev.player.inventory.filter((_, i) => i !== itemIdx);
+      const taken = removeFirstCarriedEmoji(prev.player, wants);
+      if (!taken) return prev;
       const restored = restoreStolenEmojis(
-        { inventory: remainingInv, bank: prev.player.bank, hotbarLocked: prev.player.hotbarLocked },
+        { ...taken, hotbarLocked: prev.player.hotbarLocked },
         monkey.stolenEmojis ?? [],
       );
       return {
         ...prev,
-        player: { ...prev.player, inventory: restored.inventory, bank: restored.bank },
+        player: { ...taken, inventory: restored.inventory, bank: restored.bank },
         enemies: prev.enemies.filter(e => e.id !== interaction.id),
         logs: [{ id: Math.random().toString(), text: `🐒 ${monkey.name} happily takes the ${wants} and drops your ${stolenEmojiSummary(monkey.stolenEmojis ?? []) || 'emojis'}! 🎉`, turn: prev.turn }, ...prev.logs].slice(0, 24),
       };
@@ -376,11 +375,13 @@ export function CompanionTalkDialog({ gameState, setGameState, companionId, onCl
       if (!prev) return prev;
       const comp = prev.enemies.find(e => e.id === companionId);
       if (!comp) return prev;
+      const spent = removeCarriedId(prev.player, item.id);
+      if (!spent) return prev;
       const amount = cookedEatHeal(item, prev.chefLessonCount ?? 0, prev.player.stats.maxHp);
       const newHp = Math.min(comp.maxHp, comp.hp + amount);
       return {
         ...prev,
-        player: { ...prev.player, inventory: prev.player.inventory.filter(it => it.id !== item.id) },
+        player: spent,
         enemies: prev.enemies.map(e => e.id === companionId ? { ...e, hp: newHp } : e),
         logs: [{
           id: Math.random().toString(),
@@ -806,21 +807,23 @@ export function BearInteractionDialog({ gameState, setGameState, bearId, stage, 
   if (!bear) return null;
 
   const offerItem = offerId
-    ? gameState.player.inventory.find(i => i.id === offerId && !i.consumed) ?? null
+    ? (gameState.player.food ?? []).find(i => i.id === offerId && !i.consumed)
+      ?? gameState.player.inventory.find(i => i.id === offerId && !i.consumed)
+      ?? gameState.player.bank.find(i => i.id === offerId && !i.consumed)
+      ?? null
     : null;
 
   const handleFeed = () => {
     if (!offerItem) return;
     setGameState(prev => {
       if (!prev) return prev;
-      const itemIdx = prev.player.inventory.findIndex(i => i.id === offerItem.id && !i.consumed);
-      if (itemIdx === -1) return prev;
-      const newInventory = prev.player.inventory.filter((_, idx) => idx !== itemIdx);
+      const spent = removeCarriedId(prev.player, offerItem.id);
+      if (!spent) return prev;
 
       if (stage === 'neutral') {
         return {
           ...prev,
-          player: { ...prev.player, inventory: newInventory },
+          player: spent,
           enemies: prev.enemies.map(e =>
             e.id === bearId ? { ...e, tag: 'Friendly' as const, engaged: false } : e
           ),
@@ -830,7 +833,7 @@ export function BearInteractionDialog({ gameState, setGameState, bearId, stage, 
         const recruited = Math.random() < 0.5;
         return {
           ...prev,
-          player: { ...prev.player, inventory: newInventory },
+          player: spent,
           enemies: prev.enemies.map(e =>
             e.id === bearId
               ? { ...e, tag: 'Friendly' as const, engaged: false, isRecruited: recruited, ...(recruited ? { xp: e.xp ?? 0, level: e.level ?? 1 } : {}) }
