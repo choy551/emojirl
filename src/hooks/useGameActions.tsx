@@ -20,7 +20,7 @@ import {
   moodMax, chebyshev, hasLOS, hasLOSBetween, VISION_RADIUS,
   eagleEyeRange, PLAYER_PASSABLE_TILES, playerBagPassives,
   applyEquipmentAndPassives, withVisibility, runEnemyTurns, applyEnemyTurns, tickActiveBuffs,
-  addToPlayerBag, levelFromXP, livingMaxHp, playerSoftCap, healHp, applyShrineBlessing,
+  levelFromXP, livingMaxHp, playerSoftCap, healHp, applyShrineBlessing,
   mpBonusForLevel, getRandomCowboyFlavor, handleGodBlessedImmunity,
   _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG, restoreStolenEmojis, stolenEmojiSummary,
   applyBedRest, simulateSleep, SLEEP_TURNS,
@@ -45,6 +45,7 @@ import { useInventoryActions } from './actions/useInventoryActions';
 import { useItemActions } from './actions/useItemActions';
 import { useCombatActions } from './actions/useCombatActions';
 import { restHealAmount, restHealMultiplier } from '../game/restHeal';
+import { stowFoundItems } from '../game/autoConsume';
 
 function noteKill(player: Player, floor: number) {
   return notePrestigeKill(player, floor, playerSoftCap(player).raw.luck);
@@ -510,9 +511,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                       : `Picked up ${pickedUp.emoji} ${pickedUp.name} → Equip tab (⚔️).`);
                   }
                 } else {
-                  const { inventory: _bInv, bank: _bBnk } = addToPlayerBag(bumpedPlayer, pickedUp);
-                  const wentToBank = _bBnk.length > bumpedPlayer.bank.length;
-                  bumpedPlayer = { ...bumpedPlayer, inventory: _bInv, bank: _bBnk };
+                  const stowed = stowFoundItems(bumpedPlayer, pickedUp);
+                  const wentToBank = stowed.player.bank.some(i => i.id === pickedUp.id || i.id === `${pickedUp.id}-overflow`);
+                  bumpedPlayer = stowed.player;
+                  stowed.logs.forEach(addLog);
                   addLog(wentToBank
                     ? `🎒 Bag full! Picked up ${pickedUp.emoji} ${pickedUp.name} — sent to bank.`
                     : `Picked up ${pickedUp.emoji} ${pickedUp.name} (${pickedUp.description})`);
@@ -974,9 +976,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                 : `Picked up ${pickedUp.emoji} ${pickedUp.name} → Equip tab (⚔️).`);
             }
           } else {
-            const { inventory: _pInv, bank: _pBnk } = addToPlayerBag(newPlayer, pickedUp);
-            const wentToBank = _pBnk.length > newPlayer.bank.length;
-            newPlayer = { ...newPlayer, inventory: _pInv, bank: _pBnk };
+            const stowed = stowFoundItems(newPlayer, pickedUp);
+            const wentToBank = stowed.player.bank.some(i => i.id === pickedUp.id || i.id === `${pickedUp.id}-overflow`);
+            newPlayer = stowed.player;
+            stowed.logs.forEach(addLog);
             addLog(wentToBank
               ? `🎒 Bag full! ${pickedUp.emoji} ${pickedUp.name} sent to bank. (B to open)`
               : `Picked up ${pickedUp.emoji} ${pickedUp.name} (${pickedUp.description})`);
@@ -1012,9 +1015,10 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                     : `🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you → Equip tab (⚔️).`);
                 }
               } else {
-                const { inventory: _mInv, bank: _mBnk } = addToPlayerBag(newPlayer, pickedUp);
-                const magnetWentToBank = _mBnk.length > newPlayer.bank.length;
-                newPlayer = { ...newPlayer, inventory: _mInv, bank: _mBnk };
+                const stowed = stowFoundItems(newPlayer, pickedUp);
+                const magnetWentToBank = stowed.player.bank.some(i => i.id === pickedUp.id || i.id === `${pickedUp.id}-overflow`);
+                newPlayer = stowed.player;
+                stowed.logs.forEach(addLog);
                 addLog(magnetWentToBank
                   ? `🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you — bag full, sent to bank.`
                   : `🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you!`);

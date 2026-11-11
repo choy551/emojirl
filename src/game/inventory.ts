@@ -43,13 +43,33 @@ export function addToPlayerBag(
   const food = pantry.length > 0 ? [...(player.food ?? []), ...pantry] : [...(player.food ?? [])];
   if (pantry.length > 0) player.food = food;
   if (player.hotbarLocked) {
-    return {
-      inventory: player.inventory,
-      bank: [...player.bank, ...rest],
-      food,
-      nonStackableBanked: [],
-      duplicateActiveBanked: [],
-    };
+    // New finds stay in the Bank, except a stack that is already on the hotbar and still has room.
+    const inventory = [...player.inventory];
+    const bank = [...player.bank];
+    for (const item of rest) {
+      if (!isStackableBagPassive(item)) {
+        bank.push(item);
+        continue;
+      }
+      const stackCap = STACKABLE_BAG_CAPS[item.emoji] ?? 9;
+      const addCount = Math.max(1, item.stackCount ?? 1);
+      const existingIdx = inventory.findIndex(i => !i.consumed && i.emoji === item.emoji && isStackableBagPassive(i));
+      if (existingIdx === -1) {
+        bank.push(item);
+        continue;
+      }
+      const existing = inventory[existingIdx];
+      const cur = existing.stackCount ?? 1;
+      const room = Math.max(0, stackCap - cur);
+      if (room <= 0) {
+        bank.push({ ...item, stackCount: addCount });
+        continue;
+      }
+      const toStack = Math.min(room, addCount);
+      inventory[existingIdx] = { ...existing, stackCount: cur + toStack };
+      if (addCount > toStack) bank.push({ ...item, id: `${item.id}-overflow`, stackCount: addCount - toStack });
+    }
+    return { inventory, bank, food, nonStackableBanked: [], duplicateActiveBanked: [] };
   }
   return { ...addItemsToBag(player.inventory, player.bank, rest, hotbarCapFor(player)), food };
 }

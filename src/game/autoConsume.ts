@@ -2,7 +2,7 @@ import type { EmojiItem, GameState, Player } from './types';
 import type { SoulEffect } from './emojis';
 import { EMOJI_POWERS } from './emojis';
 import { applyStarConsume, pillOverhealHp } from './emojiBalance';
-import { applySoulHp, livingMaxHp, playerSoftCap } from './inventory';
+import { addToPlayerBag, applySoulHp, livingMaxHp, playerSoftCap } from './inventory';
 import { STACKABLE_BAG_CAPS, isStackableBagPassive } from './passives';
 import { moodMax, levelFromXP } from './progression';
 import { recordRunEmojiConsume } from './meta';
@@ -31,9 +31,8 @@ function applyOne(player: Player, item: EmojiItem, logs: string[]): Player | nul
     logs.push(`💊 The pill mends you — full heal and +${hp - pool} overheal.`);
     return { ...player, stats: { ...player.stats, hp } };
   }
-  if (item.emoji === '⚡') return null;
   const effect = soulEffect(item);
-  if (!effect || effect.instakillNearest) return null;
+  if (!effect) return null;
   const stats = { ...player.stats };
   const souled = applySoulHp({ ...player, stats }, effect);
   stats.hp = souled.stats.hp;
@@ -60,14 +59,16 @@ function applyOne(player: Player, item: EmojiItem, logs: string[]): Player | nul
 }
 
 /**
- * Use Bank copies that are past the hotbar.
- * Stacking emoji wait until the hotbar stack is at its cap.
- * A non-stacking soul is used only when the hotbar already carries one.
+ * Use passive and stat emoji that were routed to the Bank.
+ * On-demand items stay. A stacking emoji fills its hotbar stack first;
+ * only copies past that cap are used.
  */
 export function consumeBankExtras(player: Player): { player: Player; logs: string[] } {
   if (!player.autoConsumeBank) return { player, logs: [] };
   const logs: string[] = [];
   let next = player;
+  let inventory = [...player.inventory];
+  let folded = false;
   const keep: EmojiItem[] = [];
   for (const item of player.bank) {
     if (autoConsumeExcluded(item)) {
@@ -75,48 +76,68 @@ export function consumeBankExtras(player: Player): { player: Player; logs: strin
       continue;
     }
     const copies = Math.max(1, item.stackCount ?? 1);
+    let pending = copies;
     if (isStackableBagPassive(item)) {
-      const hot = next.inventory.find(entry => !entry.consumed && entry.emoji === item.emoji && isStackableBagPassive(entry));
       const cap = STACKABLE_BAG_CAPS[item.emoji] ?? 9;
-      if (!hot || (hot.stackCount ?? 1) < cap) {
-        keep.push(item);
+      const idx = inventory.findIndex(entry => !entry.consumed && entry.emoji === item.emoji && isStackableBagPassive(entry));
+      if (idx !== -1) {
+        const hot = inventory[idx];
+        const room = Math.max(0, cap - (hot.stackCount ?? 1));
+        if (room > 0) {
+          const toStack = Math.min(room, pending);
+          inventory[idx] = { ...hot, stackCount: (hot.stackCount ?? 1) + toStack };
+          pending -= toStack;
+          folded = true;
+        }
+      }
+      const hotNow = inventory.find(entry => !entry.consumed && entry.emoji === item.emoji && isStackableBagPassive(entry));
+      if (!hotNow || (hotNow.stackCount ?? 1) < cap) {
+        if (pending > 0) keep.push(pending === copies ? item : { ...item, stackCount: pending });
         continue;
       }
-    } else if (!next.inventory.some(entry => !entry.consumed && !entry.isEquipment && entry.emoji === item.emoji)) {
-      keep.push(item);
-      continue;
     }
-    let applied = next;
+    if (pending <= 0) continue;
+    let applied = { ...next, inventory };
     const gained: string[] = [];
     let spent = 0;
-    for (let n = 0; n < copies; n++) {
+    for (let n = 0; n < pending; n++) {
       const step = applyOne(applied, item, gained);
       if (!step) break;
       applied = step;
+      inventory = step.inventory;
       recordRunEmojiConsume(item.emoji, 1, item);
       spent += 1;
     }
     if (spent === 0) {
-      keep.push(item);
+      keep.push(pending === copies ? item : { ...item, stackCount: pending });
       continue;
     }
-    if (spent < copies) keep.push({ ...item, stackCount: copies - spent });
+    if (spent < pending) keep.push({ ...item, stackCount: pending - spent });
     logs.push(`🫳 Auto-consumed ${item.emoji} ${item.name}${spent > 1 ? ` ×${spent}` : ''}.`);
     logs.push(...gained);
     next = applied;
+    inventory = applied.inventory;
   }
-  if (logs.length === 0) return { player, logs };
-  return { player: { ...next, bank: keep }, logs };
+  if (logs.length === 0 && !folded) return { player, logs };
+  return { player: { ...next, inventory, bank: keep }, logs };
+}
+
+/** Park a find, then use anything the Bank sweep would use. */
+export function stowFoundItems(player: Player, ...items: EmojiItem[]): { player: Player; logs: string[] } {
+  const added = addToPlayerBag(player, ...items);
+  const packed: Player = { ...player, inventory: added.inventory, bank: added.bank, food: added.food };
+  if (!packed.autoConsumeBank) return { player: packed, logs: [] };
+  return consumeBankExtras(packed);
 }
 
 export function noteAutoConsume(state: GameState): GameState {
   const drained = consumeBankExtras(state.player);
-  if (drained.logs.length === 0) return state;
+  if (drained.player === state.player && drained.logs.length === 0) return state;
   const entries = drained.logs.map((text, i) => ({ id: `auto-consume-${state.turn}-${i}`, text, turn: state.turn }));
   return {
     ...state,
     player: drained.player,
-    logs: [...entries, ...state.logs].slice(0, 24),
+    logs: entries.length > 0 ? [...entries, ...state.logs].slice(0, 24) : state.logs,
   };
 }
 
