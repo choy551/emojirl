@@ -103,7 +103,7 @@ describe('resolveContextAction idle fallback', () => {
     }));
     expect(farmer.kind).toBe('trade');
     const dark = wide.map(row => row.map(tile => ({ ...tile })));
-    dark[0][2] = { ...floor, visible: false };
+    dark[1][2] = { ...floor, type: 'wall', emoji: '⬛' };
     const unseen = resolveMobileContext(stubState({
       player: { ...stubState().player, pos: { x: 2, y: 2 } },
       map: dark,

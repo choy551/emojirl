@@ -146,7 +146,7 @@ export function resolveContextAction(
  * Anything else stays the existing use action, including Explore when idle.
  */
 export function resolveMobileContext(state: GameState, exploring = false): ContextActionDescriptor {
-  if (foesInSight(state.map, state.enemies).length > 0) {
+  if (foesInSight(state.map, state.enemies, state.player).length > 0) {
     return { kind: 'autofight', label: 'Attack', icon: '⚔️' };
   }
   const action = resolveContextAction(state, 'explore');

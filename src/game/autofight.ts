@@ -5,7 +5,8 @@ import { gunshotPlan, isArcaneCaster, isHitman, isRoyalGuard } from './prestige'
 import { chooseGuardShot } from './royalGuard';
 import { bfsStepToward, hasLOS, hasLOSBetween } from './pathfinding';
 import { PLAYER_PASSABLE_TILES } from './tiles';
-import { eagleEyeRange, VISION_RADIUS } from './vision';
+import { playerBagPassives } from './inventory';
+import { eagleEyeRange, hasLineOfSight, VISION_RADIUS, visionRadiusFor } from './vision';
 import { voidRangedSpend } from './voidAttackCost';
 
 /** Refuse autofight when current HP is strictly below half of max HP. */
@@ -66,17 +67,19 @@ function occupied(enemies: Enemy[], exceptId?: string): Set<string> {
   return set;
 }
 
-/** Same foes Tab autofight will chase: living hostiles on a visible tile. */
-export function foesInSight(map: MapGrid, enemies: Enemy[]): Enemy[] {
+/** Tab targets: living hostiles in real sight. Telepathy does not count. */
+export function foesInSight(map: MapGrid, enemies: Enemy[], player: Player): Enemy[] {
+  const radius = Math.max(1, visionRadiusFor(player.characterClass, player.stats.level) + playerBagPassives(player).losBonus);
   return enemies.filter(e =>
     e.hp > 0
     && isHostileCombatTarget(e)
-    && !!map[e.pos.y]?.[e.pos.x]?.visible,
+    && chebyshev(player.pos, e.pos) <= radius
+    && hasLineOfSight(map, player.pos, e.pos),
   );
 }
 
 function visibleHostiles(input: AutofightInput): Enemy[] {
-  return foesInSight(input.map, input.enemies);
+  return foesInSight(input.map, input.enemies, input.player);
 }
 
 function nearest(from: Position, foes: Enemy[]): Enemy {
