@@ -1,7 +1,7 @@
 import { Player, EmojiItem, VoidGhost } from './types';
 import type { BagPassiveSummary } from './types';
 import { STACKABLE_BAG_CAPS, isStackableBagPassive } from './passives';
-import { ACTIVE_DROPS, EMOJI_POWERS, isPantryFood } from './emojis';
+import { ACTIVE_DROPS, EMOJI_POWERS, isStoredHeal } from './emojis';
 import { hotbarCapFor, padGhostHotbar, voidGhostCapacity } from './voidDamage';
 import { drinkEvasionBonus } from './drinks';
 import { resolveSoftCap, type SoftCapInput, type SoftCapResult } from './softCap';
@@ -38,8 +38,8 @@ export function addToPlayerBag(
   player: Player,
   ...items: EmojiItem[]
 ): { inventory: EmojiItem[]; bank: EmojiItem[]; food: EmojiItem[]; nonStackableBanked: EmojiItem[]; duplicateActiveBanked: EmojiItem[] } {
-  const pantry = items.filter(isPantryFood);
-  const rest = items.filter(item => !isPantryFood(item));
+  const pantry = items.filter(isStoredHeal);
+  const rest = items.filter(item => !isStoredHeal(item));
   const food = pantry.length > 0 ? [...(player.food ?? []), ...pantry] : [...(player.food ?? [])];
   if (pantry.length > 0) player.food = food;
   if (player.hotbarLocked) {
@@ -72,6 +72,20 @@ export function addToPlayerBag(
     return { inventory, bank, food, nonStackableBanked: [], duplicateActiveBanked: [] };
   }
   return { ...addItemsToBag(player.inventory, player.bank, rest, hotbarCapFor(player)), food };
+}
+
+/** HP restores never stay in the hotbar or the Bank. */
+export function divertStoredHeals(
+  inventory: EmojiItem[],
+  bank: EmojiItem[],
+  food: EmojiItem[],
+): { inventory: EmojiItem[]; bank: EmojiItem[]; food: EmojiItem[] } {
+  const nextFood = [...food];
+  const keepInv: EmojiItem[] = [];
+  const keepBank: EmojiItem[] = [];
+  for (const item of inventory) (isStoredHeal(item) ? nextFood : keepInv).push(item);
+  for (const item of bank) (isStoredHeal(item) ? nextFood : keepBank).push(item);
+  return { inventory: keepInv, bank: keepBank, food: nextFood };
 }
 
 export function toggleHotbarLock(player: Player): { player: Player; log: string } {

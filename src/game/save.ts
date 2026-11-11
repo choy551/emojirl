@@ -1,6 +1,6 @@
 import { GameState, Player, PlayerStats, EmojiItem, Equipment } from './types';
 import { applyBlinkTalentSaveMigration, applyBlinkTokenSaveMigration, knownBlinkTalents } from './blinkStrike';
-import { applySoulCatalogCopy, isPantryFood } from './emojis';
+import { applySoulCatalogCopy, isPantryFood, isStoredHeal } from './emojis';
 import { normalizeBounty, normalizeVanity } from './goldSinks2';
 import { applyEquipmentRestrictionMigration } from '../components/itemUtils';
 import { migrateEquippedCrown, splitPooledGuardAmmo } from './royalGuard';
@@ -29,12 +29,13 @@ export const SAVE_KEY = 'emojirl_save_v1';
  * 10: A ready Fencer Riposte becomes one riposte charge.
  * 11: Food leaves the hotbar and the Bank for an uncapped food store.
  * 12: Hitman Still stacks. Missing means 0.
+ * 13: Potions and emergency hearts left in the hotbar or Bank join food storage.
  */
-export const SAVE_SCHEMA_VERSION = 12;
+export const SAVE_SCHEMA_VERSION = 13;
 const CURRENT_SCHEMA_VERSION = SAVE_SCHEMA_VERSION;
 
 /** Set of schema versions this build knows how to load (after migration). */
-const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+const KNOWN_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
 
 /**
  * Runs in-place migrations on the raw parsed JSON object so that
@@ -154,6 +155,24 @@ const MIGRATIONS: Array<(raw: Record<string, unknown>) => void> = [
     if (!stats) return;
     const stacks = Number(stats.stillStacks);
     stats.stillStacks = Number.isFinite(stacks) && stacks > 0 ? Math.floor(stacks) : 0;
+  },
+  raw => {
+    const player = raw.player;
+    if (!player || typeof player !== 'object') return;
+    const record = player as Record<string, unknown>;
+    const food = Array.isArray(record.food) ? [...record.food] : [];
+    const pull = (list: unknown): unknown[] => {
+      if (!Array.isArray(list)) return [];
+      const keep: unknown[] = [];
+      for (const item of list) {
+        if (item && typeof item === 'object' && isStoredHeal(item as { healAmount?: number })) food.push(item);
+        else keep.push(item);
+      }
+      return keep;
+    };
+    record.inventory = pull(record.inventory);
+    record.bank = pull(record.bank);
+    record.food = food;
   },
 ];
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { cookOneFromPantry } from './foodSinks';
-import { addToPlayerBag } from './inventory';
+import { stowFoundItems } from './autoConsume';
+import { addToPlayerBag, divertStoredHeals } from './inventory';
 import { SAVE_KEY, SAVE_SCHEMA_VERSION, loadGame } from './save';
 import type { EmojiItem, Player } from './types';
 
@@ -83,5 +84,61 @@ describe('food storage', () => {
     expect(loaded.state.player.food?.map(item => item.emoji)).toEqual(['🍓', '🍞']);
     expect(loaded.state.player.inventory.map(item => item.emoji)).toEqual(['💀']);
     expect(loaded.state.player.bank).toHaveLength(0);
+  });
+
+  it('parks potions and hearts in food storage, including a locked or full bag', () => {
+    const potion = food('pot', '🧪', 'Potion');
+    potion.healAmount = 6;
+    const heart = food('organ', '🫀', 'Heart');
+    heart.healAmount = 8;
+    const apple = food('apple', '🍎', 'Apple');
+    const bomb: EmojiItem = { id: 'bomb', emoji: '💣', name: 'Bomb', description: 'boom', consumed: false, activeKind: 'bomb' };
+
+    const locked = addToPlayerBag(player({ hotbarLocked: true, autoConsumeBank: true }), potion, apple, bomb);
+    expect(locked.food.map(item => item.id)).toEqual(['pot', 'apple']);
+    expect(locked.inventory).toHaveLength(0);
+    expect(locked.bank.map(item => item.id)).toEqual(['bomb']);
+
+    const fullBar = Array.from({ length: 9 }, (_, i) => ({
+      id: `s${i}`, emoji: '💀', name: 'Skull', description: 'crit', consumed: false,
+    }));
+    const overflow = addToPlayerBag(player({ inventory: fullBar }), heart);
+    expect(overflow.inventory).toHaveLength(9);
+    expect(overflow.bank).toHaveLength(0);
+    expect(overflow.food.map(item => item.id)).toEqual(['organ']);
+
+    const picked = stowFoundItems(player({ hotbarLocked: true, autoConsumeBank: true }), potion);
+    expect(picked.player.food?.map(item => item.id)).toEqual(['pot']);
+    expect(picked.player.bank).toHaveLength(0);
+    expect(picked.player.inventory).toHaveLength(0);
+    expect(picked.logs).toHaveLength(0);
+
+    const dragged = divertStoredHeals([potion], [apple, bomb], []);
+    expect(dragged.food.map(item => item.id)).toEqual(['pot', 'apple']);
+    expect(dragged.inventory).toHaveLength(0);
+    expect(dragged.bank.map(item => item.id)).toEqual(['bomb']);
+  });
+
+  it('moves potions and hearts out of a loaded Bank into food storage', () => {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      schemaVersion: 12,
+      map: [],
+      player: {
+        characterClass: '🥷',
+        ammo: 0,
+        stats: {},
+        inventory: [food('organ', '🫀', 'Heart'), { id: 'soul', emoji: '💀', name: 'Skull', description: '', consumed: false }],
+        bank: [food('pot', '🧪', 'Potion'), food('bread', '🍞', 'Bread'), { id: 'bomb', emoji: '💣', name: 'Bomb', description: '', consumed: false, activeKind: 'bomb' }],
+        food: [food('apple', '🍎', 'Apple')],
+        equipment: {},
+      },
+    }));
+    const loaded = loadGame();
+    expect(loaded.kind).toBe('ok');
+    if (loaded.kind !== 'ok') return;
+    expect(loaded.state.schemaVersion).toBe(13);
+    expect(loaded.state.player.food?.map(item => item.emoji)).toEqual(['🍎', '🫀', '🧪', '🍞']);
+    expect(loaded.state.player.inventory.map(item => item.emoji)).toEqual(['💀']);
+    expect(loaded.state.player.bank.map(item => item.emoji)).toEqual(['💣']);
   });
 });

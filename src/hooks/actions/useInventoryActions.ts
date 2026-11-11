@@ -3,7 +3,7 @@ import { EquipSlot } from '../../game/types';
 import {
   addToPlayerBag, activeKindLabel, sortBagSlots, buildHotbarSlots,
   isNonStackableBagPassiveDuplicate, isActiveKindDuplicate, runEnemyTurns, applyEnemyTurns,
-  applyBankToHotbarSlot,
+  applyBankToHotbarSlot, divertStoredHeals,
 } from '../../game/gameHelpers';
 import type { GameSetters, AddLog, ApplyMonkeyDropOnKill } from './types';
 import { _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG } from '../../game/flashSignals';
@@ -57,7 +57,8 @@ export function useInventoryActions(
         } else if (srcBankIdx !== -1) {
           const next = applyBankToHotbarSlot(prev.player, sourceId, dest);
           if (next === prev.player) return prev;
-          return { ...prev, player: next };
+          const parked = divertStoredHeals(next.inventory, next.bank, next.food ?? []);
+          return { ...prev, player: { ...next, ...parked } };
         }
       } else {
         const dstInvIdx  = inv.findIndex(i => i.id === dest);
@@ -74,7 +75,8 @@ export function useInventoryActions(
         else if (srcBankIdx !== -1 && dstInvIdx !== -1) { bank[srcBankIdx] = dstItem; inv[dstInvIdx] = srcItem; }
       }
 
-      return { ...prev, player: { ...prev.player, inventory: inv, bank } };
+      const parked = divertStoredHeals(inv, bank, prev.player.food ?? []);
+      return { ...prev, player: { ...prev.player, inventory: parked.inventory, bank: parked.bank, food: parked.food } };
     });
   }, [setGameState]);
 
