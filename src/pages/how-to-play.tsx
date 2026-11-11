@@ -955,7 +955,7 @@ export default function HowToPlay({
           </li>
         </ul>
         <p className="text-xs text-muted-foreground mt-3">
-          🫳 Auto-consume sits beside the bag. While it is on, excess Bank emoji are used for their stat effect and the log names each one. It ignores bombs, guns, ropes, boomerangs, freeze rays, food, drinks, ammo, equipment, money bags, and structure blueprints. Lightning stays too, because that consume needs a target. A stacking emoji is used only once the hotbar copy is at its cap; only the Bank copies past that cap are consumed. The switch is saved with the run.
+          🫳 Auto-consume sits beside the bag. While it is on, passive and stat emoji that land in the Bank are used for their effect, and the log names each one. It ignores bombs, guns, ropes, boomerangs, freeze rays, potions, food, drinks, ammo, equipment, money bags, and structure blueprints. A stacking emoji joins its hotbar stack until that stack is full, even when the hotbar is locked. Copies past that cap are used while auto-consume is on, and wait in the Bank while it is off. The switch is saved with the run.
         </p>
         <p className="text-xs text-muted-foreground mt-3">
           💀 <strong className="text-foreground">Skull</strong> is non-stackable.
