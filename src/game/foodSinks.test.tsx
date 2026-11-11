@@ -120,6 +120,12 @@ describe('campfire banquet', () => {
     expect(hurt.player?.bank).toEqual([]);
     expect(hurt.player?.banquet).toEqual({ floor: 12, turnsLeft: 8 });
 
+    const stored = executeBanquet({ ...playerWith([], [], 4, 77), food: dishes }, ['a', 'b', 'c']);
+    expect(stored.ok).toBe(true);
+    expect(stored.player?.food).toEqual([]);
+    expect(stored.player?.stats.hp).toBe(20);
+    expect(stored.player?.stats.gold).toBe(77);
+
     const over = executeBanquet(playerWith(dishes, [], 30, 77), ['a', 'b', 'c']);
     expect(over.player?.stats.hp).toBe(30);
     expect(over.player?.stats.gold).toBe(77);
@@ -193,6 +199,11 @@ describe('companion feast', () => {
     const refused = executeFeast(playerWith([potion]), wolf(), 'pot');
     expect(refused.ok).toBe(false);
     expect(refused.player).toBeUndefined();
+
+    const fromStore = executeFeast({ ...playerWith([], [], 20), food: [bite] }, wolf(), 'apple');
+    expect(fromStore.ok).toBe(true);
+    expect(fromStore.player?.food).toEqual([]);
+    expect(fromStore.companion?.feastBuff).toMatchObject({ attack: 1, defense: 0, turnsLeft: 6 });
   });
 
   it('lets the feast defense expire', () => {
@@ -218,6 +229,11 @@ describe('shrine offering', () => {
     const blessed = rawCombatStats(first.player!);
     expect(blessed.attack - base.attack).toBe(2);
     expect(blessed.defense - base.defense).toBe(1);
+
+    const fromStore = executeShrineOffer({ ...playerWith([], [], 20, 15), food: [apple] }, 'apple');
+    expect(fromStore.ok).toBe(true);
+    expect(fromStore.player?.food).toEqual([]);
+    expect(fromStore.player?.shrineOffering?.foodEmoji).toBe('🍎');
 
     const second = executeShrineOffer(first.player!, 'apple');
     expect(second.ok).toBe(false);

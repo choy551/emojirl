@@ -1,5 +1,5 @@
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToPlayerBag, removeAndRefillBag, COOKED_OVERFLOW_THRESHOLD, cookedHealCount, isHealJunk, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG, playerSoftCap } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToPlayerBag, removeCarriedId, COOKED_OVERFLOW_THRESHOLD, cookedHealCount, carriedSellables, isHealJunk, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG, playerSoftCap } from '../game/gameHelpers';
 import { goldWithLuck } from '../game/softCap';
 import { soulHelpText } from '../game/emojis';
 import { isStackableBagPassive } from '../game/passives';
@@ -183,16 +183,10 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
         {/* Sell */}
         {(() => {
           const cls = gameState.player.characterClass;
-          const allSellable = [
-            ...gameState.player.inventory.filter(i => !i.consumed),
-            ...gameState.player.bank.filter(i => !i.consumed),
-          ];
+          const allSellable = carriedSellables(gameState.player);
           const souls = allSellable.filter(i => !i.healAmount && !i.ammoAmount);
           const food  = allSellable.filter(i => i.healAmount !== undefined);
-          const overflowHeals = cookedHealCount([
-            ...gameState.player.inventory,
-            ...gameState.player.bank,
-          ]) >= COOKED_OVERFLOW_THRESHOLD;
+          const overflowHeals = cookedHealCount(allSellable) >= COOKED_OVERFLOW_THRESHOLD;
           const isJunk = (i: EmojiItem) =>
             i.isMoneyBag || i.emoji === '💰' ||
             (i.isEquipment && !canEquipItem(i, cls)) ||
@@ -218,15 +212,13 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                   onClick={() => {
                     setGameState(prev => {
                       if (!prev) return prev;
-                      const fromHotbar = prev.player.inventory.some(i => i.id === item.id);
-                      const { inventory, bank } = fromHotbar
-                        ? removeAndRefillBag(prev.player.inventory, prev.player.bank, item.id, prev.player.hotbarLocked === true)
-                        : { inventory: prev.player.inventory, bank: prev.player.bank.filter(i => i.id !== item.id) };
+                      const sold = removeCarriedId(prev.player, item.id);
+                      if (!sold) return prev;
                       const equipment: Equipment = { ...prev.player.equipment };
                       (Object.keys(equipment) as EquipSlot[]).forEach(slot => {
                         if (equipment[slot]?.id === item.id) delete equipment[slot];
                       });
-                      return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: prev.player.stats.gold + price }, inventory, bank, equipment } };
+                      return { ...prev, player: { ...sold, stats: { ...sold.stats, gold: sold.stats.gold + price }, equipment } };
                     });
                     addLog((item.isMoneyBag || item.emoji === '💰')
                       ? `💰 Sold Money Bag for ${price}g!`
@@ -249,22 +241,16 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                     setGameState(prev => {
                       if (!prev) return prev;
                       const junkIds = new Set(junk.map(i => i.id));
-                      let inventory = prev.player.inventory;
-                      let bank = prev.player.bank;
+                      let next = prev.player;
                       for (const j of junk) {
-                        if (inventory.some(i => i.id === j.id)) {
-                          const r = removeAndRefillBag(inventory, bank, j.id, prev.player.hotbarLocked === true);
-                          inventory = r.inventory;
-                          bank = r.bank;
-                        } else {
-                          bank = bank.filter(i => i.id !== j.id);
-                        }
+                        const sold = removeCarriedId(next, j.id);
+                        if (sold) next = sold;
                       }
-                      const equipment: Equipment = { ...prev.player.equipment };
+                      const equipment: Equipment = { ...next.equipment };
                       (Object.keys(equipment) as EquipSlot[]).forEach(slot => {
                         if (equipment[slot] && junkIds.has(equipment[slot]!.id)) delete equipment[slot];
                       });
-                      return { ...prev, player: { ...prev.player, stats: { ...prev.player.stats, gold: prev.player.stats.gold + junkGold }, inventory, bank, equipment } };
+                      return { ...prev, player: { ...next, stats: { ...next.stats, gold: next.stats.gold + junkGold }, equipment } };
                     });
                     addLog(soldOverflowHeals
                       ? `🗑️ Sold ${junk.length} junk (incl. overflow heals) for ${junkGold}g.`

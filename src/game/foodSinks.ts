@@ -183,6 +183,7 @@ export function tickBanquet(player: Player): { player: Player; log?: string } {
 function dropIds(player: Player, ids: Set<string>): Player {
   return {
     ...player,
+    food: (player.food ?? []).filter(item => !ids.has(item.id)),
     inventory: player.inventory.filter(item => !ids.has(item.id)),
     bank: player.bank.filter(item => !ids.has(item.id)),
   };
@@ -198,7 +199,7 @@ export interface SinkResult {
 
 export function executeBanquet(player: Player, offerIds: string[]): SinkResult {
   const unique = [...new Set(offerIds)];
-  const held = new Map([...player.inventory, ...player.bank].map(item => [item.id, item]));
+  const held = new Map(carried(player).map(item => [item.id, item]));
   const dishes: EmojiItem[] = [];
   for (const id of unique) {
     const item = held.get(id);
@@ -224,8 +225,7 @@ export function executeBanquet(player: Player, offerIds: string[]): SinkResult {
 }
 
 export function executeFeast(player: Player, companion: Enemy, itemId: string): SinkResult {
-  const item = player.inventory.find(entry => entry.id === itemId && !entry.consumed)
-    ?? player.bank.find(entry => entry.id === itemId && !entry.consumed);
+  const item = carried(player).find(entry => entry.id === itemId && !entry.consumed);
   if (!item || !isSinkFood(item)) return { ok: false, reason: 'Companions feast on food, not potions, hearts, or gold.' };
   const tier = FEAST_BY_TIER[foodTierId(item.healAmount ?? 0)];
   const xp = (companion.xp ?? 0) + tier.xp;
@@ -256,8 +256,7 @@ export function executeFeast(player: Player, companion: Enemy, itemId: string): 
 
 export function executeShrineOffer(player: Player, itemId: string): SinkResult {
   if (player.shrineOffering) return { ok: false, reason: 'This floor already holds your offering.' };
-  const item = player.inventory.find(entry => entry.id === itemId && !entry.consumed)
-    ?? player.bank.find(entry => entry.id === itemId && !entry.consumed);
+  const item = carried(player).find(entry => entry.id === itemId && !entry.consumed);
   if (!item || !isSinkFood(item)) return { ok: false, reason: 'The shrine wants food, not gold or potions.' };
   const tierId = foodTierId(item.healAmount ?? 0);
   const tier = SHRINE_BY_TIER[tierId];

@@ -24,6 +24,7 @@ export function CampfireBanquetModal({ gameState, setGameState, addLog, onClose 
   const [picked, setPicked] = useState<string[] | null>(null);
 
   const dishes = [
+    ...(gameState.player.food ?? []).filter(isCookedDish).map(item => ({ item, where: 'Food' })),
     ...gameState.player.inventory.filter(isCookedDish).map(item => ({ item, where: 'Bag' })),
     ...gameState.player.bank.filter(isCookedDish).map(item => ({ item, where: 'Bank' })),
   ];

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { moneyBagSellValue, getItemSellValue, getItemBuyPrice, MERCHANT_BUY_PRICE_TEXT, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, pickBestDishesToSell, restaurantCookedPrice, CHEF_LESSON_COST_TEXT, chefLessonCost, chefLessonPrice, chefLessonPriceLabel, chefLessonTooltip, cookedHealBonus, cookedSellBonus, MAX_CHEF_LESSONS, restaurantCookedSellPrice, cookedEatHeal, foodHealLabel, foodHealDescription, slotShrineCost, slotTierFromRoll, rollSlotTier, resolveSlotPrize, grantSlotPrizeItems } from './economy';
+import { moneyBagSellValue, getItemSellValue, getItemBuyPrice, MERCHANT_BUY_PRICE_TEXT, isHealJunk, isCookedHeal, COOKED_OVERFLOW_THRESHOLD, carriedSellables, cookedHealCount, pickBestDishesToSell, restaurantCookedPrice, CHEF_LESSON_COST_TEXT, chefLessonCost, chefLessonPrice, chefLessonPriceLabel, chefLessonTooltip, cookedHealBonus, cookedSellBonus, MAX_CHEF_LESSONS, restaurantCookedSellPrice, cookedEatHeal, foodHealLabel, foodHealDescription, slotShrineCost, slotTierFromRoll, rollSlotTier, resolveSlotPrize, grantSlotPrizeItems } from './economy';
+import { removeCarriedId, removeFirstCarriedEmoji } from './inventory';
 import { MONEY_BAG } from './emojis';
 import type { EmojiItem } from './types';
 
@@ -57,6 +58,26 @@ describe('cooked-heal overflow junk', () => {
   it('junks potions/hearts when overflow is on', () => {
     expect(isHealJunk(potion('p'), true)).toBe(true);
     expect(isHealJunk(heart('h'), true)).toBe(true);
+  });
+
+  it('sells junk and counts cooked dishes from food storage', () => {
+    const onion = apple('onion');
+    onion.emoji = '🧅';
+    onion.healAmount = 1;
+    const steaks = Array.from({ length: 12 }, (_, i) => steak(`s${i}`));
+    const listed = carriedSellables({ food: [onion, ...steaks], inventory: [], bank: [] });
+    expect(listed).toHaveLength(13);
+    expect(isHealJunk(onion, false)).toBe(true);
+    expect(cookedHealCount(listed)).toBe(12);
+    const player = {
+      pos: { x: 0, y: 0 }, emoji: '🧙', characterClass: '🧙', ammo: 0,
+      stats: { hp: 10, maxHp: 10, attack: 1, defense: 0, speed: 1, evasion: 0, luck: 0, level: 1, xp: 0, moodValue: 0, gold: 0 },
+      inventory: [], bank: [], food: [onion], equipment: {},
+    };
+    const sold = removeCarriedId(player, 'onion');
+    expect(sold?.food).toEqual([]);
+    const fed = removeFirstCarriedEmoji({ ...player, food: [onion] }, '🧅');
+    expect(fed?.food).toEqual([]);
   });
 
   it('never junks cooked steak or raw apple via overflow', () => {

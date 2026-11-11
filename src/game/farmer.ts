@@ -105,8 +105,12 @@ export function farmerAskPrice(item: EmojiItem): number {
   return Math.max(4, Math.round(sell * 0.75));
 }
 
+function carriedHeals(player: Player): EmojiItem[] {
+  return [...(player.food ?? []), ...player.inventory, ...player.bank];
+}
+
 export function payableFarmerItems(player: Player): EmojiItem[] {
-  return [...player.inventory, ...player.bank].filter(i => farmerTradeValue(i) > 0);
+  return carriedHeals(player).filter(i => farmerTradeValue(i) > 0);
 }
 
 export function rollFarmerStock(rng: () => number = Math.random): EmojiItem[] {
@@ -234,7 +238,7 @@ export function executeFarmerTrade(
   const goods = stock.find(s => s.id === stockId && !s.consumed);
   if (!goods) return { ok: false, reason: 'The farmer already traded that away.' };
   const unique = [...new Set(offerIds)];
-  const held = new Map([...player.inventory, ...player.bank].map(i => [i.id, i]));
+  const held = new Map(carriedHeals(player).map(i => [i.id, i]));
   const offers: EmojiItem[] = [];
   for (const id of unique) {
     const item = held.get(id);
@@ -249,12 +253,13 @@ export function executeFarmerTrade(
   const spent = new Set(unique);
   const inventory = player.inventory.filter(i => !spent.has(i.id));
   const bank = player.bank.filter(i => !spent.has(i.id));
+  const food = (player.food ?? []).filter(i => !spent.has(i.id));
   const gained: EmojiItem = {
     ...goods,
     id: `bartered-${goods.id}-${Math.floor(Math.random() * 1e9).toString(36)}`,
     consumed: false,
   };
-  const packed = addToPlayerBag({ ...player, inventory, bank }, gained);
+  const packed = addToPlayerBag({ ...player, inventory, bank, food }, gained);
   const gold = player.stats.gold;
   return {
     ok: true,
