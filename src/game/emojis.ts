@@ -52,6 +52,14 @@ export function isPantryFood(item: { healAmount?: number; emoji: string }): bool
   return item.healAmount !== undefined && FOOD_EMOJI_SET.has(item.emoji);
 }
 
+/**
+ * Every HP restore lives in food storage, including potions and emergency hearts.
+ * Those two are not cookable and are not bear food; that is what FOOD_EMOJI_SET is for.
+ */
+export function isStoredHeal(item: { healAmount?: number; drinkTier?: number; isEquipment?: boolean; activeKind?: string }): boolean {
+  return item.healAmount !== undefined && item.drinkTier === undefined && !item.isEquipment && !item.activeKind;
+}
+
 export function getFoodHealItems(inventory: import('./types').EmojiItem[]) {
   return inventory.filter(it => !it.consumed && it.healAmount !== undefined && FOOD_EMOJI_SET.has(it.emoji));
 }
