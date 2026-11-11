@@ -82,7 +82,7 @@ describe('autofight', () => {
       enemies: [foe(3, 2)],
       rangerMode: 'ranged',
     });
-    expect(reposition).toEqual({ kind: 'move', dx: 1, dy: 0 });
+    expect(reposition).toEqual({ kind: 'idle', log: NO_ENEMIES_LOG });
   });
 
   it('closes to melee with a bow and sword when the enemy is within 2 tiles', () => {
@@ -126,14 +126,31 @@ describe('autofight', () => {
       map: floor(5, 14),
       enemies: [foe(2, 12)],
     });
-    expect(far).toEqual({ kind: 'move', dx: 0, dy: 1 });
+    expect(far).toEqual({ kind: 'idle', log: NO_ENEMIES_LOG });
   });
 
   it('logs and spends nothing when no enemy is visible', () => {
     expect(plan({ enemies: [] })).toEqual({ kind: 'idle', log: NO_ENEMIES_LOG });
-    const hidden = floor(6, 6);
-    hidden[4][1] = { ...hidden[4][1], visible: false };
-    expect(plan({ map: hidden, enemies: [foe(1, 4)] })).toEqual({ kind: 'idle', log: NO_ENEMIES_LOG });
+  });
+
+  it('ignores telepathy and foes outside sight, and still shoots inside LOS', () => {
+    const blocked = floor(8, 8);
+    wallAt(blocked, 1, 2);
+    blocked[3][1] = { ...blocked[3][1], visible: true };
+    const telepathy = plan({ map: blocked, enemies: [foe(1, 3)] });
+    expect(telepathy).toEqual({ kind: 'idle', log: NO_ENEMIES_LOG });
+
+    const seen = plan({ map: floor(8, 8), enemies: [foe(1, 3)] });
+    expect(seen).toEqual({ kind: 'move', dx: 0, dy: 1 });
+
+    const outside = plan({ map: floor(3, VISION_RADIUS + 4), enemies: [foe(1, 1 + VISION_RADIUS + 1)] });
+    expect(outside).toEqual({ kind: 'idle', log: NO_ENEMIES_LOG });
+
+    const ranger = hero({ pos: { x: 1, y: 1 }, emoji: '🧝', characterClass: '🧝', ammo: 6 });
+    const shot = plan({ player: ranger, enemies: [foe(1, 4)], rangerMode: 'ranged' });
+    expect(shot).toEqual({ kind: 'move', dx: 0, dy: 1 });
+    const noShot = plan({ player: ranger, map: blocked, enemies: [foe(1, 3)], rangerMode: 'ranged' });
+    expect(noShot).toEqual({ kind: 'idle', log: NO_ENEMIES_LOG });
   });
 
   it('prices a void shot in HP and melees when that price would kill', () => {
