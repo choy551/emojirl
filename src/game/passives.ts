@@ -110,23 +110,29 @@ export function getStackableBonusLabel(item: EmojiItem): string | null {
 export function getStackableCumulativeLabel(item: EmojiItem): string | null {
   const p = item.bagPassive;
   if (!p) return null;
-  const n = item.stackCount ?? 1;
-  if (p.shieldWall)   return `${n * 25}% block chance, −${n} incoming dmg`;
-  if (p.healOnKill)   return `+${n} HP per kill`;
+  const n = Math.max(1, item.stackCount ?? 1);
+  if (p.shieldWall)   return `25% block, −${n} dmg + (0.2% DEF × depth × ${n})`;
+  if (p.healOnKill)   return `+${n} HP per kill + (0.1% max HP × depth × ${n})`;
   if (p.bonusLoot)    return cloverLootSummary(n);
-  if (p.thorns)       return `+${n} reflect dmg per hit`;
-  if (p.regeneration) return `${5 + (Math.min(5, n) - 1) * 1.25}% max HP every 5 turns`;
+  if (p.thorns)       return `+${n} reflect + (1% ATK × depth × ${n})`;
+  if (p.regeneration) return `${Math.round(pillRegenPercent(n))}% max HP every 5 turns`;
+  if (p.burningOnHit) return `+1 ATK · ignite ${n}×depth + (${n}×depth×10% ATK)`;
   if (p.starGaze) return n >= 5 ? 'no stealth · foes path across the map' : `+${n} sight · +${n} detection`;
   if (p.royalAura) return `20% flee · Royal Guard stun ${Math.min(5, n) * 5}% instead`;
-  if (p.vampiricStrike) return `+${n} HP per hit`;
-  if (p.dodgeHeal)      return `+${n} HP on dodge`;
-  if (p.ninjaCombo)     return `Ninja only: ${25 + (n-1)*15}% chance of bonus melee strike`;
+  if (p.vampiricStrike) return `+${n} HP per hit + (1% ATK × depth × ${n})`;
+  if (p.dodgeHeal)      return `+${n} HP on dodge + (0.1% max HP × depth × ${n})`;
+  if (p.ninjaCombo)     return `Ninja only: ${25 + (n - 1) * 15}% chance of bonus melee strike`;
   if (p.combatRegen)    return `+${n} HP per turn in combat`;
   if (p.lightningBolt) {
     const [a, b, c] = lightningArcTiers(n);
     return `${Math.round(a * 100)}% / ${Math.round(b * 100)}% / ${Math.round(c * 100)}% ATK arcs`;
   }
   return null;
+}
+
+function pillRegenPercent(stacks: number): number {
+  const z = Math.max(1, Math.min(5, stacks));
+  return (0.05 + (z - 1) * 0.0125) * 100;
 }
 
 /** Ghost stacks are always named, including ×1. Dormant ghosts say so. */

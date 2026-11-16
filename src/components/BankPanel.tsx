@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { EmojiItem, Player } from '../game/types';
-import { bankExtraCopies, hasBagPassive, getPassiveTooltipSuffix, hotbarCountBadge, isStackableBagPassive, getStackableBonusLabel } from '../game/passives';
+import { bankExtraCopies, hasBagPassive, getPassiveTooltipSuffix, hotbarCountBadge, isStackableBagPassive, getStackableBonusLabel, getStackableCumulativeLabel } from '../game/passives';
 import { soulHelpText } from '../game/emojis';
 import { bankSelectionAfterTap, isNonStackableBagPassiveDuplicate, isActiveKindDuplicate } from '../game/gameHelpers';
 import { foodHealDescription } from '../game/economy';
@@ -171,8 +171,8 @@ export function BankPanel({
                 ? isNonStackableBagPassiveDuplicate(si, player.inventory)
                 : false;
               return alreadyActive
-                ? <div className="text-zinc-400/70 text-[10px] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-zinc-500/70 inline-block shrink-0" />Passive: {soulHelpText(si).bagPassiveDescription ?? si.bagPassive!.description} <span className="text-zinc-500">(already active)</span></div>
-                : <div className="text-green-400/80 text-[10px] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_3px_rgba(74,222,128,0.9)] inline-block shrink-0" />Passive: {soulHelpText(si).bagPassiveDescription ?? si.bagPassive!.description}</div>;
+                ? <div className="text-zinc-400/70 text-[10px] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-zinc-500/70 inline-block shrink-0" />Passive: {getStackableCumulativeLabel(si) ?? soulHelpText(si).bagPassiveDescription ?? si.bagPassive!.description} <span className="text-zinc-500">(already active)</span></div>
+                : <div className="text-green-400/80 text-[10px] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_3px_rgba(74,222,128,0.9)] inline-block shrink-0" />Passive: {getStackableCumulativeLabel(si) ?? soulHelpText(si).bagPassiveDescription ?? si.bagPassive!.description}</div>;
             })()}
             {needsHotbar && !wouldBeDuplicate && <div className="text-amber-400/70 text-[10px]">Pull to hotbar to activate this item.</div>}
             {needsHotbar && wouldBeDuplicate && <div className="text-amber-400/70 text-[10px]">You already carry this active ability.</div>}
