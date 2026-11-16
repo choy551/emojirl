@@ -198,6 +198,36 @@ describe('autofight', () => {
     expect(quiver).toEqual({ kind: 'move', dx: 0, dy: 1 });
   });
 
+  it('shoots on an 8-direction line and melees when adjacent', () => {
+    const pistol = { id: 'pistol', emoji: '🔫', name: 'Pistol', description: '', consumed: false, weaponKind: 'gun' as const };
+    const hitman = hero({
+      pos: { x: 1, y: 1 }, emoji: '🕴️', characterClass: '🕴️', ammo: 4,
+      equipment: { mainHand: pistol },
+    });
+    expect(plan({ player: hitman, enemies: [foe(1, 4)] })).toEqual({ kind: 'move', dx: 0, dy: 1 });
+    expect(plan({ player: hitman, enemies: [foe(2, 2)] })).toEqual({ kind: 'move', dx: 1, dy: 1 });
+
+    const cowboy = hero({
+      pos: { x: 1, y: 1 }, emoji: '🤠', characterClass: '🤠', ammo: 4,
+      equipment: { mainHand: pistol, offHand: { ...pistol, id: 'pistol-2' } },
+    });
+    expect(plan({ player: cowboy, enemies: [foe(1, 4)] })).toEqual({ kind: 'move', dx: 0, dy: 1 });
+    expect(plan({ player: cowboy, enemies: [foe(2, 2)] })).toEqual({ kind: 'move', dx: 1, dy: 1 });
+
+    const ranger = hero({ pos: { x: 1, y: 1 }, emoji: '🧝', characterClass: '🧝', ammo: 6 });
+    expect(plan({ player: ranger, enemies: [foe(2, 2)], rangerMode: 'ranged' })).toEqual({ kind: 'move', dx: 1, dy: 1 });
+
+    const voider = hero({ pos: { x: 1, y: 1 }, emoji: '👤', characterClass: '👤', ammo: 4 }, { hp: 16, maxHp: 20 });
+    expect(plan({ player: voider, enemies: [foe(2, 2)], voidAttackMode: 'ranger' })).toEqual({ kind: 'move', dx: 1, dy: 1 });
+
+    const guard = hero({
+      pos: { x: 1, y: 1 }, emoji: '💂', characterClass: '💂', ammo: 0, arrowAmmo: 6,
+      equipment: { mainHand: { id: 'bow', emoji: '🏹', name: 'Bow', description: '', consumed: false, weaponKind: 'bow' } },
+    });
+    expect(plan({ player: guard, enemies: [foe(2, 2)], rangerMode: 'ranged' })).toEqual({ kind: 'move', dx: 1, dy: 1 });
+    expect(plan({ player: guard, enemies: [foe(1, 4)], rangerMode: 'ranged' })).toEqual({ kind: 'move', dx: 0, dy: 1 });
+  });
+
   it('refuses below half HP and still acts at exactly half', () => {
     const wounded = plan({
       player: hero({}, { hp: 9, maxHp: 20 }),
