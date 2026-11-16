@@ -182,6 +182,8 @@ export function planAutofight(input: AutofightInput): AutofightAction {
   const from = input.player.pos;
 
   if (style === 'ranged') {
+    // Adjacent is always a bump. A shot starts at range 2 along an 8-direction line.
+    if (chebyshev(from, foe.pos) === 1) return melee(input, foe);
     // Close hybrids step in and swing. Lining up a shot only starts past 2 tiles.
     if (hybridLoadout(input.player) && chebyshev(from, foe.pos) <= 2) {
       return melee(input, foe);
