@@ -6,15 +6,37 @@ import { pressureForRun } from './progression';
 import { spawnPrairieDenizens } from './farmer';
 import { rollStructureBuilding, STRUCTURE_FLOOR_CHANCE, structureItem } from './cityBuildings';
 
-function floorScale<T extends { hp: number; attack: number; defense: number }>(type: T, floor: number): T {
-  if (floor <= 1) return type;
-  const depth = floor - 1;
-  const hpMult = Math.min(20, 1 + 0.4 * depth);
+/** HP steps start at D:4 and stop after 30 floors. Attack grows every floor of depth. */
+export function floorHpMultiplier(floor: number): number {
+  const steps = Math.min(30, Math.max(0, floor - 3));
+  return 1 + 0.25 * steps;
+}
+
+export function floorAttackBonus(floor: number): number {
+  return 1.3 * Math.max(0, floor - 1);
+}
+
+/** 0 on D:1–3. Then min(25, floor(1.5*(floor-3))). Evasive mobs use 90 as the cap. Bosses are 10. */
+export function mobEvasion(floor: number, kind: 'normal' | 'evasive' | 'boss'): number {
+  if (kind === 'boss') return 10;
+  if (floor <= 3) return 0;
+  const scaled = Math.floor(1.5 * (floor - 3));
+  return Math.min(kind === 'evasive' ? 90 : 25, scaled);
+}
+
+function floorScale<T extends { hp: number; attack: number; defense: number; evasive?: boolean }>(
+  type: T,
+  floor: number,
+  kind?: 'normal' | 'evasive' | 'boss',
+): T & { evasion: number } {
+  const resolved = kind ?? (type.evasive ? 'evasive' : 'normal');
+  const depth = Math.max(0, floor - 1);
   return {
     ...type,
-    hp:      Math.max(type.hp, Math.round(type.hp * hpMult)),
-    attack:  type.attack + Math.floor(depth * 0.9),
+    hp: Math.max(type.hp, Math.round(type.hp * floorHpMultiplier(floor))),
+    attack: Math.max(1, Math.round(type.attack + floorAttackBonus(floor))),
     defense: type.defense + Math.floor(depth * 0.4),
+    evasion: mobEvasion(floor, resolved),
   };
 }
 
@@ -67,7 +89,7 @@ export function makeBossrushFighter(
     const scaled = applySpawnPressure(scaleEnemy(floorScale(echo, floor), difficultyTier), pressure);
     return { ...scaled, isBoss: false as const, isEcho: true as const };
   }
-  const scaled = applySpawnPressure(scaleBoss(floorScale(raw, floor), difficultyTier), pressure);
+  const scaled = applySpawnPressure(scaleBoss(floorScale(raw, floor, 'boss'), difficultyTier), pressure);
   return { ...scaled, isBoss: true as const, isEcho: false as const };
 }
 
@@ -129,7 +151,7 @@ export function spawnEnemies(floor: number, rooms: Room[], _playerPos: Position,
     }
     if (room.theme === 'boss') {
       const rawBoss = getBossForFloor(floor);
-      const bossBase = scaleBoss(floorScale(rawBoss, floor), difficultyTier);
+      const bossBase = scaleBoss(floorScale(rawBoss, floor, 'boss'), difficultyTier);
       const bossType = applySpawnPressure(bossBase, pressure);
       const cx = room.x + Math.floor(room.w / 2);
       const cy = room.y + Math.floor(room.h / 2);

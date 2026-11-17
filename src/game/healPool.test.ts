@@ -12,10 +12,10 @@ import { applyLevelUp } from './playerTurn';
 import { applyBedRest, BED_OVERHEAL_MULT } from './sleep';
 import { reclaimVoidSlotPressure } from './voidSlotBurden';
 
-/** Alex (Ranger LV27, Floor 26): raw DEF 137, base max 585, overflow +234, pool 819. */
+/** Alex (Ranger LV27, Floor 26): raw DEF 137, base max 585. DEF past 50 is +1 HP per 20, so +4, pool 589. */
 const ALEX_DEF = 137;
 const ALEX_BASE = 585;
-const ALEX_POOL = 819;
+const ALEX_POOL = 589;
 
 function makePlayer(stats: Partial<PlayerStats>, characterClass = '🏹'): Player {
   const baseStats: PlayerStats = {
@@ -47,7 +47,7 @@ describe('living pool', () => {
     const player = alex(ALEX_POOL);
     expect(livingMaxHp(player)).toBe(ALEX_POOL);
     expect(player.stats.maxHp).toBe(ALEX_BASE);
-    expect(ALEX_POOL - ALEX_BASE).toBe(234);
+    expect(ALEX_POOL - ALEX_BASE).toBe(4);
   });
 });
 
@@ -59,8 +59,8 @@ describe('healHp', () => {
   });
 
   it('adds a partial heal up to the pool and leaves overheal alone', () => {
-    expect(healHp(800, ALEX_POOL, 50)).toBe(ALEX_POOL);
-    expect(healHp(700, ALEX_POOL, 10)).toBe(710);
+    expect(healHp(560, ALEX_POOL, 50)).toBe(ALEX_POOL);
+    expect(healHp(500, ALEX_POOL, 10)).toBe(510);
     expect(healHp(ALEX_POOL, ALEX_POOL, 50)).toBe(ALEX_POOL);
     expect(healHp(900, ALEX_POOL, 50)).toBe(900);
     expect(healHp(100, ALEX_POOL, 0)).toBe(100);
@@ -92,14 +92,14 @@ describe('applyLevelUp full heal', () => {
       description: 'none',
     });
     const log = vi.fn();
-    const full = applyLevelUp(alex(ALEX_POOL), 1, 2, log);
+    const full = applyLevelUp(alex(ALEX_POOL), 1, 3, log);
     expect(full.inventory[0]?.emoji).toBe('🪨');
-    expect(full.stats.maxHp).toBe(588);
-    expect(livingMaxHp(full)).toBe(822);
-    expect(full.stats.hp).toBe(822);
+    expect(full.stats.maxHp).toBe(589);
+    expect(livingMaxHp(full)).toBe(593);
+    expect(full.stats.hp).toBe(593);
 
     const wounded = applyLevelUp(alex(400), 1, 2, log);
-    expect(wounded.stats.hp).toBe(822);
+    expect(wounded.stats.hp).toBe(591);
 
     const over = applyLevelUp(alex(900), 1, 2, log);
     expect(over.stats.hp).toBe(900);
@@ -111,8 +111,8 @@ describe('soul consumes', () => {
     const heart = { maxHpBonus: 3, hpBonus: 3 };
     const full = applySoulHp(alex(ALEX_POOL), heart);
     expect(full.stats.maxHp).toBe(588);
-    expect(livingMaxHp(full)).toBe(822);
-    expect(full.stats.hp).toBe(822);
+    expect(livingMaxHp(full)).toBe(592);
+    expect(full.stats.hp).toBe(592);
 
     const wounded = applySoulHp(alex(400), heart);
     expect(wounded.stats.hp).toBe(403);
@@ -126,19 +126,19 @@ describe('soul consumes', () => {
     const ball = { defenseBonus: 1, hpBonus: 2 };
     const full = applySoulHp(alex(ALEX_POOL), ball);
     expect(full.stats.defense).toBe(ALEX_DEF + 1);
-    expect(livingMaxHp(full)).toBe(821);
-    expect(full.stats.hp).toBe(821);
+    expect(livingMaxHp(full)).toBe(589);
+    expect(full.stats.hp).toBe(589);
   });
 });
 
 describe('shrine blessing', () => {
   it('fills to the new living pool and keeps HP that was already above it', () => {
-    expect(applyShrineBlessing(alex(ALEX_POOL), 2, false).stats.hp).toBe(821);
-    expect(applyShrineBlessing(alex(400), 2, false).stats.hp).toBe(821);
-    expect(applyShrineBlessing(alex(700), 2, false).stats.hp).toBe(821);
+    expect(applyShrineBlessing(alex(ALEX_POOL), 2, false).stats.hp).toBe(591);
+    expect(applyShrineBlessing(alex(400), 2, false).stats.hp).toBe(591);
+    expect(applyShrineBlessing(alex(700), 2, false).stats.hp).toBe(702);
     const over = applyShrineBlessing(alex(900), 2, false);
     expect(over.stats.maxHp).toBe(587);
-    expect(livingMaxHp(over)).toBe(821);
+    expect(livingMaxHp(over)).toBe(591);
     expect(over.stats.hp).toBe(902);
   });
 
@@ -165,7 +165,7 @@ describe('other heals against the living pool', () => {
   it('void reclaim heals toward the living pool and does not wipe overheal', () => {
     const burden = [{ itemId: 'bolt', dealt: 40 }, ...Array.from({ length: 8 }, () => ({ itemId: null, dealt: 0 }))];
     const wounded = makePlayer(
-      { hp: 800, maxHp: ALEX_BASE, defense: ALEX_DEF },
+      { hp: 570, maxHp: ALEX_BASE, defense: ALEX_DEF },
       '👤',
     );
     wounded.inventory = [bolt()];

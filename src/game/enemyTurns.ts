@@ -1,7 +1,8 @@
 import { Enemy, EmojiItem, GameState, Position, FloatingText, PlacedBomb, ActiveProjectile } from './types';
 import { chebyshev } from './geo';
-import { applyEquipmentAndPassives, addToPlayerBag, playerBagPassives, parkVoidOverflow, countVoidPressureSlots, healHp } from './inventory';
+import { applyEquipmentAndPassives, addToPlayerBag, playerBagPassives, parkVoidOverflow, countVoidPressureSlots, healHp, gearStatPoints } from './inventory';
 import { applyNullMomentum, applyVoidPressureTick, creditVoidBoss, occupiedGhosts, voidClassTurnDamage, voidDamageFor, voidGhostCapacity, VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from './voidDamage';
+import { applyGearReduction } from './softCap';
 import { applyEntropicTithe, type GhostKillEffect } from './voidAbilities';
 import { unlockVoidClass } from './voidMeta';
 import { stealOneSoulEmoji, applySoulThefts, stolenEmojiSummary } from './monkeyLoot';
@@ -84,7 +85,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   let playerDied = false;
   let depthBossKills = 0;
   const titheKills: GhostKillEffect[] = [];
-  const soften = (raw: number) => applyNullMomentum(raw, player);
+  const soften = (raw: number) => applyNullMomentum(applyGearReduction(raw, gearStatPoints(player).defense), player);
   let killer: { name: string; emoji: string } | undefined;
   let voidGraceFloor: number | undefined;
   const newLogs: Array<{ id: string; text: string; turn: number }> = [];

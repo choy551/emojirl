@@ -223,6 +223,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             const cDrop = rollKillDrop({
               boss: !!enemy.isBoss,
               clover: _cowboyPassives.bonusLoot,
+              magicFindPct: playerSoftCap(cPlayer).magicFindPct,
               floor: prev.currentFloor,
               playerClass: cls,
               cowboyDualGuns: true,
@@ -430,6 +431,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             const drop = rollKillDrop({
               boss: !!enemy.isBoss,
               clover: _rangerPassives.bonusLoot,
+              magicFindPct: playerSoftCap(newPlayer).magicFindPct,
               floor: prev.currentFloor,
               playerClass: cls,
             });
@@ -806,6 +808,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const drop = rollKillDrop({
             boss: !!enemy.isBoss,
             clover: _meleePassives.bonusLoot,
+            magicFindPct: playerSoftCap(newPlayer).magicFindPct,
             floor: prev.currentFloor,
             playerClass: cls,
             cowboyDualGuns,
@@ -1253,6 +1256,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             const bDrop = rollKillDrop({
               boss: !!boltTarget.isBoss,
               clover: _boltPassives.bonusLoot,
+              magicFindPct: playerSoftCap(newPlayer).magicFindPct,
               floor: prev.currentFloor,
               playerClass: cls,
             });
@@ -1463,6 +1467,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             const bDrop = rollKillDrop({
               boss: !!boltTarget.isBoss,
               clover: _boltPassives.bonusLoot,
+              magicFindPct: playerSoftCap(waitPlayer).magicFindPct,
               floor: prev.currentFloor,
               playerClass: cls,
             });

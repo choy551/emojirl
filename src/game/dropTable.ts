@@ -111,6 +111,8 @@ export interface DropIdentity {
 
 export interface DropRollContext {
   clover?: number;
+  /** Luck overflow, in percent, added to the drop chance. */
+  magicFindPct?: number;
   floor?: number;
   playerClass?: string;
   cowboyDualGuns?: boolean;
@@ -255,9 +257,10 @@ export function fullGridTokensPerConsume(item: DropIdentity): number {
   return rarity ? FULL_GRID_RARITY_TOKENS[rarity] : FULL_GRID_TOKEN_MIN;
 }
 
-export function enemyDropChance(clover: number): number {
+export function enemyDropChance(clover: number, magicFindPct = 0): number {
   const c = Math.max(0, clover);
-  return Math.min(DROP_CHANCE_CAP, DROP_CHANCE_BASE + DROP_CHANCE_PER_CLOVER * c);
+  const find = Math.max(0, magicFindPct) / 100;
+  return Math.min(DROP_CHANCE_CAP, DROP_CHANCE_BASE + DROP_CHANCE_PER_CLOVER * c + find);
 }
 
 export function formatWeightMultiplier(n: number): string {
@@ -410,6 +413,6 @@ export function rollFromDropTable(ctx: DropRollContext = {}): Omit<EmojiItem, 'i
  */
 export function rollKillDrop(ctx: DropRollContext = {}): Omit<EmojiItem, 'id' | 'consumed'> | null {
   const rng = ctx.rng ?? Math.random;
-  if (!ctx.boss && rng() >= enemyDropChance(ctx.clover ?? 0)) return null;
+  if (!ctx.boss && rng() >= enemyDropChance(ctx.clover ?? 0, ctx.magicFindPct ?? 0)) return null;
   return rollFromDropTable({ ...ctx, rng });
 }

@@ -4,6 +4,7 @@ import { EMOJI_POWERS, getRandomEmojiPower } from './emojis';
 import { rollKillDrop } from './dropTable';
 import { appendMonkeyPickaxe } from './pickaxe';
 import { addToPlayerBag, activeKindLabel, applyPlayerHeal, applySoulHp, computeBagPassives, healHp, livingMaxHp, playerSoftCap } from './inventory';
+import { levelUpEmojiCount } from './playerTurn';
 import { markEnemySeen, markEnemyKilled, markEmojiSeen } from './discoveries';
 import { moodMax, levelFromXP, hpBonusForLevel } from './progression';
 import { creditVoidBoss } from './voidDamage';
@@ -272,15 +273,19 @@ export function applyInstantItemUse(
     if (newLevel > oldLevel) {
       const hpInc = hpBonusForLevel(newLevel) - hpBonusForLevel(oldLevel);
       const newMaxHp = newPlayer.stats.maxHp + hpInc;
-      const lvlEmoji = { ...getRandomEmojiPower(), id: `zap-lvl-${Math.random()}`, consumed: false };
-      markEmojiSeen(lvlEmoji.emoji);
+      const granted = [];
+      for (let level = oldLevel + 1; level <= newLevel; level++) {
+        const count = levelUpEmojiCount(cls, level);
+        for (let i = 0; i < count; i++) granted.push({ ...getRandomEmojiPower(), id: `zap-lvl-${level}-${i}-${Math.random()}`, consumed: false });
+      }
+      granted.forEach(emoji => markEmojiSeen(emoji.emoji));
       let drafted = newPlayer;
-      if (opts.source === 'bag') {
-        const { inventory: _inv, bank: _bnk, nonStackableBanked: _nsbZ, duplicateActiveBanked: _dabZ } = addToPlayerBag(newPlayer, lvlEmoji);
+      if (opts.source === 'bag' && granted.length > 0) {
+        const { inventory: _inv, bank: _bnk, nonStackableBanked: _nsbZ, duplicateActiveBanked: _dabZ } = addToPlayerBag(newPlayer, ...granted);
         _nsbZ.forEach(i => log(`Extra ${i.emoji} → Bank (already carried)`));
         _dabZ.forEach(i => log(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
         drafted = { ...newPlayer, inventory: _inv, bank: _bnk };
-        log(`✨ Level ${newLevel}! Full heal! +${hpInc} max HP! Got ${lvlEmoji.emoji}!`);
+        log(`✨ Level ${newLevel}! Full heal! +${hpInc} max HP! Got ${granted.map(emoji => emoji.emoji).join('')}!`);
       } else {
         log(`✨ Level ${newLevel}! Full heal! +${hpInc} max HP!`);
       }
@@ -299,6 +304,7 @@ export function applyInstantItemUse(
     const drop = rollKillDrop({
       boss: !!target.isBoss,
       clover: computeBagPassives(newPlayer.inventory).bonusLoot,
+      magicFindPct: playerSoftCap(newPlayer).magicFindPct,
       floor: s.currentFloor,
       playerClass: cls,
       cowboyDualGuns: cls === '🤠' && newPlayer.equipment.mainHand?.weaponKind === 'gun' && newPlayer.equipment.offHand?.weaponKind === 'gun',

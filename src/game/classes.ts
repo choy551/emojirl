@@ -60,7 +60,7 @@ export const CHARACTER_CLASSES: Record<string, ClassDefinition> = {
     passives: [
       { label: 'Arcane Barrage', detail: 'Auto-fires a spell bolt every turn (move or wait), costing 1 Mana. Starts at 4 MP max; gains +1 max MP every 3 levels and from Shrines. +1 MP per Wait turn — but only if no hostile has line of sight on you (companions and unengaged neutrals do not block regen). No bolt when empty.' },
       { label: 'Frail Melee', detail: 'Melee hits deal only 25% of base attack — but killing an enemy in melee restores 3+ MP (scales with level, same as max MP growth). High risk, real reward.' },
-      { label: 'Spell Echo', detail: '25% chance any emoji power you use is not consumed — it stays in your inventory and can be used again.' },
+      { label: 'Spell Echo', detail: '25% chance any emoji power you use is not consumed — it stays in your inventory and can be used again. On every 3rd level, the same 25% grants a second level-up emoji.' },
     ],
   },
   '🥷': {

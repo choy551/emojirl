@@ -5,7 +5,7 @@ import { getCowboyUnarmedBonus, getMoodModifiers, playerDodgeChance } from '../.
 import { cowboyCombatMoodValue, playerMood } from '../../game/drinks';
 import { nullMomentumPercent } from '../../game/voidDamage';
 import { blinkStrikeDamagePhrase, blinkTalentById, blinkTalentProgress, knownBlinkTalents, overkillStatusPhrase } from '../../game/blinkStrike';
-import { softCapBonusLines, softCapTitles } from '../../game/softCap';
+import { accuracyScore, softCapBonusLines, softCapTitles } from '../../game/softCap';
 import { MiniMap } from '../MiniMap';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './oneHandedLayout';
 import { useDismissGuard } from '../../hooks/useDismissGuard';
@@ -40,10 +40,9 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
   const ironFist = (dualGuns && player.ammo <= 0) || unarmed ? getCowboyUnarmedBonus(player.stats.level) : 0;
   const atk = caps.attack + ironFist;
   const crit = caps.crit;
-  const dodge = playerDodgeChance(
-    eff,
-    getMoodModifiers(playerMood(player), player.stats.hp, player.stats.maxHp, cowboyCombatMoodValue(player)).dodgeBonus,
-  );
+  const moodMods = getMoodModifiers(playerMood(player), player.stats.hp, player.stats.maxHp, cowboyCombatMoodValue(player));
+  const dodge = playerDodgeChance(eff, moodMods.dodgeBonus);
+  const accuracy = accuracyScore(moodMods.hitChance, caps.speed);
   const pressure = pressureForRun(currentFloor, gameState.deepDive);
   const voidDr = player.characterClass === '👤' ? nullMomentumPercent(player.stats.level) : 0;
   const p = bagPassiveSummary;
@@ -123,6 +122,7 @@ export function StatsModal({ player, className, currentFloor, moodEmoji, moodNam
           <StatPill label="LCK" value={caps.luck} color="text-pink-400" title={titles.LCK} />
           <StatPill label="CRIT" value={`${crit}%`} color="text-rose-300" title={titles.CRIT} />
           <StatPill label="DODGE" value={`${dodge}%`} color="text-sky-300" title={player.characterClass === '🥷' ? 'Dodge chance combat rolls. Caps at 75%.' : player.characterClass === '🤺' ? 'Dodge chance combat rolls. Poise caps at 60%.' : 'Dodge chance combat rolls. Caps at 50%, even when EVA is higher.'} />
+          <StatPill label="ACC" value={accuracy} color="text-lime-300" title={[`Accuracy ${accuracy} = 90 + mood ${moodMods.hitChance >= 0 ? '+' : ''}${moodMods.hitChance} + SPD overflow`, titles.ACC].filter(Boolean).join('. ')} />
           {voidDr > 0 && <StatPill label="DR" value={`${voidDr}%`} color="text-zinc-200" />}
           {pressure.atk > 0 && <StatPill label="PRESSURE" value={`+${pressure.atk}/+${pressure.def}`} color="text-red-400" />}
         </div>

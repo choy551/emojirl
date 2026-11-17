@@ -45,11 +45,11 @@ describe('spawn pressure HP', () => {
       expect(new Set(hp)).toEqual(new Set([hp[0]]));
       return hp[0];
     };
-    // Spider base hp 2. floorScale then +pressure.atk. D15 has no pressure.
-    expect(at(15)).toBe(13);
-    expect(at(16)).toBe(17);
-    expect(at(20)).toBe(32);
-    expect(at(25)).toBe(51);
+    // Spider base hp 2. From D:4, +0.25x per floor, then pressure HP.
+    expect(at(15)).toBe(8);
+    expect(at(16)).toBe(12);
+    expect(at(20)).toBe(26);
+    expect(at(25)).toBe(43);
   });
 });
 

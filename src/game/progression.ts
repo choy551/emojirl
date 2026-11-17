@@ -14,7 +14,7 @@ export function levelFromXP(xp: number): number {
 }
 
 export function hpBonusForLevel(level: number): number {
-  return Math.floor(Math.pow(level - 1, 1.3) * 3);
+  return Math.floor(Math.pow(level - 1, 1.3) * 2);
 }
 
 export function mpBonusForLevel(level: number): number {
