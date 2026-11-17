@@ -27,6 +27,7 @@ import {
   evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
 } from '../game/gameHelpers';
 import { lightningArcDamage } from '../game/passives';
+import { formatHitBreakdown, type HitComponent } from '../game/hitLog';
 import { butterflyHeal, diamondThorns, heartHeal, igniteFields, mushroomHeal, starXpGain } from '../game/emojiBalance';
 import { afterGuardShot, chooseGuardShot, gainCarriedAmmo, guardHasBow, guardHasGun, guardHasRangedWeapon } from '../game/royalGuard';
 import { equippedGuns, isLongGun, longGunRange, nextStill, pickOffhandTarget } from '../game/sharpshooter';
@@ -188,7 +189,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const mood = playerMood(prev.player);
           const effectiveCowboy = applyEquipmentAndPassives(player);
           const _cowboyPassives = playerBagPassives(prev.player);
-          const cResult = resolveCombat(effectiveCowboy, enemy, addLog, { mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true, damageMult: shotPlan.damageMult });
+          const shotParts: HitComponent[] = [];
+          const cResult = resolveCombat(effectiveCowboy, enemy, addLog, { mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true, damageMult: shotPlan.damageMult, collectHits: shotParts, hitName: 'Shot', hitTarget: `${enemy.emoji} ${enemy.name}` });
           if (cResult.fled) { const midState = { ...prev, turn: prev.turn + 1 }; return applyEnemyTurns(midState, runEnemyTurns(midState)); }
           addLog(shotPlan.label);
           const cFloats: FloatingText[] = [];
@@ -242,7 +244,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             const secondIdx = secondId ? cEnemies.findIndex(e => e.id === secondId && e.hp > 0) : -1;
             if (secondIdx >= 0) {
               const second = cEnemies[secondIdx];
-              const sResult = resolveCombat(effectiveCowboy, second, addLog, { mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true, damageMult: 1 });
+              const sResult = resolveCombat(effectiveCowboy, second, addLog, { mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true, damageMult: 1, collectHits: shotParts, hitName: 'Offhand', hitTarget: `${second.emoji} ${second.name}`, noCounter: true });
               addLog(off ? `🕴️ Offhand — ${second.emoji} ${second.name}.` : '🕴️ Offhand — same target.');
               cPlayer = { ...cPlayer, stats: { ...cPlayer.stats, hp: sResult.playerHp } };
               if (sResult.enemyDied) {
@@ -256,6 +258,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               }
             }
           }
+          const shotLine = formatHitBreakdown(shotParts);
+          if (shotLine) addLog(shotLine);
           if (cResult.playerDied) return { ...prev, killCounts: cKillCounts, player: cPlayer, enemies: cEnemies, floatingTexts: cFloats, gameOver: true, killer: { name: enemy.name, emoji: enemy.emoji } };
           const cMid = { ...prev, killCounts: cKillCounts, player: cPlayer, enemies: cEnemies, turn: prev.turn + 1, floatingTexts: cFloats, pendingBeam: cBeam };
           return applyEnemyTurns(cMid, runEnemyTurns(cMid, cSkip));
@@ -822,6 +826,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             const arcCount = Math.min(arcCandidates.length, 1 + Math.floor(Math.random() * 3));
             const shuffled = [...arcCandidates].sort(() => Math.random() - 0.5).slice(0, arcCount);
             const bits: string[] = [];
+            const arcParts: HitComponent[] = [];
             const arcAtk = combatPlayer.stats.attack;
             const arcStacks = _meleePassives.lightningBolt;
             shuffled.forEach((tgt, arcI) => {
@@ -830,6 +835,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               const arcDmg = lightningArcDamage(arcAtk, arcStacks, arcI);
               const newHp = tgt.hp - arcDmg;
               bits.push(`${tgt.emoji}-${arcDmg}`);
+              arcParts.push({ name: 'Arc', damage: arcDmg, target: `${tgt.emoji} ${tgt.name}` });
               if (newHp <= 0) {
                 markEnemyKilled(tgt.emoji);
                 updatedKillCounts[tgt.emoji] = (updatedKillCounts[tgt.emoji] ?? 0) + 1;
@@ -843,7 +849,9 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                 newEnemies[idx] = { ...tgt, hp: newHp, engaged: true };
               }
             });
-            if (bits.length > 0) addLog(`⚡ Arc! ${bits.join(' ')}`);
+            const arcLine = formatHitBreakdown(arcParts);
+            if (arcParts.length > 1 && arcLine) addLog(arcLine);
+            else if (bits.length > 0) addLog(`⚡ Arc! ${bits.join(' ')}`);
           }
         }
 

@@ -9,6 +9,7 @@ import { fencerCritBonus, fencerEvasion, isFencer, isRoyalGuard, royalDefenseBon
 import { royalDualBlades, royalOffhandFraction } from './royalGuard';
 import { FENCER_EVA_CAP, FENCER_PARRY_CHANCE } from './prestigeConstants';
 import { NINJA_DODGE_CAP, computeNinjaEvasion } from './progression';
+import { formatHitBreakdown, type HitComponent } from './hitLog';
 
 /**
  * Auto-fire / barrage should only pick real foes: not companions, not friendlies,
@@ -127,7 +128,7 @@ export function resolveCombat(
   player: Player,
   enemy: Enemy,
   addLog: (msg: string) => void,
-  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean; floor?: number; blinkStrike?: boolean; bonusDamage?: number; damageMult?: number; critBonus?: number; parryChance?: number; incomingMult?: number; noCounter?: boolean } = {}
+  opts: { weakMelee?: boolean; wizardMelee?: boolean; firstShot?: boolean; mood?: MoodType; cowboyMoodValue?: number; dualStrike?: boolean; quadStrike?: boolean; advantage?: boolean; execBlow?: boolean; trueAim?: boolean; shieldWall?: number; isRanged?: boolean; pistolWhip?: boolean; floor?: number; blinkStrike?: boolean; bonusDamage?: number; damageMult?: number; critBonus?: number; parryChance?: number; incomingMult?: number;   noCounter?: boolean; collectHits?: HitComponent[]; hitName?: string; hitTarget?: string } = {}
 ): CombatResult {
   const cls = player.characterClass;
   const mods = getMoodModifiers(opts.mood ?? 'neutral', player.stats.hp, player.stats.maxHp, opts.cowboyMoodValue);
@@ -156,6 +157,24 @@ export function resolveCombat(
     return r() * 100 < critChance + skullBonus;
   };
   let newEnemyHp = enemy.hp;
+  const landed: HitComponent[] = [];
+  const keepHit = (name: string, damage: number, crit: boolean, solo: string) => {
+    landed.push({ name, damage, crit, solo });
+  };
+  const flushHits = () => {
+    const line = formatHitBreakdown(landed, `${enemy.emoji} ${enemy.name}`);
+    if (opts.collectHits) {
+      for (const part of landed) {
+        opts.collectHits.push({
+          ...part,
+          name: opts.hitName && landed.length === 1 ? opts.hitName : part.name,
+          target: opts.hitTarget ?? part.target,
+        });
+      }
+      return;
+    }
+    if (line) addLog(line);
+  };
 
   if (cls === '🥷' && (opts.dualStrike || opts.quadStrike)) {
     // ── Ninja Multi-Strike: 2 hits (dualStrike) or 4 hits (quadStrike = dual blades) ──
@@ -170,11 +189,14 @@ export function resolveCombat(
       const isCrit1 = rollCrit(newEnemyHp);
       const dmg1 = Math.max(1, Math.round(raw1 * mods.damageMult * (isCrit1 ? 2 : 1)) - enemyDef);
       newEnemyHp -= dmg1;
-      if (wasUnaware) {
-        addLog(`🥷 Shadow Strike! ${dmg1} dmg to ${enemy.emoji} (unaware)${isCrit1 ? ' CRITICAL!' : ''}!`);
-      } else {
-        addLog(`You hit ${enemy.emoji} for ${dmg1} dmg${isCrit1 ? ' CRITICAL!' : ''}`);
-      }
+      keepHit(
+        wasUnaware ? 'Shadow' : 'Strike',
+        dmg1,
+        isCrit1,
+        wasUnaware
+          ? `🥷 Shadow Strike! ${dmg1} dmg to ${enemy.emoji} (unaware)${isCrit1 ? ' CRITICAL!' : ''}!`
+          : `You hit ${enemy.emoji} for ${dmg1} dmg${isCrit1 ? ' CRITICAL!' : ''}`,
+      );
     }
 
     // Swing 2 (main hand follow-up)
@@ -187,7 +209,7 @@ export function resolveCombat(
         const isCrit2 = rollCrit(newEnemyHp);
         const dmg2 = Math.max(1, Math.round(raw2 * mods.damageMult * (isCrit2 ? 2 : 1)) - enemyDef);
         newEnemyHp -= dmg2;
-        addLog(`🥷 Dual Strike! ${wasUnaware ? 'Shadow ' : ''}${dmg2} dmg${isCrit2 ? ' CRITICAL!' : ''}!`);
+        keepHit('Dual', dmg2, isCrit2, `🥷 Dual Strike! ${wasUnaware ? 'Shadow ' : ''}${dmg2} dmg${isCrit2 ? ' CRITICAL!' : ''}!`);
       }
     }
 
@@ -201,7 +223,7 @@ export function resolveCombat(
         const isCrit3 = rollCrit(newEnemyHp);
         const dmg3 = Math.max(1, Math.round(raw3 * mods.damageMult * (isCrit3 ? 2 : 1)) - enemyDef);
         newEnemyHp -= dmg3;
-        addLog(`🥷 Off-hand slash! ${dmg3} dmg${isCrit3 ? ' CRITICAL!' : ''}!`);
+        keepHit('Off-hand', dmg3, isCrit3, `🥷 Off-hand slash! ${dmg3} dmg${isCrit3 ? ' CRITICAL!' : ''}!`);
       }
     }
     if (opts.quadStrike && newEnemyHp > 0) {
@@ -213,9 +235,10 @@ export function resolveCombat(
         const isCrit4 = rollCrit(newEnemyHp);
         const dmg4 = Math.max(1, Math.round(raw4 * mods.damageMult * (isCrit4 ? 2 : 1)) - enemyDef);
         newEnemyHp -= dmg4;
-        addLog(`🥷 Finishing strike! ${dmg4} dmg${isCrit4 ? ' CRITICAL!' : ''}!`);
+        keepHit('Finish', dmg4, isCrit4, `🥷 Finishing strike! ${dmg4} dmg${isCrit4 ? ' CRITICAL!' : ''}!`);
       }
     }
+    flushHits();
   } else {
     // ── Normal attack path ────────────────────────────────────────────────────
     const blinkTruestrike = !!opts.blinkStrike && blinkStrikeAlwaysHits(player.stats.blinkTalents);
@@ -252,25 +275,22 @@ export function resolveCombat(
       if (overkillBonus > 0) actualDamage += overkillBonus;
       newEnemyHp = enemy.hp - actualDamage;
 
-      if (opts.blinkStrike) {
-        const unaware = cls === '🥷' && !enemy.engaged;
-        const bonusNote = overkillBonus > 0 ? ` (+${overkillBonus} overkill)` : '';
-        addLog(`⚡ Blink Strike! ${actualDamage} dmg to ${enemy.emoji}${unaware ? ' (unaware)' : ''}${isCrit ? ' CRITICAL!' : ''}${bonusNote}!`);
-      } else if (cls === '🥷' && !enemy.engaged) {
-        addLog(`🥷 Shadow Strike! ${actualDamage} dmg to ${enemy.emoji} (unaware)!`);
-      } else if (opts.wizardMelee) {
-        addLog(`🧙 Frail melee — ${actualDamage} dmg to ${enemy.emoji} (no spells in range)`);
-      } else if (opts.weakMelee) {
-        addLog(`🧝 Weak melee — ${actualDamage} dmg to ${enemy.emoji} (no ammo)`);
-      } else if (opts.pistolWhip) {
-        addLog(`🤠 Pistol whip! ${actualDamage} dmg to ${enemy.emoji}!`);
-      } else if (opts.firstShot) {
-        addLog(`🎯 First shot! ${actualDamage} dmg to ${enemy.emoji}${isCrit ? ' CRITICAL!' : ''}!`);
-      } else if (dualBlades) {
-        addLog(`💂 Main hand hits ${enemy.emoji} for ${actualDamage} dmg${isCrit ? ' CRITICAL!' : ''}`);
-      } else {
-        addLog(`You hit ${enemy.emoji} for ${actualDamage} dmg${isCrit ? ' CRITICAL!' : ''}`);
-      }
+      const solo = opts.blinkStrike
+        ? `⚡ Blink Strike! ${actualDamage} dmg to ${enemy.emoji}${cls === '🥷' && !enemy.engaged ? ' (unaware)' : ''}${isCrit ? ' CRITICAL!' : ''}${overkillBonus > 0 ? ` (+${overkillBonus} overkill)` : ''}!`
+        : cls === '🥷' && !enemy.engaged
+          ? `🥷 Shadow Strike! ${actualDamage} dmg to ${enemy.emoji} (unaware)!`
+          : opts.wizardMelee
+            ? `🧙 Frail melee — ${actualDamage} dmg to ${enemy.emoji} (no spells in range)`
+            : opts.weakMelee
+              ? `🧝 Weak melee — ${actualDamage} dmg to ${enemy.emoji} (no ammo)`
+              : opts.pistolWhip
+                ? `🤠 Pistol whip! ${actualDamage} dmg to ${enemy.emoji}!`
+                : opts.firstShot
+                  ? `🎯 First shot! ${actualDamage} dmg to ${enemy.emoji}${isCrit ? ' CRITICAL!' : ''}!`
+                  : dualBlades
+                    ? `💂 Main hand hits ${enemy.emoji} for ${actualDamage} dmg${isCrit ? ' CRITICAL!' : ''}`
+                    : `You hit ${enemy.emoji} for ${actualDamage} dmg${isCrit ? ' CRITICAL!' : ''}`;
+      keepHit(opts.hitName ?? (dualBlades ? 'Main' : 'Hit'), actualDamage, isCrit, solo);
 
       if (dualBlades && newEnemyHp > 0) {
         const frac = royalOffhandFraction(player.stats.level);
@@ -278,15 +298,15 @@ export function resolveCombat(
         const offCrit = rollCrit(newEnemyHp);
         const offDamage = Math.max(1, Math.round(offRaw * mods.damageMult * (offCrit ? 2 : 1)) - enemyDef);
         newEnemyHp -= offDamage;
-        addLog(`💂 Off-hand hits ${enemy.emoji} for ${offDamage} dmg (${Math.round(frac * 100)}% ATK)${offCrit ? ' CRITICAL!' : ''}`);
+        keepHit('Off-hand', offDamage, offCrit, `💂 Off-hand hits ${enemy.emoji} for ${offDamage} dmg (${Math.round(frac * 100)}% ATK)${offCrit ? ' CRITICAL!' : ''}`);
       }
 
-      // Mood: double strike
       if (mods.doubleStrike > 0 && newEnemyHp > 0 && r() * 100 < mods.doubleStrike) {
         const dmg2 = Math.max(1, Math.round(rawDamage * mods.damageMult) - enemyDef);
         newEnemyHp -= dmg2;
-        addLog(`You strike again for ${dmg2}!`);
+        keepHit('Again', dmg2, false, `You strike again for ${dmg2}!`);
       }
+      flushHits();
     }
   }
 
