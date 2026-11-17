@@ -8,6 +8,7 @@ import { isArcaneCaster, isFencer, isHitman, isRoyalGuard, activateGuardianStanc
 import { guardHasRangedWeapon } from '../../game/royalGuard';
 import { applyLungeStrike } from '../../game/lunge';
 import { FENCER_BACKDASH_CD, FENCER_LUNGE_CD, FENCER_LUNGE_MULT } from '../../game/prestigeConstants';
+import { formatHitBreakdown, type HitComponent } from '../../game/hitLog';
 import { resolveExecuteContract } from '../../game/hitman';
 
 const BLINK_ACTIVE = 3;
@@ -215,12 +216,16 @@ export function useTacticsActions(refs: GameRefs, setters: GameSetters, addLog: 
       const mood = getMood(prev.player.stats.moodValue, prev.player.stats.hp, prev.player.stats.maxHp, prev.player.inventory.filter(i => !i.consumed && !i.healAmount && !i.ammoAmount).length, false, 0, Math.max(banquetFloor, houseFloor));
       const attacker = applyEquipmentAndPassives({ ...prev.player, pos: plan.pos });
       const combatLogs: string[] = [];
+      const lungeParts: HitComponent[] = [];
       const note = (text: string) => { combatLogs.push(text); };
-      let result = resolveCombat(attacker, plan.target, note, { mood, damageMult: FENCER_LUNGE_MULT * swings.mults[0], floor: prev.currentFloor });
+      const lungeTarget = `${plan.target.emoji} ${plan.target.name}`;
+      let result = resolveCombat(attacker, plan.target, note, { mood, damageMult: FENCER_LUNGE_MULT * swings.mults[0], floor: prev.currentFloor, collectHits: lungeParts, hitName: 'Lunge', hitTarget: lungeTarget });
       if (combo && !result.enemyDied && result.enemyHp > 0) {
-        const follow = resolveCombat(attacker, { ...plan.target, hp: result.enemyHp }, note, { mood, damageMult: FENCER_LUNGE_MULT * swings.mults[1], floor: prev.currentFloor, noCounter: true });
+        const follow = resolveCombat(attacker, { ...plan.target, hp: result.enemyHp }, note, { mood, damageMult: FENCER_LUNGE_MULT * swings.mults[1], floor: prev.currentFloor, noCounter: true, collectHits: lungeParts, hitName: 'Lunge', hitTarget: lungeTarget });
         result = { ...result, enemyHp: follow.enemyHp, enemyDied: follow.enemyDied };
       }
+      const lungeLine = formatHitBreakdown(lungeParts);
+      if (lungeLine) combatLogs.push(lungeLine);
       const cooled: Player = {
         ...prev.player,
         pos: plan.pos,

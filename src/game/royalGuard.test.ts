@@ -191,8 +191,7 @@ describe('royal guard dual blades', () => {
       hp: 80, maxHp: 80, attack: 0, defense: 0, speed: 1, engaged: true,
     } as Enemy;
     resolveCombat(guard, foe, text => logs.push(text), { mood: 'neutral' });
-    expect(logs.some(line => line.includes('Main hand hits 🐀 for 20'))).toBe(true);
-    expect(logs.some(line => line.includes('Off-hand hits 🐀 for 10') && line.includes('51% ATK'))).toBe(true);
+    expect(logs.some(line => line.includes('Main 20 + Off-hand 10 = 30 to 🐀 Rat'))).toBe(true);
     const manual = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
     expect(manual).toContain('blade in each hand');
     expect(manual).toContain('level 50');
