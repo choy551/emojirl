@@ -49,6 +49,11 @@ export function shouldPromptFinaleStairs(state: { currentFloor: number; deepDive
   return state.currentFloor === FINALE_FLOOR && !state.deepDive;
 }
 
+/** D:26 stairs are the last step before the D:27 boss rush. */
+export function shouldConfirmFinalDescent(floor: number, tileType: string): boolean {
+  return floor === FINALE_FLOOR - 1 && tileType === 'stairs';
+}
+
 export function spectatorBumpText(emoji: string): string {
   return `${emoji} The crowd blocks the way. They're only here to watch.`;
 }

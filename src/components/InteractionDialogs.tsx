@@ -978,6 +978,33 @@ export function FinalePromptDialog({
   );
 }
 
+export function FinalDescentDialog({ onDescend, onStay }: { onDescend: () => void; onStay: () => void }) {
+  useDialogHotkeys(onDescend, onStay);
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3">
+      <div className="bg-card border border-amber-500/60 rounded-xl p-5 max-w-sm w-full shadow-2xl text-center">
+        <div className="text-4xl mb-2">🕳️</div>
+        <h2 className="text-sm font-bold text-amber-300 uppercase tracking-widest mb-2">Last safe floor</h2>
+        <p className="text-sm text-white/90 mb-4 leading-relaxed">
+          D:26 is the last safe floor. D:27 is the boss rush. Arrange your hotbar, overheal, and buff up before you go.
+        </p>
+        <div className="flex flex-col-reverse sm:flex-row gap-2">
+          <button
+            type="button"
+            className="flex-1 min-h-11 text-sm py-2.5 rounded-lg bg-secondary/40 border border-border/60 text-muted-foreground hover:bg-secondary/60"
+            onClick={onStay}
+          >Stay on current floor</button>
+          <button
+            type="button"
+            className="flex-1 min-h-11 text-sm py-2.5 rounded-lg bg-amber-600/80 border border-amber-500/60 text-white font-bold hover:bg-amber-600"
+            onClick={onDescend}
+          >Descend to D:27</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LavaStepDialog({ onYes, onNo }: { onYes: () => void; onNo: () => void }) {
   useDialogHotkeys(onYes, onNo);
   return (
