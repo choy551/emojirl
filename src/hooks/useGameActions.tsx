@@ -28,6 +28,7 @@ import {
 } from '../game/gameHelpers';
 import { lightningArcDamage } from '../game/passives';
 import { formatHitBreakdown, type HitComponent } from '../game/hitLog';
+import { appendMonkeyPickaxe, canMineWall, findHotbarPickaxe, shouldAutoMine } from '../game/pickaxe';
 import { butterflyHeal, diamondThorns, heartHeal, igniteFields, mushroomHeal, starXpGain } from '../game/emojiBalance';
 import { afterGuardShot, chooseGuardShot, gainCarriedAmmo, guardHasBow, guardHasGun, guardHasRangedWeapon } from '../game/royalGuard';
 import { equippedGuns, isLongGun, longGunRange, nextStill, pickOffhandTarget } from '../game/sharpshooter';
@@ -206,6 +207,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           }
           let cSkip: string | undefined;
           let cKillCounts = { ...prev.killCounts };
+          let cItems = prev.items;
           if (cResult.enemyDied) {
             markEnemyKilled(enemy.emoji);
             cKillCounts = { ...cKillCounts, [enemy.emoji]: (cKillCounts[enemy.emoji] ?? 0) + 1 };
@@ -226,8 +228,11 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               cowboyDualGuns: true,
             });
             if (cDrop) {
-              const cItem = { ...cDrop, id: `drop-${Math.random()}`, consumed: false, pos: enemy.pos };
-              const cMid = { ...prev, killCounts: cKillCounts, player: cPlayer, enemies: cEnemies, items: [...prev.items, cItem], turn: prev.turn + 1, floatingTexts: cFloats, pendingBeam: cBeam };
+              cItems = [...cItems, { ...cDrop, id: `drop-${Math.random()}`, consumed: false, pos: enemy.pos }];
+            }
+            cItems = appendMonkeyPickaxe(cItems, enemy.monkey, prev.currentFloor, enemy.pos);
+            if (cDrop) {
+              const cMid = { ...prev, killCounts: cKillCounts, player: cPlayer, enemies: cEnemies, items: cItems, turn: prev.turn + 1, floatingTexts: cFloats, pendingBeam: cBeam };
               return applyEnemyTurns(cMid, runEnemyTurns(cMid));
             }
           } else {
@@ -252,6 +257,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                 cKillCounts = { ...cKillCounts, [second.emoji]: (cKillCounts[second.emoji] ?? 0) + 1 };
                 cEnemies.splice(secondIdx, 1);
                 cPlayer.stats.xp = cPlayer.stats.xp + starXpGain(second.isBoss ? 25 : 5, cPlayer.stats.xpBoostTurns);
+                cItems = appendMonkeyPickaxe(cItems, second.monkey, prev.currentFloor, second.pos);
                 if (second.id === enemy.id) cSkip = undefined;
               } else {
                 cEnemies[secondIdx] = { ...second, hp: sResult.enemyHp, engaged: true };
@@ -261,7 +267,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const shotLine = formatHitBreakdown(shotParts);
           if (shotLine) addLog(shotLine);
           if (cResult.playerDied) return { ...prev, killCounts: cKillCounts, player: cPlayer, enemies: cEnemies, floatingTexts: cFloats, gameOver: true, killer: { name: enemy.name, emoji: enemy.emoji } };
-          const cMid = { ...prev, killCounts: cKillCounts, player: cPlayer, enemies: cEnemies, turn: prev.turn + 1, floatingTexts: cFloats, pendingBeam: cBeam };
+          const cMid = { ...prev, killCounts: cKillCounts, player: cPlayer, enemies: cEnemies, items: cItems, turn: prev.turn + 1, floatingTexts: cFloats, pendingBeam: cBeam };
           return applyEnemyTurns(cMid, runEnemyTurns(cMid, cSkip));
         }
       }
@@ -427,10 +433,13 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               floor: prev.currentFloor,
               playerClass: cls,
             });
-            if (drop) {
-              const newItem = { ...drop, id: `drop-${Math.random()}`, consumed: false, pos: enemy.pos };
+            const rangerItems = appendMonkeyPickaxe(
+              drop ? [...prev.items, { ...drop, id: `drop-${Math.random()}`, consumed: false, pos: enemy.pos }] : prev.items,
+              enemy.monkey, prev.currentFloor, enemy.pos,
+            );
+            if (rangerItems !== prev.items) {
               applyShotPierce();
-              let midState: GameState = { ...prev, killCounts: rangerKillCounts, player: newPlayer, enemies: newEnemies, items: [...prev.items, newItem], turn: prev.turn + 1, floatingTexts: rangedBaseFloats, pendingBeam: rangerBeam, difficultyTier: enemy.isBoss ? (prev.difficultyTier ?? 0) + 1 : (prev.difficultyTier ?? 0) };
+              let midState: GameState = { ...prev, killCounts: rangerKillCounts, player: newPlayer, enemies: newEnemies, items: rangerItems, turn: prev.turn + 1, floatingTexts: rangedBaseFloats, pendingBeam: rangerBeam, difficultyTier: enemy.isBoss ? (prev.difficultyTier ?? 0) + 1 : (prev.difficultyTier ?? 0) };
               if (enemy.isBoss) midState = creditVoidBoss(midState, enemy);
               return applyEnemyTurns(midState, runEnemyTurns(midState));
             }
@@ -539,6 +548,18 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           }
         }
       } else if (!PLAYER_PASSABLE_TILES.has(tile.type)) {
+        const pick = findHotbarPickaxe(prev.player.inventory);
+        if (tile.type === 'wall' && shouldAutoMine(prev.player.autoMine, !!pick, canMineWall(prev.map, newPos.x, newPos.y)) && pick) {
+          const map = prev.map.map(row => row.map(cell => ({ ...cell })));
+          map[newPos.y][newPos.x] = { ...map[newPos.y][newPos.x], type: 'floor', emoji: '⬜' };
+          const left = (pick.charges ?? 0) - 1;
+          const inventory = left > 0
+            ? prev.player.inventory.map(item => item.id === pick.id ? { ...item, charges: left } : item)
+            : prev.player.inventory.filter(item => item.id !== pick.id);
+          addLog(left > 0 ? `⛏️ The wall crumbles. ${left} charges left.` : '⛏️ The pickaxe breaks.');
+          const mid = { ...prev, map, player: { ...prev.player, inventory }, turn: prev.turn + 1 };
+          return applyEnemyTurns(withVisibility(mid), runEnemyTurns(mid));
+        }
         return prev;
       }
 
@@ -792,6 +813,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (drop) {
             newState.items = [...prev.items, { ...drop, id: `drop-${Math.random()}`, consumed: false, pos: enemy.pos }];
           }
+          newState.items = appendMonkeyPickaxe(newState.items ?? prev.items, enemy.monkey, prev.currentFloor, enemy.pos);
         }
         const playerLanded = (combatResult.enemyDied && !godBlessedProc) || combatResult.enemyHp < enemy.hp;
         if (!godBlessedProc && !combatResult.enemyDied) {
@@ -1237,6 +1259,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             if (bDrop) {
               newState.items = [...newState.items, { ...bDrop, id: `bolt-drop-${Math.random()}`, consumed: false, pos: boltTarget.pos }];
             }
+            newState.items = appendMonkeyPickaxe(newState.items, boltTarget.monkey, prev.currentFloor, boltTarget.pos);
           } else {
             const boltLanded = boltResult.enemyHp < boltTarget.hp;
             const _bBurn = boltLanded ? igniteFields(newPlayer, prev.currentFloor, false) : null;
@@ -1446,6 +1469,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             if (bDrop) {
               waitItems = [...waitItems, { ...bDrop, id: `bolt-drop-${Math.random()}`, consumed: false, pos: boltTarget.pos }];
             }
+            waitItems = appendMonkeyPickaxe(waitItems, boltTarget.monkey, prev.currentFloor, boltTarget.pos);
           } else {
             const boltLanded = boltResult.enemyHp < boltTarget.hp;
             const _bBurn = boltLanded ? igniteFields(waitPlayer, prev.currentFloor, false) : null;

@@ -9,7 +9,7 @@ export interface GameRefs {
   yeehawTurnRef: MutableRefObject<number>;
   lastCowboyFlavorTurnRef: MutableRefObject<number>;
   inspectedEnemyIdRef: MutableRefObject<string | null>;
-  dirPickModeRef: MutableRefObject<'gun' | 'freeze' | 'boomerang' | 'bomb' | null>;
+  dirPickModeRef: MutableRefObject<'gun' | 'freeze' | 'boomerang' | 'bomb' | 'pickaxe' | null>;
   boatConfirmedRef: MutableRefObject<boolean>;
   lavaStepConfirmedRef: MutableRefObject<boolean>;
   finalDescentConfirmedRef: MutableRefObject<boolean>;
@@ -29,7 +29,7 @@ export interface GameSetters {
   setAutoExplore: React.Dispatch<React.SetStateAction<boolean>>;
   setAutoRest: React.Dispatch<React.SetStateAction<boolean>>;
   setInspectedEnemyId: React.Dispatch<React.SetStateAction<string | null>>;
-  setDirPickMode: React.Dispatch<React.SetStateAction<'gun' | 'freeze' | 'boomerang' | 'bomb' | null>>;
+  setDirPickMode: React.Dispatch<React.SetStateAction<'gun' | 'freeze' | 'boomerang' | 'bomb' | 'pickaxe' | null>>;
   setBagTab: React.Dispatch<React.SetStateAction<'hotbar' | 'equipment' | 'bank'>>;
   setBankOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setSelectedItemId: React.Dispatch<React.SetStateAction<string | null>>;

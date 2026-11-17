@@ -1,6 +1,7 @@
 import type { Enemy, EmojiItem, Player, Position } from './types';
 import { markEnemyKilled } from './discoveries';
 import { rollKillDrop } from './dropTable';
+import { appendMonkeyPickaxe } from './pickaxe';
 import { starXpGain } from './emojiBalance';
 import { playerBagPassives, playerSoftCap } from './inventory';
 import { restoreStolenEmojis, stolenEmojiSummary } from './monkeyLoot';
@@ -90,9 +91,14 @@ export function applyLungeStrike(input: {
     playerClass: player.characterClass,
     rng: input.rng,
   });
-  const items = drop
-    ? [...input.items, { ...drop, id: `drop-lunge-${target.id}`, consumed: false, pos: target.pos }]
-    : input.items;
+  const items = appendMonkeyPickaxe(
+    drop
+      ? [...input.items, { ...drop, id: `drop-lunge-${target.id}`, consumed: false, pos: target.pos }]
+      : input.items,
+    target.monkey,
+    input.floor,
+    target.pos,
+  );
   return {
     player,
     enemies,

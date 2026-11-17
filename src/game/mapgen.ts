@@ -8,6 +8,7 @@ import { BUSH_EMOJI, LAVA_EMOJI, VOLCANO_EMOJI, WATER_EMOJI, coolLavaWaterContac
 import { BED_EMOJI, BED_MAX_USES } from './tiles';
 import { placeDistrictVault, VAULT_DISTRICTS } from './districtVault';
 import { FINALE_FLOOR } from './finaleConstants';
+import { markProtectedWalls } from './pickaxe';
 
 const MAP_WIDTH = 50;
 const MAP_HEIGHT = 28;
@@ -821,6 +822,7 @@ export function generateFinaleArena(): FinaleArena {
     theme: 'normal',
   }];
 
+  markProtectedWalls(map, rooms, true);
   return { map, startPos, stairsPos, rooms, seats, pitTiles };
 }
 
@@ -1057,5 +1059,6 @@ export function generateMap(floor: number, opts?: { voidRun?: boolean }): { map:
   // drain the minimum water/lava tiles on the shortest path.
   ensureStairsReachable(cooled, startPos, stairsPos);
 
+  markProtectedWalls(cooled, rooms, false);
   return { map: cooled, startPos, stairsPos, rooms };
 }

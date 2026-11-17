@@ -140,6 +140,7 @@ function tacticsHtml(p: Player): string {
     handleExecuteContract: noop,
     handleGuardianStance: noop,
     onToggleGenieCast: noop,
+    onToggleAutoMine: noop,
     onClose: noop,
   }));
 }

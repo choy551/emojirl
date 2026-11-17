@@ -8,7 +8,7 @@ import { recordHotbarSoulConsume } from './voidMeta';
 import { noteThemedHotbarConsume } from './voidAbilities';
 import { reclaimVoidSlotPressure, releaseVoidSlotBurden } from './voidSlotBurden';
 
-const CHARGE_KINDS = new Set<ActiveKind>(['bomb', 'gun', 'boomerang', 'rope', 'freeze']);
+const CHARGE_KINDS = new Set<ActiveKind>(['bomb', 'gun', 'boomerang', 'rope', 'freeze', 'pickaxe']);
 
 const KIND_EMOJI: Record<ActiveKind, string> = {
   bomb: '💣',
@@ -16,6 +16,7 @@ const KIND_EMOJI: Record<ActiveKind, string> = {
   boomerang: '🪃',
   rope: '🪢',
   freeze: '❄️',
+  pickaxe: '⛏️',
 };
 
 export function chargeKindForEmoji(emoji: string): ActiveKind | null {

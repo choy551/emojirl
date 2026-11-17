@@ -2,6 +2,7 @@ import { Enemy, EmojiItem, FloatingText, GameState, Player } from './types';
 import type { SoulEffect } from './emojis';
 import { EMOJI_POWERS, getRandomEmojiPower } from './emojis';
 import { rollKillDrop } from './dropTable';
+import { appendMonkeyPickaxe } from './pickaxe';
 import { addToPlayerBag, activeKindLabel, applyPlayerHeal, applySoulHp, computeBagPassives, healHp, livingMaxHp, playerSoftCap } from './inventory';
 import { markEnemySeen, markEnemyKilled, markEmojiSeen } from './discoveries';
 import { moodMax, levelFromXP, hpBonusForLevel } from './progression';
@@ -305,6 +306,7 @@ export function applyInstantItemUse(
     if (drop) {
       newItems = [...newItems, { ...drop, id: `zap-drop-${Math.random()}`, consumed: false, pos: target.pos }];
     }
+    newItems = appendMonkeyPickaxe(newItems, target.monkey, s.currentFloor, target.pos);
     floats.push({ id: `zap-${target.id}-${s.turn}`, pos: { ...target.pos }, text: '⚡ ZAP!', color: '#fbbf24', life: 3 });
   }
 

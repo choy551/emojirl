@@ -18,6 +18,7 @@ import {
 } from '../../game/blinkStrike';
 import { playerMood } from '../../game/drinks';
 import { starXpGain } from '../../game/emojiBalance';
+import { digCardinalLine } from '../../game/pickaxe';
 import { markEnemyKilled } from '../../game/discoveries';
 import {
   moodMax, chebyshev, hasLOSBetween, PLAYER_PASSABLE_TILES, playerBagPassives,
@@ -52,9 +53,26 @@ export function useCombatActions(
     });
   }, [addLog, setGameState]);
 
-  const handleFireProjectile = useCallback((kind: 'gun' | 'freeze' | 'boomerang' | 'bomb', dx: number, dy: number) => {
+  const handleFireProjectile = useCallback((kind: 'gun' | 'freeze' | 'boomerang' | 'bomb' | 'pickaxe', dx: number, dy: number) => {
     setGameState(prev => {
       if (!prev || prev.gameOver) return prev;
+      if (kind === 'pickaxe') {
+        if (dx !== 0 && dy !== 0) {
+          addLog('⛏️ Dig north, south, east, or west.');
+          return prev;
+        }
+        const pick = prev.player.inventory.find(item => item.activeKind === 'pickaxe' && !item.consumed && (item.charges ?? 0) > 0);
+        if (!pick) { addLog('No ⛏️ Pickaxe in the hotbar.'); return prev; }
+        const dug = digCardinalLine(prev.map, prev.player.pos, dx, dy, pick.charges ?? 0);
+        if (dug.dug === 0) { addLog('⛏️ Nothing there to dig.'); return prev; }
+        const left = (pick.charges ?? 0) - dug.dug;
+        const inventory = left > 0
+          ? prev.player.inventory.map(item => item.id === pick.id ? { ...item, charges: left } : item)
+          : prev.player.inventory.filter(item => item.id !== pick.id);
+        addLog(left > 0 ? `⛏️ Dug ${dug.dug} tile${dug.dug === 1 ? '' : 's'}. ${left} charges left.` : `⛏️ Dug ${dug.dug} and the pickaxe breaks.`);
+        const mid = { ...prev, map: dug.map, player: { ...prev.player, inventory }, turn: prev.turn + 1 };
+        return applyEnemyTurns(withVisibility(mid), runEnemyTurns(mid));
+      }
       if (prev.activeProjectile) {
         addLog('A projectile is already in flight!');
         return prev;

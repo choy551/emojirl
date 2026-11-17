@@ -1,0 +1,87 @@
+import { describe, expect, it } from 'vitest';
+import type { MapGrid, Tile } from './types';
+import { addPickaxeCharges, canMineWall, digCardinalLine, markProtectedWalls, monkeyPickaxeDrop, PICKAXE_CAP, PICKAXE_CLAMP, shouldAutoMine } from './pickaxe';
+
+function grid(): MapGrid {
+  const wall = (): Tile => ({ type: 'wall', emoji: '⬛', seen: true, visible: true });
+  const map = Array.from({ length: 6 }, () => Array.from({ length: 6 }, wall));
+  return map;
+}
+
+describe('pickaxe charges', () => {
+  it('starts at 5, clamps a +5 pickup at 10, then adds 1 up to 20', () => {
+    expect(addPickaxeCharges(0)).toBe(5);
+    expect(addPickaxeCharges(5)).toBe(10);
+    expect(addPickaxeCharges(7)).toBe(10);
+    expect(addPickaxeCharges(9)).toBe(10);
+    expect(addPickaxeCharges(PICKAXE_CLAMP)).toBe(11);
+    expect(addPickaxeCharges(19)).toBe(PICKAXE_CAP);
+    expect(addPickaxeCharges(20)).toBe(20);
+    expect(addPickaxeCharges(30)).toBe(20);
+  });
+});
+
+describe('pickaxe mining', () => {
+  it('refuses the border and unbreakable walls, and stops a consume line there', () => {
+    const map = grid();
+    map[2][2] = { type: 'floor', emoji: '⬜', seen: true, visible: true };
+    map[2][3] = { type: 'wall', emoji: '⬛', seen: true, visible: true, unbreakable: true };
+    expect(canMineWall(map, 0, 2)).toBe(false);
+    expect(canMineWall(map, 3, 2)).toBe(false);
+    expect(canMineWall(map, 2, 1)).toBe(true);
+
+    const dug = digCardinalLine(map, { x: 2, y: 2 }, 0, -1, 5);
+    expect(dug.dug).toBe(1);
+    expect(dug.map[1][2].type).toBe('floor');
+    expect(dug.map[0][2].type).toBe('wall');
+
+    const stopped = digCardinalLine(map, { x: 2, y: 2 }, 1, 0, 5);
+    expect(stopped.dug).toBe(0);
+    expect(stopped.map[2][3].type).toBe('wall');
+  });
+
+  it('mines a bump only while Auto-mine is on', () => {
+    expect(shouldAutoMine(false, true, true)).toBe(false);
+    expect(shouldAutoMine(undefined, true, true)).toBe(false);
+    expect(shouldAutoMine(true, false, true)).toBe(false);
+    expect(shouldAutoMine(true, true, false)).toBe(false);
+    expect(shouldAutoMine(true, true, true)).toBe(true);
+  });
+
+  it('does not mine diagonally', () => {
+    const map = grid();
+    expect(digCardinalLine(map, { x: 2, y: 2 }, 1, 1, 3).dug).toBe(0);
+  });
+
+  it('marks boss, vault, shop, city, temple, and arena walls, and leaves a plain wall', () => {
+    const map = grid();
+    markProtectedWalls(map, [
+      { x: 2, y: 2, w: 2, h: 2, theme: 'shop' },
+      { x: 2, y: 2, w: 2, h: 2, theme: 'boss' },
+      { x: 2, y: 2, w: 2, h: 2, theme: 'treasure-vault' },
+      { x: 2, y: 2, w: 2, h: 2, theme: 'market' },
+      { x: 2, y: 2, w: 2, h: 2, theme: 'shrine' },
+    ], false);
+    expect(map[1][2].unbreakable).toBe(true);
+    expect(canMineWall(map, 2, 1)).toBe(false);
+
+    const open = grid();
+    markProtectedWalls(open, [{ x: 2, y: 2, w: 1, h: 1, theme: 'normal' }], false);
+    expect(canMineWall(open, 2, 2)).toBe(true);
+
+    const arena = grid();
+    markProtectedWalls(arena, [], true);
+    expect(canMineWall(arena, 2, 2)).toBe(false);
+  });
+});
+
+describe('pickaxe monkey loot', () => {
+  it('drops a 5-charge pickaxe from D:3 and nothing earlier', () => {
+    expect(monkeyPickaxeDrop(true, 2, { x: 1, y: 1 })).toBeNull();
+    expect(monkeyPickaxeDrop(false, 5, { x: 1, y: 1 })).toBeNull();
+    const drop = monkeyPickaxeDrop(true, 3, { x: 4, y: 5 });
+    expect(drop?.activeKind).toBe('pickaxe');
+    expect(drop?.charges).toBe(5);
+    expect(drop?.pos).toEqual({ x: 4, y: 5 });
+  });
+});
