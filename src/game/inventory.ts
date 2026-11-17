@@ -537,7 +537,22 @@ export function banishPlayerGhost(player: Player, slot: number): Player {
   return { ...player, ghostHotbar: hot, ghostBank: [...(player.ghostBank ?? []), ghost] };
 }
 
+/** Largest same-stat pile is full, the next is 75%, and every pile after that is 50%. */
+export function diminishStatPiles(piles: number[]): number {
+  const ordered = piles.filter(value => value !== 0).sort((a, b) => Math.abs(b) - Math.abs(a));
+  const total = ordered.reduce((sum, value, index) => {
+    const rate = index === 0 ? 1 : index === 1 ? 0.75 : 0.5;
+    return sum + value * rate;
+  }, 0);
+  return Math.round(total);
+}
+
 export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {
+  const attackPiles: number[] = [];
+  const defensePiles: number[] = [];
+  const speedPiles: number[] = [];
+  const evasionPiles: number[] = [];
+  const luckPiles: number[] = [];
   const acc = {
     attack: 0, defense: 0, speed: 0, evasion: 0, luck: 0,
     losBonus: 0, stealthBonus: 0, stealthPenalty: 0,
@@ -551,13 +566,13 @@ export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {
   for (const item of inventory) {
     if (item.consumed || item.isEquipment || !item.bagPassive || item.activeKind || item.healAmount != null || item.ammoAmount != null) continue;
     const p = item.bagPassive;
-    acc.attack         += p.attackBonus    ?? 0;
-    acc.defense        += p.defenseBonus   ?? 0;
-    acc.speed          += p.speedBonus     ?? 0;
-    acc.evasion        += p.evasionBonus   ?? 0;
-    acc.luck           += p.luckBonus      ?? 0;
-    acc.stealthBonus   += p.stealthBonus   ?? 0;
     const sc = isStackableBagPassive(item) ? (item.stackCount ?? 1) : 1;
+    if (p.attackBonus) attackPiles.push(p.attackBonus);
+    if (p.defenseBonus) defensePiles.push(p.defenseBonus);
+    if (p.speedBonus) speedPiles.push(p.speedBonus);
+    if (p.evasionBonus) evasionPiles.push(p.evasionBonus);
+    if (p.luckBonus) luckPiles.push(p.luckBonus);
+    acc.stealthBonus   += p.stealthBonus   ?? 0;
     if (p.starGaze) {
       acc.starStacks += sc;
       acc.losBonus += sc;
@@ -592,6 +607,11 @@ export function computeBagPassives(inventory: EmojiItem[]): BagPassiveSummary {
     if (p.combatRegen)    acc.combatRegen   += sc;
     if (p.dodgeHeal)      acc.dodgeHeal     += sc;
   }
+  acc.attack = diminishStatPiles(attackPiles);
+  acc.defense = diminishStatPiles(defensePiles);
+  acc.speed = diminishStatPiles(speedPiles);
+  acc.evasion = diminishStatPiles(evasionPiles);
+  acc.luck = diminishStatPiles(luckPiles);
   return acc;
 }
 
@@ -603,25 +623,35 @@ export function tickActiveBuffs(stats: import('./types').PlayerStats): import('.
   return { ...stats, activeBuffs: updated.length ? updated : undefined };
 }
 
+/** Equip-bonus points. Attack, defense, and luck are percents, not flat stats. */
+export function gearStatPoints(player: Player): { attack: number; defense: number; luck: number; speed: number; evasion: number } {
+  const slots = [player.equipment.body, player.equipment.mainHand, player.equipment.offHand, player.equipment.accessory].filter(Boolean) as EmojiItem[];
+  const points = { attack: 0, defense: 0, luck: 0, speed: 0, evasion: 0 };
+  for (const item of slots) {
+    const bonus = item.equipBonus ?? {};
+    points.attack += bonus.attack ?? 0;
+    points.defense += bonus.defense ?? 0;
+    points.luck += bonus.luck ?? 0;
+    points.speed += bonus.speed ?? 0;
+    points.evasion += bonus.evasion ?? 0;
+  }
+  return points;
+}
+
 /** Gear, bag passives, buffs, and drink EVA — before overflow soft caps. */
 export function rawCombatStats(player: Player): SoftCapInput {
   const passives = playerBagPassives(player);
   const eq = player.equipment;
   const slots = [eq.body, eq.mainHand, eq.offHand, eq.accessory].filter(Boolean) as EmojiItem[];
-  let eqAtk = 0, eqDef = 0, eqSpd = 0, eqEva = 0, eqLck = 0;
+  const gear = gearStatPoints(player);
+  let soulAtk = 0, soulDef = 0, soulSpd = 0, soulEva = 0, soulLck = 0;
   for (const item of slots) {
-    const b = item.equipBonus ?? {};
-    eqAtk += b.attack  ?? 0;
-    eqDef += b.defense ?? 0;
-    eqSpd += b.speed   ?? 0;
-    eqEva += b.evasion ?? 0;
-    eqLck += b.luck    ?? 0;
     if (player.characterClass === '🤠' && item.bagPassive && !item.weaponKind && !item.armorKind) {
-      eqAtk += item.bagPassive.attackBonus  ?? 0;
-      eqDef += item.bagPassive.defenseBonus ?? 0;
-      eqSpd += item.bagPassive.speedBonus   ?? 0;
-      eqEva += item.bagPassive.evasionBonus ?? 0;
-      eqLck += item.bagPassive.luckBonus    ?? 0;
+      soulAtk += item.bagPassive.attackBonus  ?? 0;
+      soulDef += item.bagPassive.defenseBonus ?? 0;
+      soulSpd += item.bagPassive.speedBonus   ?? 0;
+      soulEva += item.bagPassive.evasionBonus ?? 0;
+      soulLck += item.bagPassive.luckBonus    ?? 0;
     }
   }
   const buffAtk = (player.stats.activeBuffs ?? []).filter(b => b.stat === 'attack').reduce((s, b) => s + b.amount, 0);
@@ -629,11 +659,11 @@ export function rawCombatStats(player: Player): SoftCapInput {
   const shrineAtk = player.shrineOffering?.attack ?? 0;
   const shrineDef = player.shrineOffering?.defense ?? 0;
   return {
-    attack:  player.stats.attack  + passives.attack  + eqAtk + buffAtk + shrineAtk,
-    defense: player.stats.defense + passives.defense + eqDef + buffDef + shrineDef,
-    speed:   player.stats.speed   + passives.speed   + eqSpd,
-    evasion: player.stats.evasion + passives.evasion + eqEva + drinkEvasionBonus(player),
-    luck:    player.stats.luck    + passives.luck    + eqLck,
+    attack:  player.stats.attack  + passives.attack  + soulAtk + buffAtk + shrineAtk,
+    defense: player.stats.defense + passives.defense + soulDef + buffDef + shrineDef,
+    speed:   player.stats.speed   + passives.speed   + gear.speed + soulSpd,
+    evasion: player.stats.evasion + passives.evasion + gear.evasion + soulEva + drinkEvasionBonus(player),
+    luck:    player.stats.luck    + passives.luck    + soulLck,
     maxHp:   player.stats.maxHp,
   };
 }

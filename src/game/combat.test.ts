@@ -88,7 +88,7 @@ describe('Blink Strike damage', () => {
     expect(base).toBe(51 * 4);
     scriptedRandom([0, 0, 0.99]);
     const crit = resolveCombat(ninja({ attack: 51, luck: 94 }), rat(), () => {}, { blinkStrike: true, mood: 'neutral' });
-    expect(400 - crit.enemyHp).toBe(base * 2);
+    expect(400 - crit.enemyHp).toBe(Math.round(base * 2.02));
   });
 
   it('adds Heavier Blink as a +100 shift and keeps banked Overkill flat through a crit', () => {

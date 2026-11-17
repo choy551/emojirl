@@ -87,6 +87,7 @@ export function applyLungeStrike(input: {
   const drop = rollKillDrop({
     boss: !!target.isBoss,
     clover: playerBagPassives(player).bonusLoot,
+    magicFindPct: playerSoftCap(player).magicFindPct,
     floor: input.floor,
     playerClass: player.characterClass,
     rng: input.rng,

@@ -39,10 +39,11 @@ function scriptedRandom(values: number[]) {
 afterEach(() => vi.restoreAllMocks());
 
 describe('playerDodgeChance', () => {
-  it('caps a normal dodge at 50% when EVA is inflated by Speed overflow', () => {
+  it('caps a normal dodge at 50% and does not turn speed into evasion', () => {
     const player = hero({ speed: 31, evasion: 72 });
     const geared = applyEquipmentAndPassives(player);
-    expect(geared.stats.evasion).toBe(96);
+    expect(geared.stats.evasion).toBe(72);
+    expect(geared.stats.speed).toBe(31);
     expect(playerDodgeChance(geared)).toBe(DODGE_CAP);
     expect(playerDodgeChance(geared)).toBe(50);
     expect(playerDodgeChance(geared, 20)).toBe(50);

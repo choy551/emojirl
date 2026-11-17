@@ -45,24 +45,24 @@ export function enemyMaySpawnOnTile(tileType: string | undefined, flying?: boole
 export const ENEMY_TYPES = [
   { emoji: '👿', name: 'Demon',          hp: 6,  attack: 3, defense: 1, speed: 4,  weight: 1, berserker: true },
   { emoji: '🧟', name: 'Zombie',         hp: 4,  attack: 2, defense: 0, speed: 2,  weight: 3, silent: true },
-  { emoji: '🐍', name: 'Snake',          hp: 3,  attack: 2, defense: 0, speed: 8,  weight: 2 },
+  { emoji: '🐍', name: 'Snake',          hp: 3,  attack: 2, defense: 0, speed: 8,  weight: 2, evasive: true },
   { emoji: '🕷️', name: 'Spider',        hp: 2,  attack: 1, defense: 0, speed: 6,  weight: 3, packHunter: true },
   { emoji: '💀', name: 'Skeleton',       hp: 5,  attack: 3, defense: 2, speed: 3,  weight: 2, silent: true },
   { emoji: '🧙‍♂️', name: 'Dark Mage',  hp: 8,  attack: 4, defense: 1, speed: 5,  weight: 1, godBlessed: true },
   { emoji: '👁️', name: 'Eye',           hp: 3,  attack: 2, defense: 0, speed: 4,  weight: 2, godBlessed: true, flying: true },
-  { emoji: '🤡', name: 'Jester',         hp: 4,  attack: 1, defense: 0, speed: 9,  weight: 1, cowardly: true },
+  { emoji: '🤡', name: 'Jester',         hp: 4,  attack: 1, defense: 0, speed: 9,  weight: 1, cowardly: true, evasive: true },
   { emoji: '👻', name: 'Ghost',          hp: 3,  attack: 2, defense: 0, speed: 5,  weight: 2, ghostly: true, flying: true },
   { emoji: '🧑‍🔬', name: 'Mad Scientist', hp: 2, attack: 0, defense: 0, speed: 7, weight: 1, cowardly: true, madScientist: true, healCooldown: 0 },
   { emoji: '🧜‍♂️', name: 'Merman',     hp: 8,  attack: 4, defense: 2, speed: 6,  weight: 1, tag: 'Neutral' as const, waterAggro: true },
   { emoji: '🧚‍♀️', name: 'Cute Fairy', hp: 1,  attack: 0, defense: 0, speed: 3,  weight: 1, tag: 'Friendly' as const, flying: true },
   { emoji: '🐒', name: 'Monkey',         hp: 4,  attack: 2, defense: 0, speed: 5,  weight: 2, tag: 'Neutral' as const, monkey: true },
-  { emoji: '🐦‍⬛', name: 'Crow',          hp: 3,  attack: 1, defense: 0, speed: 8,  weight: 2, cowardly: true, crow: true, flying: true },
+  { emoji: '🐦‍⬛', name: 'Crow',          hp: 3,  attack: 1, defense: 0, speed: 8,  weight: 2, cowardly: true, crow: true, flying: true, evasive: true },
   { emoji: '🧝‍♀️', name: 'Elf Archer',    hp: 7,  attack: 3, defense: 1, speed: 5,  weight: 2, ranged: true },
 ];
 
 export const FOREST_ENEMY_TYPES = [
   { emoji: '🐺', name: 'Wolf',  hp: 7,  attack: 3, defense: 1, speed: 7,  weight: 2, packHunter: true },
-  { emoji: '🦊', name: 'Fox',   hp: 4,  attack: 2, defense: 0, speed: 9,  weight: 3, cowardly: true },
+  { emoji: '🦊', name: 'Fox',   hp: 4,  attack: 2, defense: 0, speed: 9,  weight: 3, cowardly: true, evasive: true },
   { emoji: '🐗', name: 'Boar',  hp: 9,  attack: 4, defense: 2, speed: 5,  weight: 2, berserker: true },
   { emoji: '🐻', name: 'Bear',  hp: 20, attack: 7, defense: 3, speed: 4,  weight: 2, tag: 'Neutral' as const, bear: true, berserker: true },
 ];

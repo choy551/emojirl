@@ -411,6 +411,10 @@ export interface Enemy {
   attack: number;
   defense: number;
   speed: number;
+  /** Chance to be missed. 0 on D:1–3, then the floor formula. Bosses are 10. */
+  evasion?: number;
+  /** Uses the 90% evasion cap instead of 25%. */
+  evasive?: boolean;
   engaged: boolean;
   alertedBlind?: boolean;
   isBoss?: boolean;

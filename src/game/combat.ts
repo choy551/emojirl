@@ -3,7 +3,8 @@ import { crowGoldSteal } from './economy';
 import { applyNullMomentum } from './voidDamage';
 import { shieldReduction } from './emojiBalance';
 import { blinkStrikeAlwaysHits, blinkStrikeDamageMultiplier, critStat } from './blinkStrike';
-import { DODGE_CAP, effectiveCrit } from './softCap';
+import { gearStatPoints } from './inventory';
+import { DODGE_CAP, accuracyScore, applyGearAttack, applyGearReduction, critDamageMultiplier, critFromLuck, effectiveCrit, hitChance, CRIT_SOFT_CAP, CRIT_TO_CRIT_DAMAGE, EVA_SOFT_CAP, EVA_TO_CRIT_DAMAGE } from './softCap';
 import { feastDefense } from './foodSinks';
 import { fencerCritBonus, fencerEvasion, isFencer, isRoyalGuard, royalDefenseBonus, royalIncomingMult, royalMeleeMultiplier } from './prestige';
 import { royalDualBlades, royalOffhandFraction } from './royalGuard';
@@ -147,7 +148,12 @@ export function resolveCombat(
   }
 
   // ── 2. Hit resolution ──────────────────────────────────────────────────────
-  const baseHit = 85 + mods.hitChance;
+  const gear = gearStatPoints(player);
+  const evaOverflowCrit = Math.floor(Math.max(0, (player.stats.evasion ?? 0) - EVA_SOFT_CAP) / EVA_TO_CRIT_DAMAGE);
+  const critOverflow = Math.floor(Math.max(0, critFromLuck(player.stats.luck ?? 0) - CRIT_SOFT_CAP) / CRIT_TO_CRIT_DAMAGE);
+  const critMult = critDamageMultiplier(gear.luck + evaOverflowCrit + critOverflow);
+  const hitRoll = hitChance(accuracyScore(mods.hitChance, player.stats.speed ?? 1), enemy.evasion ?? 0);
+  const finish = (damage: number) => applyGearAttack(damage, gear.attack);
   const fencer = isFencer(cls);
   const critChance = effectiveCrit(player.stats.luck ?? 1) + mods.critBonus + (opts.critBonus ?? 0) + (fencer ? fencerCritBonus(player.stats.hp, player.stats.maxHp) : 0);
   const parryChance = Math.max(opts.parryChance ?? 0, fencer ? FENCER_PARRY_CHANCE : 0);
@@ -181,13 +187,13 @@ export function resolveCombat(
     const wasUnaware = !enemy.engaged;
 
     // Swing 1 (main hand)
-    const hit1 = (opts.trueAim ?? false) || r() * 100 < Math.max(5, Math.min(99, baseHit));
+    const hit1 = (opts.trueAim ?? false) || r() * 100 < hitRoll;
     if (!hit1) {
       addLog(`You swing at ${enemy.emoji} — miss!`);
     } else {
       const raw1 = wasUnaware ? Math.round(player.stats.attack * 1.6) : player.stats.attack;
       const isCrit1 = rollCrit(newEnemyHp);
-      const dmg1 = Math.max(1, Math.round(raw1 * mods.damageMult * (isCrit1 ? 2 : 1)) - enemyDef);
+      const dmg1 = finish(Math.max(1, Math.round(raw1 * mods.damageMult * (isCrit1 ? critMult : 1)) - enemyDef));
       newEnemyHp -= dmg1;
       keepHit(
         wasUnaware ? 'Shadow' : 'Strike',
@@ -201,13 +207,13 @@ export function resolveCombat(
 
     // Swing 2 (main hand follow-up)
     if (newEnemyHp > 0) {
-      const hit2 = (opts.trueAim ?? false) || r() * 100 < Math.max(5, Math.min(99, baseHit));
+      const hit2 = (opts.trueAim ?? false) || r() * 100 < hitRoll;
       if (!hit2) {
         addLog(`🥷 Dual Strike — second swing misses!`);
       } else {
         const raw2 = Math.floor((wasUnaware ? Math.round(player.stats.attack * 1.6) : player.stats.attack) * 0.65);
         const isCrit2 = rollCrit(newEnemyHp);
-        const dmg2 = Math.max(1, Math.round(raw2 * mods.damageMult * (isCrit2 ? 2 : 1)) - enemyDef);
+        const dmg2 = finish(Math.max(1, Math.round(raw2 * mods.damageMult * (isCrit2 ? critMult : 1)) - enemyDef));
         newEnemyHp -= dmg2;
         keepHit('Dual', dmg2, isCrit2, `🥷 Dual Strike! ${wasUnaware ? 'Shadow ' : ''}${dmg2} dmg${isCrit2 ? ' CRITICAL!' : ''}!`);
       }
@@ -215,25 +221,25 @@ export function resolveCombat(
 
     // Swings 3 & 4 — off-hand blade (quadStrike only)
     if (opts.quadStrike && newEnemyHp > 0) {
-      const hit3 = (opts.trueAim ?? false) || r() * 100 < Math.max(5, Math.min(99, baseHit));
+      const hit3 = (opts.trueAim ?? false) || r() * 100 < hitRoll;
       if (!hit3) {
         addLog(`🥷 Off-hand slash — miss!`);
       } else {
         const raw3 = Math.floor((wasUnaware ? Math.round(player.stats.attack * 1.6) : player.stats.attack) * 0.55);
         const isCrit3 = rollCrit(newEnemyHp);
-        const dmg3 = Math.max(1, Math.round(raw3 * mods.damageMult * (isCrit3 ? 2 : 1)) - enemyDef);
+        const dmg3 = finish(Math.max(1, Math.round(raw3 * mods.damageMult * (isCrit3 ? critMult : 1)) - enemyDef));
         newEnemyHp -= dmg3;
         keepHit('Off-hand', dmg3, isCrit3, `🥷 Off-hand slash! ${dmg3} dmg${isCrit3 ? ' CRITICAL!' : ''}!`);
       }
     }
     if (opts.quadStrike && newEnemyHp > 0) {
-      const hit4 = (opts.trueAim ?? false) || r() * 100 < Math.max(5, Math.min(99, baseHit));
+      const hit4 = (opts.trueAim ?? false) || r() * 100 < hitRoll;
       if (!hit4) {
         addLog(`🥷 Finishing strike — miss!`);
       } else {
         const raw4 = Math.floor((wasUnaware ? Math.round(player.stats.attack * 1.6) : player.stats.attack) * 0.40);
         const isCrit4 = rollCrit(newEnemyHp);
-        const dmg4 = Math.max(1, Math.round(raw4 * mods.damageMult * (isCrit4 ? 2 : 1)) - enemyDef);
+        const dmg4 = finish(Math.max(1, Math.round(raw4 * mods.damageMult * (isCrit4 ? critMult : 1)) - enemyDef));
         newEnemyHp -= dmg4;
         keepHit('Finish', dmg4, isCrit4, `🥷 Finishing strike! ${dmg4} dmg${isCrit4 ? ' CRITICAL!' : ''}!`);
       }
@@ -242,7 +248,7 @@ export function resolveCombat(
   } else {
     // ── Normal attack path ────────────────────────────────────────────────────
     const blinkTruestrike = !!opts.blinkStrike && blinkStrikeAlwaysHits(player.stats.blinkTalents);
-    const hit = (opts.trueAim ?? false) || blinkTruestrike || r() * 100 < Math.max(5, Math.min(99, baseHit));
+    const hit = (opts.trueAim ?? false) || blinkTruestrike || r() * 100 < hitRoll;
     if (!hit) {
       addLog(`You swing at ${enemy.emoji} — miss!`);
     } else {
@@ -269,10 +275,11 @@ export function resolveCombat(
       rawDamage = Math.max(1, Math.round(rawDamage * (opts.damageMult ?? 1)));
 
       const isCrit = rollCrit(newEnemyHp);
-      const moodDamage = Math.round(rawDamage * mods.damageMult * (isCrit ? 2 : 1));
+      const moodDamage = Math.round(rawDamage * mods.damageMult * (isCrit ? critMult : 1));
       const overkillBonus = opts.blinkStrike ? Math.max(0, Math.floor(opts.bonusDamage ?? 0)) : 0;
       let actualDamage = Math.max(1, moodDamage - enemyDef);
       if (overkillBonus > 0) actualDamage += overkillBonus;
+      actualDamage = finish(actualDamage);
       newEnemyHp = enemy.hp - actualDamage;
 
       const solo = opts.blinkStrike
@@ -296,13 +303,13 @@ export function resolveCombat(
         const frac = royalOffhandFraction(player.stats.level);
         const offRaw = Math.max(1, Math.round(player.stats.attack * frac * (opts.damageMult ?? 1)));
         const offCrit = rollCrit(newEnemyHp);
-        const offDamage = Math.max(1, Math.round(offRaw * mods.damageMult * (offCrit ? 2 : 1)) - enemyDef);
+        const offDamage = finish(Math.max(1, Math.round(offRaw * mods.damageMult * (offCrit ? critMult : 1)) - enemyDef));
         newEnemyHp -= offDamage;
         keepHit('Off-hand', offDamage, offCrit, `💂 Off-hand hits ${enemy.emoji} for ${offDamage} dmg (${Math.round(frac * 100)}% ATK)${offCrit ? ' CRITICAL!' : ''}`);
       }
 
       if (mods.doubleStrike > 0 && newEnemyHp > 0 && r() * 100 < mods.doubleStrike) {
-        const dmg2 = Math.max(1, Math.round(rawDamage * mods.damageMult) - enemyDef);
+        const dmg2 = finish(Math.max(1, Math.round(rawDamage * mods.damageMult) - enemyDef));
         newEnemyHp -= dmg2;
         keepHit('Again', dmg2, false, `You strike again for ${dmg2}!`);
       }
@@ -362,7 +369,8 @@ export function resolveCombat(
         opts.shieldWall ? shieldReduction(opts.shieldWall, opts.floor ?? 1, defense) : 0,
       );
       const afterShield = incoming - shieldDR;
-      const finalDmg = applyNullMomentum(afterShield, player);
+      const armored = applyGearReduction(afterShield, gear.defense);
+      const finalDmg = applyNullMomentum(armored, player);
       newPlayerHp -= finalDmg;
       const shieldNote = shieldDR > 0 ? ` (🛡️−${shieldDR})` : '';
       const nullNote = finalDmg < afterShield ? ` (👤−${afterShield - finalDmg})` : '';

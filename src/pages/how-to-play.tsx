@@ -649,23 +649,23 @@ export default function HowToPlay({
             {
               label: "💨 SPD",
               color: "text-green-400",
-              desc: "Speed — if an enemy's speed exceeds yours, it strikes twice per turn (the extra hit follows a normal damage roll). Also widens enemy detection range slightly. SPD soft-caps at 8; further speed becomes Evasion, and that conversion is applied before Evasion overflow becomes Speed. Matching or exceeding enemy speed prevents double-hits.",
+              desc: "Speed — if an enemy's speed exceeds yours, it strikes twice per turn (the extra hit follows a normal damage roll). Also widens enemy detection range slightly. Speed is not capped for that race. Every 5 speed above 8 adds 1 accuracy. It does not add evasion.",
             },
             {
               label: "🎯 EVA",
               color: "text-violet-400",
               desc: (
                 <>
-                  Evasion — the EVA number.{" "}
-                  <strong className="text-foreground">Raw EVA soft-caps at 50. Dodge, the chance combat rolls, caps at 50% (75% for a Ninja) even when EVA is higher.</strong>{" "}
-                  Speed overflow can push the EVA number above 50. It does not push Dodge past that cap. Ninja dodge also scales with level and spikes at low HP. Fencer dodge uses Poise and caps at 60%.
+                  Evasion — the dodge number.{" "}
+                  <strong className="text-foreground">Dodge caps at 50% (75% for a Ninja, 60% for a Fencer). EVA past 50 adds 1% crit damage per 20 and does not raise magic find.</strong>{" "}
+                  Ninja dodge also scales with level and spikes at low HP. Fencer dodge uses Poise. Gear evasion is dodge, not loot.
                 </>
               ),
             },
             {
               label: "🍀 LCK",
               color: "text-yellow-400",
-              desc: "Luck — raw LCK still adds to crit chance (base crit = 5% + raw LCK + mood bonus) until CRIT soft-caps at 100. The LCK number itself stops at 20; further luck becomes gold find. Loot quality is shifted by the 🍀 Clover bag passive, not by the LCK stat itself.",
+              desc: "Luck — raw LCK still adds to crit chance (base crit = 5% + raw LCK) until CRIT caps at 75. The LCK number stops at 50; every 30 luck past that is +1% magic find on kill drops. Gear luck is crit damage, not crit chance and not gold. 🍀 Clover still shifts drop rarity.",
             },
             {
               label: "🔮 MP",

@@ -128,11 +128,11 @@ describe('applyLevelUp', () => {
     const p = makePlayer({ hp: 4, maxHp: 10, level: 1, xp: 5, moodValue: 0 }, '🧝');
     const out = applyLevelUp(p, 1, 2, log);
     expect(out.stats.level).toBe(2);
-    expect(out.stats.maxHp).toBe(13); // +3 from hpBonusForLevel(2)
-    expect(out.stats.hp).toBe(13); // full heal to new max
+    expect(out.stats.maxHp).toBe(12); // +2 from hpBonusForLevel(2)
+    expect(out.stats.hp).toBe(12); // full heal to new max
     expect(out.stats.moodValue).toBe(30); // min(100, 0 + 30)
     expect(out.stats.mana).toBeUndefined(); // non-wizard gets no MP
-    expect(out.inventory.length).toBe(1); // one random emoji power granted
+    expect(out.inventory.length).toBe(0); // emoji only on every 3rd level
     expect(log).toHaveBeenCalledWith(expect.stringContaining('Level 2'));
   });
 
@@ -148,10 +148,10 @@ describe('applyLevelUp', () => {
     const p = makePlayer({ hp: 5, maxHp: 10, level: 1, moodValue: 0 }, '🧙');
     const out = applyLevelUp(p, 1, 4, log);
     expect(out.stats.level).toBe(4);
-    expect(out.stats.maxHp).toBe(22); // +12 from hpBonusForLevel(4)
+    expect(out.stats.maxHp).toBe(18); // +8 from hpBonusForLevel(4)
     expect(out.stats.maxMana).toBe(5); // (default 4) + mpBonusForLevel delta of 1
     expect(out.stats.mana).toBe(5);
-    expect(out.inventory.length).toBeGreaterThanOrEqual(1); // wizard rolls two emojis
+    expect(out.inventory.length).toBeGreaterThanOrEqual(1); // level 3 grants an emoji
     expect(log).toHaveBeenCalledWith(expect.stringContaining('max MP'));
   });
 

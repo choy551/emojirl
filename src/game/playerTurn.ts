@@ -63,9 +63,19 @@ export function tickBlinkChainOutOfCombat(
   };
 }
 
+/** Same odds as Spell Echo. A Wizard rolls this on every 3rd level for a second emoji. */
+export const LEVEL_EMOJI_ECHO_CHANCE = 0.25;
+
+/** One emoji on levels 3, 6, 9… Wizards sometimes echo a second. */
+export function levelUpEmojiCount(characterClass: string, level: number, rng: () => number = Math.random): number {
+  if (level <= 0 || level % 3 !== 0) return 0;
+  if (characterClass === '🧙' && rng() < LEVEL_EMOJI_ECHO_CHANCE) return 2;
+  return 1;
+}
+
 /**
  * Level-up rewards shared by every melee/ranged kill path: grant a max-HP bump
- * with full heal, award a random emoji power (two for Wizards), restore mood, and
+ * with full heal, award a level emoji on every 3rd level, restore mood, and
  * grant Wizards bonus max MP. Side effects are limited to the passed `addLog` and
  * the global discoveries store (markEmojiSeen). Returns the updated player.
  *
@@ -77,15 +87,21 @@ export function applyLevelUp(
   oldLevel: number,
   newLevel: number,
   addLog: (text: string) => void,
+  rng: () => number = Math.random,
 ): Player {
   const hpIncrease = hpBonusForLevel(newLevel) - hpBonusForLevel(oldLevel);
   const newMaxHp = player.stats.maxHp + hpIncrease;
-  const newEmoji = { ...getRandomEmojiPower(), id: `lvlup-${Math.random()}`, consumed: false };
-  const extraEmoji = isArcaneCaster(player.characterClass)
-    ? [{ ...getRandomEmojiPower(), id: `lvlup2-${Math.random()}`, consumed: false }]
-    : [];
-  const { inventory, bank, nonStackableBanked, duplicateActiveBanked } = addToPlayerBag(player, newEmoji, ...extraEmoji);
-  markEmojiSeen(newEmoji.emoji); extraEmoji.forEach(e => markEmojiSeen(e.emoji));
+  const granted = [];
+  for (let level = oldLevel + 1; level <= newLevel; level++) {
+    const count = levelUpEmojiCount(player.characterClass, level, rng);
+    for (let i = 0; i < count; i++) {
+      granted.push({ ...getRandomEmojiPower(), id: `lvlup-${level}-${i}-${Math.random()}`, consumed: false });
+    }
+  }
+  const { inventory, bank, nonStackableBanked, duplicateActiveBanked } = granted.length > 0
+    ? addToPlayerBag(player, ...granted)
+    : { inventory: player.inventory, bank: player.bank, nonStackableBanked: [], duplicateActiveBanked: [] };
+  granted.forEach(emoji => markEmojiSeen(emoji.emoji));
   nonStackableBanked.forEach(i => addLog(`Extra ${i.emoji} → Bank (already carried)`));
   duplicateActiveBanked.forEach(i => addLog(`${i.emoji} Duplicate ${activeKindLabel(i.activeKind!)} banked — you already have one`));
 
@@ -100,7 +116,10 @@ export function applyLevelUp(
     inventory,
     bank,
   });
-  addLog(`✨ Level ${newLevel}! Full heal! +${hpIncrease} max HP! Got ${newEmoji.emoji}!`);
+  const got = granted.map(emoji => emoji.emoji).join('');
+  addLog(got
+    ? `✨ Level ${newLevel}! Full heal! +${hpIncrease} max HP! Got ${got}!`
+    : `✨ Level ${newLevel}! Full heal! +${hpIncrease} max HP!`);
 
   if (isArcaneCaster(player.characterClass)) {
     const mpInc = mpBonusForLevel(newLevel) - mpBonusForLevel(oldLevel);

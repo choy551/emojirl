@@ -6,13 +6,15 @@ export interface EnemyTooltipProps {
   vy: number;
   viewWidth: number;
   viewHeight: number;
+  /** Your chance to hit this foe, after accuracy and its evasion. */
+  hitPercent?: number;
 }
 
 function detectionRadius(speed: number): number {
   return 3 + Math.floor(speed / 3);
 }
 
-export function EnemyTooltip({ enemy, vx, vy, viewWidth, viewHeight }: EnemyTooltipProps) {
+export function EnemyTooltip({ enemy, vx, vy, viewWidth, viewHeight, hitPercent }: EnemyTooltipProps) {
   const TILE_PX = 32;
   const POPUP_W = 160;
   const traitCount = [enemy.cowardly, enemy.berserker, enemy.packHunter, enemy.silent].filter(Boolean).length;
@@ -71,6 +73,7 @@ export function EnemyTooltip({ enemy, vx, vy, viewWidth, viewHeight }: EnemyTool
             { label: 'ATK', value: enemy.attack, color: 'text-orange-400' },
             { label: 'DEF', value: enemy.defense, color: 'text-blue-400' },
             { label: 'SPD', value: enemy.speed, color: 'text-yellow-400' },
+            { label: 'EVA', value: enemy.evasion ?? 0, color: 'text-violet-400' },
           ].map(({ label, value, color }) => (
             <div key={label} className="bg-background/60 rounded px-1 py-0.5 flex flex-col items-center gap-0.5">
               <span className={`font-bold uppercase leading-none ${color}`} style={{ fontSize: 9 }}>{label}</span>
@@ -78,6 +81,13 @@ export function EnemyTooltip({ enemy, vx, vy, viewWidth, viewHeight }: EnemyTool
             </div>
           ))}
         </div>
+
+        {hitPercent != null && (
+          <div className="flex items-center justify-between text-muted-foreground" title="Chance your attack connects. Accuracy minus this foe's evasion, from 5% to 99%.">
+            <span className="uppercase tracking-wide" style={{ fontSize: 9 }}>Hit</span>
+            <span className="font-bold text-lime-300 tabular-nums">{hitPercent}%</span>
+          </div>
+        )}
 
         {/* Threat tier */}
         {(() => {

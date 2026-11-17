@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { generateMap } from '../game/mapgen';
 import { Player, Enemy, EmojiItem, GameState, Position, EquipSlot } from '../game/types';
 import { getCowboyUnarmedBonus, getMoodModifiers, isHostileCombatTarget, playerDodgeChance } from '../game/combat';
+import { accuracyScore, hitChance } from '../game/softCap';
 import { planAutofight } from '../game/autofight';
 import { resolveContextAction, resolveMobileContext } from '../game/contextAction';
 import { bagHotkey } from '../game/bagHotkey';
@@ -3447,8 +3448,9 @@ export default function Game() {
           const displayedAtk = softCaps.attack + hudIronFistBonus;
           const atkTitle = [softTitles.ATK, hudIronFistBonus > 0 ? `+${hudIronFistBonus} Iron Fist` : ''].filter(Boolean).join(' · ');
           const crit = softCaps.crit;
-          const dodgeMood = getMoodModifiers(currentMood, player.stats.hp, player.stats.maxHp, cowboyCombatMoodValue(player)).dodgeBonus;
-          const dodge = playerDodgeChance(_effPlayer, dodgeMood);
+          const moodMods = getMoodModifiers(currentMood, player.stats.hp, player.stats.maxHp, cowboyCombatMoodValue(player));
+          const dodge = playerDodgeChance(_effPlayer, moodMods.dodgeBonus);
+          const accuracy = accuracyScore(moodMods.hitChance, softCaps.speed);
           const voidDr = player.characterClass === '👤' ? nullMomentumPercent(player.stats.level) : 0;
           return (
             <div className="flex gap-1.5 shrink-0 text-[9px]" data-testid="stat-grid">
@@ -3481,6 +3483,10 @@ export default function Game() {
               <div title={player.characterClass === '🥷' ? 'Dodge chance combat rolls. Caps at 75%.' : player.characterClass === '🤺' ? 'Dodge chance combat rolls. Poise caps at 60%.' : 'Dodge chance combat rolls. Caps at 50%, even when EVA is higher.'} className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
                 <span className="font-bold text-sky-300">{dodge}%</span>
                 <span className="text-muted-foreground/50">DODGE</span>
+              </div>
+              <div title={`Accuracy ${accuracy} = 90 + mood + speed above 8. Hit chance is accuracy minus the foe's evasion.`} className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
+                <span className="font-bold text-lime-300">{accuracy}</span>
+                <span className="text-muted-foreground/50">ACC</span>
               </div>
               {voidDr > 0 && (
                 <div title="Null Momentum — incoming damage reduction" className="bg-card/60 border border-border/40 rounded px-1.5 py-0.5 flex flex-col items-center leading-none gap-0.5">
@@ -3692,6 +3698,13 @@ export default function Game() {
                       vy={hvy}
                       viewWidth={viewWidth}
                       viewHeight={viewHeight}
+                      hitPercent={hitChance(
+                        accuracyScore(
+                          getMoodModifiers(currentMood, player.stats.hp, player.stats.maxHp, cowboyCombatMoodValue(player)).hitChance,
+                          softCaps.speed,
+                        ),
+                        hovEnemy.evasion ?? 0,
+                      )}
                     />
                   </>
                 );
