@@ -5,6 +5,8 @@ import { normalizeBounty, normalizeVanity } from './goldSinks2';
 import { applyEquipmentRestrictionMigration } from '../components/itemUtils';
 import { migrateEquippedCrown, splitPooledGuardAmmo } from './royalGuard';
 import { ROYAL_GUARD } from './prestigeConstants';
+import { FINALE_FLOOR } from './finaleConstants';
+import { stampLegacyProtectedWalls } from './pickaxe';
 
 export const SAVE_KEY = 'emojirl_save_v1';
 
@@ -275,11 +277,16 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
   };
 
   // ── GameState ─────────────────────────────────────────────────────────────
+  const currentFloor = (raw.currentFloor as number) ?? 1;
+  const loadedMap = (raw.map as GameState['map']) ?? [];
+  const map = stampLegacyProtectedWalls(loadedMap, {
+    arena: currentFloor === FINALE_FLOOR || (!!raw.bossrush && typeof raw.bossrush === 'object'),
+  });
   return {
     schemaVersion:            CURRENT_SCHEMA_VERSION,
     player,
-    currentFloor:             (raw.currentFloor              as number)                  ?? 1,
-    map:                      (raw.map                       as GameState['map'])         ?? [],
+    currentFloor,
+    map,
     enemies:                  (raw.enemies                   as GameState['enemies'])     ?? [],
     items:                    ((raw.items as GameState['items']) ?? []).map(applySoulCatalogCopy),
     turn:                     (raw.turn                      as number)                  ?? 0,
