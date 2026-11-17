@@ -1,4 +1,5 @@
-import type { EmojiItem, MapGrid, Position } from './types';
+import { buildingOf } from './cityBuildings';
+import type { EmojiItem, MapGrid, Position, Tile } from './types';
 
 export const PICKAXE_EMOJI = '⛏️';
 export const PICKAXE_START = 5;
@@ -115,6 +116,178 @@ export function appendMonkeyPickaxe<T extends EmojiItem & { pos: Position }>(
 ): T[] {
   const extra = monkeyPickaxeDrop(monkey, floor, pos);
   return extra ? [...items, extra as T] : items;
+}
+
+function tileAt(map: MapGrid, x: number, y: number): Tile | undefined {
+  return map[y]?.[x];
+}
+
+interface RoomBox {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+function isLiquid(tile: Tile | undefined): boolean {
+  return tile?.type === 'water' || tile?.type === 'lava';
+}
+
+/**
+ * Room interior, including ponds. Walls and doors are the shell.
+ * A one-tile liquid gap is a breach, not a row of the room.
+ */
+function stripIsInterior(map: MapGrid, fixed: number, from: number, to: number, horizontal: boolean): boolean {
+  if (from > to) return false;
+  let liquid = 0;
+  let solid = 0;
+  for (let i = from; i <= to; i++) {
+    const tile = horizontal ? tileAt(map, i, fixed) : tileAt(map, fixed, i);
+    if (!tile || tile.type === 'wall' || tile.type === 'door-closed' || tile.type === 'door-open') return false;
+    if (isLiquid(tile)) liquid += 1;
+    else solid += 1;
+  }
+  if (solid === 0 && to - from < 2) return false;
+  return solid + liquid > 0;
+}
+
+/** Grow a rectangle of room interior. A shell of walls, or a corridor mouth, stops it. */
+function growRoom(map: MapGrid, box: RoomBox): RoomBox {
+  let { x0, y0, x1, y1 } = box;
+  const h = map.length;
+  const w = map[0]?.length ?? 0;
+  for (let guard = 0; guard < 80; guard++) {
+    let grew = false;
+    if (y0 - 1 > 0 && stripIsInterior(map, y0 - 1, x0, x1, true)) { y0 -= 1; grew = true; }
+    if (y1 + 1 < h - 1 && stripIsInterior(map, y1 + 1, x0, x1, true)) { y1 += 1; grew = true; }
+    if (x0 - 1 > 0 && stripIsInterior(map, x0 - 1, y0, y1, false)) { x0 -= 1; grew = true; }
+    if (x1 + 1 < w - 1 && stripIsInterior(map, x1 + 1, y0, y1, false)) { x1 += 1; grew = true; }
+    if (!grew) break;
+  }
+  return { x0, y0, x1, y1 };
+}
+
+function rectHas(map: MapGrid, box: RoomBox, pred: (tile: Tile) => boolean): boolean {
+  for (let y = box.y0; y <= box.y1; y++) {
+    for (let x = box.x0; x <= box.x1; x++) {
+      const tile = tileAt(map, x, y);
+      if (tile && pred(tile)) return true;
+    }
+  }
+  return false;
+}
+
+function districtTiles(map: MapGrid, box: RoomBox): number {
+  let count = 0;
+  for (let y = box.y0; y <= box.y1; y++) {
+    for (let x = box.x0; x <= box.x1; x++) {
+      const tile = tileAt(map, x, y);
+      if (tile?.type === 'floor' && buildingOf(tile.emoji)?.district) count += 1;
+    }
+  }
+  return count;
+}
+
+function closetBox(map: MapGrid, bed: Position): RoomBox {
+  const h = map.length;
+  const w = map[0]?.length ?? 0;
+  const seen = new Set<string>();
+  const queue: Position[] = [bed];
+  seen.add(`${bed.x},${bed.y}`);
+  let x0 = bed.x;
+  let y0 = bed.y;
+  let x1 = bed.x;
+  let y1 = bed.y;
+  while (queue.length > 0) {
+    const cur = queue.pop()!;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const x = cur.x + dx;
+      const y = cur.y + dy;
+      if (x < 0 || y < 0 || y >= h || x >= w) continue;
+      if (Math.max(Math.abs(x - bed.x), Math.abs(y - bed.y)) > 4) continue;
+      const key = `${x},${y}`;
+      if (seen.has(key)) continue;
+      const tile = tileAt(map, x, y);
+      if (!tile) continue;
+      if (tile.type !== 'wall' && tile.type !== 'door-closed' && tile.type !== 'door-open' && tile.type !== 'bed') continue;
+      seen.add(key);
+      queue.push({ x, y });
+      if (x < x0) x0 = x;
+      if (y < y0) y0 = y;
+      if (x > x1) x1 = x;
+      if (y > y1) y1 = y;
+    }
+  }
+  return { x0, y0, x1, y1 };
+}
+
+function markRoomShell(map: MapGrid, box: RoomBox): void {
+  const h = map.length;
+  const w = map[0]?.length ?? 0;
+  for (let y = box.y0 - 1; y <= box.y1 + 1; y++) {
+    for (let x = box.x0 - 1; x <= box.x1 + 1; x++) {
+      if (x < 0 || y < 0 || y >= h || x >= w) continue;
+      const tile = map[y][x];
+      if (tile?.type === 'wall') map[y][x] = { ...tile, unbreakable: true };
+    }
+  }
+}
+
+/**
+ * Old saves were generated before walls were flagged. Stamp the same border,
+ * boss, vault, shop, market, shrine, and arena walls `markProtectedWalls`
+ * would have written. Running it again does not flag any other wall.
+ */
+function hasUnbreakableWall(map: MapGrid): boolean {
+  for (const row of map) {
+    for (const tile of row) {
+      if (tile.type === 'wall' && tile.unbreakable) return true;
+    }
+  }
+  return false;
+}
+
+export function stampLegacyProtectedWalls(map: MapGrid, opts: { arena: boolean }): MapGrid {
+  if (map.length === 0 || (map[0]?.length ?? 0) === 0) return map;
+  // Floors generated after #103 already carry the flag. Stamping those again
+  // would only reinterpret ponds. An old floor has no flags at all.
+  if (hasUnbreakableWall(map)) return map;
+  const next = map.map(row => row.map(tile => ({ ...tile })));
+  const h = next.length;
+  const w = next[0]?.length ?? 0;
+  if (opts.arena) {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const tile = next[y][x];
+        if (tile.type === 'wall') next[y][x] = { ...tile, unbreakable: true };
+      }
+    }
+    return next;
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const border = x === 0 || y === 0 || x === w - 1 || y === h - 1;
+      const tile = next[y][x];
+      if (border && tile.type === 'wall') next[y][x] = { ...tile, unbreakable: true };
+    }
+  }
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const tile = next[y][x];
+      const seed = tile.type === 'boss-floor'
+        || tile.type === 'shrine'
+        || tile.type === 'shrine-used'
+        || tile.type === 'bed'
+        || (tile.type === 'floor' && !!buildingOf(tile.emoji)?.district);
+      if (!seed && tile.type !== 'shop-item') continue;
+      const origin = tile.type === 'bed' ? closetBox(next, { x, y }) : { x0: x, y0: y, x1: x, y1: y };
+      const room = growRoom(next, origin);
+      if (tile.type === 'shop-item' && !rectHas(next, room, cell => cell.type === 'safe-floor')) continue;
+      if (tile.type === 'floor' && districtTiles(next, room) < 4) continue;
+      markRoomShell(next, room);
+    }
+  }
+  return next;
 }
 
 /** Fold a new pickaxe into the one already carried. Returns the item to keep adding when there is none. */

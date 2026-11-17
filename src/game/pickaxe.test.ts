@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { generateMap } from './mapgen';
 import type { MapGrid, Tile } from './types';
-import { addPickaxeCharges, canMineWall, digCardinalLine, markProtectedWalls, monkeyPickaxeDrop, PICKAXE_CAP, PICKAXE_CLAMP, shouldAutoMine } from './pickaxe';
+import { addPickaxeCharges, canMineWall, digCardinalLine, markProtectedWalls, monkeyPickaxeDrop, PICKAXE_CAP, PICKAXE_CLAMP, shouldAutoMine, stampLegacyProtectedWalls } from './pickaxe';
+import { FINALE_FLOOR } from './finaleConstants';
 
 function grid(): MapGrid {
   const wall = (): Tile => ({ type: 'wall', emoji: '⬛', seen: true, visible: true });
@@ -72,6 +74,44 @@ describe('pickaxe mining', () => {
     const arena = grid();
     markProtectedWalls(arena, [], true);
     expect(canMineWall(arena, 2, 2)).toBe(false);
+  });
+});
+
+function wallFlags(map: MapGrid): string[] {
+  const flags: string[] = [];
+  for (let y = 0; y < map.length; y++) {
+    for (let x = 0; x < map[y].length; x++) {
+      if (map[y][x].type === 'wall' && map[y][x].unbreakable) flags.push(`${x},${y}`);
+    }
+  }
+  return flags;
+}
+
+function stripUnbreakable(map: MapGrid): MapGrid {
+  return map.map(row => row.map(tile => {
+    const next = { ...tile };
+    delete next.unbreakable;
+    return next;
+  }));
+}
+
+describe('legacy protected walls', () => {
+  it('leaves a floor that already has flags untouched, and stamps a stripped floor once', () => {
+    const generated = generateMap(6);
+    expect(wallFlags(stampLegacyProtectedWalls(generated.map, { arena: false }))).toEqual(wallFlags(generated.map));
+    const stripped = stripUnbreakable(generated.map);
+    const once = stampLegacyProtectedWalls(stripped, { arena: false });
+    const twice = stampLegacyProtectedWalls(once, { arena: false });
+    expect(wallFlags(twice)).toEqual(wallFlags(once));
+    expect(once[0].every(tile => tile.type !== 'wall' || tile.unbreakable)).toBe(true);
+    expect(wallFlags(once).length).toBeGreaterThan(wallFlags(generated.map).filter(key => key.endsWith(',0') || key.startsWith('0,')).length);
+  });
+
+  it('stamps the arena when the finale floor has no flags yet', () => {
+    const generated = generateMap(FINALE_FLOOR);
+    const stripped = stripUnbreakable(generated.map);
+    const stamped = stampLegacyProtectedWalls(stripped, { arena: true });
+    expect(wallFlags(stamped)).toEqual(wallFlags(generated.map));
   });
 });
 
