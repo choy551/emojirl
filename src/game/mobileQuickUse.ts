@@ -1,7 +1,7 @@
 import { EmojiItem } from './types';
 import { sortBagSlots } from './inventory';
 
-const QUICK_KINDS = new Set(['gun', 'boomerang', 'rope', 'freeze', 'bomb']);
+const QUICK_KINDS = new Set(['gun', 'boomerang', 'rope', 'freeze', 'bomb', 'pickaxe']);
 
 /** Hotbar items the player fires or zaps, not passive souls or heals. */
 export function isMobileQuickUseItem(item: EmojiItem | null | undefined): boolean {
@@ -29,6 +29,7 @@ export function mobileQuickUseLabel(item: EmojiItem): string {
     case 'rope': return 'Rope';
     case 'freeze': return 'Freeze';
     case 'boomerang': return 'Rang';
+    case 'pickaxe': return 'Dig';
     default: return 'Use';
   }
 }

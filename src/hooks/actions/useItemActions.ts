@@ -391,10 +391,10 @@ export function useItemActions(
       return;
     }
 
-    if (item.activeKind === 'gun' || item.activeKind === 'boomerang' || item.activeKind === 'freeze' || item.activeKind === 'bomb') {
+    if (item.activeKind === 'gun' || item.activeKind === 'boomerang' || item.activeKind === 'freeze' || item.activeKind === 'bomb' || item.activeKind === 'pickaxe') {
       if (gs.activeProjectile) { addLog('A projectile is already in flight!'); return; }
-      dirPickModeRef.current = item.activeKind as 'gun' | 'freeze' | 'boomerang' | 'bomb';
-      setDirPickMode(item.activeKind as 'gun' | 'freeze' | 'boomerang' | 'bomb');
+      dirPickModeRef.current = item.activeKind as 'gun' | 'freeze' | 'boomerang' | 'bomb' | 'pickaxe';
+      setDirPickMode(item.activeKind as 'gun' | 'freeze' | 'boomerang' | 'bomb' | 'pickaxe');
       addLog(`${item.emoji} Pick a direction (click a tile, d-pad, or arrow/numpad/WASD)…`);
       return;
     }

@@ -2,6 +2,7 @@ import { Player, EmojiItem, VoidGhost } from './types';
 import type { BagPassiveSummary } from './types';
 import { STACKABLE_BAG_CAPS, isStackableBagPassive } from './passives';
 import { ACTIVE_DROPS, EMOJI_POWERS, isStoredHeal } from './emojis';
+import { addPickaxeCharges, isPickaxe, mergePickaxePickup } from './pickaxe';
 import { hotbarCapFor, padGhostHotbar, voidGhostCapacity } from './voidDamage';
 import { drinkEvasionBonus } from './drinks';
 import { resolveSoftCap, type SoftCapInput, type SoftCapResult } from './softCap';
@@ -42,11 +43,20 @@ export function addToPlayerBag(
   const rest = items.filter(item => !isStoredHeal(item));
   const food = pantry.length > 0 ? [...(player.food ?? []), ...pantry] : [...(player.food ?? [])];
   if (pantry.length > 0) player.food = food;
+  let carriedInv = player.inventory;
+  let carriedBank = player.bank;
+  const pending: EmojiItem[] = [];
+  for (const item of rest) {
+    const merged = mergePickaxePickup(carriedInv, carriedBank, item);
+    carriedInv = merged.inventory;
+    carriedBank = merged.bank;
+    if (!merged.absorbed) pending.push({ ...item, charges: item.activeKind === 'pickaxe' ? (item.charges ?? 5) : item.charges });
+  }
   if (player.hotbarLocked) {
     // New finds stay in the Bank, except a stack that is already on the hotbar and still has room.
-    const inventory = [...player.inventory];
-    const bank = [...player.bank];
-    for (const item of rest) {
+    const inventory = [...carriedInv];
+    const bank = [...carriedBank];
+    for (const item of pending) {
       if (!isStackableBagPassive(item)) {
         bank.push(item);
         continue;
@@ -71,7 +81,7 @@ export function addToPlayerBag(
     }
     return { inventory, bank, food, nonStackableBanked: [], duplicateActiveBanked: [] };
   }
-  return { ...addItemsToBag(player.inventory, player.bank, rest, hotbarCapFor(player)), food };
+  return { ...addItemsToBag(carriedInv, carriedBank, pending, hotbarCapFor(player)), food };
 }
 
 /** HP restores never stay in the hotbar or the Bank. */
@@ -110,6 +120,18 @@ function addItemsToBag(
   const duplicateActiveBanked: EmojiItem[] = [];
   const cap = Math.max(0, hotbarCap);
   for (const item of items) {
+    if (isPickaxe(item)) {
+      const hot = newInv.findIndex(isPickaxe);
+      if (hot !== -1) {
+        newInv[hot] = { ...newInv[hot], charges: addPickaxeCharges(newInv[hot].charges ?? 0) };
+        continue;
+      }
+      const stored = newBank.findIndex(isPickaxe);
+      if (stored !== -1) {
+        newBank[stored] = { ...newBank[stored], charges: addPickaxeCharges(newBank[stored].charges ?? 0) };
+        continue;
+      }
+    }
     if (item.isEquipment) { newBank.push(item); continue; }
     if (item.bagPassive?.nonStackable) {
       if (isNonStackableBagPassiveDuplicate(item, newInv)) { newBank.push(item); nonStackableBanked.push(item); continue; }
@@ -157,7 +179,7 @@ function addItemsToBag(
 
 export function activeKindLabel(kind: string): string {
   const labels: Record<string, string> = {
-    gun: 'Gun', boomerang: 'Boomerang', rope: 'Rope', bomb: 'Bomb', freeze: 'Freeze Ray',
+    gun: 'Gun', boomerang: 'Boomerang', rope: 'Rope', bomb: 'Bomb', freeze: 'Freeze Ray', pickaxe: 'Pickaxe',
   };
   return labels[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1);
 }

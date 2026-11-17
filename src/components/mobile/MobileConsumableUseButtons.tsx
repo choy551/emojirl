@@ -9,7 +9,7 @@ interface Entry {
 
 interface Props {
   entries: Entry[];
-  dirPickMode?: 'gun' | 'freeze' | 'boomerang' | 'bomb' | null;
+  dirPickMode?: 'gun' | 'freeze' | 'boomerang' | 'bomb' | 'pickaxe' | null;
   activeProjectileKind?: string | null;
   onUse: (slot: number) => void;
 }

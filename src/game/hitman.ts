@@ -1,6 +1,7 @@
 import type { Enemy, EmojiItem, Player, Position } from './types';
 import { markEnemyKilled } from './discoveries';
 import { rollKillDrop } from './dropTable';
+import { appendMonkeyPickaxe } from './pickaxe';
 import { handleGodBlessedImmunity } from './flashSignals';
 import { playerBagPassives, playerSoftCap } from './inventory';
 import { restoreStolenEmojis, stolenEmojiSummary } from './monkeyLoot';
@@ -137,9 +138,14 @@ export function resolveExecuteContract(input: {
     playerClass: player.characterClass,
     rng: input.rng,
   });
-  const items = drop
-    ? [...input.items, { ...drop, id: `drop-execute-${target.id}`, consumed: false, pos: target.pos }]
-    : input.items;
+  const items = appendMonkeyPickaxe(
+    drop
+      ? [...input.items, { ...drop, id: `drop-execute-${target.id}`, consumed: false, pos: target.pos }]
+      : input.items,
+    target.monkey,
+    input.floor,
+    target.pos,
+  );
 
   return {
     player,

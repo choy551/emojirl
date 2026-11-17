@@ -6,6 +6,8 @@ interface VirtualDpadProps {
   side?: 'left' | 'right';
   /** When false, the pad is laid out by its parent instead of `position: fixed`. */
   anchored?: boolean;
+  /** Hide diagonal keys. Used when a consume only accepts north, south, east, or west. */
+  cardinalOnly?: boolean;
 }
 
 const REPEAT_DELAY_MS = 350;
@@ -35,21 +37,24 @@ function DpadCell({
   cell,
   onMove,
   onWait,
+  disabled,
 }: {
   cell: CellDef;
   onMove: (dx: number, dy: number) => void;
   onWait: () => void;
+  disabled?: boolean;
 }) {
   const repeatTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const repeatInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fire = useCallback(() => {
+    if (disabled) return;
     if (cell.isCenter) {
       onWait();
     } else {
       onMove(cell.dx, cell.dy);
     }
-  }, [cell, onMove, onWait]);
+  }, [cell, disabled, onMove, onWait]);
 
   const startRepeat = useCallback(() => {
     fire();
@@ -73,10 +78,13 @@ function DpadCell({
       className={[
         'flex items-center justify-center select-none touch-none rounded-lg',
         'transition-transform duration-75 active:scale-90',
+        disabled ? 'opacity-20' : '',
         cell.isCenter
           ? 'bg-amber-900/45 border border-amber-500/35 text-amber-400/90 font-bold text-lg'
           : 'bg-white/8 border border-white/12 text-white/75 font-bold',
       ].join(' ')}
+      disabled={disabled}
+      aria-disabled={disabled || undefined}
       style={{ minWidth: 40, minHeight: 40, width: 40, height: 40, fontSize: cell.isCenter ? '1.15rem' : '0.95rem' }}
       onPointerDown={e => { e.preventDefault(); startRepeat(); }}
       onPointerUp={stopRepeat}
@@ -92,7 +100,7 @@ function DpadCell({
 
 const STORAGE_KEY = 'emojirl_dpad_side';
 
-export function VirtualDpad({ onMove, onWait, side: sideProp, anchored = true }: VirtualDpadProps) {
+export function VirtualDpad({ onMove, onWait, side: sideProp, anchored = true, cardinalOnly = false }: VirtualDpadProps) {
   const [internalSide] = useState<'left' | 'right'>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     return stored === 'left' ? 'left' : 'right';
@@ -121,7 +129,13 @@ export function VirtualDpad({ onMove, onWait, side: sideProp, anchored = true }:
         style={{ gridTemplateColumns: 'repeat(3, 1fr)', width: 132 }}
       >
         {CELLS.map((cell, i) => (
-          <DpadCell key={i} cell={cell} onMove={onMove} onWait={onWait} />
+          <DpadCell
+            key={i}
+            cell={cell}
+            onMove={onMove}
+            onWait={onWait}
+            disabled={cardinalOnly && cell.dx !== 0 && cell.dy !== 0}
+          />
         ))}
       </div>
     </div>

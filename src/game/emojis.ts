@@ -126,10 +126,18 @@ export const ACTIVE_DROPS: Omit<EmojiItem, 'id' | 'consumed'>[] = [
     activeKind: 'freeze',
     charges: 1,
   },
+  {
+    emoji: '⛏️',
+    name: 'Pickaxe',
+    description: 'Hotbar: bump a wall to dig it (Auto-mine, 1 charge). Use: dig a cardinal line, one tile per charge. Starts at 5. Extra copies add 5 until 10, then 1, hard cap 20.',
+    activeKind: 'pickaxe',
+    charges: 5,
+  },
 ];
 
 export function getRandomActiveDrop(): Omit<EmojiItem, 'id' | 'consumed'> {
-  return ACTIVE_DROPS[Math.floor(Math.random() * ACTIVE_DROPS.length)];
+  const pool = ACTIVE_DROPS.filter(drop => drop.activeKind !== 'pickaxe');
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 export interface SoulEffect {

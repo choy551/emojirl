@@ -206,8 +206,8 @@ export default function Game() {
   const inspectedEnemyIdRef = useRef<string | null>(null);
   const [blinkTargetMode, setBlinkTargetMode] = useState(false);
   const blinkTargetModeRef = useRef(false);
-  const [dirPickMode, setDirPickMode] = useState<'gun' | 'freeze' | 'boomerang' | 'bomb' | null>(null);
-  const dirPickModeRef = useRef<'gun' | 'freeze' | 'boomerang' | 'bomb' | null>(null);
+  const [dirPickMode, setDirPickMode] = useState<'gun' | 'freeze' | 'boomerang' | 'bomb' | 'pickaxe' | null>(null);
+  const dirPickModeRef = useRef<'gun' | 'freeze' | 'boomerang' | 'bomb' | 'pickaxe' | null>(null);
   const [explosionTiles, setExplosionTiles] = useState<Set<string>>(new Set());
   const explosionClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [beamTiles, setBeamTiles] = useState<Map<string, string>>(new Map());
@@ -1401,6 +1401,10 @@ export default function Game() {
   const handleManualMove = useCallback((dx: number, dy: number) => {
     if (dirPickModeRef.current) {
       const kind = dirPickModeRef.current;
+      if (kind === 'pickaxe' && dx !== 0 && dy !== 0) {
+        addLog('⛏️ Dig north, south, east, or west.');
+        return;
+      }
       dirPickModeRef.current = null;
       setDirPickMode(null);
       handleFireProjectile(kind, dx, dy);
@@ -1410,7 +1414,7 @@ export default function Game() {
     setAutoRest(false);
     setTravelTarget(null);
     handleMove(dx, dy);
-  }, [handleMove, handleFireProjectile]);
+  }, [addLog, handleMove, handleFireProjectile]);
 
   const handleManualWait = useCallback(() => {
     setAutoExplore(false);
@@ -1481,6 +1485,10 @@ export default function Game() {
       const adx = Math.sign(dx);
       const ady = Math.sign(dy);
       if (adx === 0 && ady === 0) return;
+      if (dirPickModeRef.current === 'pickaxe' && adx !== 0 && ady !== 0) {
+        addLog('⛏️ Dig north, south, east, or west.');
+        return;
+      }
       const kind = dirPickModeRef.current;
       dirPickModeRef.current = null;
       setDirPickMode(null);
@@ -2100,13 +2108,16 @@ export default function Game() {
         if (MOVE_KEYS.has(tempKey)) {
           e.preventDefault();
           const kind = dirPickModeRef.current;
-          dirPickModeRef.current = null;
-          setDirPickMode(null);
-          // Resolve direction from the pressed key
           const tempKeys = new Set([tempKey]);
           const dir = getDxDy(tempKeys);
           if (dir) {
             const [dx, dy] = dir;
+            if (kind === 'pickaxe' && dx !== 0 && dy !== 0) {
+              addLog('⛏️ Dig north, south, east, or west.');
+              return;
+            }
+            dirPickModeRef.current = null;
+            setDirPickMode(null);
             handleFireProjectile(kind, dx, dy);
           }
           return;
@@ -3800,8 +3811,8 @@ export default function Game() {
         )}
         {dirPickMode && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-xl bg-yellow-950/95 border border-yellow-500/80 text-yellow-200 text-sm font-bold shadow-lg animate-pulse pointer-events-none select-none flex items-center gap-2">
-            <span className="text-xl">{dirPickMode === 'gun' ? '🔫' : dirPickMode === 'freeze' ? '❄️' : '🪃'}</span>
-            {dirPickMode === 'gun' ? 'Gun' : dirPickMode === 'freeze' ? 'Freeze' : dirPickMode === 'bomb' ? 'Bomb' : 'Boomerang'} — click a tile or press a direction · Esc to cancel
+            <span className="text-xl">{dirPickMode === 'gun' ? '🔫' : dirPickMode === 'freeze' ? '❄️' : dirPickMode === 'pickaxe' ? '⛏️' : '🪃'}</span>
+            {dirPickMode === 'gun' ? 'Gun' : dirPickMode === 'freeze' ? 'Freeze' : dirPickMode === 'bomb' ? 'Bomb' : dirPickMode === 'pickaxe' ? 'Pickaxe — north, south, east, or west' : 'Boomerang'} — click a tile or press a direction · Esc to cancel
           </div>
         )}
 
@@ -4042,6 +4053,17 @@ export default function Game() {
           handleGuardianStance={handleGuardianStance}
           onToggleGenieCast={toggleGenieCastOption}
           onOpenBlinkShop={() => setBlinkShopOpen(true)}
+          onToggleAutoMine={() => {
+            setGameState(prev => {
+              if (!prev) return prev;
+              const autoMine = !prev.player.autoMine;
+              return {
+                ...prev,
+                player: { ...prev.player, autoMine },
+                logs: [{ id: `mine-${prev.turn}`, text: autoMine ? '⛏️ Auto-mine on. Bumping a wall digs it.' : '⛏️ Auto-mine off.', turn: prev.turn }, ...prev.logs].slice(0, 24),
+              };
+            });
+          }}
           onClose={() => setTacticsMenuOpen(false)}
         />
       )}
@@ -4518,6 +4540,7 @@ export default function Game() {
             onWait={handleManualWait}
             side={thumbSide}
             anchored={!oneHanded}
+            cardinalOnly={dirPickMode === 'pickaxe'}
           />
         ) : null;
 

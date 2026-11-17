@@ -41,6 +41,8 @@ export interface Tile {
   usesLeft?: number;
   /** District-vault structure already surveyed into EmojiCB. */
   surveyed?: boolean;
+  /** Wall the pickaxe cannot break: map border, vault, shop, temple, or arena. */
+  unbreakable?: boolean;
 }
 
 export type MapGrid = Tile[][];
@@ -284,6 +286,8 @@ export interface Player {
    * Active-use items and stacking copies below the hotbar cap are left alone.
    */
   autoConsumeBank?: boolean;
+  /** When true, bumping a wall with a hotbar Pickaxe mines it. Missing means off. */
+  autoMine?: boolean;
 }
 
 export type VanityTrailId = 'glitter' | 'petals' | 'prisms';
@@ -341,7 +345,7 @@ export interface FeastBuff {
   label: string;
 }
 
-export type ActiveKind = 'bomb' | 'gun' | 'boomerang' | 'rope' | 'freeze';
+export type ActiveKind = 'bomb' | 'gun' | 'boomerang' | 'rope' | 'freeze' | 'pickaxe';
 
 export interface EmojiItem {
   id: string;

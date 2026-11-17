@@ -145,6 +145,7 @@ export const DROP_TABLE: DropEntry[] = [
   entry('ammo:quiver', '🏹', 'ammo', 'uncommon'),
   entry('ammo:bullets', '🪙', 'ammo', 'uncommon'),
   entry('active:rope', '🪢', 'active', 'uncommon'),
+  entry('active:pickaxe', '⛏️', 'active', 'uncommon', false),
   entry('active:freeze', '❄️', 'active', 'uncommon'),
   entry('soul:heart', '❤️', 'soul', 'uncommon'),
   entry('soul:mushroom', '🍄', 'soul', 'uncommon'),

@@ -9,7 +9,7 @@ export interface BagActOpts {
 }
 
 /** Aimed actives are used from the field, not spent by the Consume button. */
-const AIMED_KINDS = new Set(['gun', 'boomerang', 'freeze', 'bomb']);
+const AIMED_KINDS = new Set(['gun', 'boomerang', 'freeze', 'bomb', 'pickaxe']);
 
 export const BAG_DOUBLE_TAP_MS = 500;
 export const BAG_LONG_PRESS_MS = 500;

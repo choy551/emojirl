@@ -402,6 +402,10 @@ export function generateShopStock(floor: number, playerClass?: string): EmojiIte
   }
   const active = getRandomActiveDrop();
   stock.push({ ...active, id: `shop-active-${Math.random().toString(36).slice(2)}`, consumed: false });
+  stock.push({
+    emoji: '⛏️', name: 'Pickaxe', description: 'Dig walls. 5 charges.', consumed: false, activeKind: 'pickaxe', charges: 5,
+    id: `shop-pickaxe-${Math.random().toString(36).slice(2)}`,
+  });
   const numHeals = 1 + (Math.random() < 0.4 ? 1 : 0);
   for (let i = 0; i < numHeals; i++) {
     const h = getRandomHealDrop();
