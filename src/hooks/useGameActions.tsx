@@ -38,7 +38,7 @@ import { applyEntropicTithe } from '../game/voidAbilities';
 import { applyOverhealDecay, tickBlinkChainOutOfCombat, applyLevelUp } from '../game/playerTurn';
 import { descendFloor } from '../game/descend';
 import { applyStructureStep } from '../game/districtVault';
-import { shouldPromptFinaleStairs, spectatorBumpText } from '../game/finale';
+import { shouldConfirmFinalDescent, shouldPromptFinaleStairs, spectatorBumpText } from '../game/finale';
 import type { GameRefs, GameSetters } from './actions/types';
 import { useTacticsActions } from './actions/useTacticsActions';
 import { useInventoryActions } from './actions/useInventoryActions';
@@ -68,6 +68,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     lastCowboyFlavorTurnRef,
     blinkTurnRef, trailblazeTurnRef,
     lavaStepConfirmedRef,
+    finalDescentConfirmedRef,
     finalePromptRef,
     voidAttackModeRef,
   } = refs;
@@ -77,6 +78,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     setPendingAdventurerInteraction, setPendingBearInteraction, setPendingFarmerId,
     setBlinkTurn, setTrailblazeTurn,
     setPendingLavaStep,
+    setPendingFinalDescent,
     setFinalePrompt,
   } = setters;
 
@@ -1106,6 +1108,11 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           if (!finalePromptRef.current) setFinalePrompt('win');
           return prev;
         }
+        if (shouldConfirmFinalDescent(prev.currentFloor, tile.type) && !finalDescentConfirmedRef.current) {
+          setPendingFinalDescent({ dx, dy });
+          return prev;
+        }
+        finalDescentConfirmedRef.current = false;
         return descendFloor({ ...newState, player: newPlayer }, addLog);
       }
 

@@ -1,4 +1,8 @@
+import { createElement } from 'react';
 import { describe, it, expect } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { FinalDescentDialog } from '../components/InteractionDialogs';
+import { dialogKeyAction } from '../hooks/useDialogHotkeys';
 import type { Enemy, GameState, Player } from './types';
 import {
   ARENA_CENTER, ARENA_OUTER_RADIUS, ARENA_PIT_RADIUS, arenaZone, generateFinaleArena, generateMap,
@@ -6,7 +10,7 @@ import {
 import {
   BOSSRUSH_GRACE_TURNS, BOSSRUSH_MAX_WAVE, FINALE_DIVE_PROMPT, FINALE_FLOOR, FINALE_WIN_PROMPT,
   SPECTATOR_FAUNA, SPECTATOR_PEOPLE, bossrushWaveComposition, buildFinaleFloor, claimFinaleWin,
-  isBossrushCombatant, spawnSpectators, tickBossrush, waveBeginLog,
+  isBossrushCombatant, shouldConfirmFinalDescent, spawnSpectators, tickBossrush, waveBeginLog,
 } from './finale';
 import { pressureForRun, getDungeonPressure } from './progression';
 import { leaderboardEntryFromRun } from './leaderboard';
@@ -307,5 +311,22 @@ describe('descending into the finale', () => {
     );
     expect(res.enemies[0].hp).toBe(spectator.hp);
     expect(res.logs.some(l => l.text.includes('crowd'))).toBe(true);
+  });
+});
+
+describe('D:26 final descent', () => {
+  it('asks before the D:27 stairs and not on other floors', () => {
+    expect(shouldConfirmFinalDescent(26, 'stairs')).toBe(true);
+    expect(shouldConfirmFinalDescent(25, 'stairs')).toBe(false);
+    expect(shouldConfirmFinalDescent(27, 'stairs')).toBe(false);
+    expect(shouldConfirmFinalDescent(26, 'floor')).toBe(false);
+  });
+
+  it('renders Descend and Stay, and Escape stays', () => {
+    const html = renderToStaticMarkup(createElement(FinalDescentDialog, { onDescend() {}, onStay() {} }));
+    expect(html).toContain('Descend to D:27');
+    expect(html).toContain('Stay on current floor');
+    expect(html).toContain('min-h-11');
+    expect(dialogKeyAction({ key: 'Escape', code: 'Escape' })).toBe('cancel');
   });
 });

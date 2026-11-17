@@ -98,7 +98,7 @@ import { AmmoCacheModal } from '../components/AmmoCacheModal';
 import { RestaurantModal } from '../components/RestaurantModal';
 import { SlotShrineModal } from '../components/SlotShrineModal';
 import { ItemStatCard } from '../components/ItemStatCard';
-import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog, CompanionTalkDialog, BedRestDialog, LavaStepDialog, FinalePromptDialog } from '../components/InteractionDialogs';
+import { MonkeyInteractionDialog, FairyInteractionDialog, AdventurerInteractionDialog, BearInteractionDialog, CompanionTalkDialog, BedRestDialog, LavaStepDialog, FinalDescentDialog, FinalePromptDialog } from '../components/InteractionDialogs';
 import { TacticsMenu } from '../components/TacticsMenu';
 import { GoToMenu } from '../components/GoToMenu';
 import { EquipmentTab } from '../components/EquipmentTab';
@@ -270,6 +270,10 @@ export default function Game() {
   const [lastBoatWarnSlot, setLastBoatWarnSlot] = useState<number | null>(null);
   const boatConfirmedRef = useRef(false);
   const lavaStepConfirmedRef = useRef(false);
+  const [pendingFinalDescent, setPendingFinalDescent] = useState<{ dx: number; dy: number } | null>(null);
+  const pendingFinalDescentRef = useRef<{ dx: number; dy: number } | null>(null);
+  const finalDescentConfirmedRef = useRef(false);
+  useEffect(() => { pendingFinalDescentRef.current = pendingFinalDescent; }, [pendingFinalDescent]);
   const [pendingLavaStep, setPendingLavaStep] = useState<{ dx: number; dy: number } | null>(null);
   const pendingLavaStepRef = useRef<{ dx: number; dy: number } | null>(null);
   useEffect(() => { pendingLavaStepRef.current = pendingLavaStep; }, [pendingLavaStep]);
@@ -407,6 +411,7 @@ export default function Game() {
       { id: 'boat-warn', isOpen: () => lastBoatWarnSlot !== null, close: () => setLastBoatWarnSlot(null) },
       { id: 'drown-warn', isOpen: () => drownWarnSlot !== null, close: () => setDrownWarnSlot(null) },
       { id: 'lava-warn', isOpen: () => pendingLavaStep !== null, close: () => setPendingLavaStep(null) },
+      { id: 'final-descent', isOpen: () => pendingFinalDescent !== null, close: () => setPendingFinalDescent(null) },
       { id: 'finale', isOpen: () => finalePrompt !== null, close: () => setFinalePrompt(p => p === 'win' ? 'dive' : null) },
       { id: 'bed', isOpen: () => bedRestOpen, close: () => setBedRestOpen(false) },
       { id: 'talk', isOpen: () => !!pendingCompanionTalkId, close: () => setPendingCompanionTalkId(null) },
@@ -604,6 +609,7 @@ export default function Game() {
     lastBoatWarnSlot !== null ||
     drownWarnSlot !== null ||
     pendingLavaStep ||
+    pendingFinalDescent ||
     finalePrompt ||
     bedRestOpen ||
     pendingCompanionTalkId ||
@@ -944,6 +950,7 @@ export default function Game() {
       dirPickModeRef,
       boatConfirmedRef,
       lavaStepConfirmedRef,
+      finalDescentConfirmedRef,
       finalePromptRef,
       blinkTurnRef,
       trailblazeTurnRef,
@@ -966,6 +973,7 @@ export default function Game() {
       setDrownWarnSlot,
       setLastBoatWarnSlot,
       setPendingLavaStep,
+      setPendingFinalDescent,
       setFinalePrompt,
       setPendingFairyId,
       setPendingMonkeyInteraction,
@@ -1699,7 +1707,7 @@ export default function Game() {
         setGameState(prev => prev ? { ...prev, floorAnnouncement: null } : prev);
         return;
       }
-      if (pendingLavaStepRef.current || finalePromptRef.current) {
+      if (pendingLavaStepRef.current || pendingFinalDescentRef.current || finalePromptRef.current) {
         e.preventDefault();
         return;
       }
@@ -4035,6 +4043,18 @@ export default function Game() {
           onToggleGenieCast={toggleGenieCastOption}
           onOpenBlinkShop={() => setBlinkShopOpen(true)}
           onClose={() => setTacticsMenuOpen(false)}
+        />
+      )}
+
+      {pendingFinalDescent && (
+        <FinalDescentDialog
+          onStay={() => setPendingFinalDescent(null)}
+          onDescend={() => {
+            const step = pendingFinalDescent;
+            finalDescentConfirmedRef.current = true;
+            setPendingFinalDescent(null);
+            handleMove(step.dx, step.dy);
+          }}
         />
       )}
 
