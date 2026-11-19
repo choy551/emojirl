@@ -5,6 +5,7 @@ import { rarityTooltipSuffix } from '../game/dropTable';
 import { BAG_LONG_PRESS_MS, resolveBagSlotClick } from '../game/bagConsume';
 import { voidGhostBadge } from '../game/voidCharge';
 import { activeKindEmoji } from './itemUtils';
+import { displayItemDescription } from '../game/gearLabels';
 import { ActivePassivesPanel } from './ActivePassivesPanel';
 
 interface HotbarPanelProps {
@@ -123,7 +124,7 @@ export function HotbarPanel({
               }}
               {...(mobileConsume ? { style: { touchAction: 'manipulation' as const } } : {})}
               {...itemInspectProps(item, i)}
-              title={item ? `[${i + 1}] ${item.name}: ${item.description.replace(/ · Bag: [^·]+$/, '')}${getPassiveTooltipSuffix(item)}${bankDupes > 0 ? ` · ${bankDupes} more in Bank` : ''}${rarityTooltipSuffix(item)}` : `Empty slot ${i + 1}`}
+                title={item ? `[${i + 1}] ${item.name}: ${displayItemDescription(item).replace(/ · Bag: [^·]+$/, '')}${getPassiveTooltipSuffix(item)}${bankDupes > 0 ? ` · ${bankDupes} more in Bank` : ''}${rarityTooltipSuffix(item)}` : `Empty slot ${i + 1}`}
               className={`relative aspect-square rounded border flex items-center justify-center text-xl transition-all
                 ${focusedBagIdx === i ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-black/50' : ''}
                 ${item?.isVoidGhost ? 'opacity-40 border-violet-400/40 bg-violet-950/20 cursor-pointer' : !item

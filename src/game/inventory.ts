@@ -5,7 +5,7 @@ import { ACTIVE_DROPS, EMOJI_POWERS, isStoredHeal } from './emojis';
 import { addPickaxeCharges, isPickaxe, mergePickaxePickup } from './pickaxe';
 import { hotbarCapFor, padGhostHotbar, voidGhostCapacity } from './voidDamage';
 import { drinkEvasionBonus } from './drinks';
-import { resolveSoftCap, type SoftCapInput, type SoftCapResult } from './softCap';
+import { applyGearAttack, applyGearReduction, resolveSoftCap, type SoftCapInput, type SoftCapResult } from './softCap';
 
 export function isNonStackableBagPassiveDuplicate(item: EmojiItem, inv: EmojiItem[]): boolean {
   if (!item.bagPassive?.nonStackable) return false;
@@ -636,6 +636,16 @@ export function gearStatPoints(player: Player): { attack: number; defense: numbe
     points.evasion += bonus.evasion ?? 0;
   }
   return points;
+}
+
+/** Gear attack percent on a finished hit. Does not change the ATK stat. */
+export function applyEquippedAttack(player: Player, damage: number): number {
+  return applyGearAttack(damage, gearStatPoints(player).attack);
+}
+
+/** Gear defense percent on incoming damage, after flat DEF. */
+export function applyEquippedReduction(player: Player, damage: number): number {
+  return applyGearReduction(damage, gearStatPoints(player).defense);
 }
 
 /** Gear, bag passives, buffs, and drink EVA — before overflow soft caps. */

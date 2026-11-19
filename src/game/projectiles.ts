@@ -1,5 +1,5 @@
 import { ActiveProjectile, Enemy, EmojiItem, FloatingText, Player, Position } from './types';
-import { applyEquipmentAndPassives } from './inventory';
+import { applyEquipmentAndPassives, applyEquippedAttack, applyEquippedReduction } from './inventory';
 import { stolenEmojiSummary } from './monkeyLoot';
 import { RANGED_BLOCKING_TILES } from './tiles';
 import { applyNullMomentum } from './voidDamage';
@@ -89,6 +89,7 @@ export function resolveProjectileFlight(
   };
 
   const atk = applyEquipmentAndPassives(player).stats.attack;
+  const finish = (damage: number) => applyEquippedAttack(player, damage);
   const burn = igniteFields(player, floor, false);
   let enemies = [...enemiesIn];
   let gunHits = 0;
@@ -108,7 +109,7 @@ export function resolveProjectileFlight(
     }
     if (kind === 'gun') {
       const pct = gunPiercePercent(gunHits);
-      const dmg = gunPierceDmg(atk, target.defense ?? 0, gunHits);
+      const dmg = finish(gunPierceDmg(atk, target.defense ?? 0, gunHits));
       gunHits += 1;
       log(`🔫 Bullet hits ${target.emoji} ${target.name} for ${dmg} dmg! (${pct}% ATK)`);
       floats.push({ id: `gun-hit-${target.id}-${turn}`, pos: { ...target.pos }, text: `-${dmg}`, color: '#ef4444', life: 2 });
@@ -121,7 +122,7 @@ export function resolveProjectileFlight(
       return false;
     }
     if (kind === 'freeze') {
-      const dmg = gunDmg(atk, target.defense ?? 0);
+      const dmg = finish(gunDmg(atk, target.defense ?? 0));
       log(`❄️ Freeze hits ${target.emoji} ${target.name} for ${dmg} dmg! Frozen for 3 turns!`);
       floats.push({ id: `freeze-hit-${target.id}-${turn}`, pos: { ...target.pos }, text: `❄️-${dmg}`, color: '#93c5fd', life: 2 });
       const newHp = target.hp - dmg;
@@ -133,7 +134,7 @@ export function resolveProjectileFlight(
       return true;
     }
     if (kind === 'boomerang') {
-      const dmg = boomDmg(atk, target.defense ?? 0, extraBoomerangs);
+      const dmg = finish(boomDmg(atk, target.defense ?? 0, extraBoomerangs));
       const pct = Math.round(Math.min(2.0, 1.0 + 0.25 * extraBoomerangs) * 100);
       log(`🪃 Boomerang hits ${target.emoji} ${target.name} for ${dmg} dmg! (${pct}% ATK)`);
       floats.push({ id: `boom-hit-${target.id}-${turn}`, pos: { ...target.pos }, text: `-${dmg}`, color: '#fde68a', life: 2 });
@@ -162,7 +163,7 @@ export function resolveProjectileFlight(
         const e = enemies[ei];
         if (e.isSpectator) continue;
         if (Math.max(Math.abs(e.pos.x - blastPos.x), Math.abs(e.pos.y - blastPos.y)) > blastRadius) continue;
-        const dmg = Math.max(1, bombAtk - (e.defense ?? 0));
+        const dmg = finish(Math.max(1, bombAtk - (e.defense ?? 0)));
         log(`💥 Explosion hits ${e.emoji} ${e.name} for ${dmg} dmg!`);
         floats.push({ id: `bomb-proj-hit-${e.id}`, pos: { ...e.pos }, text: `-${dmg}`, color: '#f97316', life: 2 });
         const newHp = e.hp - dmg;
@@ -173,7 +174,7 @@ export function resolveProjectileFlight(
         }
       }
       if (Math.max(Math.abs(player.pos.x - blastPos.x), Math.abs(player.pos.y - blastPos.y)) <= blastRadius) {
-        const selfDmg = applyNullMomentum(Math.max(1, bombAtk), player);
+        const selfDmg = applyNullMomentum(applyEquippedReduction(player, Math.max(1, bombAtk)), player);
         playerDamage += selfDmg;
         log(`💥 You're caught in your own explosion! -${selfDmg} HP!`);
         floats.push({ id: `bomb-self-${proj.id}`, pos: { ...player.pos }, text: `-${selfDmg}`, color: '#f97316', life: 2 });

@@ -1,5 +1,6 @@
 import { Player, EmojiItem, EquipSlot } from '../game/types';
 import { canEquipInSlot, canEquipItem, equipRestrictionReason, legalEquipSlots, preferredEquipSlot } from './itemUtils';
+import { displayItemDescription, formatGearCompact, formatGearPoint } from '../game/gearLabels';
 import { RarityLabel } from './RarityLabel';
 import { rarityTooltipSuffix } from '../game/dropTable';
 
@@ -20,7 +21,6 @@ const SLOTS: { key: EquipSlot; label: string; icon: string }[] = [
   { key: 'accessory', label: 'Accessory',  icon: '💍' },
 ];
 
-const STAT_LABELS: Record<string, string> = { attack: 'ATK', defense: 'DEF', speed: 'SPD', evasion: 'EVA', luck: 'LCK' };
 const ALL_STAT_KEYS = ['attack', 'defense', 'speed', 'evasion', 'luck'] as const;
 
 export function EquipmentTab({
@@ -64,7 +64,6 @@ export function EquipmentTab({
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {diffEntries.map(({ k, newVal, diff }) => {
-                    const label = STAT_LABELS[k] ?? k.toUpperCase();
                     const hasCurrent = currentlyEquipped !== undefined;
                     const badgeCls = !hasCurrent || diff === 0
                       ? diff > 0 || (!hasCurrent && newVal > 0)
@@ -75,9 +74,9 @@ export function EquipmentTab({
                         : 'text-red-400 bg-red-900/20 border-red-800/40';
                     return (
                       <span key={k} className={`text-[11px] font-semibold px-1.5 py-0.5 rounded border ${badgeCls}`}>
-                        {newVal > 0 ? '+' : ''}{newVal} {label}
+                        {formatGearPoint(k, newVal, 'badge')}
                         {hasCurrent && diff !== 0 && (
-                          <span className="ml-1 text-[9px] opacity-75">({diff > 0 ? '+' : ''}{diff})</span>
+                          <span className="ml-1 text-[9px] opacity-75">({formatGearPoint(k, diff, 'badge')})</span>
                         )}
                       </span>
                     );
@@ -98,12 +97,7 @@ export function EquipmentTab({
           const canEquipSelected = slotPick ? canEquipInSlot(slotPick, player.characterClass, key) : false;
           const slotBlocked = !!slotPick && !canEquipSelected;
           const slotReason = slotBlocked ? equipRestrictionReason(slotPick, player.characterClass, key) : '';
-          const bonusStr = equipped
-            ? Object.entries(equipped.equipBonus ?? {})
-                .filter(([, v]) => (v ?? 0) !== 0)
-                .map(([k, v]) => `${(v ?? 0) > 0 ? '+' : ''}${v}${k.substring(0, 3).toUpperCase()}`)
-                .join(' ')
-            : '';
+          const bonusStr = equipped ? formatGearCompact(equipped.equipBonus) : '';
           return (
             <div
               key={key}
@@ -196,7 +190,7 @@ export function EquipmentTab({
                     onSelectItem(null);
                   }}
                   {...itemInspectProps(item)}
-                  title={canEquip ? `${item.name}: ${item.description}${rarityTooltipSuffix(item)} — tap to equip` : restrictionMsg}
+                  title={canEquip ? `${item.name}: ${displayItemDescription(item)}${rarityTooltipSuffix(item)} — tap to equip` : restrictionMsg}
                   className={`min-h-11 w-full flex items-center gap-3 rounded-lg border px-2.5 py-2 text-left touch-manipulation transition-all
                     ${focusedBagIdx === eqIdx ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-black/50' : ''}
                     ${!canEquip

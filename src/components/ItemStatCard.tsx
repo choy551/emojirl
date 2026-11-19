@@ -6,6 +6,7 @@ import { foodHealLabel, foodHealDescription, cookedEatHeal } from '../game/econo
 import { bagConsumeRefusal, canConsumeBagItem } from '../game/bagConsume';
 import { voidGhostBadge } from '../game/voidCharge';
 import { drinkEffectLines } from '../game/drinks';
+import { formatGearBadgeList } from '../game/gearLabels';
 
 interface ItemStatCardProps {
   item: EmojiItem;
@@ -48,9 +49,7 @@ export function ItemStatCard({
     if (effect.xpBonus)      consumeLines.push(`+${effect.xpBonus} XP`);
     if (effect.instakillNearest) consumeLines.push('⚡ Instakill nearest visible enemy');
   }
-  const equipBonusLines = si.isEquipment
-    ? Object.entries(si.equipBonus ?? {}).filter(([,v]) => (v ?? 0) !== 0).map(([k, v]) => `${(v as number) > 0 ? '+' : ''}${v} ${k.toUpperCase()}`)
-    : [];
+  const equipBonusLines = si.isEquipment ? formatGearBadgeList(si.equipBonus) : [];
   const typeLabel = si.isEquipment ? '⚔️ Equipment'
     : si.drinkTier !== undefined ? '🥤 Drink'
     : si.healAmount !== undefined ? '💊 Heal Item'

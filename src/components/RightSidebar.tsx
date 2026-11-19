@@ -10,6 +10,7 @@ import { foodHealLabel, foodHealDescription } from '../game/economy';
 import { drinkEffectForClass } from '../game/drinks';
 import { AutoConsumeButton } from './AutoConsumeButton';
 import { HotbarLockButton } from './HotbarLockButton';
+import { displayItemDescription } from '../game/gearLabels';
 
 const HEAL_DISPLAY_LIMIT = 9;
 
@@ -142,7 +143,7 @@ export function RightSidebar({
                 data-testid={`soul-slot-${i + 1}`}
                 onClick={() => handleUseSlot(i)}
                 {...itemInspectProps(item)}
-                title={`[${i + 1}] ${item.name}: ${item.description.replace(/ · Bag: [^·]+$/, '')}${item.charges !== undefined && item.charges >= 0 ? ` (${item.charges}×)` : ''}${getPassiveTooltipSuffix(item)}${bankDupes > 0 ? ` · ${bankDupes} more in Bank` : ''}${rarityTooltipSuffix(item)} · Right-click for details`}
+                title={`[${i + 1}] ${item.name}: ${displayItemDescription(item).replace(/ · Bag: [^·]+$/, '')}${item.charges !== undefined && item.charges >= 0 ? ` (${item.charges}×)` : ''}${getPassiveTooltipSuffix(item)}${bankDupes > 0 ? ` · ${bankDupes} more in Bank` : ''}${rarityTooltipSuffix(item)} · Right-click for details`}
                 className={`relative aspect-square bg-card border rounded flex items-center justify-center text-xl transition-all
                   ${item.isVoidGhost ? 'opacity-40 border-violet-400/40' : item.isEquipment
                     ? 'border-amber-500/60 hover:border-amber-300 cursor-pointer shadow-sm hover:scale-105 active:scale-95 shadow-amber-900/30'
@@ -332,7 +333,7 @@ export function RightSidebar({
                   key={slot}
                   onClick={() => { setBagTab('equipment'); setBankOpen(true); setSelectedItemId(null); }}
                   {...itemInspectProps(item)}
-                  title={`${label} ${item.name}: ${item.description}${rarityTooltipSuffix(item)} — click to manage, right-click for details`}
+                  title={`${label} ${item.name}: ${displayItemDescription(item)}${rarityTooltipSuffix(item)} — click to manage, right-click for details`}
                   className="flex items-center gap-1 px-1.5 py-1 bg-card border border-amber-600/30 rounded text-sm hover:border-amber-400 transition-all cursor-pointer"
                 >
                   <span className="text-[9px] text-muted-foreground/40">{label}</span>

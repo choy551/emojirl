@@ -1,6 +1,6 @@
 import { Enemy, GameState, MapGrid, Player, Position, Tile } from './types';
 import { chebyshev } from './geo';
-import { applyEquipmentAndPassives, livingMaxHp, playerBagPassives } from './inventory';
+import { applyEquipmentAndPassives, applyEquippedReduction, livingMaxHp, playerBagPassives } from './inventory';
 import { applyEnemyTurns, runEnemyTurns } from './enemyTurns';
 import { hasLineOfSight, visionRadiusFor } from './vision';
 import { BED_EMOJI, BED_MAX_USES } from './tiles';
@@ -69,7 +69,7 @@ export function isSleepThreat(e: Enemy): boolean {
 export function sneakAttackDamage(player: Player, enemy: Enemy): number {
   const effective = applyEquipmentAndPassives(player);
   const base = Math.max(1, enemy.attack - Math.floor((effective.stats.defense ?? 0) / 2));
-  return base * 2;
+  return applyEquippedReduction(player, base * 2);
 }
 
 export function applyBedRest(player: Player): Player {

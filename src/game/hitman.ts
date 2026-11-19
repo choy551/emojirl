@@ -3,7 +3,7 @@ import { markEnemyKilled } from './discoveries';
 import { rollKillDrop } from './dropTable';
 import { appendMonkeyPickaxe } from './pickaxe';
 import { handleGodBlessedImmunity } from './flashSignals';
-import { playerBagPassives, playerSoftCap } from './inventory';
+import { applyEquippedAttack, playerBagPassives, playerSoftCap } from './inventory';
 import { restoreStolenEmojis, stolenEmojiSummary } from './monkeyLoot';
 import { applyLevelUp } from './playerTurn';
 import { executeStrike, notePrestigeKill } from './prestige';
@@ -66,7 +66,8 @@ export function resolveExecuteContract(input: {
   if (idx < 0) return base;
 
   const target = enemies[idx];
-  const strike = executeStrike(input.attack, target.hp, target.maxHp, target.defense ?? 0, spentStill);
+  const rolled = executeStrike(input.attack, target.hp, target.maxHp, target.defense ?? 0, spentStill);
+  const strike = { ...rolled, damage: applyEquippedAttack(input.player, rolled.damage) };
   const lethal = target.hp - strike.damage <= 0;
 
   if (lethal && target.godBlessed) {
