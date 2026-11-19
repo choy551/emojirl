@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { EmojiItem, Player } from '../game/types';
 import { bankExtraCopies, hasBagPassive, getPassiveTooltipSuffix, hotbarCountBadge, isStackableBagPassive, getStackableBonusLabel, getStackableCumulativeLabel } from '../game/passives';
 import { soulHelpText } from '../game/emojis';
+import { displayItemDescription } from '../game/gearLabels';
 import { bankSelectionAfterTap, isNonStackableBagPassiveDuplicate, isActiveKindDuplicate } from '../game/gameHelpers';
 import { foodHealDescription } from '../game/economy';
 import { drinkEffectForClass } from '../game/drinks';
@@ -244,7 +245,7 @@ export function BankPanel({
                     } else { onSelect(bankSelectionAfterTap(selectedItemId, item.id)); }
                   }}
                   {...itemInspectProps(item)}
-                  title={`${item.name}${items.length > 1 ? ` ×${items.length}` : ''}: ${item.healAmount !== undefined ? foodHealDescription(item, chefLessonCount, player.stats.maxHp) : item.description}${passiveComputedSuffix}${isStackableBagPassive(item) ? ' · Stackable — compounding power per copy' : ''}${rarityTooltipSuffix(item)}`}
+                  title={`${item.name}${items.length > 1 ? ` ×${items.length}` : ''}: ${item.healAmount !== undefined ? foodHealDescription(item, chefLessonCount, player.stats.maxHp) : displayItemDescription(item)}${passiveComputedSuffix}${isStackableBagPassive(item) ? ' · Stackable — compounding power per copy' : ''}${rarityTooltipSuffix(item)}`}
                   className={`relative aspect-square rounded border flex items-center justify-center text-xl transition-all cursor-pointer
                     ${focusedBagIdx === bankIdx ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-black/50' : ''}
                     ${isSelected

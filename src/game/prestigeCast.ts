@@ -18,7 +18,7 @@ import {
   tilesInRadius,
 } from './prestige';
 import { GENIE_FIREBALL_RADIUS } from './prestigeConstants';
-import { applyEquipmentAndPassives, playerSoftCap } from './inventory';
+import { applyEquipmentAndPassives, applyEquippedAttack, playerSoftCap } from './inventory';
 import { playerMood } from './drinks';
 
 export interface GenieVolley {
@@ -204,7 +204,7 @@ export function resolveGenieFireball(args: {
   }
 
   const geared = applyEquipmentAndPassives(args.player);
-  const blast = fireballBlastDamage(geared.stats.attack, 0, pay.damageMult);
+  const blast = applyEquippedAttack(args.player, fireballBlastDamage(geared.stats.attack, 0, pay.damageMult));
   const splash = tileInFireball(target.pos, args.player.pos) ? selfSplashDamage(blast) : 0;
   let player: Player = {
     ...args.player,
@@ -238,7 +238,7 @@ export function resolveGenieFireball(args: {
     if (!area.has(`${e.pos.x},${e.pos.y}`)) continue;
     if (!isHostileCombatTarget(e) || e.hp <= 0) continue;
     markEnemySeen(e.emoji);
-    const dmg = fireballBlastDamage(geared.stats.attack, e.defense ?? 0, pay.damageMult);
+    const dmg = applyEquippedAttack(args.player, fireballBlastDamage(geared.stats.attack, e.defense ?? 0, pay.damageMult));
     e.hp -= dmg;
     floats.push({ id: `fb-${e.id}-${args.turn}`, pos: { ...e.pos }, text: `-${dmg}`, color: '#f97316', life: 2 });
     if (e.hp <= 0) doomed.push(e);

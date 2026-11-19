@@ -1,8 +1,7 @@
 import { Enemy, EmojiItem, GameState, Position, FloatingText, PlacedBomb, ActiveProjectile } from './types';
 import { chebyshev } from './geo';
-import { applyEquipmentAndPassives, addToPlayerBag, playerBagPassives, parkVoidOverflow, countVoidPressureSlots, healHp, gearStatPoints } from './inventory';
+import { applyEquipmentAndPassives, addToPlayerBag, playerBagPassives, parkVoidOverflow, countVoidPressureSlots, healHp, applyEquippedAttack, applyEquippedReduction } from './inventory';
 import { applyNullMomentum, applyVoidPressureTick, creditVoidBoss, occupiedGhosts, voidClassTurnDamage, voidDamageFor, voidGhostCapacity, VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from './voidDamage';
-import { applyGearReduction } from './softCap';
 import { applyEntropicTithe, type GhostKillEffect } from './voidAbilities';
 import { unlockVoidClass } from './voidMeta';
 import { stealOneSoulEmoji, applySoulThefts, stolenEmojiSummary } from './monkeyLoot';
@@ -85,7 +84,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   let playerDied = false;
   let depthBossKills = 0;
   const titheKills: GhostKillEffect[] = [];
-  const soften = (raw: number) => applyNullMomentum(applyGearReduction(raw, gearStatPoints(player).defense), player);
+  const soften = (raw: number) => applyNullMomentum(applyEquippedReduction(player, raw), player);
   let killer: { name: string; emoji: string } | undefined;
   let voidGraceFloor: number | undefined;
   const newLogs: Array<{ id: string; text: string; turn: number }> = [];
@@ -165,7 +164,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
         const e = newEnemies[ei];
         if (e.isSpectator) continue;
         if (chebyshev(e.pos, bomb.pos) <= bomb.radius) {
-          const dmg = Math.max(1, effectivePlayer.stats.attack * 2 - (e.defense ?? 0));
+          const dmg = applyEquippedAttack(effectivePlayer, Math.max(1, effectivePlayer.stats.attack * 2 - (e.defense ?? 0)));
           const newHp = e.hp - dmg;
           log(`💥 Explosion hits ${e.emoji} ${e.name} for ${dmg} dmg!`);
           newFloatingTexts.push({ id: `bomb-hit-${e.id}`, pos: { ...e.pos }, text: `-${dmg}`, color: '#f97316', life: 2 });

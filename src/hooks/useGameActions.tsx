@@ -27,6 +27,7 @@ import {
   evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
 } from '../game/gameHelpers';
 import { lightningArcDamage } from '../game/passives';
+import { applyEquippedAttack } from '../game/inventory';
 import { formatHitBreakdown, type HitComponent } from '../game/hitLog';
 import { appendMonkeyPickaxe, canMineWall, findHotbarPickaxe, shouldAutoMine } from '../game/pickaxe';
 import { butterflyHeal, diamondThorns, heartHeal, igniteFields, mushroomHeal, starXpGain } from '../game/emojiBalance';
@@ -857,7 +858,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             shuffled.forEach((tgt, arcI) => {
               const idx = newEnemies.findIndex(e2 => e2.id === tgt.id);
               if (idx === -1) return;
-              const arcDmg = lightningArcDamage(arcAtk, arcStacks, arcI);
+              const arcDmg = applyEquippedAttack(combatPlayer, lightningArcDamage(arcAtk, arcStacks, arcI));
               const newHp = tgt.hp - arcDmg;
               bits.push(`${tgt.emoji}-${arcDmg}`);
               arcParts.push({ name: 'Arc', damage: arcDmg, target: `${tgt.emoji} ${tgt.name}` });
@@ -890,7 +891,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           const nci = newEnemies.findIndex(e => e.id === enemy.id);
           if (nci !== -1) {
             const ncEnemy = newEnemies[nci];
-            const ncDmg = Math.max(1, Math.floor(combatPlayer.stats.attack * 0.25) - (ncEnemy.defense ?? 0));
+            const ncDmg = applyEquippedAttack(combatPlayer, Math.max(1, Math.floor(combatPlayer.stats.attack * 0.25) - (ncEnemy.defense ?? 0)));
             addLog(`🗡️ Combo! +${ncDmg} bonus dmg!`);
             const ncNewHp = ncEnemy.hp - ncDmg;
             if (ncNewHp <= 0) {

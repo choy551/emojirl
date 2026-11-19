@@ -1,5 +1,6 @@
 import { EmojiItem } from './types';
 import { normalizeEmojiKey } from './discoveries';
+import { rewriteGearDescription } from './gearLabels';
 import { DRINK_DROPS, DRINK_FLOOR_DROP_CHANCE, getRandomDrinkDrop } from './drinks';
 
 export const HEAL_DROPS: Omit<EmojiItem, 'id' | 'consumed'>[] = [
@@ -368,6 +369,10 @@ export const EQUIPMENT_DROPS_T3: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   { emoji: '🏅', name: 'Champion Medal',   description: 'Accessory: +8 ATK, +4 DEF. The deepest dungeon\'s mark.',             isEquipment: true, equipSlots: ['accessory'],            equipBonus: { attack: 8, defense: 4 } },
   { emoji: '🧿', name: 'Void Orb',         description: 'Accessory: +9 EVA, +3 SPD. Perceivable only as absence.',             isEquipment: true, equipSlots: ['accessory'],            equipBonus: { evasion: 9, speed: 3 } },
 ];
+
+for (const piece of [...EQUIPMENT_DROPS_T1, ...EQUIPMENT_DROPS_T2, ...EQUIPMENT_DROPS_T3]) {
+  if (piece.equipBonus) piece.description = rewriteGearDescription(piece.description, piece.equipBonus);
+}
 
 // Combined pool for any direct array access
 export const EQUIPMENT_DROPS = [...EQUIPMENT_DROPS_T1, ...EQUIPMENT_DROPS_T2, ...EQUIPMENT_DROPS_T3];

@@ -7,8 +7,8 @@ describe('soul catalog copy skips gear that shares an emoji', () => {
       emoji: '🎯', name: 'Precision Bow', isEquipment: true,
       description: '+2 ATK, +3 LCK · Bag: true aim',
     };
-    expect(soulHelpText(bow).description).toBe('Ranger main hand: +3 ATK, +3 LCK. Better crits at range.');
-    expect(applySoulCatalogCopy(bow).description).toBe('Ranger main hand: +3 ATK, +3 LCK. Better crits at range.');
+    expect(soulHelpText(bow).description).toBe('Ranger main hand: +6% ATK, +3% crit dmg. Better crits at range.');
+    expect(applySoulCatalogCopy(bow).description).toBe('Ranger main hand: +6% ATK, +3% crit dmg. Better crits at range.');
     expect(soulHelpText({ emoji: '🎯', description: 'old', bagPassive: { description: 'old' } }).description)
       .toContain('Bag: true aim');
   });
@@ -21,7 +21,7 @@ describe('soul catalog copy skips gear that shares an emoji', () => {
       };
       const text = soulHelpText(blade).description;
       expect(text).not.toContain('ninja combo');
-      expect(text).toContain(name === 'Assassin Blade' ? '+4 ATK, +1 SPD' : 'Ninja main/off-hand');
+      expect(text).toContain(name === 'Assassin Blade' ? '+8% ATK, +1 SPD' : 'Ninja main/off-hand');
       expect(applySoulCatalogCopy(blade).description).toBe(text);
     }
     expect(soulHelpText({ emoji: '🗡️', description: 'old' }).description).toContain('ninja combo');
