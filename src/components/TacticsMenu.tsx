@@ -1,7 +1,8 @@
 import { GameState, Player } from '../game/types';
 import { applyEquipmentAndPassives } from '../game/inventory';
 import { blinkStrikeDamagePhrase, blinkStrikeHudTitle, blinkTalentById, blinkTalentProgress, knownBlinkTalents, overkillStatusPhrase } from '../game/blinkStrike';
-import { genieBloodcastEnabled, genieOverchannelEnabled, genieSafeFireballEnabled, isArcaneCaster, isFencer, isHitman, isRoyalGuard, type GenieCastToggle } from '../game/prestige';
+import { GENIE_METEOR_MP } from '../game/prestigeConstants';
+import { genieBloodcastEnabled, genieSafeFireballEnabled, isArcaneCaster, isFencer, isHitman, isRoyalGuard, type GenieCastToggle } from '../game/prestige';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -29,6 +30,7 @@ interface TacticsMenuProps {
   handleExecuteContract: () => void;
   handleGuardianStance: () => void;
   onToggleGenieCast: (which: GenieCastToggle) => void;
+  onArmMeteor: () => void;
   onOpenBlinkShop?: () => void;
   onClose: () => void;
 }
@@ -36,7 +38,7 @@ interface TacticsMenuProps {
 export function TacticsMenu({
   player, gameState, wizardTactics, blinkTurn, trailblazeTurn, yeehawTurn,
   autoStealth, rangerMode, applyWizardMode, enterBlinkTargetMode, applyNinjaMode,
-  toggleAutoStealth,   applyRangerMode, handleCowboyTactics, handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance, onToggleGenieCast, onOpenBlinkShop, onClose,
+  toggleAutoStealth,   applyRangerMode, handleCowboyTactics, handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance, onToggleGenieCast, onArmMeteor, onOpenBlinkShop, onClose,
 }: TacticsMenuProps) {
   const hand = useMobileHand();
   const dismiss = useDismissGuard(onClose);
@@ -98,9 +100,28 @@ export function TacticsMenu({
             })()}
             {player.characterClass === '🧞‍♀️' && (
               <div className="space-y-1.5 pt-2 mt-2 border-t border-border/50">
+                <button
+                  type="button"
+                  data-testid="genie-meteor-arm"
+                  className="min-h-11 w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors hover:bg-orange-500/20"
+                  onPointerDown={e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onArmMeteor();
+                  }}
+                  onClick={e => {
+                    if (e.detail !== 0) return;
+                    onArmMeteor();
+                  }}
+                >
+                  <span className="font-mono text-muted-foreground w-4 shrink-0">6</span>
+                  <span className="flex flex-col leading-tight">
+                    <span>☄️ Meteor</span>
+                    <span className="text-[10px] font-normal text-muted-foreground">{GENIE_METEOR_MP} MP · 3×3 next turn · 250%</span>
+                  </span>
+                </button>
                 {([
                   { n: 5, which: 'bloodcast' as const, label: '🩸 Bloodcast', on: genieBloodcastEnabled(player), hint: 'HP for missing MP' },
-                  { n: 6, which: 'overchannel' as const, label: '🔥 Overchannel', on: genieOverchannelEnabled(player), hint: '3 MP · 150%' },
                   { n: 7, which: 'safe' as const, label: '🛡️ Safe fireballs', on: genieSafeFireballEnabled(player), hint: 'Hold fire in the 3×3' },
                 ]).map(({ n, which, label, on, hint }) => (
                   <button
@@ -292,7 +313,7 @@ export function TacticsMenu({
 
         <CloseHintButton onClose={dismiss}>
           {player.characterClass === '🧞‍♀️'
-            ? '5 Bloodcast · 6 Overchannel · 7 Safe · ESC or T to close'
+            ? '5 Bloodcast · 6 Meteor · 7 Safe · M arms Meteor · ESC or T to close'
             : 'press number to select · ESC or T to close'}
         </CloseHintButton>
       </div>

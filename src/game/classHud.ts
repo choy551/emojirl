@@ -1,6 +1,6 @@
 import type { Player } from './types';
-import { GENIE_BLOODCAST_HP_PER_MP, HITMAN_CONTRACT_KILLS } from './prestigeConstants';
-import { fencerStatusBadges, genieBloodcastEnabled, genieOverchannelEnabled } from './prestige';
+import { GENIE_BLOODCAST_HP_PER_MP, GENIE_METEOR_MP, HITMAN_CONTRACT_KILLS } from './prestigeConstants';
+import { fencerStatusBadges, genieBloodcastEnabled } from './prestige';
 import { occupiedGhosts } from './voidDamage';
 import { voidRangedHpCost } from './voidAttackCost';
 import { stillDamageMult, weaponRange } from './sharpshooter';
@@ -43,12 +43,11 @@ export function classHudBadges(input: ClassHudInput): ClassBadge[] {
 
   if (cls === '🧞‍♀️') {
     const blood = genieBloodcastEnabled(player);
-    const over = genieOverchannelEnabled(player);
     return [
-      badge('overchannel', over ? 'OC' : 'oc', over ? 'Overchannel is on.' : 'Overchannel is off.', !over),
+      badge('meteor', '☄️', `Meteor costs ${GENIE_METEOR_MP} MP. A 3×3 falls at the end of the next turn for 250% damage. Bloodcast cannot pay for it.`, false),
       badge('bloodcast', blood ? 'BC' : 'bc', blood
-        ? `Bloodcast is on. ${GENIE_BLOODCAST_HP_PER_MP} HP per missing MP.`
-        : 'Bloodcast is off. Casts that MP does not cover are refused.', !blood),
+        ? `Bloodcast is on. ${GENIE_BLOODCAST_HP_PER_MP} HP per missing MP. It cannot pay for Meteor.`
+        : 'Bloodcast is off. Casts that MP does not cover are refused. It starts off and cannot pay for Meteor.', !blood),
     ];
   }
 

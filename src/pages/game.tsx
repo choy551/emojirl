@@ -33,6 +33,7 @@ import { classFlies, isArcaneCaster, isFencer, isGenie, isHitman, isRoyalGuard, 
 import { ClassHudBadges } from '../components/ClassHudBadges';
 import { chooseGuardShot, guardHasRangedWeapon, hotbarCrown, initialRangerMode, splitPooledGuardAmmo } from '../game/royalGuard';
 import { GENIE_BASE_MP } from '../game/prestigeConstants';
+import { meteorArea } from '../game/meteor';
 import { saveScore, leaderboardEntryFromRun } from '../game/leaderboard';
 import {
   CHEAT_CONFIRM_TEXT,
@@ -209,6 +210,10 @@ export default function Game() {
   const blinkTargetModeRef = useRef(false);
   const [dirPickMode, setDirPickMode] = useState<'gun' | 'freeze' | 'boomerang' | 'bomb' | 'pickaxe' | null>(null);
   const dirPickModeRef = useRef<'gun' | 'freeze' | 'boomerang' | 'bomb' | 'pickaxe' | null>(null);
+  const [meteorAim, setMeteorAim] = useState(false);
+  const meteorAimRef = useRef(false);
+  const [meteorPreview, setMeteorPreview] = useState<Position | null>(null);
+  const meteorPreviewRef = useRef<Position | null>(null);
   const [explosionTiles, setExplosionTiles] = useState<Set<string>>(new Set());
   const explosionClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [beamTiles, setBeamTiles] = useState<Map<string, string>>(new Map());
@@ -217,6 +222,8 @@ export default function Game() {
   const scoreSaved = useRef(false);
   const [, navigate] = useLocation();
   const isMobile = useIsMobile();
+  const isMobileRef = useRef(isMobile);
+  useEffect(() => { isMobileRef.current = isMobile; }, [isMobile]);
   const { settings: controlSettings, setSetting: setControlSetting, toggleSetting: toggleControlSetting } = useControlSettings();
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
@@ -429,6 +436,7 @@ export default function Game() {
       { id: 'vanity', isOpen: () => vanityOpen, close: () => setVanityOpen(false) },
       { id: 'auction', isOpen: () => auctionOpen, close: () => setAuctionOpen(false) },
       { id: 'hollow', isOpen: () => hollowOpen, close: () => setHollowOpen(false) },
+      { id: 'meteor', isOpen: () => meteorAimRef.current, close: () => { meteorAimRef.current = false; meteorPreviewRef.current = null; setMeteorAim(false); setMeteorPreview(null); } },
       { id: 'dir-pick', isOpen: () => dirPickModeRef.current !== null, close: () => { dirPickModeRef.current = null; setDirPickMode(null); } },
       { id: 'unmake', isOpen: () => unmakeTargetModeRef.current, close: () => { unmakeTargetModeRef.current = false; setUnmakeTargetMode(false); } },
       { id: 'blink', isOpen: () => blinkTargetModeRef.current, close: () => { setBlinkTargetMode(false); blinkTargetModeRef.current = false; } },
@@ -848,7 +856,7 @@ export default function Game() {
       ghostHotbar: voidLoad?.ghostHotbar,
       ghostBank: voidLoad?.ghostBank,
       voidBossesCleared: 0,
-      ...(isGenie(vessel) ? { genieBloodcast: true, genieOverchannel: true, genieSafeFireball: false } : {}),
+      ...(isGenie(vessel) ? { genieBloodcast: false, genieOverchannel: false, genieSafeFireball: false } : {}),
     };
     if (isRoyalGuard(vessel)) {
       const crowned = addToPlayerBag(initialPlayer, hotbarCrown());
@@ -939,6 +947,7 @@ export default function Game() {
     handleConsumeBankItem,
     handleEquip,
     handleUnequip,
+    handleCommitMeteor,
   } = useGameActions(
     {
       gameStateRef,
@@ -1000,6 +1009,47 @@ export default function Game() {
       return { ...prev, player: toggleGenieCast(prev.player, which) };
     });
   }, []);
+
+  const cancelMeteorAim = useCallback((logIt = false) => {
+    meteorAimRef.current = false;
+    meteorPreviewRef.current = null;
+    setMeteorAim(false);
+    setMeteorPreview(null);
+    if (logIt) addLog('☄️ Meteor cancelled.');
+  }, [addLog]);
+
+  const armMeteor = useCallback(() => {
+    const gs = gameStateRef.current;
+    if (!gs || gs.gameOver || gs.player.characterClass !== '🧞‍♀️') return;
+    if (gs.pendingMeteor && gs.turn < gs.pendingMeteor.landTurn) {
+      addLog('☄️ A meteor is already falling.');
+      return;
+    }
+    meteorAimRef.current = true;
+    meteorPreviewRef.current = null;
+    setMeteorAim(true);
+    setMeteorPreview(null);
+    setTacticsMenuOpen(false);
+    addLog(isMobileRef.current
+      ? '☄️ Meteor — tap a tile, then confirm. Esc cancels.'
+      : '☄️ Meteor — click a tile. Esc cancels.');
+  }, [addLog]);
+
+  const confirmMeteorAim = useCallback((x: number, y: number) => {
+    meteorAimRef.current = false;
+    meteorPreviewRef.current = null;
+    setMeteorAim(false);
+    setMeteorPreview(null);
+    setAutoExplore(false);
+    setAutoRest(false);
+    handleCommitMeteor(x, y);
+  }, [handleCommitMeteor]);
+  const confirmMeteorRef = useRef(confirmMeteorAim);
+  useEffect(() => { confirmMeteorRef.current = confirmMeteorAim; }, [confirmMeteorAim]);
+  const armMeteorRef = useRef(armMeteor);
+  useEffect(() => { armMeteorRef.current = armMeteor; }, [armMeteor]);
+  const cancelMeteorRef = useRef(cancelMeteorAim);
+  useEffect(() => { cancelMeteorRef.current = cancelMeteorAim; }, [cancelMeteorAim]);
 
   const toggleHotbarLockOption = useCallback(() => {
     setGameState(prev => {
@@ -1476,6 +1526,15 @@ export default function Game() {
     const { player, enemies } = state;
     const dx = mapX - player.pos.x;
     const dy = mapY - player.pos.y;
+    if (meteorAimRef.current) {
+      if (isMobile) {
+        meteorPreviewRef.current = { x: mapX, y: mapY };
+        setMeteorPreview({ x: mapX, y: mapY });
+        return;
+      }
+      confirmMeteorRef.current(mapX, mapY);
+      return;
+    }
     if (unmakeTargetModeRef.current) {
       setAutoExplore(false);
       setAutoRest(false);
@@ -1517,7 +1576,7 @@ export default function Game() {
       return;
     }
     setTravelTarget({ x: mapX, y: mapY });
-  }, [handleMove, handleWait, handleFireProjectile, castUnmakeAt]);
+  }, [handleMove, handleWait, handleFireProjectile, castUnmakeAt, isMobile]);
 
   // Dispatch the resolved context-sensitive action (HL-style "use" button).
   // Mobile idle fallback is Auto-Explore; keyboard Space still waits (Z / d-pad center also wait).
@@ -1934,8 +1993,12 @@ export default function Game() {
         if (!mState || mState.gameOver) { setTacticsMenuOpen(false); return; }
         const tCls = mState.player.characterClass;
         if (tCls === '🧙' || tCls === '🧞‍♀️') {
-          if (tCls === '🧞‍♀️' && (e.key === '5' || e.key === '6' || e.key === '7')) {
-            toggleGenieCastOption(e.key === '5' ? 'bloodcast' : e.key === '6' ? 'overchannel' : 'safe');
+          if (tCls === '🧞‍♀️' && e.key === '6') {
+            armMeteorRef.current();
+            return;
+          }
+          if (tCls === '🧞‍♀️' && (e.key === '5' || e.key === '7')) {
+            toggleGenieCastOption(e.key === '5' ? 'bloodcast' : 'safe');
             return;
           }
           const WM = ['nearest', 'furthest', 'manual', 'holdfire'] as const;
@@ -2050,6 +2113,11 @@ export default function Game() {
       // Dismiss inspect / cancel direction-pick / close log / open pause menu: Escape
       if (e.key === 'Escape') {
         e.preventDefault();
+        if (meteorAimRef.current) {
+          e.preventDefault();
+          cancelMeteorRef.current(true);
+          return;
+        }
         if (dirPickModeRef.current) {
           dirPickModeRef.current = null;
           setDirPickMode(null);
@@ -2101,6 +2169,19 @@ export default function Game() {
           addLog('👤 Unmake cancelled.');
           return;
         }
+      }
+
+      if ((e.key === 'm' || e.key === 'M') && !dirPickModeRef.current && !unmakeTargetModeRef.current && gameStateRef.current?.player.characterClass === '🧞‍♀️') {
+        e.preventDefault();
+        if (meteorAimRef.current) cancelMeteorRef.current(true);
+        else armMeteorRef.current();
+        return;
+      }
+      if (meteorAimRef.current && isMobileRef.current && meteorPreviewRef.current && (e.key === 'Enter' || e.code === 'NumpadEnter')) {
+        e.preventDefault();
+        const picked = meteorPreviewRef.current;
+        confirmMeteorRef.current(picked.x, picked.y);
+        return;
       }
 
       // ── Direction-pick mode: intercept movement keys ──────────────────────
@@ -2420,6 +2501,7 @@ export default function Game() {
     handleExecuteContract,
     handleGuardianStance,
     toggleGenieCast: toggleGenieCastOption,
+    armMeteor,
   });
   const mobileGeneralActions: ActionItem[] = [
     { id: 'heal', icon: '❤️', label: 'Heal', onUse: handleUseHeal },
@@ -2472,6 +2554,15 @@ export default function Game() {
     for (let n = 1; n < _wsteps; n++) {
       wizardBoltPathKeys.add(`${Math.round(player.pos.x + (_wdx * n) / _wsteps)},${Math.round(player.pos.y + (_wdy * n) / _wsteps)}`);
     }
+  }
+
+  const meteorMarks = new Set<string>();
+  if (gameState.pendingMeteor) {
+    for (const tile of meteorArea(gameState.pendingMeteor)) meteorMarks.add(`${tile.x},${tile.y}`);
+  }
+  const meteorPreviewMarks = new Set<string>();
+  if (meteorPreview) {
+    for (const tile of meteorArea(meteorPreview)) meteorPreviewMarks.add(`${tile.x},${tile.y}`);
   }
 
   const rangerTargetKeys = new Set<string>();
@@ -2747,6 +2838,19 @@ export default function Game() {
                 />
               )}
               {/* Beam flash — wizard bolt / ranger arrow trail after firing */}
+              {(meteorMarks.has(`${mapX},${mapY}`) || meteorPreviewMarks.has(`${mapX},${mapY}`)) && (
+                <span
+                  data-testid={meteorMarks.has(`${mapX},${mapY}`) ? 'meteor-mark' : 'meteor-preview'}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: meteorMarks.has(`${mapX},${mapY}`) ? 'rgba(251,146,60,0.38)' : 'rgba(253,186,116,0.28)',
+                    boxShadow: 'inset 0 0 0 2px rgba(251,146,60,0.95)',
+                    pointerEvents: 'none',
+                    zIndex: 6,
+                  }}
+                />
+              )}
               {beamTiles.has(`${mapX},${mapY}`) && (
                 <span
                   style={{
@@ -3822,6 +3926,34 @@ export default function Game() {
             Unmake — click a tile or enemy in line of sight · Esc to cancel
           </div>
         )}
+        {meteorAim && (
+          <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-xl border border-orange-400/80 bg-orange-950/95 px-4 py-2 text-sm font-bold text-orange-100 shadow-lg">
+            <span className="text-xl">☄️</span>
+            {meteorPreview
+              ? 'Meteor — confirm this 3×3. It falls next turn.'
+              : isMobile
+                ? 'Meteor — tap a tile, then confirm. Esc cancels.'
+                : 'Meteor — click a tile. Esc cancels.'}
+            {meteorPreview && (
+              <>
+                <button
+                  type="button"
+                  className="pointer-events-auto rounded-md bg-orange-500 px-2 py-1 text-xs text-white"
+                  onClick={() => confirmMeteorAim(meteorPreview.x, meteorPreview.y)}
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  className="pointer-events-auto rounded-md bg-zinc-700 px-2 py-1 text-xs text-zinc-100"
+                  onClick={() => cancelMeteorAim(true)}
+                >
+                  Cancel
+                </button>
+              </>
+            )}
+          </div>
+        )}
         {dirPickMode && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-xl bg-yellow-950/95 border border-yellow-500/80 text-yellow-200 text-sm font-bold shadow-lg animate-pulse pointer-events-none select-none flex items-center gap-2">
             <span className="text-xl">{dirPickMode === 'gun' ? '🔫' : dirPickMode === 'freeze' ? '❄️' : dirPickMode === 'pickaxe' ? '⛏️' : '🪃'}</span>
@@ -4065,6 +4197,7 @@ export default function Game() {
           handleExecuteContract={handleExecuteContract}
           handleGuardianStance={handleGuardianStance}
           onToggleGenieCast={toggleGenieCastOption}
+          onArmMeteor={armMeteor}
           onOpenBlinkShop={() => setBlinkShopOpen(true)}
           onClose={() => setTacticsMenuOpen(false)}
         />

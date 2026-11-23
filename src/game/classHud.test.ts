@@ -26,9 +26,10 @@ describe('class hud badges', () => {
     expect(ninja[0]?.label).toBe('👻45');
     expect(ninja[1]?.dim).toBe(false);
 
-    const genie = classHudBadges({ player: hero('🧞‍♀️', { genieOverchannel: false }) });
-    expect(genie.find(b => b.id === 'overchannel')?.dim).toBe(true);
-    expect(genie.find(b => b.id === 'bloodcast')?.title).toContain('2 HP');
+    const genie = classHudBadges({ player: hero('🧞‍♀️') });
+    expect(genie.find(b => b.id === 'meteor')?.title).toContain('4 MP');
+    expect(genie.find(b => b.id === 'bloodcast')?.dim).toBe(true);
+    expect(genie.find(b => b.id === 'bloodcast')?.title).toContain('starts off');
 
     const hitman = classHudBadges({
       player: hero('🕴️', {

@@ -1,4 +1,5 @@
 import type { Enemy, Equipment, Player, Position } from './types';
+import { genieKillMp } from './genieMana';
 import { goldWithLuck } from './softCap';
 import { DUAL_PISTOL_RANGE, executeDamageMult, equippedGuns, isLongGun, stillDamageMult, weaponRange } from './sharpshooter';
 import {
@@ -22,10 +23,6 @@ import {
   GENIE_BLOODCAST_HP_PER_MP,
   GENIE_BLOODCAST_MIN_HP_FRACTION,
   GENIE_FIREBALL_MP,
-  GENIE_OVERCHANNEL_EXTRA_MP,
-  GENIE_OVERCHANNEL_LEVEL,
-  GENIE_OVERCHANNEL_MULT,
-  GENIE_TRANSMUTE_MP,
   GUARDIAN_INCOMING_MULT,
   GUARDIAN_STANCE_CD,
   GUARDIAN_STANCE_DEF,
@@ -264,8 +261,8 @@ export interface CastPayment {
   mpSpent: number;
   hpSpent: number;
   damageMult: number;
-  /** overchannel | bloodcast | fireball | none. Overchannel may also spend HP. */
-  kind: 'overchannel' | 'bloodcast' | 'fireball' | 'none';
+  /** bloodcast | fireball | none. Bloodcast never pays for Meteor. */
+  kind: 'bloodcast' | 'fireball' | 'none';
   /** Set when a bloodcast was refused. The fireball resolver logs it. */
   blockReason?: string;
 }
@@ -285,13 +282,9 @@ export function bloodcastHpAllowed(hp: number, maxHp: number): boolean {
   return hp / maxHp >= GENIE_BLOODCAST_MIN_HP_FRACTION;
 }
 
-/** Missing flags stay on. Older saves and new runs both start with both enabled. */
+/** Missing means off. New runs start with Bloodcast off. A saved true stays on. */
 export function genieBloodcastEnabled(player: Pick<Player, 'genieBloodcast'>): boolean {
-  return player.genieBloodcast !== false;
-}
-
-export function genieOverchannelEnabled(player: Pick<Player, 'genieOverchannel'>): boolean {
-  return player.genieOverchannel !== false;
+  return player.genieBloodcast === true;
 }
 
 /** Missing means off. Older saves keep the reckless fireball. */
@@ -299,11 +292,10 @@ export function genieSafeFireballEnabled(player: Pick<Player, 'genieSafeFireball
   return player.genieSafeFireball === true;
 }
 
-export type GenieCastToggle = 'bloodcast' | 'overchannel' | 'safe';
+export type GenieCastToggle = 'bloodcast' | 'safe';
 
 export function toggleGenieCast(player: Player, which: GenieCastToggle): Player {
   if (which === 'bloodcast') return { ...player, genieBloodcast: !genieBloodcastEnabled(player) };
-  if (which === 'overchannel') return { ...player, genieOverchannel: !genieOverchannelEnabled(player) };
   return { ...player, genieSafeFireball: !genieSafeFireballEnabled(player) };
 }
 
@@ -314,58 +306,32 @@ export function bloodcastOffLog(): string {
 export function planGenieCast(player: Player): CastPayment {
   const mp = player.stats.mana ?? 0;
   const hp = player.stats.hp;
-  const level = player.stats.level;
   const none: CastPayment = { canCast: false, mpSpent: 0, hpSpent: 0, damageMult: 1, kind: 'none' };
-  const overSpell = GENIE_FIREBALL_MP + GENIE_OVERCHANNEL_EXTRA_MP;
-  const baseSpell = GENIE_FIREBALL_MP;
-  const overOn = genieOverchannelEnabled(player) && level >= GENIE_OVERCHANNEL_LEVEL;
-  if (overOn && mp >= overSpell) {
-    return {
-      canCast: true,
-      mpSpent: overSpell,
-      hpSpent: 0,
-      damageMult: GENIE_OVERCHANNEL_MULT,
-      kind: 'overchannel',
-    };
-  }
-  if (mp >= baseSpell) {
-    return { canCast: true, mpSpent: baseSpell, hpSpent: 0, damageMult: 1, kind: 'fireball' };
+  if (mp >= GENIE_FIREBALL_MP) {
+    return { canCast: true, mpSpent: GENIE_FIREBALL_MP, hpSpent: 0, damageMult: 1, kind: 'fireball' };
   }
   if (!genieBloodcastEnabled(player)) {
     return { ...none, blockReason: bloodcastOffLog() };
   }
-  if (level < GENIE_OVERCHANNEL_LEVEL) return none;
-
   if (!bloodcastHpAllowed(hp, player.stats.maxHp)) {
     return {
       ...none,
       blockReason: `🧞‍♀️ Bloodcast unavailable — HP is below ${Math.round(GENIE_BLOODCAST_MIN_HP_FRACTION * 100)}%.`,
     };
   }
-
-  const attempts: { spell: number; mult: number; kind: CastPayment['kind'] }[] = overOn
-    ? [
-        { spell: overSpell, mult: GENIE_OVERCHANNEL_MULT, kind: 'overchannel' },
-        { spell: baseSpell, mult: 1, kind: 'bloodcast' },
-      ]
-    : [{ spell: baseSpell, mult: 1, kind: 'bloodcast' }];
-  let lethalCost = 0;
-  for (const attempt of attempts) {
-    const hpSpent = bloodcastHpCost(attempt.spell, mp);
-    if (hp - hpSpent > 0) {
-      return {
-        canCast: true,
-        mpSpent: Math.max(0, mp),
-        hpSpent,
-        damageMult: attempt.mult,
-        kind: attempt.kind,
-      };
-    }
-    lethalCost = hpSpent;
+  const hpSpent = bloodcastHpCost(GENIE_FIREBALL_MP, mp);
+  if (hp - hpSpent > 0) {
+    return {
+      canCast: true,
+      mpSpent: Math.max(0, mp),
+      hpSpent,
+      damageMult: 1,
+      kind: 'bloodcast',
+    };
   }
   return {
     ...none,
-    blockReason: `🧞‍♀️ Bloodcast stopped — ${lethalCost} HP would drop you to 0.`,
+    blockReason: `🧞‍♀️ Bloodcast stopped — ${hpSpent} HP would drop you to 0.`,
   };
 }
 
@@ -420,13 +386,18 @@ export function startFloorContract(player: Player): { player: Player; log: strin
   };
 }
 
-export function notePrestigeKill(player: Player, floor: number, rawLuck = player.stats.luck): { player: Player; logs: string[] } {
+export function notePrestigeKill(
+  player: Player,
+  floor: number,
+  rawLuck = player.stats.luck,
+  victim?: { isBoss?: boolean; godBlessed?: boolean },
+): { player: Player; logs: string[] } {
   const logs: string[] = [];
   let next = player;
   if (next.characterClass === GENIE) {
     const maxMana = next.stats.maxMana ?? GENIE_BASE_MP;
     const prev = next.stats.mana ?? 0;
-    const gain = Math.min(GENIE_TRANSMUTE_MP, Math.max(0, maxMana - prev));
+    const gain = Math.min(genieKillMp(victim), Math.max(0, maxMana - prev));
     if (gain > 0) {
       next = { ...next, stats: { ...next.stats, mana: prev + gain } };
       logs.push(`🧞‍♀️ Transmute — +${gain} MP (${prev + gain}/${maxMana})`);

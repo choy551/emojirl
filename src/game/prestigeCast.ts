@@ -121,7 +121,7 @@ function genieMeleeVolley(
   if (result.enemyDied) {
     markEnemyKilled(target.emoji);
     killCountAdds.push(target.emoji);
-    const paid = notePrestigeKill(player, args.floor, playerSoftCap(player).raw.luck);
+    const paid = notePrestigeKill(player, args.floor, playerSoftCap(player).raw.luck, target);
     player = paid.player;
     paid.logs.forEach(args.addLog);
     const xpGain = starXpGain(target.isBoss ? 25 : 5, player.stats.xpBoostTurns);
@@ -163,7 +163,7 @@ function genieMeleeVolley(
 /**
  * Genie Fireball: 2 MP, 3×3 around the aimed hostile. Splash is 25% of the blast
  * and lands only when the caster's tile is inside that 3×3.
- * Overchannel spends 1 extra MP for more damage at LV5. Bloodcast pays 2 HP per missing MP only.
+ * Auto fireball spends 2 MP. Bloodcast pays 2 HP per missing MP only. Meteor is aimed by hand.
  */
 export function resolveGenieFireball(args: {
   player: Player;
@@ -219,7 +219,6 @@ export function resolveGenieFireball(args: {
     args.addLog(`🧞‍♀️ Bloodcast — ${pay.hpSpent} HP for the missing mana.`);
     floats.push({ id: `blood-${args.turn}`, pos: { ...player.pos }, text: `-${pay.hpSpent}`, color: '#ef4444', life: 2 });
   }
-  if (pay.kind === 'overchannel') args.addLog(`🧞‍♀️ Overchannel — fireball surges.`);
   args.addLog(splash > 0
     ? `🧞‍♀️ Fireball! ${blast} damage in a 3×3. Splash ${splash}.`
     : `🧞‍♀️ Fireball! ${blast} damage in a 3×3.`);
@@ -248,7 +247,7 @@ export function resolveGenieFireball(args: {
   for (const dead of doomed) {
     markEnemyKilled(dead.emoji);
     killCountAdds.push(dead.emoji);
-    const paid = notePrestigeKill(player, args.floor, playerSoftCap(player).raw.luck);
+    const paid = notePrestigeKill(player, args.floor, playerSoftCap(player).raw.luck, dead);
     player = paid.player;
     paid.logs.forEach(args.addLog);
     const xpGain = starXpGain(dead.isBoss ? 25 : 5, player.stats.xpBoostTurns);

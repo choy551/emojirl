@@ -80,7 +80,7 @@ export function applyLungeStrike(input: {
     stats: { ...player.stats, moodValue: Math.min(moodMax(player.characterClass), player.stats.moodValue + 10) },
   };
   logs.push(`🤺 Lunge kills ${target.emoji} ${target.name}!`);
-  const paid = notePrestigeKill(player, input.floor, playerSoftCap(player).raw.luck);
+  const paid = notePrestigeKill(player, input.floor, playerSoftCap(player).raw.luck, target);
   player = paid.player;
   logs.push(...paid.logs);
   enemies.splice(idx, 1);

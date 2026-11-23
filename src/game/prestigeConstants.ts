@@ -44,14 +44,20 @@ export const GENIE_BASE_MP = 6;
 export const GENIE_FIREBALL_MP = 2;
 export const GENIE_FIREBALL_RADIUS = 1;
 export const GENIE_SELF_SPLASH = 0.25;
-export const GENIE_OVERCHANNEL_LEVEL = 5;
-export const GENIE_OVERCHANNEL_EXTRA_MP = 1;
-export const GENIE_OVERCHANNEL_MULT = 1.5;
-/** HP paid per MP the spell still needs. Attack does not change this. */
+/** Hand-aimed 3×3. Lands at the end of the next turn. */
+export const GENIE_METEOR_MP = 4;
+export const GENIE_METEOR_MULT = 2.5;
+export const GENIE_METEOR_RADIUS = 1;
+/** HP paid per MP the spell still needs. Attack does not change this. Meteor cannot be paid this way. */
 export const GENIE_BLOODCAST_HP_PER_MP = 2;
 /** Bloodcast is refused while current HP is under this fraction of max HP. */
 export const GENIE_BLOODCAST_MIN_HP_FRACTION = 0.25;
-export const GENIE_TRANSMUTE_MP = 2;
+/** Kill mana. A blessed foe is an elite. A boss outranks that. */
+export const GENIE_KILL_MP = 2;
+export const GENIE_ELITE_MP = 4;
+export const GENIE_BOSS_MP = 8;
+export const GENIE_DRINK_MP = 4;
+export const GENIE_TRANSMUTE_MP = GENIE_KILL_MP;
 
 // ── Levitating Hitman (ranged, 3 passives + Execute Contract) ───────────────
 export const HITMAN_CONTRACT_KILLS = 4;

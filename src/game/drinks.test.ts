@@ -155,7 +155,7 @@ describe('applyDrinkToPlayer', () => {
     expect(genie.ok).toBe(true);
     if (!genie.ok) return;
     expect(genie.player.stats.hp).toBe(6);
-    expect(genie.player.stats.mana).toBe(1 + DRINK_TIER_MP[1]);
+    expect(genie.player.stats.mana).toBe(1 + 4);
     expect(genie.player.drinkBuff).toBeUndefined();
     const genieFull = applyDrinkToPlayer(player({ characterClass: '🧞‍♀️' }, { hp: 6, mana: 6, maxMana: 6 }), drink(2));
     expect(genieFull.ok).toBe(false);

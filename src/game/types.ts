@@ -267,8 +267,8 @@ export interface Player {
   /** Cosmetic trail and title. No combat stats. */
   vanity?: VanityLoadout;
   /**
-   * Genie tactics. Missing means on, so older saves keep Bloodcast and Overchannel.
-   * False turns that option off for the rest of the run.
+   * Genie Bloodcast. Missing means off. An explicit true from an older save stays on.
+   * genieOverchannel is unused. Meteor replaced it. Old saves still load the flag.
    */
   genieBloodcast?: boolean;
   genieOverchannel?: boolean;
@@ -556,6 +556,8 @@ export interface GameState {
    * Missing or false keeps the run eligible for the high score log.
    */
   scoreInvalid?: boolean;
+  /** Genie Meteor mark. It lands when `turn` reaches `landTurn`. */
+  pendingMeteor?: { x: number; y: number; landTurn: number };
 }
 
 export interface BossrushState {
