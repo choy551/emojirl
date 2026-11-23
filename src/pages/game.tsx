@@ -4199,17 +4199,6 @@ export default function Game() {
           onToggleGenieCast={toggleGenieCastOption}
           onArmMeteor={armMeteor}
           onOpenBlinkShop={() => setBlinkShopOpen(true)}
-          onToggleAutoMine={() => {
-            setGameState(prev => {
-              if (!prev) return prev;
-              const autoMine = !prev.player.autoMine;
-              return {
-                ...prev,
-                player: { ...prev.player, autoMine },
-                logs: [{ id: `mine-${prev.turn}`, text: autoMine ? '⛏️ Auto-mine on. Bumping a wall digs it.' : '⛏️ Auto-mine off.', turn: prev.turn }, ...prev.logs].slice(0, 24),
-              };
-            });
-          }}
           onClose={() => setTacticsMenuOpen(false)}
         />
       )}

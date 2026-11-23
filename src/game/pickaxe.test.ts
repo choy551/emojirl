@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { generateMap } from './mapgen';
 import type { MapGrid, Tile } from './types';
-import { addPickaxeCharges, canMineWall, digCardinalLine, markProtectedWalls, monkeyPickaxeDrop, PICKAXE_CAP, PICKAXE_CLAMP, shouldAutoMine, stampLegacyProtectedWalls } from './pickaxe';
+import { addPickaxeCharges, canMineWall, digCardinalLine, markProtectedWalls, monkeyPickaxeDrop, PICKAXE_CAP, PICKAXE_CLAMP, PICKAXE_PROTECTED_LINE, shouldAutoMine, stampLegacyProtectedWalls } from './pickaxe';
+import { ACTIVE_DROPS } from './emojis';
 import { FINALE_FLOOR } from './finaleConstants';
 
 function grid(): MapGrid {
@@ -42,12 +43,15 @@ describe('pickaxe mining', () => {
     expect(stopped.map[2][3].type).toBe('wall');
   });
 
-  it('mines a bump only while Auto-mine is on', () => {
-    expect(shouldAutoMine(false, true, true)).toBe(false);
-    expect(shouldAutoMine(undefined, true, true)).toBe(false);
-    expect(shouldAutoMine(true, false, true)).toBe(false);
-    expect(shouldAutoMine(true, true, false)).toBe(false);
-    expect(shouldAutoMine(true, true, true)).toBe(true);
+  it('tells the player which walls cannot be mined', () => {
+    const pick = ACTIVE_DROPS.find(drop => drop.activeKind === 'pickaxe');
+    expect(pick?.description).toContain(PICKAXE_PROTECTED_LINE);
+  });
+
+  it('mines a bump whenever a charged pickaxe can break the wall', () => {
+    expect(shouldAutoMine(false, true)).toBe(false);
+    expect(shouldAutoMine(true, false)).toBe(false);
+    expect(shouldAutoMine(true, true)).toBe(true);
   });
 
   it('does not mine diagonally', () => {

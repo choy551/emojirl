@@ -32,14 +32,13 @@ interface TacticsMenuProps {
   onToggleGenieCast: (which: GenieCastToggle) => void;
   onArmMeteor: () => void;
   onOpenBlinkShop?: () => void;
-  onToggleAutoMine: () => void;
   onClose: () => void;
 }
 
 export function TacticsMenu({
   player, gameState, wizardTactics, blinkTurn, trailblazeTurn, yeehawTurn,
   autoStealth, rangerMode, applyWizardMode, enterBlinkTargetMode, applyNinjaMode,
-  toggleAutoStealth,   applyRangerMode, handleCowboyTactics, handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance, onToggleGenieCast, onArmMeteor, onOpenBlinkShop, onToggleAutoMine, onClose,
+  toggleAutoStealth,   applyRangerMode, handleCowboyTactics, handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance, onToggleGenieCast, onArmMeteor, onOpenBlinkShop, onClose,
 }: TacticsMenuProps) {
   const hand = useMobileHand();
   const dismiss = useDismissGuard(onClose);
@@ -311,17 +310,6 @@ export function TacticsMenu({
             </div>
           );
         })()}
-
-        {player.inventory.some(item => item.activeKind === 'pickaxe' && !item.consumed) && (
-          <button
-            type="button"
-            className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${player.autoMine ? 'bg-stone-500/20 text-stone-100 font-semibold' : 'hover:bg-secondary/60'}`}
-            onClick={() => { onToggleAutoMine(); onClose(); }}
-          >
-            ⛏️ Auto-mine — bump walls to dig
-            {player.autoMine && <span className="ml-auto text-stone-300">✓</span>}
-          </button>
-        )}
 
         <CloseHintButton onClose={dismiss}>
           {player.characterClass === '🧞‍♀️'

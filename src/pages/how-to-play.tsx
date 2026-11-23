@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, Lock } from "lucide-react";
 import { EMOJI_POWERS } from "../game/emojis";
+import { PICKAXE_PROTECTED_LINE } from "../game/pickaxe";
 import { RARITY_LABEL, RARITY_TEXT_CLASS, rarityOfItem } from "../game/dropTable";
 import { ENEMY_TYPES } from "../game/enemies";
 import { CHARACTER_CLASSES } from "../game/classes";
@@ -1072,6 +1073,9 @@ export default function HowToPlay({
         <div className="mt-3 text-xs text-muted-foreground space-y-3">
           <p>
             <strong className="text-foreground">🪢 Rope:</strong> Use rope 🪢 (from hotbar or tactics) to safely enter. This magical rope will transport you to a dimensional treasure vault that randomly intersects the current dungeon floor. Treasure vaults offer big rewards (risk of traps). Rope 🪢 can also be used as a quick &apos;teleport&apos;/&apos;get out of danger&apos; button, but beware of taking damage from traps if you&apos;re at low health!
+          </p>
+          <p>
+            <strong className="text-foreground">⛏️ Pickaxe:</strong> While a charged Pickaxe is in the hotbar, bumping a ⬛ wall digs it for 1 charge and spends the turn. Using it digs a straight cardinal line, one tile per charge. {PICKAXE_PROTECTED_LINE}
           </p>
           <p>
             Autoexplore stops at shops, restaurants, bars, and beds.

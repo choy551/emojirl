@@ -273,7 +273,6 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     genieSafeFireball: rawPlayer.genieSafeFireball === true,
     hotbarLocked: rawPlayer.hotbarLocked === true,
     autoConsumeBank: rawPlayer.autoConsumeBank === true,
-    autoMine: rawPlayer.autoMine === true,
   };
 
   // ── GameState ─────────────────────────────────────────────────────────────

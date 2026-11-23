@@ -286,8 +286,6 @@ export interface Player {
    * Active-use items and stacking copies below the hotbar cap are left alone.
    */
   autoConsumeBank?: boolean;
-  /** When true, bumping a wall with a hotbar Pickaxe mines it. Missing means off. */
-  autoMine?: boolean;
 }
 
 export type VanityTrailId = 'glitter' | 'petals' | 'prisms';

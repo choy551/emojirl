@@ -554,7 +554,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
       } else if (!PLAYER_PASSABLE_TILES.has(tile.type)) {
         const pick = findHotbarPickaxe(prev.player.inventory);
-        if (tile.type === 'wall' && shouldAutoMine(prev.player.autoMine, !!pick, canMineWall(prev.map, newPos.x, newPos.y)) && pick) {
+        if (tile.type === 'wall' && shouldAutoMine(!!pick, canMineWall(prev.map, newPos.x, newPos.y)) && pick) {
           const map = prev.map.map(row => row.map(cell => ({ ...cell })));
           map[newPos.y][newPos.x] = { ...map[newPos.y][newPos.x], type: 'floor', emoji: '⬜' };
           const left = (pick.charges ?? 0) - 1;
