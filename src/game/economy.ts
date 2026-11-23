@@ -1,6 +1,6 @@
 import { EmojiItem, MapGrid, Position } from './types';
 import { STRUCTURE_SELL_VALUE } from './cityBuildings';
-import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, cookFood, HEAL_DROPS, COOKABLE_EMOJIS } from './emojis';
+import { getRandomEmojiPower, getRandomHealDrop, getAmmoDrop, getBulletDrop, getRandomActiveDrop, getRandomEquipmentDrop, cookFood, HEAL_DROPS, COOKABLE_EMOJIS, ACTIVE_DROPS } from './emojis';
 import { DRINK_SHOP_CHANCE, DRINK_TIER_SELL, getRandomDrinkDrop } from './drinks';
 import { addToBag, addToBagCapped } from './inventory';
 import { usesArrows, usesBullets } from './prestige';
@@ -402,10 +402,8 @@ export function generateShopStock(floor: number, playerClass?: string): EmojiIte
   }
   const active = getRandomActiveDrop();
   stock.push({ ...active, id: `shop-active-${Math.random().toString(36).slice(2)}`, consumed: false });
-  stock.push({
-    emoji: '⛏️', name: 'Pickaxe', description: 'Dig walls. 5 charges.', consumed: false, activeKind: 'pickaxe', charges: 5,
-    id: `shop-pickaxe-${Math.random().toString(36).slice(2)}`,
-  });
+  const pickaxe = ACTIVE_DROPS.find(drop => drop.activeKind === 'pickaxe')!;
+  stock.push({ ...pickaxe, consumed: false, id: `shop-pickaxe-${Math.random().toString(36).slice(2)}` });
   const numHeals = 1 + (Math.random() < 0.4 ? 1 : 0);
   for (let i = 0; i < numHeals; i++) {
     const h = getRandomHealDrop();

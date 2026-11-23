@@ -14,9 +14,12 @@ export function addPickaxeCharges(current: number): number {
   return Math.min(PICKAXE_CLAMP, have + PICKAXE_START);
 }
 
-export function shouldAutoMine(autoMine: boolean | undefined, hasPickaxe: boolean, mineable: boolean): boolean {
-  return autoMine === true && hasPickaxe && mineable;
+/** A charged hotbar Pickaxe always mines a bump. There is no toggle. */
+export function shouldAutoMine(hasPickaxe: boolean, mineable: boolean): boolean {
+  return hasPickaxe && mineable;
 }
+
+export const PICKAXE_PROTECTED_LINE = 'Cannot mine protected walls: the map border, boss and vault walls, shop and market walls, and shrine and arena walls.';
 
 export function isPickaxe(item: EmojiItem | null | undefined): boolean {
   return !!item && !item.consumed && item.activeKind === 'pickaxe';
