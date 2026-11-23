@@ -293,7 +293,8 @@ describe('genie cast toggles', () => {
     expect(onHtml).toContain('min-h-11');
     expect(onHtml).toContain('>On<');
     expect(onHtml).toContain('>Off<');
-    expect(onHtml).toContain('5 Bloodcast · 6 Meteor · 7 Safe · M arms Meteor · ESC or T to close');
+    expect(onHtml).toContain('1 Meteor · 2 Bloodcast · 3 Safe · 4 Blink · 5 Nearest · 6 Furthest · 7 Manual · M arms Meteor · ESC or T to close');
+    expect(onHtml).toMatch(/w-4 shrink-0">1<\/span>[\s\S]*Meteor[\s\S]*w-4 shrink-0">2<\/span>[\s\S]*Bloodcast[\s\S]*w-4 shrink-0">3<\/span>[\s\S]*Safe[\s\S]*w-4 shrink-0">4<\/span>[\s\S]*Blink[\s\S]*w-4 shrink-0">5<\/span>[\s\S]*Nearest[\s\S]*w-4 shrink-0">6<\/span>[\s\S]*Furthest[\s\S]*w-4 shrink-0">7<\/span>[\s\S]*Manual/);
 
     const allOn = tacticsHtml(player({ characterClass: GENIE, genieBloodcast: true, genieSafeFireball: true }));
     expect(allOn).toContain('data-testid="genie-safe-toggle"');
@@ -333,6 +334,7 @@ describe('genie cast toggles', () => {
     })));
     expect(offAbilities.find(a => a.id === 'genie-bloodcast')?.detail).toBe('Off');
     expect(offAbilities.find(a => a.id === 'genie-meteor')?.label).toBe('Meteor');
+    expect(abilities.map(a => a.id)).toEqual(['genie-meteor', 'genie-bloodcast', 'genie-safe', 'genie-blink', 'genie-aim']);
     expect(getClassAbilities(abilityArgs(player({ characterClass: WIZARD }))).map(a => a.id)).toEqual(['wizard-blink', 'wizard-aim']);
 
     const hud = renderToStaticMarkup(createElement(AbilityButtons, { abilities, align: 'right' }));
@@ -360,8 +362,11 @@ describe('genie cast toggles', () => {
     expect(fireball).toContain('starts off');
     expect(fireball).not.toContain('even at range');
     const manual = readFileSync(new URL('../pages/how-to-play.tsx', import.meta.url), 'utf8');
-    expect(manual).toContain('5 toggles Bloodcast (starts off). 6 or M arms Meteor');
-    expect(manual).toContain('7 toggles Safe fireballs (starts off)');
+    expect(manual).toContain('1 or M arms Meteor');
+    expect(manual).toContain('2 toggles Bloodcast (starts off)');
+    expect(manual).toContain('3 toggles Safe fireballs (starts off)');
+    expect(manual).toContain('4 is Blink. 5 nearest / 6 furthest / 7 manual');
+    expect(detail).toContain('tactics key 1');
   });
 
   it('melees instead of splashing when Safe fireballs is on', () => {

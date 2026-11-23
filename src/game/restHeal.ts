@@ -1,3 +1,5 @@
+import { manaAfterQuietWait } from './genieMana';
+
 /** HP restored by one wait/rest turn before campfire, wave, and the low-HP multiplier. */
 export const WAIT_HEAL = 1;
 /** Extra HP on that turn while adjacent to a campfire or restaurant. Multiplied with the rest package. */
@@ -29,6 +31,34 @@ export function restHealAmount(opts: {
 }): number {
   const base = WAIT_HEAL + Math.max(0, Math.floor(opts.waveRegen ?? 0)) + (opts.campfire ? CAMPFIRE_REST_BONUS : 0);
   return base * restHealMultiplier(opts.hp, opts.maxHp);
+}
+
+export interface RestPool {
+  characterClass: string;
+  hp: number;
+  maxHp: number;
+  mana?: number;
+  maxMana?: number;
+}
+
+/**
+ * A quiet wait refills this pool. Wizard MP does. Genie MP does not, and neither
+ * do ammo, item charges, or any other stock that waiting leaves alone.
+ */
+export function quietWaitRestoresMana(characterClass: string, mana: number, maxMana: number): boolean {
+  return manaAfterQuietWait(characterClass, mana, maxMana) > mana;
+}
+
+/**
+ * Auto-rest and autoexplore stop when HP is full and every resource a quiet
+ * wait can restore is full. A companion bounty can keep auto-rest going.
+ */
+export function restUntilFullDone(pool: RestPool, bountyWait = false): boolean {
+  if (bountyWait) return false;
+  if (pool.hp < pool.maxHp) return false;
+  const mana = pool.mana ?? 0;
+  const maxMana = pool.maxMana ?? 4;
+  return !quietWaitRestoresMana(pool.characterClass, mana, maxMana);
 }
 
 /** Turns of uninterrupted rest to reach maxHp. Each turn uses HP at the start of that turn. */

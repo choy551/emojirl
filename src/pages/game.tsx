@@ -119,6 +119,7 @@ import {
   isAutoexploreThreat, autoexploreOccupiedKeys, autoexploreInteractBlockKeys, isAutoexploreInteractNpc,
   classifyStairsFinish, scanGotoDestinations, evaluateBedSleep, autoRestNeedsBountyWait,
 } from '../game/gameHelpers';
+import { restUntilFullDone } from '../game/restHeal';
 import { useGameActions } from '../hooks/useGameActions';
 import { noteAutoConsume, toggleAutoConsume } from '../game/autoConsume';
 
@@ -1331,10 +1332,16 @@ export default function Game() {
         }
       }
 
-      // Auto-rest first if HP or MP (Wizard) isn't full and no enemies are visible
-      const exploreIsWizard = isArcaneCaster(player.characterClass);
-      const exploreMpFull = !exploreIsWizard || (player.stats.mana ?? 0) >= (player.stats.maxMana ?? 4);
-      if (player.stats.hp < livingMaxHp(player) || !exploreMpFull) {
+      // Rest first only for HP, plus MP when a quiet wait actually refills it.
+      // Genie MP, ammo, and charges do not, so they must not keep this loop going.
+      const exploreRested = restUntilFullDone({
+        characterClass: player.characterClass,
+        hp: player.stats.hp,
+        maxHp: livingMaxHp(player),
+        mana: player.stats.mana,
+        maxMana: player.stats.maxMana,
+      });
+      if (!exploreRested) {
         const anyVisibleEnemy = hostileEnemies.some(e => enemyInEngageSight(e));
         if (!anyVisibleEnemy) {
           handleWaitRef.current?.();
@@ -1668,11 +1675,15 @@ export default function Game() {
         return;
       }
 
-      const isWizard = isArcaneCaster(state.player.characterClass);
-      const hpFull = state.player.stats.hp >= livingMaxHp(state.player);
-      const mpFull = !isWizard || (state.player.stats.mana ?? 0) >= (state.player.stats.maxMana ?? 4);
       const bountyWait = autoRestNeedsBountyWait(state.companionKillTally ?? 0);
-      if (hpFull && mpFull && !bountyWait) {
+      const rested = restUntilFullDone({
+        characterClass: state.player.characterClass,
+        hp: state.player.stats.hp,
+        maxHp: livingMaxHp(state.player),
+        mana: state.player.stats.mana,
+        maxMana: state.player.stats.maxMana,
+      }, bountyWait);
+      if (rested) {
         setAutoRest(false);
         addLog('Fully rested.');
         return;
@@ -1992,17 +2003,20 @@ export default function Game() {
         const mState = gameStateRef.current;
         if (!mState || mState.gameOver) { setTacticsMenuOpen(false); return; }
         const tCls = mState.player.characterClass;
-        if (tCls === '🧙' || tCls === '🧞‍♀️') {
-          if (tCls === '🧞‍♀️' && e.key === '6') {
+        if (tCls === '🧞‍♀️') {
+          if (e.key === '1' || e.key === 'm' || e.key === 'M') {
             armMeteorRef.current();
             return;
           }
-          if (tCls === '🧞‍♀️' && (e.key === '5' || e.key === '7')) {
-            toggleGenieCastOption(e.key === '5' ? 'bloodcast' : 'safe');
-            return;
-          }
+          if (e.key === '2') { toggleGenieCastOption('bloodcast'); return; }
+          if (e.key === '3') { toggleGenieCastOption('safe'); return; }
+          if (e.key === '4') { applyWizardMode('holdfire'); setTacticsMenuOpen(false); return; }
+          const genieAim = ['nearest', 'furthest', 'manual'] as const;
+          const aim = parseInt(e.key, 10) - 5;
+          if (aim >= 0 && aim < genieAim.length) { applyWizardMode(genieAim[aim]); setTacticsMenuOpen(false); }
+        } else if (tCls === '🧙') {
           const WM = ['nearest', 'furthest', 'manual', 'holdfire'] as const;
-          const wi = parseInt(e.key) - 1;
+          const wi = parseInt(e.key, 10) - 1;
           if (wi >= 0 && wi < WM.length) { applyWizardMode(WM[wi]); setTacticsMenuOpen(false); }
         } else if (tCls === '🤺') {
           if (e.key === '1') { handleBackdash(); setTacticsMenuOpen(false); }
