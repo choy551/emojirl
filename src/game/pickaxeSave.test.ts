@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { SAVE_KEY, loadGame, saveGame } from './save';
+import { SAVE_KEY, loadGame, saveGame, getRawSave } from './save';
 import { canMineWall, stampLegacyProtectedWalls } from './pickaxe';
 import type { MapGrid, Tile, TileType } from './types';
 
@@ -84,6 +84,25 @@ function pre103Save(floor: number, map: MapGrid) {
     logs: [],
   };
 }
+
+describe('old autoMine saves', () => {
+  it('loads a save that still has autoMine and does not keep the setting', () => {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      ...pre103Save(1, [[{ type: 'floor', emoji: '⬜', seen: true, visible: true }]]),
+      player: {
+        ...pre103Save(1, []).player,
+        autoMine: true,
+      },
+    }));
+    const loaded = loadGame();
+    expect(loaded.kind).toBe('ok');
+    if (loaded.kind !== 'ok') return;
+    expect(loaded.state.player).not.toHaveProperty('autoMine');
+    saveGame(loaded.state);
+    const raw = JSON.parse(getRawSave() ?? '{}') as { player?: { autoMine?: boolean } };
+    expect(raw.player?.autoMine).toBeUndefined();
+  });
+});
 
 describe('pre-#103 save fixture', () => {
   it('stamps protected walls when an in-progress floor is loaded', () => {

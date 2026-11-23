@@ -1,6 +1,7 @@
 import { EmojiItem } from './types';
 import { normalizeEmojiKey } from './discoveries';
 import { rewriteGearDescription } from './gearLabels';
+import { PICKAXE_PROTECTED_LINE } from './pickaxe';
 import { DRINK_DROPS, DRINK_FLOOR_DROP_CHANCE, getRandomDrinkDrop } from './drinks';
 
 export const HEAL_DROPS: Omit<EmojiItem, 'id' | 'consumed'>[] = [
@@ -130,7 +131,7 @@ export const ACTIVE_DROPS: Omit<EmojiItem, 'id' | 'consumed'>[] = [
   {
     emoji: '⛏️',
     name: 'Pickaxe',
-    description: 'Hotbar: bump a wall to dig it (Auto-mine, 1 charge). Use: dig a cardinal line, one tile per charge. Starts at 5. Extra copies add 5 until 10, then 1, hard cap 20.',
+    description: `Hotbar: bump a ⬛ wall to dig it for 1 charge. Use: dig a cardinal line, one tile per charge. Starts at 5. Extra copies add 5 until 10, then 1, hard cap 20. ${PICKAXE_PROTECTED_LINE}`,
     activeKind: 'pickaxe',
     charges: 5,
   },
