@@ -127,7 +127,7 @@ export function resolveExecuteContract(input: {
   }
   logs.push(contractLine);
 
-  const paid = notePrestigeKill(player, input.floor, playerSoftCap(player).raw.luck);
+  const paid = notePrestigeKill(player, input.floor, playerSoftCap(player).raw.luck, target);
   player = paid.player;
   logs.push(...paid.logs);
 

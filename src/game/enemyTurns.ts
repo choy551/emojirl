@@ -27,6 +27,7 @@ import { farmDenizenIntent } from './farmer';
 import { applyBanquetTick, feastAttackBonus, tickFeastBuffs } from './foodSinks';
 import { applyHouseRoundTick } from './goldSinks';
 import { noteAutoConsume } from './autoConsume';
+import { resolvePendingMeteor } from './meteor';
 
 export interface EnemyTurnResult {
   enemies: Enemy[];
@@ -1151,5 +1152,5 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
         ? [...settled.logs.map((text, i) => ({ id: `blink-credit-${state.turn}-${i}`, text, turn: state.turn })), ...afterHazards.logs].slice(0, 24)
         : afterHazards.logs,
     };
-  return noteAutoConsume(finished);
+  return noteAutoConsume(resolvePendingMeteor(finished));
 }

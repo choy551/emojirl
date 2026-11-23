@@ -1,6 +1,7 @@
 import type { DrinkBuff, DrinkTier, EmojiItem, GameState, MoodType, Player } from './types';
 import { COWBOY_MOOD_FLOOR, getMood } from './moods';
-import { isArcaneCaster, isFencer, isHitman, isRoyalGuard } from './prestige';
+import { GENIE_DRINK_MP } from './prestigeConstants';
+import { isFencer, isHitman, isRoyalGuard } from './prestige';
 import { moodMax } from './progression';
 
 /**
@@ -145,7 +146,7 @@ export function getRandomDrinkDrop(): Omit<EmojiItem, 'id' | 'consumed'> {
   return DRINK_DROPS[Math.floor(Math.random() * DRINK_DROPS.length)];
 }
 
-function wizardDrink(cls: string): boolean { return isArcaneCaster(cls); }
+function wizardDrink(cls: string): boolean { return cls === '🧙'; }
 function cowboyDrink(cls: string): boolean { return cls === '🤠' || isHitman(cls); }
 function ninjaDrink(cls: string): boolean { return cls === '🥷' || isFencer(cls); }
 function rangerDrink(cls: string): boolean { return cls === '🧝' || isRoyalGuard(cls); }
@@ -167,6 +168,7 @@ export function drinkEffectLines(tier: DrinkTier): { emoji: string; name: string
 }
 
 export function drinkEffectForClass(tier: DrinkTier, characterClass: string): string {
+  if (characterClass === '🧞‍♀️') return `+${GENIE_DRINK_MP} MP`;
   if (wizardDrink(characterClass)) return `+${DRINK_TIER_MP[tier]} MP`;
   if (cowboyDrink(characterClass)) {
     const floor = COWBOY_MOOD_FLOOR + DRINK_COWBOY_FLOOR_BONUS[tier];
@@ -219,7 +221,7 @@ export function classDrinkEffects(): ClassDrinkEffect[] {
     {
       emoji: '🧞‍♀️',
       name: 'Genie',
-      summary: `Matches Wizard: restores ${joinTiers(mp)} MP by tier. Caps at max MP. No HP.`,
+      summary: `Restores ${GENIE_DRINK_MP} MP. Caps at max MP. No HP.`,
     },
     {
       emoji: '🤠',
@@ -318,6 +320,22 @@ export function applyDrinkToPlayer(player: Player, item: EmojiItem): DrinkOutcom
   const tier = item.drinkTier;
   const cls = player.characterClass;
   const tag = `${item.emoji} ${item.name}`;
+
+  if (cls === '🧞‍♀️') {
+    const maxMana = player.stats.maxMana ?? 4;
+    const mana = player.stats.mana ?? 0;
+    if (mana >= maxMana) return { ok: false, log: 'Already at full MP.' };
+    const gain = Math.min(GENIE_DRINK_MP, maxMana - mana);
+    const next = mana + gain;
+    return {
+      ok: true,
+      log: `${tag}: +${gain} MP (${next}/${maxMana}).`,
+      player: {
+        ...player,
+        stats: { ...player.stats, hp: player.stats.hp, mana: next },
+      },
+    };
+  }
 
   if (wizardDrink(cls)) {
     const maxMana = player.stats.maxMana ?? 4;

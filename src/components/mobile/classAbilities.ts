@@ -1,7 +1,8 @@
 import { Player } from '../../game/types';
 import { applyEquipmentAndPassives } from '../../game/inventory';
 import { blinkStrikeMultiplierPercent, critStat, overkillStatusPhrase } from '../../game/blinkStrike';
-import { genieBloodcastEnabled, genieOverchannelEnabled, genieSafeFireballEnabled, isArcaneCaster, isFencer, isHitman, isRoyalGuard, lungeReach, type GenieCastToggle } from '../../game/prestige';
+import { GENIE_METEOR_MP } from '../../game/prestigeConstants';
+import { genieBloodcastEnabled, genieSafeFireballEnabled, isArcaneCaster, isFencer, isHitman, isRoyalGuard, lungeReach, type GenieCastToggle } from '../../game/prestige';
 import { voidHpAttackTooltip, voidRangedHpCost } from '../../game/voidAttackCost';
 
 // Mirrors the cooldown constants in useTacticsActions.ts (BLINK_ACTIVE + BLINK_CD).
@@ -47,6 +48,7 @@ export interface ClassAbilityArgs {
   handleExecuteContract: () => void;
   handleGuardianStance: () => void;
   toggleGenieCast?: (which: GenieCastToggle) => void;
+  armMeteor?: () => void;
 }
 
 export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
@@ -56,13 +58,13 @@ export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
     cycleVoidAttack, beginUnmake, unmakeSpent, voidAttackMode,
     handleBackdash, handleLunge, handleExecuteContract, handleGuardianStance,
     toggleGenieCast,
+    armMeteor,
   } = args;
 
   if (isArcaneCaster(player.characterClass) && player.characterClass !== '🧙') {
     const remaining = BLINK_TOTAL_CD - (turn - blinkTurn);
     const onCd = remaining > 0 && blinkTurn > -900;
     const bloodOn = genieBloodcastEnabled(player);
-    const overOn = genieOverchannelEnabled(player);
     const safeOn = genieSafeFireballEnabled(player);
     return [
       {
@@ -86,12 +88,12 @@ export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
         onUse: () => toggleGenieCast?.('bloodcast'),
       },
       {
-        id: 'genie-overchannel', icon: '🔥', label: 'Overchannel',
-        detail: overOn ? 'On' : 'Off',
+        id: 'genie-meteor', icon: '☄️', label: 'Meteor',
+        detail: `${GENIE_METEOR_MP} MP`,
+        title: `Arm Meteor. ${GENIE_METEOR_MP} MP, then tap a tile and confirm. A 3×3 lands next turn for 250% damage. Cancel spends nothing.`,
         disabled: false,
-        active: overOn,
         roomy: true,
-        onUse: () => toggleGenieCast?.('overchannel'),
+        onUse: () => armMeteor?.(),
       },
       {
         id: 'genie-safe', icon: '🛡️', label: 'Safe',

@@ -6,7 +6,8 @@ import { moodMax } from './progression';
 import { pressureForRun } from './progression';
 import { _flashSignals, PEACEMAKERS_LOG, tryDualGunsFanfare } from './flashSignals';
 import { FINALE_FLOOR, buildFinaleFloor, waveBeginLog } from './finale';
-import { isArcaneCaster, startFloorContract } from './prestige';
+import { manaOnDescend } from './genieMana';
+import { startFloorContract } from './prestige';
 import { clearShrineOffering } from './foodSinks';
 import { expireBountyOnDescend } from './goldSinks2';
 import { districtVaultEnteredLog } from './districtVault';
@@ -128,7 +129,15 @@ export function descendFloor(state: GameState, addLog: (text: string) => void): 
     }
   }
   newPlayer.stats.moodValue = Math.min(moodMax(cls), newPlayer.stats.moodValue + 15);
-  if (isArcaneCaster(cls)) newPlayer.stats.mana = newPlayer.stats.maxMana ?? 4;
+  {
+    const before = newPlayer.stats.mana ?? 0;
+    const max = newPlayer.stats.maxMana ?? 0;
+    const next = manaOnDescend(cls, before, max);
+    if (next !== before) {
+      newPlayer.stats.mana = next;
+      if (cls === '🧞‍♀️') addLog(`🧞‍♀️ The stairs restore your mana to ${next}/${max}.`);
+    }
+  }
   const contract = startFloorContract(newPlayer);
   newPlayer = contract.player;
   if (contract.log) addLog(contract.log);

@@ -20,7 +20,7 @@ import { softCapRulesBlurb } from "../game/softCap";
 import { farmerRulesBlurb } from "../game/farmer";
 import { foodSinkRulesBlurb } from "../game/foodSinks";
 import { CHEF_LESSON_COST_TEXT, MERCHANT_BUY_PRICE_TEXT, slotShrineCost } from "../game/economy";
-import { GENIE_BLOODCAST_HP_PER_MP, GENIE_BLOODCAST_MIN_HP_FRACTION, GENIE_FIREBALL_MP, GENIE_OVERCHANNEL_LEVEL } from "../game/prestigeConstants";
+import { GENIE_BLOODCAST_HP_PER_MP, GENIE_BLOODCAST_MIN_HP_FRACTION, GENIE_BOSS_MP, GENIE_DRINK_MP, GENIE_ELITE_MP, GENIE_FIREBALL_MP, GENIE_KILL_MP, GENIE_METEOR_MP } from "../game/prestigeConstants";
 import { classWeaponRulesBlurb } from "../components/itemUtils";
 import { goldSinkRulesBlurb } from "../game/goldSinks";
 import { goldSink2RulesBlurb } from "../game/goldSinks2";
@@ -380,7 +380,7 @@ export default function HowToPlay({
                 • <strong>Ranger 🧝</strong>: 1 ranged / 2 melee / 3 flee (Trailblaze)<br />
                 • <strong>Cowboy 🤠</strong>: 1 yeehaw tactics (special flavor/ability)<br />
                 • <strong>The Void 👤</strong>: <em>t</em> cycles Melee → Ranger autos → Wizard autos (locked styles are skipped, with a progress line such as “Wizard autos: 4/10 magic emoji”). Ranger autos unlock after 10 ranged emoji (bows, arrows, guns, bullets, boomerangs). Wizard autos unlock after 10 magic emoji (potions, crystals, stars, spellbooks, wands). Wizard autos cost 1 HP per attack, plus 1 HP for each depth boss beaten. Ranger autos spend ammo first, then that same HP cost. Below 25% HP, or if paying would be lethal, both switch to melee. <em>U</em> aims Unmake.<br />
-                • <strong>Genie 🧞‍♀️</strong>: same aim keys as the Wizard; 4 is Blink. 5 toggles Bloodcast and 6 toggles Overchannel (both start on). 7 toggles Safe fireballs (starts off). Fireball replaces the bolt.<br />
+                • <strong>Genie 🧞‍♀️</strong>: same aim keys as the Wizard; 4 is Blink. 5 toggles Bloodcast (starts off). 6 or M arms Meteor, then click a tile. On a phone, tap Meteor, tap a tile, and confirm the blast preview. Escape or cancel disarms it and spends no MP. 7 toggles Safe fireballs (starts off). Fireball replaces the bolt.<br />
                 • <strong>Fencer 🤺</strong>: 1 Backdash (up to 2 tiles, auto-parry 1, Riposte) / 2 Lunge (up to 3 tiles, or 5 the turn after a Backdash). Backdash then Lunge is a double attack and always reaches that 5-tile chain. Lunge then Backdash auto-parries 2 and banks 2 Ripostes.<br />
                 • <strong>Levitating Hitman 🕴️</strong>: 1 Execute Contract (X, range follows the gun; heavy hit is 200% ATK +25% per Still stack, then Still is spent) / 2 stealth. One pistol is 125% ATK and gains Still while you stand still, max 200% (150% over lava or water). Two pistols fire two 100% shots for 2 bullets. A long gun's range is 5, +1 per Still stack, up to 7.<br />
                 • <strong>Royal Guard 💂</strong>: starts in melee. 1 ranged (only with a bow or gun equipped) / 2 melee / 4 Guardian Stance (X)
@@ -670,7 +670,7 @@ export default function HowToPlay({
             {
               label: "🔮 MP",
               color: "text-blue-400",
-              desc: `Mana Points — Wizard 🧙 and Genie 🧞‍♀️. Spells cost MP. It regenerates by 1 when you Wait out of enemy sight. The Genie's fireball costs ${GENIE_FIREBALL_MP} MP. From level ${GENIE_OVERCHANNEL_LEVEL}, Bloodcast pays ${GENIE_BLOODCAST_HP_PER_MP} HP per missing MP and charges nothing when MP covers the spell. It is unavailable below ${Math.round(GENIE_BLOODCAST_MIN_HP_FRACTION * 100)}% HP and will not cast if the HP cost would drop you to 0. Drinks restore MP by tier and never restore HP.`,
+              desc: `Mana Points — Wizard 🧙 and Genie 🧞‍♀️. Spells cost MP. A Wizard regenerates by 1 when you Wait out of enemy sight. A Genie does not. The Genie's fireball costs ${GENIE_FIREBALL_MP} MP. Meteor costs ${GENIE_METEOR_MP} MP, marks a 3×3, and lands at the end of the next turn for 250% damage. Bloodcast pays ${GENIE_BLOODCAST_HP_PER_MP} HP per missing MP and charges nothing when MP covers the spell. It cannot pay for Meteor. It starts off. It is unavailable below ${Math.round(GENIE_BLOODCAST_MIN_HP_FRACTION * 100)}% HP and will not cast if the HP cost would drop you to 0. A kill restores ${GENIE_KILL_MP} MP, a blessed elite ${GENIE_ELITE_MP}, and a boss ${GENIE_BOSS_MP}. A mana drink restores ${GENIE_DRINK_MP} MP. A shrine refills MP and raises max MP. Stairs raise MP to 50% and never lower it.`,
             },
           ].map(({ label, color, desc }) => (
             <div
@@ -970,7 +970,7 @@ export default function HowToPlay({
         <p className="text-xs text-muted-foreground leading-relaxed">
           Drinks are overflow items, like food: they do not fill the 9 hotbar slots, do not count as mood-bag souls, and do not count as Void pressure.
           A shop often stocks one. Floors can drop them. Restaurants stay food-only. Drinking spends a turn.
-          Wizards and Genies drink the biggest when MP is low, otherwise the smallest drink that covers the gap, and refuse when MP is already full.
+          Wizards drink the biggest when MP is low, otherwise the smallest drink that covers the gap, and refuse when MP is already full. A Genie drink restores 4 MP and never restores HP.
           Every other class drinks the weakest one first. Prestige classes drink like their base class. Sell Junk does not include drinks.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

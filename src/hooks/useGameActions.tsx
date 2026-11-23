@@ -29,6 +29,8 @@ import {
 import { lightningArcDamage } from '../game/passives';
 import { applyEquippedAttack } from '../game/inventory';
 import { formatHitBreakdown, type HitComponent } from '../game/hitLog';
+import { manaAfterQuietWait } from '../game/genieMana';
+import { placeMeteor } from '../game/meteor';
 import { appendMonkeyPickaxe, canMineWall, findHotbarPickaxe, shouldAutoMine } from '../game/pickaxe';
 import { butterflyHeal, diamondThorns, heartHeal, igniteFields, mushroomHeal, starXpGain } from '../game/emojiBalance';
 import { afterGuardShot, chooseGuardShot, gainCarriedAmmo, guardHasBow, guardHasGun, guardHasRangedWeapon } from '../game/royalGuard';
@@ -50,8 +52,8 @@ import { useCombatActions } from './actions/useCombatActions';
 import { restHealAmount, restHealMultiplier } from '../game/restHeal';
 import { stowFoundItems } from '../game/autoConsume';
 
-function noteKill(player: Player, floor: number) {
-  return notePrestigeKill(player, floor, playerSoftCap(player).raw.luck);
+function noteKill(player: Player, floor: number, victim?: { isBoss?: boolean; godBlessed?: boolean }) {
+  return notePrestigeKill(player, floor, playerSoftCap(player).raw.luck, victim);
 }
 
 function stampDualGunsFanfare(state: GameState, prevEquipment: Player['equipment'], addLog: (text: string) => void): GameState {
@@ -214,7 +216,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             cKillCounts = { ...cKillCounts, [enemy.emoji]: (cKillCounts[enemy.emoji] ?? 0) + 1 };
             cPlayer = applyMonkeyDropOnKill(enemy, cPlayer);
             {
-              const paid = noteKill(cPlayer, prev.currentFloor);
+              const paid = noteKill(cPlayer, prev.currentFloor, enemy);
               cPlayer = paid.player;
               paid.logs.forEach(addLog);
             }
@@ -411,7 +413,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             rangerKillCounts = { ...rangerKillCounts, [enemy.emoji]: (rangerKillCounts[enemy.emoji] ?? 0) + 1 };
             newPlayer = applyMonkeyDropOnKill(enemy, newPlayer);
             {
-              const paid = noteKill(newPlayer, prev.currentFloor);
+              const paid = noteKill(newPlayer, prev.currentFloor, enemy);
               newPlayer = paid.player;
               paid.logs.forEach(addLog);
             }
@@ -801,7 +803,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             }
           }
           {
-            const paid = noteKill(newPlayer, prev.currentFloor);
+            const paid = noteKill(newPlayer, prev.currentFloor, enemy);
             newPlayer = paid.player;
             paid.logs.forEach(addLog);
           }
@@ -1361,7 +1363,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           hasLOSBetween(prev.map, prev.player.pos, e.pos)
         );
         if (!seenByEnemy) {
-          stats.mana = Math.min(stats.maxMana ?? 4, (stats.mana ?? 0) + 1);
+          stats.mana = manaAfterQuietWait(cls, stats.mana ?? 0, stats.maxMana ?? 4);
         }
       }
 
@@ -1611,6 +1613,33 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     });
   }, [setGameState, setBlinkTurn, setTrailblazeTurn]);
 
+  const handleCommitMeteor = useCallback((x: number, y: number) => {
+    setGameState(prev => {
+      if (!prev || prev.gameOver || !isGenie(prev.player.characterClass)) return prev;
+      if (prev.pendingMeteor && prev.turn < prev.pendingMeteor.landTurn) {
+        return {
+          ...prev,
+          logs: [{ id: `meteor-busy-${prev.turn}`, text: '☄️ A meteor is already falling.', turn: prev.turn }, ...prev.logs].slice(0, 24),
+        };
+      }
+      const placed = placeMeteor(prev.player, prev.turn, { x, y });
+      if (!placed.ok) {
+        return {
+          ...prev,
+          logs: [{ id: `meteor-no-${prev.turn}`, text: placed.log, turn: prev.turn }, ...prev.logs].slice(0, 24),
+        };
+      }
+      const mid: GameState = {
+        ...prev,
+        player: placed.player,
+        pendingMeteor: placed.meteor,
+        turn: prev.turn + 1,
+        logs: [{ id: `meteor-mark-${prev.turn}`, text: placed.log, turn: prev.turn + 1 }, ...prev.logs].slice(0, 24),
+      };
+      return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
+    });
+  }, [setGameState]);
+
   const {
     applyWizardMode, handleCycleRangedTarget, applyNinjaMode,
     toggleAutoStealth, applyRangerMode, handleCowboyTactics,
@@ -1659,5 +1688,6 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     handleUnequip,
     handleBlinkStrike,
     handleBlinkStrikeOnTarget,
+    handleCommitMeteor,
   };
 }

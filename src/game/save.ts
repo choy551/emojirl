@@ -268,7 +268,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     insurance: rawPlayer.insurance as Player['insurance'],
     houseRound: rawPlayer.houseRound as Player['houseRound'],
     vanity: normalizeVanity(rawPlayer.vanity),
-    genieBloodcast: rawPlayer.genieBloodcast === false ? false : true,
+    genieBloodcast: rawPlayer.genieBloodcast === true,
     genieOverchannel: rawPlayer.genieOverchannel === false ? false : true,
     genieSafeFireball: rawPlayer.genieSafeFireball === true,
     hotbarLocked: rawPlayer.hotbarLocked === true,
@@ -329,7 +329,15 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     bounty:                   normalizeBounty(raw.bounty),
     blinkT3RespecPending:     raw.blinkT3RespecPending === true ? true : undefined,
     scoreInvalid:             raw.scoreInvalid === true,
+    pendingMeteor:            normalizePendingMeteor(raw.pendingMeteor),
   };
+}
+
+function normalizePendingMeteor(raw: unknown): GameState['pendingMeteor'] {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const mark = raw as { x?: unknown; y?: unknown; landTurn?: unknown };
+  if (typeof mark.x !== 'number' || typeof mark.y !== 'number' || typeof mark.landTurn !== 'number') return undefined;
+  return { x: mark.x, y: mark.y, landTurn: mark.landTurn };
 }
 
 export function saveGame(state: GameState): void {
