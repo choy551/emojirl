@@ -2,7 +2,7 @@ import { GameState, Player } from '../game/types';
 import { applyEquipmentAndPassives } from '../game/inventory';
 import { blinkStrikeDamagePhrase, blinkStrikeHudTitle, blinkTalentById, blinkTalentProgress, knownBlinkTalents, overkillStatusPhrase } from '../game/blinkStrike';
 import { GENIE_METEOR_MP } from '../game/prestigeConstants';
-import { genieBloodcastEnabled, genieSafeFireballEnabled, isArcaneCaster, isFencer, isHitman, isRoyalGuard, type GenieCastToggle } from '../game/prestige';
+import { genieBloodcastEnabled, genieSafeFireballEnabled, isFencer, isHitman, isRoyalGuard, type GenieCastToggle } from '../game/prestige';
 import { overlayFlexClass, overlayPanelClass, overlayPanelStyle, useMobileHand } from './mobile/oneHandedLayout';
 import { useDismissGuard } from '../hooks/useDismissGuard';
 import { CloseHintButton } from './CloseHintButton';
@@ -60,10 +60,7 @@ export function TacticsMenu({
         </div>
 
         {/* Wizard */}
-        {player.characterClass === '🧞‍♀️' && (
-          <div className="text-[11px] text-center text-orange-300/80 mb-2">Fireball replaces Arcane Barrage. Blink still holds fire.</div>
-        )}
-        {isArcaneCaster(player.characterClass) && (
+        {player.characterClass === '🧙' && (
           <div className="space-y-1.5">
             {([
               { n: 1, label: '🎯 Autofire — Nearest',  mode: 'nearest'  as const },
@@ -98,61 +95,95 @@ export function TacticsMenu({
                 </button>
               );
             })()}
-            {player.characterClass === '🧞‍♀️' && (
-              <div className="space-y-1.5 pt-2 mt-2 border-t border-border/50">
+          </div>
+        )}
+        {player.characterClass === '🧞‍♀️' && (
+          <div className="space-y-1.5">
+            <div className="text-[11px] text-center text-orange-300/80 mb-2">Fireball replaces Arcane Barrage. Blink still holds fire.</div>
+            <button
+              type="button"
+              data-testid="genie-meteor-arm"
+              className="min-h-11 w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors hover:bg-orange-500/20"
+              onPointerDown={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                onArmMeteor();
+              }}
+              onClick={e => {
+                if (e.detail !== 0) return;
+                onArmMeteor();
+              }}
+            >
+              <span className="font-mono text-muted-foreground w-4 shrink-0">1</span>
+              <span className="flex flex-col leading-tight">
+                <span>☄️ Meteor</span>
+                <span className="text-[10px] font-normal text-muted-foreground">{GENIE_METEOR_MP} MP · 3×3 next turn · 250%</span>
+              </span>
+            </button>
+            {([
+              { n: 2, which: 'bloodcast' as const, label: '🩸 Bloodcast', on: genieBloodcastEnabled(player), hint: 'HP for missing MP' },
+              { n: 3, which: 'safe' as const, label: '🛡️ Safe fireballs', on: genieSafeFireballEnabled(player), hint: 'Hold fire in the 3×3' },
+            ]).map(({ n, which, label, on, hint }) => (
+              <button
+                key={which}
+                type="button"
+                role="switch"
+                aria-checked={on}
+                data-testid={`genie-${which}-toggle`}
+                className={`min-h-11 w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${on ? 'bg-orange-500/20 text-orange-100 font-semibold' : 'bg-secondary/40 text-muted-foreground'}`}
+                onPointerDown={e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onToggleGenieCast(which);
+                }}
+                onClick={e => {
+                  if (e.detail !== 0) return;
+                  onToggleGenieCast(which);
+                }}
+              >
+                <span className="font-mono text-muted-foreground w-4 shrink-0">{n}</span>
+                <span className="flex flex-col leading-tight">
+                  <span>{label}</span>
+                  <span className="text-[10px] font-normal text-muted-foreground">{on ? hint : 'Off'}</span>
+                </span>
+                <span className={`ml-auto min-w-11 text-center text-[11px] font-bold rounded-full px-2 py-1 ${on ? 'bg-orange-400/30 text-orange-50' : 'bg-zinc-700/80 text-zinc-200'}`}>
+                  {on ? 'On' : 'Off'}
+                </span>
+              </button>
+            ))}
+            {(() => {
+              const elapsed = gameState.turn - blinkTurn;
+              const BLINK_ACTIVE = 3, BLINK_CD = 5;
+              const isActive = wizardTactics.mode === 'holdfire' && elapsed < BLINK_ACTIVE;
+              const onCooldown = elapsed < BLINK_ACTIVE + BLINK_CD;
+              const remaining = onCooldown ? (BLINK_ACTIVE + BLINK_CD) - elapsed : 0;
+              return (
                 <button
-                  type="button"
-                  data-testid="genie-meteor-arm"
-                  className="min-h-11 w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors hover:bg-orange-500/20"
-                  onPointerDown={e => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onArmMeteor();
-                  }}
-                  onClick={e => {
-                    if (e.detail !== 0) return;
-                    onArmMeteor();
-                  }}
+                  className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${isActive ? 'bg-violet-500/20 text-violet-200 font-semibold' : onCooldown ? 'opacity-40 cursor-not-allowed' : 'hover:bg-secondary/60'}`}
+                  onClick={() => { applyWizardMode('holdfire'); if (!onCooldown) onClose(); }}
                 >
-                  <span className="font-mono text-muted-foreground w-4 shrink-0">6</span>
-                  <span className="flex flex-col leading-tight">
-                    <span>☄️ Meteor</span>
-                    <span className="text-[10px] font-normal text-muted-foreground">{GENIE_METEOR_MP} MP · 3×3 next turn · 250%</span>
+                  <span className="font-mono text-muted-foreground w-4 shrink-0">4</span>
+                  ✨ Blink — phase through gaps &amp; enemies
+                  <span className="ml-auto text-[10px] font-mono">
+                    {isActive ? <span className="text-violet-300">{BLINK_ACTIVE - elapsed}t left</span> : onCooldown ? <span className="text-zinc-400">{remaining}t</span> : <span className="text-violet-400">ready</span>}
                   </span>
                 </button>
-                {([
-                  { n: 5, which: 'bloodcast' as const, label: '🩸 Bloodcast', on: genieBloodcastEnabled(player), hint: 'HP for missing MP' },
-                  { n: 7, which: 'safe' as const, label: '🛡️ Safe fireballs', on: genieSafeFireballEnabled(player), hint: 'Hold fire in the 3×3' },
-                ]).map(({ n, which, label, on, hint }) => (
-                  <button
-                    key={which}
-                    type="button"
-                    role="switch"
-                    aria-checked={on}
-                    data-testid={`genie-${which}-toggle`}
-                    className={`min-h-11 w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${on ? 'bg-orange-500/20 text-orange-100 font-semibold' : 'bg-secondary/40 text-muted-foreground'}`}
-                    onPointerDown={e => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onToggleGenieCast(which);
-                    }}
-                    onClick={e => {
-                      if (e.detail !== 0) return;
-                      onToggleGenieCast(which);
-                    }}
-                  >
-                    <span className="font-mono text-muted-foreground w-4 shrink-0">{n}</span>
-                    <span className="flex flex-col leading-tight">
-                      <span>{label}</span>
-                      <span className="text-[10px] font-normal text-muted-foreground">{on ? hint : 'Off'}</span>
-                    </span>
-                    <span className={`ml-auto min-w-11 text-center text-[11px] font-bold rounded-full px-2 py-1 ${on ? 'bg-orange-400/30 text-orange-50' : 'bg-zinc-700/80 text-zinc-200'}`}>
-                      {on ? 'On' : 'Off'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
+              );
+            })()}
+            {([
+              { n: 5, label: '🎯 Autofire — Nearest',  mode: 'nearest'  as const },
+              { n: 6, label: '🎯 Autofire — Furthest', mode: 'furthest' as const },
+              { n: 7, label: '🎯 Autofire — Manual',   mode: 'manual'   as const },
+            ]).map(({ n, label, mode }) => (
+              <button key={mode}
+                className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 text-sm transition-colors ${wizardTactics.mode === mode ? 'bg-violet-500/20 text-violet-200 font-semibold' : 'hover:bg-secondary/60'}`}
+                onClick={() => { applyWizardMode(mode); onClose(); }}
+              >
+                <span className="font-mono text-muted-foreground w-4 shrink-0">{n}</span>
+                {label}
+                {wizardTactics.mode === mode && <span className="ml-auto text-violet-400">✓</span>}
+              </button>
+            ))}
           </div>
         )}
 
@@ -313,7 +344,7 @@ export function TacticsMenu({
 
         <CloseHintButton onClose={dismiss}>
           {player.characterClass === '🧞‍♀️'
-            ? '5 Bloodcast · 6 Meteor · 7 Safe · M arms Meteor · ESC or T to close'
+            ? '1 Meteor · 2 Bloodcast · 3 Safe · 4 Blink · 5 Nearest · 6 Furthest · 7 Manual · M arms Meteor · ESC or T to close'
             : 'press number to select · ESC or T to close'}
         </CloseHintButton>
       </div>

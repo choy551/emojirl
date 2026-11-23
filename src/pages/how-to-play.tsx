@@ -372,7 +372,7 @@ export default function HowToPlay({
               <div className="flex items-center gap-2">
                 <Kbd>t</Kbd>
                 <span className="text-muted-foreground">
-                  — lowercase <strong className="text-foreground">t</strong> — open tactics menu (class-specific abilities &amp; modes). Not the same as uppercase T (Talk). Use number keys 1–4 inside the menu:
+                  — lowercase <strong className="text-foreground">t</strong> — open tactics menu (class-specific abilities &amp; modes). Not the same as uppercase T (Talk). Use the numbered keys inside the menu:
                 </span>
               </div>
               <div className="ml-4 text-xs text-muted-foreground space-y-0.5">
@@ -381,7 +381,7 @@ export default function HowToPlay({
                 • <strong>Ranger 🧝</strong>: 1 ranged / 2 melee / 3 flee (Trailblaze)<br />
                 • <strong>Cowboy 🤠</strong>: 1 yeehaw tactics (special flavor/ability)<br />
                 • <strong>The Void 👤</strong>: <em>t</em> cycles Melee → Ranger autos → Wizard autos (locked styles are skipped, with a progress line such as “Wizard autos: 4/10 magic emoji”). Ranger autos unlock after 10 ranged emoji (bows, arrows, guns, bullets, boomerangs). Wizard autos unlock after 10 magic emoji (potions, crystals, stars, spellbooks, wands). Wizard autos cost 1 HP per attack, plus 1 HP for each depth boss beaten. Ranger autos spend ammo first, then that same HP cost. Below 25% HP, or if paying would be lethal, both switch to melee. <em>U</em> aims Unmake.<br />
-                • <strong>Genie 🧞‍♀️</strong>: same aim keys as the Wizard; 4 is Blink. 5 toggles Bloodcast (starts off). 6 or M arms Meteor, then click a tile. On a phone, tap Meteor, tap a tile, and confirm the blast preview. Escape or cancel disarms it and spends no MP. 7 toggles Safe fireballs (starts off). Fireball replaces the bolt.<br />
+                • <strong>Genie 🧞‍♀️</strong>: 1 or M arms Meteor, then click a tile. On a phone, tap Meteor, tap a tile, and confirm the blast preview. Escape or cancel disarms it and spends no MP. 2 toggles Bloodcast (starts off). 3 toggles Safe fireballs (starts off). 4 is Blink. 5 nearest / 6 furthest / 7 manual. Fireball replaces the bolt.<br />
                 • <strong>Fencer 🤺</strong>: 1 Backdash (up to 2 tiles, auto-parry 1, Riposte) / 2 Lunge (up to 3 tiles, or 5 the turn after a Backdash). Backdash then Lunge is a double attack and always reaches that 5-tile chain. Lunge then Backdash auto-parries 2 and banks 2 Ripostes.<br />
                 • <strong>Levitating Hitman 🕴️</strong>: 1 Execute Contract (X, range follows the gun; heavy hit is 200% ATK +25% per Still stack, then Still is spent) / 2 stealth. One pistol is 125% ATK and gains Still while you stand still, max 200% (150% over lava or water). Two pistols fire two 100% shots for 2 bullets. A long gun's range is 5, +1 per Still stack, up to 7.<br />
                 • <strong>Royal Guard 💂</strong>: starts in melee. 1 ranged (only with a bow or gun equipped) / 2 melee / 4 Guardian Stance (X)
@@ -435,7 +435,7 @@ export default function HowToPlay({
               <div className="flex items-center gap-2">
                 <Kbd>R</Kbd>
                 <span className="text-muted-foreground">
-                  — toggle auto-rest (same rest healing, including the low-HP multiplier, until full HP). A visible hostile still cancels it.
+                  — toggle auto-rest (same rest healing, including the low-HP multiplier, until full HP). A Wizard also waits until MP is full, because a quiet wait restores it. A Genie does not: MP, ammo, and charges are left alone. A visible hostile still cancels it.
                 </span>
               </div>
               <div className="flex items-center gap-2">

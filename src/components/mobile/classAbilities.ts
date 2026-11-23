@@ -68,16 +68,12 @@ export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
     const safeOn = genieSafeFireballEnabled(player);
     return [
       {
-        id: 'genie-blink', icon: '✨', label: 'Blink',
-        detail: onCd ? `${remaining}t` : 'Ready',
-        disabled: onCd,
-        onUse: () => applyWizardMode('holdfire'),
-      },
-      {
-        id: 'genie-aim', icon: '🔥', label: 'Aim',
-        detail: wizardMode,
+        id: 'genie-meteor', icon: '☄️', label: 'Meteor',
+        detail: `${GENIE_METEOR_MP} MP`,
+        title: `Arm Meteor. ${GENIE_METEOR_MP} MP, then tap a tile and confirm. A 3×3 lands next turn for 250% damage. Cancel spends nothing.`,
         disabled: false,
-        onUse: () => applyWizardMode(wizardMode === 'nearest' ? 'furthest' : wizardMode === 'furthest' ? 'manual' : 'nearest'),
+        roomy: true,
+        onUse: () => armMeteor?.(),
       },
       {
         id: 'genie-bloodcast', icon: '🩸', label: 'Bloodcast',
@@ -88,20 +84,24 @@ export function getClassAbilities(args: ClassAbilityArgs): AbilityDescriptor[] {
         onUse: () => toggleGenieCast?.('bloodcast'),
       },
       {
-        id: 'genie-meteor', icon: '☄️', label: 'Meteor',
-        detail: `${GENIE_METEOR_MP} MP`,
-        title: `Arm Meteor. ${GENIE_METEOR_MP} MP, then tap a tile and confirm. A 3×3 lands next turn for 250% damage. Cancel spends nothing.`,
-        disabled: false,
-        roomy: true,
-        onUse: () => armMeteor?.(),
-      },
-      {
         id: 'genie-safe', icon: '🛡️', label: 'Safe',
         detail: safeOn ? 'On' : 'Off',
         disabled: false,
         active: safeOn,
         roomy: true,
         onUse: () => toggleGenieCast?.('safe'),
+      },
+      {
+        id: 'genie-blink', icon: '✨', label: 'Blink',
+        detail: onCd ? `${remaining}t` : 'Ready',
+        disabled: onCd,
+        onUse: () => applyWizardMode('holdfire'),
+      },
+      {
+        id: 'genie-aim', icon: '🔥', label: 'Aim',
+        detail: wizardMode,
+        disabled: false,
+        onUse: () => applyWizardMode(wizardMode === 'nearest' ? 'furthest' : wizardMode === 'furthest' ? 'manual' : 'nearest'),
       },
     ];
   }
