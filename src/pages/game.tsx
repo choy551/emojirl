@@ -174,6 +174,8 @@ function blinkPromptFor(state: GameState | null | undefined) {
 export default function Game() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [autoExplore, setAutoExplore] = useState(false);
+  const autoExploreRef = useRef(false);
+  useEffect(() => { autoExploreRef.current = autoExplore; }, [autoExplore]);
   const [travelTarget, setTravelTarget] = useState<{ x: number; y: number; enemyId?: string } | null>(null);
   const [autoRest, setAutoRest] = useState(false);
   const [wizardTactics, setWizardTactics] = useState<{
@@ -954,6 +956,7 @@ export default function Game() {
       gameStateRef,
       wizardTacticsRef,
       autoStealthRef,
+      autoExploreRef,
       rangerModeRef,
       yeehawTurnRef,
       lastCowboyFlavorTurnRef,

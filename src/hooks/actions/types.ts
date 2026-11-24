@@ -5,6 +5,7 @@ export interface GameRefs {
   gameStateRef: MutableRefObject<GameState | null>;
   wizardTacticsRef: MutableRefObject<{ mode: 'nearest' | 'furthest' | 'manual' | 'holdfire'; manualTargetId: string | null }>;
   autoStealthRef: MutableRefObject<boolean>;
+  autoExploreRef: MutableRefObject<boolean>;
   rangerModeRef: MutableRefObject<'ranged' | 'melee' | 'flee'>;
   yeehawTurnRef: MutableRefObject<number>;
   lastCowboyFlavorTurnRef: MutableRefObject<number>;

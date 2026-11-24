@@ -1,6 +1,7 @@
-import type { VoidGhost } from './types';
+import type { EmojiItem, Player, VoidGhost } from './types';
 import { ACTIVE_DROPS } from './emojis';
-import { voidGhostCapacity } from './voidDamage';
+import { grantGhostStack } from './inventory';
+import { isVoidSoulSpend, voidGhostCapacity } from './voidDamage';
 
 const UNLOCK_KEY = 'emojirl_unlocked_void';
 const PENDING_KEY = 'emojirl_void_unlock_pending';
@@ -102,6 +103,29 @@ function writeConsumeEntry(
   cat[emoji] = { unlocks, consumes, order };
   writeGhostCatalog(cat);
   return { unlocks, consumes, crossed };
+}
+
+/** Bag > Items line. First stack is "Ghost 3/10". Later stacks are "×2, next 4/10". */
+export function ghostProgressLabel(entry?: Pick<GhostCatalogEntry, 'unlocks' | 'consumes'>): string {
+  const unlocks = Math.max(0, entry?.unlocks ?? 0);
+  const consumes = Math.max(0, entry?.consumes ?? 0);
+  const into = Math.max(0, consumes - unlocks * 10);
+  if (unlocks <= 0) return `Ghost ${into}/10`;
+  return `×${unlocks}, next ${into}/10`;
+}
+
+/**
+ * One Void consume toward a ghost. Shop Buy & Use and a hotbar use share this.
+ * Charge items and food do not: they are not soul spends.
+ */
+export function creditVoidGhostConsume(player: Player, item: EmojiItem): { player: Player; log: string | null } {
+  if (player.characterClass !== '👤' || !isVoidSoulSpend(item)) return { player, log: null };
+  const rec = recordHotbarSoulConsume(item.emoji);
+  if (!rec.crossed) return { player, log: null };
+  const log = rec.unlocks <= 1
+    ? `👤 Ghost unlocked: ${item.emoji}`
+    : `👤 Ghost unlocked: ${item.emoji} (stack ×${rec.unlocks})`;
+  return { player: grantGhostStack(player, item.emoji, rec.unlocks), log };
 }
 
 export function recordHotbarSoulConsume(emoji: string): { unlocks: number; consumes: number; crossed: boolean } {

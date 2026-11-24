@@ -4,6 +4,7 @@ import { spawnEnemies, spawnVaultItems } from './spawning';
 import { computeVisibility, visionRadiusFor } from './vision';
 import { moodMax } from './progression';
 import { pressureForRun } from './progression';
+import { stampVoidRosterFloor } from './voidDamage';
 import { _flashSignals, PEACEMAKERS_LOG, tryDualGunsFanfare } from './flashSignals';
 import { FINALE_FLOOR, buildFinaleFloor, waveBeginLog } from './finale';
 import { manaOnDescend } from './genieMana';
@@ -151,7 +152,7 @@ export function descendFloor(state: GameState, addLog: (text: string) => void): 
   }
   const expired = expireBountyOnDescend({ ...newState, player: newPlayer });
   if (expired.log) addLog(expired.log);
-  newState = { ...expired.state, player: newPlayer };
+  newState = { ...expired.state, player: stampVoidRosterFloor(newPlayer, nextFloor) };
   newState = stampDualGunsFanfare(newState, prev.player.equipment, addLog);
   newState.turn++;
   return newState;

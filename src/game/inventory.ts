@@ -4,7 +4,7 @@ import { STACKABLE_BAG_CAPS, isStackableBagPassive } from './passives';
 import { ACTIVE_DROPS, EMOJI_POWERS, isStoredHeal } from './emojis';
 import { addPickaxeCharges, isPickaxe, mergePickaxePickup } from './pickaxe';
 import { hotbarCapFor, padGhostHotbar, voidGhostCapacity } from './voidDamage';
-import { drinkEvasionBonus } from './drinks';
+import { drinkEvasionBonus, effectiveVoidPressureSlots, voidPressureIgnoredSlots } from './drinks';
 import { applyGearAttack, applyGearReduction, resolveSoftCap, type SoftCapInput, type SoftCapResult } from './softCap';
 
 export function isNonStackableBagPassiveDuplicate(item: EmojiItem, inv: EmojiItem[]): boolean {
@@ -431,7 +431,7 @@ export function buildHotbarSlots(player: Player): (EmojiItem | null)[] {
   const reals = sortBagSlots(player.inventory).filter(i => !i.isVoidGhost);
   const slots: (EmojiItem | null)[] = Array.from({ length: 9 }, () => null);
   if (player.characterClass === '👤') {
-    let activeLeft = voidGhostCapacity(0, player.voidBossesCleared ?? 0);
+    let activeLeft = voidGhostCapacity(player.voidRosterFloor ?? 0, player.voidBossesCleared ?? 0);
     for (let i = 0; i < 9; i++) {
       const ghost = ghosts[i];
       if (!ghost) continue;
@@ -450,6 +450,16 @@ export function buildHotbarSlots(player: Player): (EmojiItem | null)[] {
 /** Real hotbar items only — ghosts, equipment, and empty slots do not count. */
 export function countVoidPressureSlots(player: Player): number {
   return buildHotbarSlots(player).filter(s => s && !s.isVoidGhost).length;
+}
+
+export function voidHotbarPressureGain(before: Player, after: Player): number {
+  if (before.characterClass !== '👤') return 0;
+  const score = (p: Player) => effectiveVoidPressureSlots(countVoidPressureSlots(p), voidPressureIgnoredSlots(p));
+  return score(after) - score(before);
+}
+
+export function voidExplorePressureLog(emoji: string, name: string): string {
+  return `🔭 Autoexplore stopped — ${emoji} ${name} filled a hotbar slot and the Void is damaging you.`;
 }
 
 /** Inventory that actually contributes bag passives. Void ghosts in active slots are included. */

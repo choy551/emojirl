@@ -4,6 +4,8 @@ import { bankExtraCopies, getPassiveTooltipSuffix, hotbarCountBadge } from '../g
 import { rarityTooltipSuffix } from '../game/dropTable';
 import { BAG_LONG_PRESS_MS, resolveBagSlotClick } from '../game/bagConsume';
 import { voidGhostBadge } from '../game/voidCharge';
+import { ghostProgressLabel, readGhostCatalog } from '../game/voidMeta';
+import { isVoidSoulSpend } from '../game/voidDamage';
 import { activeKindEmoji } from './itemUtils';
 import { displayItemDescription } from '../game/gearLabels';
 import { ActivePassivesPanel } from './ActivePassivesPanel';
@@ -154,7 +156,34 @@ export function HotbarPanel({
           );
         })}
       </div>
+      {asVoid && (
+        <GhostProgressList bagSlots={bagSlots} />
+      )}
       <ActivePassivesPanel bagSlots={bagSlots} />
+    </div>
+  );
+}
+
+function GhostProgressList({ bagSlots }: { bagSlots: (EmojiItem | null)[] }) {
+  const catalog = readGhostCatalog();
+  const seen = new Set<string>();
+  const lines: { emoji: string; label: string }[] = [];
+  for (const item of bagSlots) {
+    if (!item || seen.has(item.emoji)) continue;
+    const charge = !!item.activeKind;
+    const soul = isVoidSoulSpend(item) || !!item.isVoidGhost;
+    if (!charge && !soul) continue;
+    seen.add(item.emoji);
+    lines.push({ emoji: item.emoji, label: ghostProgressLabel(catalog[item.emoji]) });
+  }
+  if (lines.length === 0) return null;
+  return (
+    <div data-testid="ghost-progress" className="mt-2 space-y-0.5">
+      {lines.map(line => (
+        <div key={line.emoji} className="text-[10px] text-violet-200/90 leading-tight">
+          {line.emoji} {line.label}
+        </div>
+      ))}
     </div>
   );
 }

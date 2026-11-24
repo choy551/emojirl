@@ -248,6 +248,11 @@ export interface Player {
   /** Depth bosses cleared this run (D:5/10/15…). Mirrors GameState.voidBossesCleared. */
   voidBossesCleared?: number;
   /**
+   * Floor used for Hollow Roster. Refreshed from the run's current floor on load,
+   * descend, and each enemy phase. Missing means only boss kills count.
+   */
+  voidRosterFloor?: number;
+  /**
    * Void only. Index matches hotbar slot 0–8.
    * `dealt` is Void pressure that slot has dealt since `itemId` entered. Reset when that item leaves.
    */

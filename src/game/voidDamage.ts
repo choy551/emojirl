@@ -83,12 +83,27 @@ export function applyNullMomentum(
   return Math.max(1, reduced);
 }
 
+/** Depth steps that open a ghost slot: D:5, D:10, D:15… */
+export function depthGhostSteps(floor: number): number {
+  return Math.floor(Math.max(0, floor) / 5);
+}
+
 /**
- * Active ghost slots. D:1–4 (0 depth bosses) → 1.
- * +1 after each D:5/10/15… boss, cap 9. `floor` is unused; bosses cleared is the source of truth.
+ * Active ghost slots, 1 to 9.
+ * D:1–4 with no depth bosses is 1. Each 5 floors reached, and each depth boss beaten,
+ * adds a slot. The higher of those two counts.
  */
-export function voidGhostCapacity(_floor: number, bossesClearedAt5k: number): number {
-  return Math.min(9, 1 + Math.max(0, bossesClearedAt5k));
+export function voidGhostCapacity(floor: number, bossesClearedAt5k: number): number {
+  const opened = Math.max(depthGhostSteps(floor), Math.max(0, bossesClearedAt5k));
+  return Math.min(9, 1 + opened);
+}
+
+/** Remember the floor so bag passives and dormant ghosts follow depth without a schema field. */
+export function stampVoidRosterFloor<P extends { characterClass?: string; voidRosterFloor?: number }>(player: P, floor: number): P {
+  if (player.characterClass !== '👤') return player;
+  const next = Math.max(0, Math.floor(floor));
+  if (player.voidRosterFloor === next) return player;
+  return { ...player, voidRosterFloor: next };
 }
 
 /** Hotbar spend that can unlock a ghost: a soul bag-passive, actually consumed. */
