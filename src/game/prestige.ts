@@ -386,6 +386,24 @@ export function startFloorContract(player: Player): { player: Player; log: strin
   };
 }
 
+/** One Transmute for a blast. Pays only when MP is already 0, and only the best tier. */
+export function grantGenieTransmute(
+  player: Player,
+  victims: { isBoss?: boolean; godBlessed?: boolean }[],
+): { player: Player; logs: string[] } {
+  if (player.characterClass !== GENIE || (player.stats.mana ?? 0) !== 0 || victims.length === 0) {
+    return { player, logs: [] };
+  }
+  const best = victims.reduce((top, victim) => (genieKillMp(victim) > genieKillMp(top) ? victim : top));
+  const maxMana = player.stats.maxMana ?? GENIE_BASE_MP;
+  const gain = Math.min(genieKillMp(best), maxMana);
+  if (gain <= 0) return { player, logs: [] };
+  return {
+    player: { ...player, stats: { ...player.stats, mana: gain } },
+    logs: [`🧞‍♀️ Transmute — +${gain} MP (${gain}/${maxMana})`],
+  };
+}
+
 export function notePrestigeKill(
   player: Player,
   floor: number,
@@ -395,13 +413,9 @@ export function notePrestigeKill(
   const logs: string[] = [];
   let next = player;
   if (next.characterClass === GENIE) {
-    const maxMana = next.stats.maxMana ?? GENIE_BASE_MP;
-    const prev = next.stats.mana ?? 0;
-    const gain = Math.min(genieKillMp(victim), Math.max(0, maxMana - prev));
-    if (gain > 0) {
-      next = { ...next, stats: { ...next.stats, mana: prev + gain } };
-      logs.push(`🧞‍♀️ Transmute — +${gain} MP (${prev + gain}/${maxMana})`);
-    }
+    const granted = grantGenieTransmute(next, [victim ?? {}]);
+    next = granted.player;
+    logs.push(...granted.logs);
   }
   if (next.characterClass === HITMAN && !next.stats.contractDone) {
     const goal = next.stats.contractGoal ?? HITMAN_CONTRACT_KILLS;

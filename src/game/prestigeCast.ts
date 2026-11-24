@@ -12,6 +12,7 @@ import { markEnemyKilled, markEnemySeen } from './discoveries';
 import {
   fireballBlastDamage,
   genieSafeFireballEnabled,
+  grantGenieTransmute,
   notePrestigeKill,
   planGenieCast,
   selfSplashDamage,
@@ -259,6 +260,7 @@ export function resolveGenieFireball(args: {
     else e.engaged = true;
   }
 
+  const slainForMp: Enemy[] = [];
   for (const dead of doomed) {
     const deadIdx = enemies.findIndex(e => e.id === dead.id);
     const spared = spareLethalHit({
@@ -278,9 +280,7 @@ export function resolveGenieFireball(args: {
     }
     markEnemyKilled(dead.emoji);
     killCountAdds.push(dead.emoji);
-    const paid = notePrestigeKill(player, args.floor, playerSoftCap(player).raw.luck, dead);
-    player = paid.player;
-    paid.logs.forEach(args.addLog);
+    slainForMp.push(dead);
     const xpGain = starXpGain(dead.isBoss ? 25 : 5, player.stats.xpBoostTurns);
     const oldLevel = player.stats.level;
     player = { ...player, stats: { ...player.stats, xp: player.stats.xp + xpGain } };
@@ -298,6 +298,9 @@ export function resolveGenieFireball(args: {
       items.push({ ...drop, id: `fb-drop-${dead.id}-${args.turn}`, consumed: false, pos: { ...dead.pos } });
     }
   }
+  const blastMp = grantGenieTransmute(player, slainForMp);
+  player = blastMp.player;
+  blastMp.logs.forEach(args.addLog);
 
   const alive = enemies.filter(e => e.hp > 0);
   const dx = target.pos.x - args.player.pos.x;

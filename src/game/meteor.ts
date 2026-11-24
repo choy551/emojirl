@@ -1,9 +1,9 @@
 import { isHostileCombatTarget } from './combat';
 import { spareLethalHit } from './flashSignals';
 import { starXpGain } from './emojiBalance';
-import { applyEquippedAttack, applyEquipmentAndPassives, playerSoftCap } from './inventory';
+import { applyEquippedAttack, applyEquipmentAndPassives } from './inventory';
 import { applyLevelUp } from './playerTurn';
-import { fireballBlastDamage, notePrestigeKill, tilesInRadius } from './prestige';
+import { fireballBlastDamage, grantGenieTransmute, tilesInRadius } from './prestige';
 import { GENIE_METEOR_MP, GENIE_METEOR_MULT, GENIE_METEOR_RADIUS } from './prestigeConstants';
 import { levelFromXP } from './progression';
 import type { Enemy, FloatingText, GameState, Player, Position } from './types';
@@ -67,6 +67,7 @@ export function applyMeteorBlast(args: {
   const floats: FloatingText[] = [];
   let player = args.player;
   let roster = args.enemies.map(enemy => ({ ...enemy }));
+  const slainForMp: Enemy[] = [];
   for (const enemy of [...roster]) {
     if (!inside.has(`${enemy.pos.x},${enemy.pos.y}`) || enemy.hp <= 0 || !isHostileCombatTarget(enemy)) continue;
     const idx = roster.findIndex(live => live.id === enemy.id);
@@ -100,9 +101,7 @@ export function applyMeteorBlast(args: {
       continue;
     }
     roster = roster.filter(live => live.id !== enemy.id);
-    const paid = notePrestigeKill(player, args.floor, playerSoftCap(player).raw.luck, enemy);
-    player = paid.player;
-    logs.push(...paid.logs);
+    slainForMp.push(enemy);
     const xpGain = starXpGain(enemy.isBoss ? 25 : 5, player.stats.xpBoostTurns);
     const oldLevel = player.stats.level;
     player = { ...player, stats: { ...player.stats, xp: player.stats.xp + xpGain } };
@@ -110,6 +109,9 @@ export function applyMeteorBlast(args: {
     if (newLevel > oldLevel) player = applyLevelUp(player, oldLevel, newLevel, text => logs.push(text));
     logs.push(`☄️ ${enemy.emoji} ${enemy.name} is crushed.`);
   }
+  const blastMp = grantGenieTransmute(player, slainForMp);
+  player = blastMp.player;
+  logs.push(...blastMp.logs);
   return { player, enemies: roster, logs, tiles, floats };
 }
 

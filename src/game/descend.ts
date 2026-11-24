@@ -135,7 +135,6 @@ export function descendFloor(state: GameState, addLog: (text: string) => void): 
     const next = manaOnDescend(cls, before, max);
     if (next !== before) {
       newPlayer.stats.mana = next;
-      if (cls === '🧞‍♀️') addLog(`🧞‍♀️ The stairs restore your mana to ${next}/${max}.`);
     }
   }
   const contract = startFloorContract(newPlayer);
