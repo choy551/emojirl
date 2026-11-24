@@ -3,7 +3,7 @@ import { getItemBuyPrice, getItemSellValue, addToPlayerBag, removeCarriedId, COO
 import { goldWithLuck } from '../game/softCap';
 import { soulHelpText } from '../game/emojis';
 import { isStackableBagPassive } from '../game/passives';
-import { canBuyAndUse } from '../game/shopUse';
+import { canBuyAndUse, shopShowsBuyAndUse } from '../game/shopUse';
 import { insuranceCost, rerollCost } from '../game/goldSinks';
 import { drinkEffectForClass } from '../game/drinks';
 import { canEquipItem, emptyLegalEquipSlot } from './itemUtils';
@@ -157,8 +157,10 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                   >
                     {bagFull ? 'Full' : `${price}g`}
                   </button>
+                  {shopShowsBuyAndUse(item) && (
                   <button
                     type="button"
+                    data-testid="shop-buy-and-use"
                     disabled={!useCheck.ok}
                     title={useCheck.ok ? 'Buy and consume immediately' : useCheck.reason}
                     onClick={() => {
@@ -173,6 +175,7 @@ export function ShopModal({ gameState, setGameState, shopItems, setShopItems, ad
                     <span className="block">Buy</span>
                     <span className="block">&amp; Use</span>
                   </button>
+                  )}
                   </div>
                 </div>
               );

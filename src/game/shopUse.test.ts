@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Enemy, EmojiItem, GameState, MapGrid, Player, Tile } from './types';
-import { canBuyAndUse, isShopDirectUseBlocked, applyInstantItemUse, hasVisibleEnemy } from './shopUse';
+import { canBuyAndUse, isShopDirectUseBlocked, shopShowsBuyAndUse, applyInstantItemUse, hasVisibleEnemy } from './shopUse';
 import { _flashSignals } from './flashSignals';
 
 function tile(type: Tile['type'], emoji: string, visible = true): Tile {
@@ -104,6 +104,20 @@ describe('canBuyAndUse', () => {
     expect(isShopDirectUseBlocked(sword)).toBe(true);
     expect(canBuyAndUse(gun, state(), 10).ok).toBe(false);
     expect(canBuyAndUse(sword, state(), 10).ok).toBe(false);
+  });
+
+  it('does not offer Buy & Use for a Pickaxe, and plain buy is still a separate action', () => {
+    const pick: EmojiItem = {
+      id: 'pk', emoji: '⛏️', name: 'Pickaxe', description: 'dig', consumed: false, activeKind: 'pickaxe', charges: 5,
+    };
+    expect(shopShowsBuyAndUse(pick)).toBe(false);
+    expect(isShopDirectUseBlocked(pick)).toBe(true);
+    expect(canBuyAndUse(pick, state(), 10)).toEqual({
+      ok: false,
+      reason: 'Needs a target direction — buy it and use from the hotbar',
+    });
+    expect(shopShowsBuyAndUse(apple)).toBe(true);
+    expect(shopShowsBuyAndUse(gun)).toBe(true);
   });
 
   it('allows Buy & Use for Rope', () => {

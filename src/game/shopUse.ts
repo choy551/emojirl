@@ -29,7 +29,12 @@ export type ShopUseBlockReason =
   | 'Already at full MP'
   | 'Sell it at the shop';
 
-const AIMED_KINDS = new Set(['gun', 'boomerang', 'freeze', 'bomb']);
+const AIMED_KINDS = new Set(['gun', 'boomerang', 'freeze', 'bomb', 'pickaxe']);
+
+/** A Pickaxe has to be aimed at a wall, and a shop room has none, so Buy & Use is not offered. */
+export function shopShowsBuyAndUse(item: EmojiItem): boolean {
+  return item.activeKind !== 'pickaxe';
+}
 
 export function isShopDirectUseBlocked(item: EmojiItem): boolean {
   if (item.isEquipment) return true;
