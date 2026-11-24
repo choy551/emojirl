@@ -4,6 +4,7 @@ import { stolenEmojiSummary } from './monkeyLoot';
 import { RANGED_BLOCKING_TILES } from './tiles';
 import { applyNullMomentum } from './voidDamage';
 import { igniteFields } from './emojiBalance';
+import { spareLethalHit } from './flashSignals';
 
 export interface ProjectileResolution {
   projectile: ActiveProjectile | null;
@@ -101,6 +102,34 @@ export function resolveProjectileFlight(
   const dx = proj.dir.x;
   const dy = proj.dir.y;
 
+  const finishLethal = (idx: number, newHp: number): boolean => {
+    const target = enemies[idx];
+    if (newHp > 0) return false;
+    const hpBefore = Math.max(0, player.stats.hp - playerDamage);
+    const spared = spareLethalHit({
+      enemy: target,
+      lethal: true,
+      enemies,
+      index: idx,
+      playerHp: hpBefore,
+      turn,
+      log,
+      floats,
+    });
+    if (spared.spared) {
+      playerDamage += hpBefore - spared.playerHp;
+      enemies = spared.enemies;
+      if (spared.playerDied) {
+        playerDied = true;
+        killer = { name: target.name, emoji: target.emoji };
+      }
+      return true;
+    }
+    reclaim(target);
+    enemies.splice(idx, 1);
+    return true;
+  };
+
   const applyHit = (idx: number, kind: ActiveProjectile['kind']): boolean => {
     const target = enemies[idx];
     if (target.isSpectator) {
@@ -114,8 +143,7 @@ export function resolveProjectileFlight(
       log(`🔫 Bullet hits ${target.emoji} ${target.name} for ${dmg} dmg! (${pct}% ATK)`);
       floats.push({ id: `gun-hit-${target.id}-${turn}`, pos: { ...target.pos }, text: `-${dmg}`, color: '#ef4444', life: 2 });
       const newHp = target.hp - dmg;
-      if (newHp <= 0) { reclaim(target); enemies.splice(idx, 1); }
-      else {
+      if (!finishLethal(idx, newHp)) {
         if (burn) log(`🔥 ${target.emoji} is ignited! (${burn.burnDamage}/turn)`);
         enemies[idx] = { ...target, hp: newHp, engaged: true, ...(burn ?? {}) };
       }
@@ -126,8 +154,7 @@ export function resolveProjectileFlight(
       log(`❄️ Freeze hits ${target.emoji} ${target.name} for ${dmg} dmg! Frozen for 3 turns!`);
       floats.push({ id: `freeze-hit-${target.id}-${turn}`, pos: { ...target.pos }, text: `❄️-${dmg}`, color: '#93c5fd', life: 2 });
       const newHp = target.hp - dmg;
-      if (newHp <= 0) { reclaim(target); enemies.splice(idx, 1); }
-      else {
+      if (!finishLethal(idx, newHp)) {
         if (burn) log(`🔥 ${target.emoji} is ignited! (${burn.burnDamage}/turn)`);
         enemies[idx] = { ...target, hp: newHp, engaged: true, frozenTurns: 3, slowedTurns: 0, ...(burn ?? {}) };
       }
@@ -139,8 +166,7 @@ export function resolveProjectileFlight(
       log(`🪃 Boomerang hits ${target.emoji} ${target.name} for ${dmg} dmg! (${pct}% ATK)`);
       floats.push({ id: `boom-hit-${target.id}-${turn}`, pos: { ...target.pos }, text: `-${dmg}`, color: '#fde68a', life: 2 });
       const newHp = target.hp - dmg;
-      if (newHp <= 0) { reclaim(target); enemies.splice(idx, 1); }
-      else {
+      if (!finishLethal(idx, newHp)) {
         if (burn) log(`🔥 ${target.emoji} is ignited! (${burn.burnDamage}/turn)`);
         enemies[idx] = { ...target, hp: newHp, engaged: true, ...(burn ?? {}) };
       }
@@ -167,8 +193,7 @@ export function resolveProjectileFlight(
         log(`💥 Explosion hits ${e.emoji} ${e.name} for ${dmg} dmg!`);
         floats.push({ id: `bomb-proj-hit-${e.id}`, pos: { ...e.pos }, text: `-${dmg}`, color: '#f97316', life: 2 });
         const newHp = e.hp - dmg;
-        if (newHp <= 0) { reclaim(e); enemies.splice(ei, 1); }
-        else {
+        if (!finishLethal(ei, newHp)) {
           if (burn) log(`🔥 ${e.emoji} is ignited! (${burn.burnDamage}/turn)`);
           enemies[ei] = { ...e, hp: newHp, engaged: true, ...(burn ?? {}) };
         }

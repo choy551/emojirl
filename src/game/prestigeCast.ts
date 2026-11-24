@@ -20,6 +20,7 @@ import {
 import { GENIE_FIREBALL_RADIUS } from './prestigeConstants';
 import { applyEquipmentAndPassives, applyEquippedAttack, playerSoftCap } from './inventory';
 import { playerMood } from './drinks';
+import { spareLethalHit } from './flashSignals';
 
 export interface GenieVolley {
   player: Player;
@@ -118,7 +119,21 @@ function genieMeleeVolley(
   const items: GenieVolley['items'] = [];
   const killCountAdds: string[] = [];
   let difficultyBump = 0;
-  if (result.enemyDied) {
+  const meleeIdx = enemies.findIndex(e => e.id === target.id);
+  const meleeSpare = spareLethalHit({
+    enemy: target,
+    lethal: result.enemyDied,
+    enemies,
+    index: meleeIdx,
+    playerHp: player.stats.hp,
+    turn: args.turn,
+    log: args.addLog,
+    floats,
+  });
+  if (meleeSpare.spared) {
+    enemies = meleeSpare.enemies;
+    player = { ...player, stats: { ...player.stats, hp: meleeSpare.playerHp } };
+  } else if (result.enemyDied) {
     markEnemyKilled(target.emoji);
     killCountAdds.push(target.emoji);
     const paid = notePrestigeKill(player, args.floor, playerSoftCap(player).raw.luck, target);
@@ -245,6 +260,22 @@ export function resolveGenieFireball(args: {
   }
 
   for (const dead of doomed) {
+    const deadIdx = enemies.findIndex(e => e.id === dead.id);
+    const spared = spareLethalHit({
+      enemy: dead,
+      lethal: true,
+      enemies,
+      index: deadIdx,
+      playerHp: player.stats.hp,
+      turn: args.turn,
+      log: args.addLog,
+      floats,
+    });
+    if (spared.spared) {
+      enemies = spared.enemies;
+      player = { ...player, stats: { ...player.stats, hp: spared.playerHp } };
+      continue;
+    }
     markEnemyKilled(dead.emoji);
     killCountAdds.push(dead.emoji);
     const paid = notePrestigeKill(player, args.floor, playerSoftCap(player).raw.luck, dead);

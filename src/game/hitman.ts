@@ -2,7 +2,7 @@ import type { Enemy, EmojiItem, Player, Position } from './types';
 import { markEnemyKilled } from './discoveries';
 import { rollKillDrop } from './dropTable';
 import { appendMonkeyPickaxe } from './pickaxe';
-import { handleGodBlessedImmunity } from './flashSignals';
+import { spareLethalHit } from './flashSignals';
 import { applyEquippedAttack, playerBagPassives, playerSoftCap } from './inventory';
 import { restoreStolenEmojis, stolenEmojiSummary } from './monkeyLoot';
 import { applyLevelUp } from './playerTurn';
@@ -70,15 +70,23 @@ export function resolveExecuteContract(input: {
   const strike = { ...rolled, damage: applyEquippedAttack(input.player, rolled.damage) };
   const lethal = target.hp - strike.damage <= 0;
 
-  if (lethal && target.godBlessed) {
-    const gb = handleGodBlessedImmunity(target, enemies, idx, player.stats.hp, 0, (msg) => logs.push(msg), []);
-    const hp = gb.newPlayerHp;
+  const spared = spareLethalHit({
+    enemy: target,
+    lethal,
+    enemies,
+    index: idx,
+    playerHp: player.stats.hp,
+    turn: 0,
+    log: (msg) => logs.push(msg),
+  });
+  if (spared.spared) {
     return {
       ...base,
-      player: { ...player, stats: { ...player.stats, hp } },
-      enemies: gb.newEnemies,
-      playerDied: hp <= 0,
-      killer: hp <= 0 ? { name: target.name, emoji: target.emoji } : undefined,
+      player: { ...player, stats: { ...player.stats, hp: spared.playerHp } },
+      enemies: spared.enemies,
+      playerDied: spared.playerDied,
+      killer: spared.playerDied ? { name: target.name, emoji: target.emoji } : undefined,
+      logs,
     };
   }
 

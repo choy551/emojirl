@@ -10,7 +10,7 @@ import { moodMax, levelFromXP, hpBonusForLevel } from './progression';
 import { creditVoidBoss } from './voidDamage';
 import { withVisibility } from './vision';
 import { runEnemyTurns, applyEnemyTurns } from './enemyTurns';
-import { _flashSignals } from './flashSignals';
+import { _flashSignals, spareLethalHit } from './flashSignals';
 import { cookedEatHeal } from './economy';
 import { goldWithLuck } from './softCap';
 import { applyDrinkToPlayer } from './drinks';
@@ -257,6 +257,22 @@ export function applyInstantItemUse(
       return d1 < d2 ? e : closest;
     });
     markEnemySeen(target.emoji);
+    const zapIdx = s.enemies.findIndex(e => e.id === target.id);
+    const zapSpare = spareLethalHit({
+      enemy: target,
+      lethal: true,
+      enemies: s.enemies,
+      index: zapIdx,
+      playerHp: newPlayer.stats.hp,
+      turn: s.turn,
+      log,
+      floats,
+    });
+    if (zapSpare.spared) {
+      newEnemies = zapSpare.enemies;
+      newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, hp: zapSpare.playerHp } };
+      floats.push({ id: `zap-${target.id}-${s.turn}`, pos: { ...target.pos }, text: '⚡ ZAP!', color: '#fbbf24', life: 3 });
+    } else {
     markEnemyKilled(target.emoji);
     zapKillCounts = { ...s.killCounts, [target.emoji]: (s.killCounts[target.emoji] ?? 0) + 1 };
     _flashSignals.lightningFlashPending = true;
@@ -314,6 +330,7 @@ export function applyInstantItemUse(
     }
     newItems = appendMonkeyPickaxe(newItems, target.monkey, s.currentFloor, target.pos);
     floats.push({ id: `zap-${target.id}-${s.turn}`, pos: { ...target.pos }, text: '⚡ ZAP!', color: '#fbbf24', life: 3 });
+    }
   }
 
   let midState: GameState = {
