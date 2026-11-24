@@ -186,10 +186,12 @@ export function resolveUnmake(
       markEnemyKilled(enemy.emoji);
       enemies = enemies.filter(e => e.id !== enemy.id);
       killCounts = { ...killCounts, [enemy.emoji]: (killCounts[enemy.emoji] ?? 0) + 1 };
-      if (enemy.monkey && enemy.stolenEmojis?.length) {
+      if ((enemy.monkey || enemy.raccoon) && enemy.stolenEmojis?.length) {
         const restored = restoreStolenEmojis(player, enemy.stolenEmojis);
         player = { ...player, inventory: restored.inventory, bank: restored.bank };
-        lines.push(`🐒 ${enemy.emoji} dropped your ${stolenEmojiSummary(enemy.stolenEmojis)}!`);
+        lines.push(enemy.raccoon
+          ? `🦝 ${enemy.emoji} drops your ${stolenEmojiSummary(enemy.stolenEmojis)}!`
+          : `🐒 ${enemy.emoji} dropped your ${stolenEmojiSummary(enemy.stolenEmojis)}!`);
       }
       const xpGain = starXpGain(enemy.isBoss ? 25 : 5, player.stats.xpBoostTurns);
       const oldLevel = player.stats.level;

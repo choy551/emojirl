@@ -20,6 +20,9 @@ describe('isAnimalEnemy', () => {
     expect(isAnimalEnemy({ emoji: '🦑', name: 'Kraken' })).toBe(true);
     expect(isAnimalEnemy({ emoji: '🦊', name: 'Fox' })).toBe(true);
     expect(isAnimalEnemy({ emoji: '🐗', name: 'Boar' })).toBe(true);
+    expect(isAnimalEnemy({ emoji: '🦝', name: 'Raccoon', raccoon: true })).toBe(true);
+    expect(isAnimalEnemy({ emoji: '🦇', name: 'Bat', bat: true })).toBe(true);
+    expect(isAnimalEnemy({ emoji: '🐘', name: 'Elephant', elephant: true })).toBe(true);
     expect(isAnimalEnemy({ emoji: '🕷️', name: 'Spider Queen' })).toBe(true);
   });
 

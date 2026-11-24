@@ -103,6 +103,10 @@ export interface PlayerStats {
   overhealDecayTick?: number;
   /** Turns left on a Star's +50% XP. Absent means none. */
   xpBoostTurns?: number;
+  /** Turns left on a Candle's +3 sight. Does not reveal stealth. */
+  candleLosTurns?: number;
+  /** Turns the player must skip. An Elephant wall-knock sets 1. */
+  stunTurns?: number;
   backdashCooldown?: number;
   lungeCooldown?: number;
   executeCooldown?: number;
@@ -445,6 +449,14 @@ export interface Enemy {
   madScientist?: boolean;
   waterAggro?: boolean;
   monkey?: boolean;
+  /** Steals one hotbar item, then paths to the stairs. */
+  raccoon?: boolean;
+  /** Steps at random while chasing. Evasion stays at BAT_EVASION. */
+  bat?: boolean;
+  /** Knocks back on hit and stomps adjacent hostiles. */
+  elephant?: boolean;
+  /** Ignores the floor evasion curve. */
+  fixedEvasion?: number;
   bear?: boolean;
   crow?: boolean;
   healCooldown?: number;

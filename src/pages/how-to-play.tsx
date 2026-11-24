@@ -828,6 +828,14 @@ export default function HowToPlay({
               color: "text-amber-200",
             },
             {
+              emoji: "🕯️",
+              name: "Candle",
+              effect: "Lamp",
+              detail:
+                "Use: +3 sight for 30 turns, the way a Star widens sight. It does not reveal stealthed enemies and does not raise detection.",
+              color: "text-amber-100",
+            },
+            {
               emoji: "🔥",
               name: "Fire",
               effect: "Ignite",
@@ -1274,6 +1282,24 @@ export default function HowToPlay({
                 label: "Echo",
                 desc: "Violet tint + ✨ ECHO badge. A faded echo of a past boss — diminished but still deadly. Appears on deeper floors (5+) as a rare surprise encounter. Stat card and combat log will warn you when you spot one.",
               },
+              {
+                badge: "🦝",
+                color: "bg-stone-500/15 border-stone-500/30 text-stone-300",
+                label: "Raccoon",
+                desc: "Snatches one hotbar item on contact or on a hit, then runs for the stairs. Kill it to get the item back. If it reaches the stairs, it escapes with the item.",
+              },
+              {
+                badge: "🦇",
+                color: "bg-slate-500/15 border-slate-500/30 text-slate-200",
+                label: "Bat",
+                desc: "Rare. Erratic steps, and a flat 50 EVA (accuracy minus 50). The first evasive foe that does not use the depth curve.",
+              },
+              {
+                badge: "🐘",
+                color: "bg-stone-600/20 border-stone-500/40 text-stone-200",
+                label: "Elephant",
+                desc: "1.5× a Bear's HP, slightly less ATK. Spawns 75% Neutral, 25% Hostile. Hits knock you back 30% of the time: 1 tile, or 2 from D:15. A wall stuns you for a turn. Lava burns you. Flyers are pushed and not stunned. Hitting a Neutral Elephant turns it Hostile. It stomps adjacent hostile mobs.",
+              },
             ].map((t) => (
               <div key={t.label} className="flex items-start gap-2">
                 <span
@@ -1323,6 +1349,9 @@ export default function HowToPlay({
                       <span>🛡️ {enemy.defense} DEF</span>
                       <span>💨 {enemy.speed} SPD</span>
                     </div>
+                    {"note" in enemy && enemy.note && (
+                      <p className="text-xs text-muted-foreground mt-1">{enemy.note}</p>
+                    )}
                     {(("silent" in enemy && enemy.silent) ||
                       ("packHunter" in enemy && enemy.packHunter) ||
                       ("berserker" in enemy && enemy.berserker) ||

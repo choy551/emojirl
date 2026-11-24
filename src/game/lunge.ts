@@ -56,10 +56,12 @@ export function applyLungeStrike(input: {
     return { ...base, enemies };
   }
 
-  if (target.monkey && target.stolenEmojis?.length) {
+  if ((target.monkey || target.raccoon) && target.stolenEmojis?.length) {
     const restored = restoreStolenEmojis(player, target.stolenEmojis);
     const bankNote = restored.banked > 0 ? ` (${restored.banked} overflowed to bank)` : '';
-    logs.push(`🐒 ${target.emoji} Monkey dropped your ${stolenEmojiSummary(target.stolenEmojis)}! Soul restored.${bankNote}`);
+    logs.push(target.raccoon
+      ? `🦝 ${target.emoji} ${target.name} drops your ${stolenEmojiSummary(target.stolenEmojis)}!${bankNote}`
+      : `🐒 ${target.emoji} Monkey dropped your ${stolenEmojiSummary(target.stolenEmojis)}! Soul restored.${bankNote}`);
     player = { ...player, inventory: restored.inventory, bank: restored.bank };
   }
 

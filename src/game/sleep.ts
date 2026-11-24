@@ -1,8 +1,8 @@
 import { Enemy, GameState, MapGrid, Player, Position, Tile } from './types';
 import { chebyshev } from './geo';
-import { applyEquipmentAndPassives, applyEquippedReduction, livingMaxHp, playerBagPassives } from './inventory';
+import { applyEquipmentAndPassives, applyEquippedReduction, livingMaxHp } from './inventory';
 import { applyEnemyTurns, runEnemyTurns } from './enemyTurns';
-import { hasLineOfSight, visionRadiusFor } from './vision';
+import { hasLineOfSight, playerSightRadius } from './vision';
 import { BED_EMOJI, BED_MAX_USES } from './tiles';
 import { applyNullMomentum } from './voidDamage';
 
@@ -33,10 +33,7 @@ export function consumeBedUse(map: MapGrid, pos: Position): MapGrid {
 
 export function findSleepThreatInSight(state: GameState): Enemy | undefined {
   const { player, map, enemies } = state;
-  const radius = Math.max(
-    1,
-    visionRadiusFor(player.characterClass, player.stats.level) + playerBagPassives(player).losBonus,
-  );
+  const radius = playerSightRadius(player);
   return enemies.find(e =>
     isSleepThreat(e) &&
     chebyshev(e.pos, player.pos) <= radius &&

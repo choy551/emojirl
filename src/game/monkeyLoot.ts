@@ -13,6 +13,23 @@ function remainingInStack(item: EmojiItem, takenFrom: Record<string, number>): n
   return (item.stackCount ?? 1) - (takenFrom[item.id] ?? 0);
 }
 
+/** Any real hotbar entry, one copy. Souls, food, gear, and actives all count. */
+export function stealOneHotbarItem(
+  inventory: EmojiItem[],
+  takenFrom: Record<string, number>,
+): { stolen: EmojiItem; sourceId: string } | null {
+  const stealable = inventory.filter(i => !i.consumed && !i.isVoidGhost && remainingInStack(i, takenFrom) > 0);
+  if (stealable.length === 0) return null;
+  const src = stealable[Math.floor(Math.random() * stealable.length)];
+  takenFrom[src.id] = (takenFrom[src.id] ?? 0) + 1;
+  const stolen: EmojiItem = {
+    ...src,
+    id: `${src.id}-stolen-${Math.random().toString(36).slice(2, 9)}`,
+    stackCount: isStackableBagPassive(src) ? 1 : src.stackCount,
+  };
+  return { stolen, sourceId: src.id };
+}
+
 /**
  * Steal one soul emoji copy (one stack unit). Stacks lose a single copy per steal
  * rather than the whole pile, matching "snatches one emoji per adjacent turn".

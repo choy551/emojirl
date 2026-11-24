@@ -4,14 +4,18 @@ import { applyEquipmentAndPassives, addToPlayerBag, playerBagPassives, parkVoidO
 import { applyNullMomentum, applyVoidPressureTick, creditVoidBoss, occupiedGhosts, stampVoidRosterFloor, voidClassTurnDamage, voidDamageFor, voidGhostCapacity, VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from './voidDamage';
 import { applyEntropicTithe, type GhostKillEffect } from './voidAbilities';
 import { unlockVoidClass } from './voidMeta';
-import { stealOneSoulEmoji, applySoulThefts, stolenEmojiSummary } from './monkeyLoot';
+import { stealOneSoulEmoji, stealOneHotbarItem, applySoulThefts, stolenEmojiSummary } from './monkeyLoot';
 import { resolveProjectileFlight } from './projectiles';
-import { withVisibility, visionRadiusFor } from './vision';
+import { withVisibility, playerSightRadius } from './vision';
 import { bfsStepToward, fleeStep, hasLOSBetween, detectionRadius } from './pathfinding';
 import { diamondThorns, foeDetectionRadius, pillRegenAmount, starXpGain, tickStarXpBoost } from './emojiBalance';
 import { crownFlees, crownStuns } from './royalGuard';
 import { PLAYER_PASSABLE_TILES } from './tiles';
 import { passableTilesForEnemy } from './enemies';
+import { GENIE, HITMAN } from './prestigeConstants';
+import {
+  ELEPHANT_KNOCK_CHANCE, elephantKnockTiles, erraticStep, findStairs, resolveKnockback, tickCandleSight,
+} from './slice1';
 import { tickVolcanoAndLava } from './lava';
 import { _flashSignals, handleGodBlessedImmunity } from './flashSignals';
 import { nearRestaurant, crowGoldSteal } from './economy';
@@ -40,6 +44,9 @@ export interface EnemyTurnResult {
   activeProjectile: ActiveProjectile | null;
   explosionPositions: Position[];
   kitePos?: Position;
+  /** Elephant knock. Applied after the phase, before lava. */
+  shovePos?: Position;
+  playerStun?: boolean;
   trailblazerCooldown?: number;
   moodDrain: number;
   goldDrain: number;
@@ -71,7 +78,9 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   // Player's true sight range (class/level + bag LOS passives). Ranged enemies may
   // only attack while the player can actually see them — i.e. within this radius
   // with clear line of sight — so archers can't snipe from the unseen fog.
-  const playerVisionRadius = Math.max(1, visionRadiusFor(player.characterClass, player.stats.level) + playerBagPassives(player).losBonus);
+  const playerVisionRadius = playerSightRadius(player);
+  let shovePos: Position | undefined;
+  let playerStun = false;
   const newEnemies = [...state.enemies];
   let playerHp = player.stats.hp;
   let fencerParries = player.characterClass === '🤺' ? (player.stats.fencerParries ?? 0) : 0;
@@ -117,9 +126,11 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
   };
 
   const reclaimMonkeyLoot = (e: Enemy) => {
-    if (e.monkey && e.stolenEmojis?.length) {
+    if ((e.monkey || e.raccoon) && e.stolenEmojis?.length) {
       playerInventoryAdditions.push(...e.stolenEmojis);
-      log(`🐒 ${e.name} dropped your ${stolenEmojiSummary(e.stolenEmojis)}!`);
+      log(e.raccoon
+        ? `🦝 ${e.name} drops your ${stolenEmojiSummary(e.stolenEmojis)}!`
+        : `🐒 ${e.name} dropped your ${stolenEmojiSummary(e.stolenEmojis)}!`);
     }
   };
 
@@ -328,9 +339,111 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
 
     occupied.delete(`${enemy.pos.x},${enemy.pos.y}`);
     const passable = passableTilesForEnemy(enemy);
+    const wanderOr = (aimed: Position | null, from: Position): Position | null => {
+      if (!enemy.bat || Math.random() >= 0.5) return aimed;
+      return erraticStep(map, from, occupied, passable, player.pos, Math.random()) ?? aimed;
+    };
 
     const dist = chebyshev(enemy.pos, player.pos);
     const playerKey = `${player.pos.x},${player.pos.y}`;
+
+    if (enemy.elephant && enemy.hp > 0) {
+      if (enemy.tag === 'Neutral' && enemy.engaged) {
+        newEnemies[i] = { ...newEnemies[i], tag: 'Hostile' };
+        log(`🐘 ${enemy.name} is provoked and turns hostile!`);
+      }
+      const stomper = newEnemies[i];
+      for (let j = 0; j < newEnemies.length; j++) {
+        if (j === i) continue;
+        const mob = newEnemies[j];
+        if (mob.hp <= 0 || mob.isSpectator || mob.tag === 'Neutral' || mob.tag === 'Friendly') continue;
+        if (chebyshev(mob.pos, stomper.pos) > 1) continue;
+        const dmg = Math.max(1, stomper.attack - Math.floor((mob.defense ?? 0) / 2));
+        const hp = mob.hp - dmg;
+        newFloatingTexts.push({
+          id: `stomp-${stomper.id}-${mob.id}-${state.turn}`,
+          pos: { ...mob.pos },
+          text: `-${dmg}`,
+          color: '#a8a29e',
+          life: 2,
+        });
+        if (hp <= 0) {
+          reclaimMonkeyLoot(mob);
+          newEnemies[j] = { ...mob, hp: 0 };
+          markEnemyKilled(mob.emoji);
+          log(`🐘 ${stomper.name} stomps ${mob.emoji} ${mob.name} flat!`);
+        } else {
+          newEnemies[j] = { ...mob, hp };
+          log(`🐘 ${stomper.name} stomps ${mob.emoji} ${mob.name} for ${dmg}!`);
+        }
+      }
+    }
+
+    const maybeElephantShove = (from: Position) => {
+      if (!enemy.elephant || playerDied || Math.random() >= ELEPHANT_KNOCK_CHANCE) return;
+      const knock = resolveKnockback({
+        elephant: from,
+        player: shovePos ?? player.pos,
+        tiles: elephantKnockTiles(state.currentFloor),
+        flies: player.characterClass === GENIE || player.characterClass === HITMAN,
+        tileAt: pos => map[pos.y]?.[pos.x]?.type,
+        occupied: pos => occupied.has(`${pos.x},${pos.y}`),
+      });
+      const moved = knock.pos.x !== (shovePos ?? player.pos).x || knock.pos.y !== (shovePos ?? player.pos).y;
+      if (moved) {
+        shovePos = knock.pos;
+        log(`🐘 ${enemy.name} knocks you back!`);
+      }
+      if (knock.stunned) {
+        playerStun = true;
+        log(`💫 ${enemy.name} knocks you into a wall — you are stunned!`);
+      }
+      if (knock.burned) log(`🔥 ${enemy.name} knocks you into the lava!`);
+    };
+
+    const raccoonGrab = (carrier: Enemy): Enemy => {
+      if (!carrier.raccoon || (carrier.stolenEmojis?.length ?? 0) > 0 || playerDied || sleeping) return carrier;
+      const theft = stealOneHotbarItem(player.inventory, stealTakenFrom);
+      if (!theft) return carrier;
+      playerInventoryRemovals.push(theft.sourceId);
+      log(`🦝 ${carrier.emoji} ${carrier.name} snatches your ${theft.stolen.emoji} and bolts for the stairs!`);
+      return { ...carrier, stolenEmojis: [...(carrier.stolenEmojis ?? []), theft.stolen] };
+    };
+
+    if (enemy.raccoon && newEnemies[i].hp > 0) {
+      let carrier = newEnemies[i];
+      if (dist <= 1) carrier = raccoonGrab(carrier);
+      if ((carrier.stolenEmojis?.length ?? 0) > 0) {
+        const stairs = findStairs(map);
+        const here = map[carrier.pos.y]?.[carrier.pos.x]?.type;
+        const escape = () => {
+          log(`🦝 ${carrier.emoji} ${carrier.name} escapes down the stairs with your ${stolenEmojiSummary(carrier.stolenEmojis ?? [])}!`);
+          newEnemies[i] = { ...carrier, hp: 0, stolenEmojis: [] };
+        };
+        if (here === 'stairs') {
+          escape();
+          continue;
+        }
+        const goal = stairs;
+        const next = goal
+          ? bfsStepToward(map, carrier.pos, goal, occupied, passable)
+          : fleeStep(map, carrier.pos, player.pos, occupied, passable);
+        if (next && `${next.x},${next.y}` !== playerKey) {
+          openDoorIfNeeded(next, carrier);
+          carrier = { ...carrier, pos: next, patrolTarget: undefined };
+          if (map[next.y]?.[next.x]?.type === 'stairs') {
+            escape();
+          } else {
+            newEnemies[i] = carrier;
+            occupied.add(`${next.x},${next.y}`);
+          }
+        } else {
+          newEnemies[i] = carrier;
+          occupied.add(`${carrier.pos.x},${carrier.pos.y}`);
+        }
+        continue;
+      }
+    }
 
     if (enemy.tag === 'Friendly') {
       if (enemy.isAdventurer || (enemy.bear && enemy.isRecruited)) {
@@ -820,7 +933,11 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             life: 2,
           });
           const standing = reflectThorns();
-          if (standing && !playerDied) stealGoldOnCrowHit(enemy);
+          if (standing && !playerDied) {
+            stealGoldOnCrowHit(enemy);
+            updated = raccoonGrab(updated);
+            maybeElephantShove(enemy.pos);
+          }
           if (standing && enemy.berserker && !playerDied) {
             if (turnAside(enemy)) {
             } else if (Math.random() * 100 < dodgeChance) {
@@ -845,7 +962,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
         }
         occupied.add(`${updated.pos.x},${updated.pos.y}`);
       } else {
-        const nextPos = bfsStepToward(map, enemy.pos, player.pos, occupied, passable);
+        const nextPos = wanderOr(bfsStepToward(map, enemy.pos, player.pos, occupied, passable), enemy.pos);
         if (nextPos && !(nextPos.x === player.pos.x && nextPos.y === player.pos.y)) {
           openDoorIfNeeded(nextPos, enemy);
           updated = { ...updated, pos: nextPos, patrolTarget: undefined };
@@ -872,6 +989,10 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
                 life: 2,
               });
               const lunging = reflectThorns();
+              if (lunging && !playerDied) {
+                updated = raccoonGrab(updated);
+                maybeElephantShove(updated.pos);
+              }
               if (lunging && enemy.berserker && !playerDied) {
                 if (turnAside(enemy)) {
                 } else if (Math.random() * 100 < dodgeChance) {
@@ -918,7 +1039,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
           }
         }
         if (target) {
-          const nextPos = bfsStepToward(map, enemy.pos, target, occupied, passable);
+          const nextPos = wanderOr(bfsStepToward(map, enemy.pos, target, occupied, passable), enemy.pos);
           if (nextPos && `${nextPos.x},${nextPos.y}` !== playerKey) {
             openDoorIfNeeded(nextPos, enemy);
             updated = { ...updated, pos: nextPos };
@@ -943,7 +1064,7 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
             updated = { ...updated, patrolTarget: target };
           }
 
-          const nextPos = bfsStepToward(map, enemy.pos, target, occupied, passable);
+          const nextPos = wanderOr(bfsStepToward(map, enemy.pos, target, occupied, passable), enemy.pos);
           if (nextPos && `${nextPos.x},${nextPos.y}` !== playerKey) {
             openDoorIfNeeded(nextPos, enemy);
             updated = { ...updated, pos: nextPos };
@@ -983,7 +1104,21 @@ export function runEnemyTurns(state: GameState, skipId?: string, sleeping = fals
 
   const feasted = tickFeastBuffs(newEnemies.filter(e => e.hp > 0));
   for (const text of feasted.logs) log(text);
-  return { enemies: feasted.enemies, playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn, depthBossKills, titheKills, voidGraceFloor, voidSlotBurden };
+  return { enemies: feasted.enemies, playerHp, playerDied, killer, newLogs, newFloatingTexts, placedBombs: newBombs, activeProjectile: newProjectile, explosionPositions, kitePos, shovePos, playerStun, trailblazerCooldown, moodDrain, goldDrain, playerInventoryRemovals, playerInventoryAdditions, enemyBeam, map, playerXpGain, companionKillTally, companionKillsThisTurn, depthBossKills, titheKills, voidGraceFloor, voidSlotBurden };
+}
+
+/** Skip the player's action. The stun was spent by an Elephant wall-knock. */
+export function spendPlayerStun(state: GameState): GameState | null {
+  const left = state.player.stats.stunTurns ?? 0;
+  if (left <= 0 || state.gameOver) return null;
+  const stunTurns = left > 1 ? left - 1 : undefined;
+  const logged: GameState = {
+    ...state,
+    player: { ...state.player, stats: { ...state.player.stats, stunTurns } },
+    turn: state.turn + 1,
+    logs: [{ id: `stun-${state.turn}`, text: '💫 You are stunned and lose a turn.', turn: state.turn }, ...state.logs].slice(0, 24),
+  };
+  return withVisibility(applyEnemyTurns(logged, runEnemyTurns(logged)));
 }
 
 export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): GameState {
@@ -1018,6 +1153,14 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
   const nextMap = result.map ?? state.map;
 
   let next: GameState;
+  const shovedPlayer = (base: GameState['player']): GameState['player'] => {
+    if (!result.shovePos && !result.playerStun) return base;
+    return {
+      ...base,
+      pos: result.shovePos ?? base.pos,
+      stats: { ...base.stats, ...(result.playerStun ? { stunTurns: 1 } : {}) },
+    };
+  };
   if (result.newLogs.length === 0 && result.playerHp === state.player.stats.hp && mergedFloating.length === 0 && state.floatingTexts.length === 0 && !hasExtraChanges) {
     next = {
       ...state,
@@ -1028,12 +1171,12 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
       activeProjectile: result.activeProjectile,
       pendingExplosion,
       pendingBeam,
-      player: {
+      player: shovedPlayer({
         ...state.player,
         stats: { ...state.player.stats, fencerParries: 0 },
         trailblazerCooldown: result.trailblazerCooldown,
         voidSlotBurden: result.voidSlotBurden ?? state.player.voidSlotBurden,
-      },
+      }),
       ...(result.voidGraceFloor !== undefined ? { voidGraceFloor: result.voidGraceFloor } : {}),
     };
   } else {
@@ -1041,7 +1184,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
       ...state,
       map: nextMap,
       enemies: result.enemies,
-      player: {
+      player: shovedPlayer({
         ...state.player,
         pos: result.kitePos ?? state.player.pos,
         stats: { ...state.player.stats, hp: result.playerHp, moodValue: newMoodValue, gold: newGold, fencerParries: 0 },
@@ -1050,7 +1193,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
         food: newFood,
         trailblazerCooldown: result.trailblazerCooldown,
         voidSlotBurden: result.voidSlotBurden ?? state.player.voidSlotBurden,
-      },
+      }),
       logs: [...result.newLogs, ...state.logs].slice(0, 24),
       floatingTexts: mergedFloating,
       gameOver: state.gameOver || result.playerDied,
@@ -1078,7 +1221,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
         });
       }
     }
-    p = { ...p, stats: { ...p.stats, xpBoostTurns: tickStarXpBoost(p.stats.xpBoostTurns) } };
+    p = { ...p, stats: { ...p.stats, xpBoostTurns: tickStarXpBoost(p.stats.xpBoostTurns), candleLosTurns: tickCandleSight(p.stats.candleLosTurns) } };
     next = {
       ...next,
       player: p,

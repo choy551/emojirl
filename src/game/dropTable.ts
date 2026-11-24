@@ -174,6 +174,7 @@ export const DROP_TABLE: DropEntry[] = [
   entry('soul:fire', '🔥', 'soul', 'legendary'),
   entry('soul:diamond', '💎', 'soul', 'rare'),
   entry('soul:star', '🌟', 'soul', 'rare'),
+  entry('soul:candle', '🕯️', 'soul', 'rare'),
   entry('soul:magnet', '🧲', 'soul', 'rare'),
   entry('soul:shield', '🛡️', 'soul', 'rare'),
   entry('soul:target', '🎯', 'soul', 'rare'),

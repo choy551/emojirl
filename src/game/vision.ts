@@ -1,12 +1,23 @@
-import { GameState, MapGrid, Position } from './types';
+import { GameState, MapGrid, Player, Position } from './types';
 import { playerBagPassives } from './inventory';
 import { isHitman, isTrailblazer } from './prestige';
 import { markEnemySeen } from './discoveries';
+import { candleSightBonus } from './slice1';
 
 export const VISION_RADIUS = 4;
 
 export function visionRadiusFor(characterClass: string, level: number): number {
   return VISION_RADIUS + (isTrailblazer(characterClass) ? Math.floor((level - 1) / 3) : 0);
+}
+
+/** Class sight, bag LoS, and a lit Candle. A Candle does not add detection. */
+export function playerSightRadius(player: Player): number {
+  return Math.max(
+    1,
+    visionRadiusFor(player.characterClass, player.stats.level)
+      + playerBagPassives(player).losBonus
+      + candleSightBonus(player.stats.candleLosTurns),
+  );
 }
 
 export function eagleEyeRange(level: number): number {
@@ -89,9 +100,8 @@ export function computeVisibility(map: MapGrid, playerPos: Position, radius = VI
 }
 
 export function withVisibility(state: GameState): GameState {
-  const baseRadius = visionRadiusFor(state.player.characterClass, state.player.stats.level);
   const passives = playerBagPassives(state.player);
-  const radius = Math.max(1, baseRadius + passives.losBonus);
+  const radius = playerSightRadius(state.player);
   let newMap = computeVisibility(state.map, state.player.pos, radius);
   if (passives.trueVision) {
     for (const enemy of state.enemies) {
