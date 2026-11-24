@@ -4,7 +4,7 @@ import { bankExtraCopies, hasBagPassive, getPassiveTooltipSuffix, hotbarCountBad
 import { soulHelpText } from '../game/emojis';
 import { displayItemDescription } from '../game/gearLabels';
 import { bankSelectionAfterTap, isNonStackableBagPassiveDuplicate, isActiveKindDuplicate } from '../game/gameHelpers';
-import { foodHealDescription } from '../game/economy';
+import { foodCarryKey, foodHealDescription } from '../game/economy';
 import { drinkEffectForClass } from '../game/drinks';
 import { activeKindEmoji } from './itemUtils';
 import { voidGhostBadge } from '../game/voidCharge';
@@ -213,11 +213,14 @@ export function BankPanel({
             type BankGroup = { rep: EmojiItem; items: EmojiItem[]; totalCharges: number };
             const groups: BankGroup[] = [];
             const seen = new Set<string>();
+            const pileKey = (entry: EmojiItem) => entry.healAmount !== undefined
+              ? `${foodCarryKey(entry)}|${entry.name}`
+              : `${entry.name}|${entry.emoji}|${entry.activeKind ?? ''}`;
             for (const item of nonEq) {
-              const key = `${item.name}|${item.emoji}|${item.activeKind ?? ''}`;
+              const key = pileKey(item);
               if (!seen.has(key)) {
                 seen.add(key);
-                const grp = nonEq.filter(i => `${i.name}|${i.emoji}|${i.activeKind ?? ''}` === key);
+                const grp = nonEq.filter(i => pileKey(i) === key);
                 groups.push({ rep: grp[0], items: grp, totalCharges: grp.reduce((s, i) => s + (i.charges ?? 1), 0) });
               }
             }

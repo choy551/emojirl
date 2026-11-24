@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { GameState, EmojiItem, EquipSlot, Equipment } from '../game/types';
-import { getItemBuyPrice, getItemSellValue, addToPlayerBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonPrice, chefLessonPriceLabel, chefLessonTooltip, MAX_CHEF_LESSONS, cookedHealBonus, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG, playerSoftCap } from '../game/gameHelpers';
+import { getItemBuyPrice, getItemSellValue, addToPlayerBag, pickBestDishesToSell, restaurantCookedPrice, chefLessonPrice, chefLessonPriceLabel, chefLessonTooltip, MAX_CHEF_LESSONS, cookedHealBonus, foodHealDescription, tryDualGunsFanfare, PEACEMAKERS_LOG, playerSoftCap, tagRestaurantPurchase, isRestaurantBought, RESTAURANT_RESALE_NOTE } from '../game/gameHelpers';
 import { RESTAURANT_COOKED_SELL_LIMIT } from '../game/economy';
 import { executeHouseRound, roundCost, roundPlan } from '../game/goldSinks';
 import { goldWithLuck } from '../game/softCap';
@@ -81,7 +81,7 @@ export function RestaurantModal({
                       setGameState(prev => {
                         if (!prev) return prev;
                         if (prev.player.stats.gold < price) return prev;
-                        const boughtItem = { ...item, id: `rest-bought-${Math.random().toString(36).slice(2)}` };
+                        const boughtItem = tagRestaurantPurchase({ ...item, id: `rest-bought-${Math.random().toString(36).slice(2)}` });
                         const newGold = prev.player.stats.gold - price;
                         if (boughtItem.ammoAmount) {
                           const gained = gainCarriedAmmo(prev.player, boughtItem);
@@ -263,12 +263,14 @@ export function RestaurantModal({
               <div className="text-[10px] text-muted-foreground mt-1">The kitchen is full. Rest here for +2 HP/turn.</div>
             </div>
           ) : (() => {
-            const sellable = [
+            const carriedFood = [
               ...(gameState.player.food ?? []).filter(i => !i.consumed && i.healAmount !== undefined),
               ...gameState.player.inventory.filter(i => !i.consumed && i.healAmount !== undefined),
               ...gameState.player.bank.filter(i => !i.consumed && i.healAmount !== undefined),
             ];
-            if (sellable.length === 0) return <div className="text-xs text-muted-foreground text-center py-3">Nothing to sell.</div>;
+            const menuFood = carriedFood.filter(isRestaurantBought);
+            const sellable = carriedFood.filter(i => !isRestaurantBought(i));
+            if (sellable.length === 0 && menuFood.length === 0) return <div className="text-xs text-muted-foreground text-center py-3">Nothing to sell.</div>;
             const isLastCooked = restaurantSoldCount === 4;
             const lessons = gameState.chefLessonCount ?? 0;
             const bestBatch = pickBestDishesToSell(sellable, restaurantSoldCount);
@@ -325,6 +327,15 @@ export function RestaurantModal({
                     ⚠️ Selling one more cooked dish will close the kitchen!
                   </div>
                 )}
+                {menuFood.map(item => (
+                  <div key={item.id} className="group flex items-start gap-2 bg-secondary/10 border border-border/30 rounded-lg px-3 py-2">
+                    <span className="text-xl leading-none shrink-0 mt-0.5">{item.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold leading-tight">{item.name}{item.isCooked ? ' ✨' : ''}</div>
+                      <div className="text-[10px] text-muted-foreground leading-snug" title={RESTAURANT_RESALE_NOTE}>{foodHealDescription(item, gameState.chefLessonCount ?? 0, gameState.player.stats.maxHp)}</div>
+                    </div>
+                  </div>
+                ))}
                 {sellable.map(item => {
                   const isCooked = item.isCooked || !!item.cookedBuff;
                   const sellMul = isCooked ? 2.5 : 1;
@@ -341,8 +352,10 @@ export function RestaurantModal({
                       </div>
                       <button
                         onClick={() => {
+                          if (isRestaurantBought(item)) return;
                           setGameState(prev => {
                             if (!prev) return prev;
+                            if (isRestaurantBought(item)) return prev;
                             const inventory = prev.player.inventory.filter(i => i.id !== item.id);
                             const bank = prev.player.bank.filter(i => i.id !== item.id);
                             const food = (prev.player.food ?? []).filter(i => i.id !== item.id);
