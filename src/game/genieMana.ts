@@ -6,14 +6,15 @@ export function manaAfterQuietWait(characterClass: string, mana: number, maxMana
   return Math.min(maxMana, mana + 1);
 }
 
-/**
- * Stairs refill. Wizard fills to max. Genie rises to 50% and never loses MP.
- * Every other class is unchanged.
- */
+/** Stairs refill. Wizard fills to max. A Genie keeps whatever MP they have. */
 export function manaOnDescend(characterClass: string, mana: number, maxMana: number): number {
   if (characterClass === '🧙') return maxMana;
-  if (characterClass === '🧞‍♀️') return Math.max(mana, Math.ceil(maxMana * 0.5));
   return mana;
+}
+
+/** Highest Transmute tier in one blast. Boss 8 beats elite 4 beats a normal kill 2. */
+export function bestGenieKillMp(victims: { isBoss?: boolean; godBlessed?: boolean }[]): number {
+  return victims.reduce((best, victim) => Math.max(best, genieKillMp(victim)), 0);
 }
 
 export function genieKillMp(victim?: { isBoss?: boolean; godBlessed?: boolean }): number {

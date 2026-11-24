@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { applyShrineBlessing } from './inventory';
 import { applyDrinkToPlayer } from './drinks';
 import { manaAfterQuietWait, manaOnDescend } from './genieMana';
 import { applyMeteorBlast, meteorArea, meteorDue, meteorStrikeDamage, placeMeteor, resolvePendingMeteor } from './meteor';
+import { resolveGenieFireball } from './prestigeCast';
+import type { MapGrid } from './types';
 import { genieBloodcastEnabled, notePrestigeKill, planGenieCast } from './prestige';
 import { GENIE_DRINK_MP, GENIE_FIREBALL_MP, GENIE_METEOR_MP, GENIE_METEOR_MULT } from './prestigeConstants';
 import type { Enemy, GameState, Player } from './types';
@@ -113,10 +115,11 @@ describe('genie meteor', () => {
     expect(manaAfterQuietWait('🧙', 6, 6)).toBe(6);
 
     const pool = { mana: 1, maxMana: 20 };
-    expect(notePrestigeKill(genie(pool), 1).player.stats.mana).toBe(3);
-    expect(notePrestigeKill(genie(pool), 1, 0, { godBlessed: true }).player.stats.mana).toBe(5);
-    expect(notePrestigeKill(genie(pool), 1, 0, { isBoss: true }).player.stats.mana).toBe(9);
-    expect(notePrestigeKill(genie(pool), 1, 0, { isBoss: true, godBlessed: true }).player.stats.mana).toBe(9);
+    expect(notePrestigeKill(genie({ ...pool, mana: 2 }), 1).player.stats.mana).toBe(2);
+    expect(notePrestigeKill(genie({ ...pool, mana: 0 }), 1).player.stats.mana).toBe(2);
+    expect(notePrestigeKill(genie({ ...pool, mana: 0 }), 1, 0, { godBlessed: true }).player.stats.mana).toBe(4);
+    expect(notePrestigeKill(genie({ ...pool, mana: 0 }), 1, 0, { isBoss: true }).player.stats.mana).toBe(8);
+    expect(notePrestigeKill(genie({ ...pool, mana: 0 }), 1, 0, { isBoss: true, godBlessed: true }).player.stats.mana).toBe(8);
 
     const drunk = applyDrinkToPlayer(genie({ mana: 1, maxMana: 10, hp: 8 }), {
       id: 'drink', emoji: '🧃', name: 'Tonic', description: '', consumed: false, drinkTier: 1,
@@ -131,9 +134,64 @@ describe('genie meteor', () => {
     expect(shrine.stats.mana).toBe(7);
     expect(shrine.stats.hp).toBeGreaterThanOrEqual(8);
 
-    expect(manaOnDescend('🧞‍♀️', 1, 6)).toBe(3);
-    expect(manaOnDescend('🧞‍♀️', 5, 6)).toBe(5);
+    expect(manaOnDescend('🧞‍♀️', 1, 6)).toBe(1);
+    expect(manaOnDescend('🧞‍♀️', 0, 6)).toBe(0);
     expect(manaOnDescend('🧙', 1, 6)).toBe(6);
     expect(manaOnDescend('🥷', 1, 6)).toBe(1);
   });
+
+  it('pays one Transmute per blast, and only the best kill, and only from 0 MP', () => {
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    const pack = (): Enemy[] => [
+      foeLike('n', { x: 1, y: 1 }, false, false),
+      foeLike('e', { x: 2, y: 1 }, false, true),
+      foeLike('b', { x: 1, y: 2 }, true, false),
+    ].map(enemy => ({ ...enemy }));
+    const dry = applyMeteorBlast({
+      player: genie({ mana: 0, maxMana: 20, attack: 40 }),
+      enemies: pack(),
+      center: { x: 1, y: 1 },
+      floor: 1,
+      turn: 3,
+    });
+    expect(dry.player.stats.mana).toBe(8);
+    expect(dry.logs.filter(line => line.includes('Transmute'))).toHaveLength(1);
+
+    const holding = applyMeteorBlast({
+      player: genie({ mana: 3, maxMana: 20, attack: 40 }),
+      enemies: pack(),
+      center: { x: 1, y: 1 },
+      floor: 1,
+      turn: 4,
+    });
+    expect(holding.player.stats.mana).toBe(3);
+    expect(holding.logs.some(line => line.includes('Transmute'))).toBe(false);
+
+    const map: MapGrid = [Array.from({ length: 6 }, () => ({ type: 'floor' as const, emoji: '⬜', seen: true, visible: true }))];
+    const logs: string[] = [];
+    const volley = resolveGenieFireball({
+      player: genie({ mana: 2, maxMana: 20, attack: 40 }, { pos: { x: 0, y: 0 } }),
+      enemies: [
+        foeLike('n', { x: 2, y: 0 }, false, false),
+        foeLike('b', { x: 3, y: 0 }, true, false),
+      ],
+      map,
+      mode: 'nearest',
+      manualTargetId: null,
+      turn: 5,
+      floor: 1,
+      addLog: text => logs.push(text),
+    });
+    expect(volley.player.stats.mana).toBe(8);
+    expect(logs.filter(line => line.includes('Transmute'))).toHaveLength(1);
+    expect(logs.some(line => line.includes('+8 MP'))).toBe(true);
+    random.mockRestore();
+  });
 });
+
+function foeLike(id: string, pos: { x: number; y: number }, isBoss: boolean, godBlessed: boolean): Enemy {
+  return {
+    id, pos, emoji: '🐀', name: id, hp: 1, maxHp: 8, attack: 0, defense: 0, speed: 1, engaged: true,
+    isBoss, godBlessed,
+  };
+}
