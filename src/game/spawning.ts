@@ -24,19 +24,28 @@ export function mobEvasion(floor: number, kind: 'normal' | 'evasive' | 'boss'): 
   return Math.min(kind === 'evasive' ? 90 : 25, scaled);
 }
 
-function floorScale<T extends { hp: number; attack: number; defense: number; evasive?: boolean }>(
+export function resolveMobEvasion(
+  type: { evasive?: boolean; fixedEvasion?: number },
+  floor: number,
+  kind?: 'normal' | 'evasive' | 'boss',
+): number {
+  if (typeof type.fixedEvasion === 'number') return type.fixedEvasion;
+  const resolved = kind ?? (type.evasive ? 'evasive' : 'normal');
+  return mobEvasion(floor, resolved);
+}
+
+export function floorScale<T extends { hp: number; attack: number; defense: number; evasive?: boolean; fixedEvasion?: number }>(
   type: T,
   floor: number,
   kind?: 'normal' | 'evasive' | 'boss',
 ): T & { evasion: number } {
-  const resolved = kind ?? (type.evasive ? 'evasive' : 'normal');
   const depth = Math.max(0, floor - 1);
   return {
     ...type,
     hp: Math.max(type.hp, Math.round(type.hp * floorHpMultiplier(floor))),
     attack: Math.max(1, Math.round(type.attack + floorAttackBonus(floor))),
     defense: type.defense + Math.floor(depth * 0.4),
-    evasion: mobEvasion(floor, resolved),
+    evasion: resolveMobEvasion(type, floor, kind),
   };
 }
 

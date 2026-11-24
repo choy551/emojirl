@@ -1,12 +1,13 @@
 import type { Enemy } from './types';
 import { ENEMY_PASSABLE_TILES, FLYING_TILES, HUMANOID_ENEMY_PASSABLE_TILES, MERMAN_PASSABLE_TILES } from './tiles';
+import { applyElephantDisposition, BAT_EVASION } from './slice1';
 
 const ANIMAL_EMOJIS = new Set([
   '🐍', '🕷️', '🐦‍⬛', '🐺', '🦊', '🐗', '🐻', '🐒', '👁️', '🐉', '🦑',
-  '🐕', '🐈', '🐔', '🐄',
+  '🐕', '🐈', '🐔', '🐄', '🦝', '🦇', '🐘',
 ]);
 
-const ANIMAL_NAME_RE = /spider queen|dragon|kraken|snake|spider|crow|wolf|fox|boar|bear|monkey|\beye\b/i;
+const ANIMAL_NAME_RE = /spider queen|dragon|kraken|snake|spider|crow|wolf|fox|boar|bear|monkey|raccoon|bat|elephant|\beye\b/i;
 
 /** Animals cannot open closed doors. Humanoids (including ghosts, fairies, mermen, adventurers) can. */
 export function isAnimalEnemy(e: {
@@ -15,9 +16,12 @@ export function isAnimalEnemy(e: {
   monkey?: boolean;
   bear?: boolean;
   crow?: boolean;
+  raccoon?: boolean;
+  bat?: boolean;
+  elephant?: boolean;
   isFarmAnimal?: boolean;
 }): boolean {
-  if (e.monkey || e.bear || e.crow || e.isFarmAnimal) return true;
+  if (e.monkey || e.bear || e.crow || e.raccoon || e.bat || e.elephant || e.isFarmAnimal) return true;
   if (e.emoji && ANIMAL_EMOJIS.has(e.emoji)) return true;
   if (e.name && ANIMAL_NAME_RE.test(e.name)) return true;
   return false;
@@ -58,6 +62,9 @@ export const ENEMY_TYPES = [
   { emoji: '🐒', name: 'Monkey',         hp: 4,  attack: 2, defense: 0, speed: 5,  weight: 2, tag: 'Neutral' as const, monkey: true },
   { emoji: '🐦‍⬛', name: 'Crow',          hp: 3,  attack: 1, defense: 0, speed: 8,  weight: 2, cowardly: true, crow: true, flying: true, evasive: true },
   { emoji: '🧝‍♀️', name: 'Elf Archer',    hp: 7,  attack: 3, defense: 1, speed: 5,  weight: 2, ranged: true },
+  { emoji: '🦝', name: 'Raccoon', hp: 6, attack: 2, defense: 0, speed: 7, weight: 2, raccoon: true, note: 'Snatches one hotbar item on contact or on a hit, then runs for the stairs. Kill it to get the item back. The stairs take the item with it.' },
+  { emoji: '🦇', name: 'Bat', hp: 4, attack: 2, defense: 0, speed: 8, weight: 0.25, evasive: true, fixedEvasion: BAT_EVASION, bat: true, note: 'Rare. Wanders instead of chasing in a line, with a flat 50 EVA.' },
+  { emoji: '🐘', name: 'Elephant', hp: 30, attack: 6, defense: 4, speed: 3, weight: 1, elephant: true, tag: 'Neutral' as const, note: '1.5× a Bear\'s HP, slightly less ATK. 75% Neutral, 25% Hostile. A hit knocks you back 30% of the time (1 tile, 2 from D:15). A wall stuns you; lava burns you. Flyers are pushed and not stunned. Hitting a Neutral one turns it Hostile. It stomps adjacent hostile mobs.' },
 ];
 
 export const FOREST_ENEMY_TYPES = [
@@ -99,12 +106,12 @@ export function getRandomEnemy(floor: number, difficultyTier = 0) {
     if (roll <= 0) {
       if (!e.godBlessed && floor > 10) {
         const scaledChance = Math.min(0.30, 0.05 * (1 + 0.15 * Math.max(0, floor - 10) / 5));
-        if (Math.random() < scaledChance) return { ...e, godBlessed: true as const };
+        if (Math.random() < scaledChance) return applyElephantDisposition({ ...e, godBlessed: true as const });
       }
-      return e;
+      return applyElephantDisposition(e);
     }
   }
-  return valid[0];
+  return applyElephantDisposition(valid[0]);
 }
 
 export function getEchoEnemy(bossType: typeof BOSS_TYPES[number]) {

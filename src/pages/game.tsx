@@ -112,7 +112,7 @@ import {
   eagleEyeRange, sortBagSlots, buildHotbarSlots, banishPlayerGhost, manifestPlayerGhost,
   generateShopStock, generateAmmoCacheStock, generateRestaurantStock,
   spawnEnemies, spawnVaultItems, xpThresholdForLevel,
-  computeVisibility, visionRadiusFor, hitmanRevealsEnemy,
+  computeVisibility, playerSightRadius, hitmanRevealsEnemy,
   _flashSignals,
   bfsStepToward, bfsNextStep, bfsNextStepWallHug, PLAYER_PASSABLE_TILES,
   pressureForRun, claimFinaleWin, descendFloor,
@@ -1693,7 +1693,7 @@ export default function Game() {
       }
 
       const passives = playerBagPassives(state.player);
-      const safeRadius = visionRadiusFor(state.player.characterClass, state.player.stats.level) + passives.losBonus;
+      const safeRadius = playerSightRadius(state.player);
       const { x: px, y: py } = state.player.pos;
       const hasVisibleEnemy = state.enemies.some(e => {
         if (!isHostileCombatTarget(e)) return false;

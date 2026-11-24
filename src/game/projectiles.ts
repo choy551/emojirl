@@ -83,9 +83,11 @@ export function resolveProjectileFlight(
   const stolenReturns: EmojiItem[] = [];
   const log = (text: string) => logs.push({ id: Math.random().toString(), text, turn });
   const reclaim = (e: Enemy) => {
-    if (e.monkey && e.stolenEmojis?.length) {
+    if ((e.monkey || e.raccoon) && e.stolenEmojis?.length) {
       stolenReturns.push(...e.stolenEmojis);
-      log(`🐒 ${e.name} dropped your ${stolenEmojiSummary(e.stolenEmojis)}!`);
+      log(e.raccoon
+        ? `🦝 ${e.name} drops your ${stolenEmojiSummary(e.stolenEmojis)}!`
+        : `🐒 ${e.name} dropped your ${stolenEmojiSummary(e.stolenEmojis)}!`);
     }
   };
 

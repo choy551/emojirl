@@ -8,7 +8,7 @@ import { isStackableBagPassive } from '../../game/passives';
 import {
   moodMax, refillBagFromBank, removeAndRefillBag, takeOneMatchingFromBank,
   tickActiveBuffs, withVisibility, runEnemyTurns, applyEnemyTurns, getItemBuyPrice, cookedEatHeal,
-  buildHotbarSlots, livingMaxHp, healHp,
+  buildHotbarSlots, livingMaxHp, healHp, spendPlayerStun,
 } from '../../game/gameHelpers';
 import { applyInstantItemUse, canBuyAndUse } from '../../game/shopUse';
 import { applyDrinkToPlayer, pickDrink } from '../../game/drinks';
@@ -331,6 +331,10 @@ export function useItemActions(
   const handleUseSlot = useCallback((bagSlotIndex: number) => {
     const gs = gameStateRef.current;
     if (!gs || gs.gameOver) return;
+    if ((gs.player.stats.stunTurns ?? 0) > 0) {
+      setGameState(prev => (prev ? spendPlayerStun(prev) ?? prev : prev));
+      return;
+    }
     const bagItems = buildHotbarSlots(gs.player);
     const item = bagItems[bagSlotIndex];
     if (!item || item.consumed) return;

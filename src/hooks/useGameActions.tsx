@@ -23,7 +23,7 @@ import {
   levelFromXP, livingMaxHp, playerSoftCap, healHp, applyShrineBlessing,
   mpBonusForLevel, getRandomCowboyFlavor, handleGodBlessedImmunity,
   _flashSignals, tryDualGunsFanfare, PEACEMAKERS_LOG, restoreStolenEmojis, stolenEmojiSummary,
-  applyBedRest, simulateSleep, SLEEP_TURNS,
+  applyBedRest, simulateSleep, SLEEP_TURNS, spendPlayerStun,
   evaluateBedSleep, consumeBedUse, shouldConfirmLavaStep,
 } from '../game/gameHelpers';
 import { lightningArcDamage } from '../game/passives';
@@ -102,16 +102,24 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
   // Helper to consistently return stolen emojis (via proper addToBag for stacking/banking) when a monkey is killed.
   // Used in all kill paths (melee/ranged/bolt/blink/zap/arc/etc) to fix incomplete returns.
   const applyMonkeyDropOnKill = (killed: any, p: Player) => {
-    if (killed?.monkey && killed.stolenEmojis?.length) {
+    if ((killed?.raccoon || killed?.monkey) && killed.stolenEmojis?.length) {
       const restored = restoreStolenEmojis(p, killed.stolenEmojis);
       const bankNote = restored.banked > 0 ? ` (${restored.banked} overflowed to bank)` : '';
-      addLog(`🐒 ${killed.emoji} Monkey dropped your ${stolenEmojiSummary(killed.stolenEmojis)}! Soul restored.${bankNote}`);
+      const line = killed.raccoon
+        ? `🦝 ${killed.emoji} ${killed.name} drops your ${stolenEmojiSummary(killed.stolenEmojis)}!${bankNote}`
+        : `🐒 ${killed.emoji} Monkey dropped your ${stolenEmojiSummary(killed.stolenEmojis)}! Soul restored.${bankNote}`;
+      addLog(line);
       return { ...p, inventory: restored.inventory, bank: restored.bank };
     }
     return p;
   };
 
   const handleMove = useCallback((dx: number, dy: number) => {
+    const stunnedNow = gameStateRef.current;
+    if (stunnedNow && !stunnedNow.gameOver && (stunnedNow.player.stats.stunTurns ?? 0) > 0) {
+      setGameState(prev => (prev ? spendPlayerStun(prev) ?? prev : prev));
+      return;
+    }
     // Auto-deactivate expired Blink / Trailblaze (must run outside setGameState)
     const _outerState = gameStateRef.current;
     if (_outerState && !_outerState.gameOver) {
@@ -1441,6 +1449,8 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
   const handleWait = useCallback(() => {
     setGameState(prev => {
       if (!prev || prev.gameOver || prev.floorAnnouncement) return prev;
+      const stunned = spendPlayerStun(prev);
+      if (stunned) return stunned;
       const cls = prev.player.characterClass;
       const { x: px, y: py } = prev.player.pos;
       const nearCampfire = [-1, 0, 1].some(dy =>

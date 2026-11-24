@@ -1,7 +1,7 @@
 import type { GameState, Player } from './types';
 import { generateMap } from './mapgen';
 import { spawnEnemies, spawnVaultItems } from './spawning';
-import { computeVisibility, visionRadiusFor } from './vision';
+import { computeVisibility, playerSightRadius } from './vision';
 import { moodMax } from './progression';
 import { pressureForRun } from './progression';
 import { stampVoidRosterFloor } from './voidDamage';
@@ -43,7 +43,7 @@ export function descendFloor(state: GameState, addLog: (text: string) => void): 
   const generated = finale ?? generateMap(nextFloor, { voidRun: cls === '👤' });
   const { map, startPos, rooms } = generated;
 
-  newState.map = computeVisibility(map, startPos, visionRadiusFor(newPlayer.characterClass, newPlayer.stats.level));
+  newState.map = computeVisibility(map, startPos, playerSightRadius(newPlayer));
   newPlayer.pos = startPos;
   newState.currentFloor = nextFloor;
   newState.placedBombs = [];

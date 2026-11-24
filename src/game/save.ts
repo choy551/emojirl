@@ -224,6 +224,8 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     blinkOverkillCooldown:         rawStats.blinkOverkillCooldown          as number | undefined,
     overhealDecayTick:             rawStats.overhealDecayTick             as number | undefined,
     xpBoostTurns:                  rawStats.xpBoostTurns                  as number | undefined,
+    candleLosTurns:                typeof rawStats.candleLosTurns === 'number' && rawStats.candleLosTurns > 0 ? Math.floor(rawStats.candleLosTurns) : undefined,
+    stunTurns:                     typeof rawStats.stunTurns === 'number' && rawStats.stunTurns > 0 ? Math.floor(rawStats.stunTurns) : undefined,
     backdashCooldown:              rawStats.backdashCooldown              as number | undefined,
     lungeCooldown:                 rawStats.lungeCooldown                 as number | undefined,
     executeCooldown:               rawStats.executeCooldown               as number | undefined,

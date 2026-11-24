@@ -5,8 +5,7 @@ import { gunshotPlan, isArcaneCaster, isHitman, isRoyalGuard } from './prestige'
 import { chooseGuardShot } from './royalGuard';
 import { bfsStepToward, hasLOS, hasLOSBetween } from './pathfinding';
 import { PLAYER_PASSABLE_TILES } from './tiles';
-import { playerBagPassives } from './inventory';
-import { eagleEyeRange, hasLineOfSight, VISION_RADIUS, visionRadiusFor } from './vision';
+import { eagleEyeRange, hasLineOfSight, playerSightRadius, VISION_RADIUS } from './vision';
 import { voidRangedSpend } from './voidAttackCost';
 
 /** Refuse autofight when current HP is strictly below half of max HP. */
@@ -69,7 +68,7 @@ function occupied(enemies: Enemy[], exceptId?: string): Set<string> {
 
 /** Tab targets: living hostiles in real sight. Telepathy does not count. */
 export function foesInSight(map: MapGrid, enemies: Enemy[], player: Player): Enemy[] {
-  const radius = Math.max(1, visionRadiusFor(player.characterClass, player.stats.level) + playerBagPassives(player).losBonus);
+  const radius = playerSightRadius(player);
   return enemies.filter(e =>
     e.hp > 0
     && isHostileCombatTarget(e)

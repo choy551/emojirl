@@ -196,6 +196,16 @@ export function applyInstantItemUse(
     return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
   }
 
+  if (item.emoji === '🕯️') {
+    log(`🕯️ The candle brightens the dark. +3 sight for 30 turns. Stealthed foes stay hidden.`);
+    const mid = {
+      ...s,
+      player: { ...s.player, stats: { ...s.player.stats, candleLosTurns: 30 } },
+      turn: s.turn + 1,
+    };
+    return withVisibility(applyEnemyTurns(mid, runEnemyTurns(mid)));
+  }
+
   if (item.emoji === '💊') {
     const pool = livingMaxHp(s.player);
     const hp = pillOverhealHp(pool);
