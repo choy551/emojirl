@@ -64,6 +64,7 @@ export function carriedSellables(player: { food?: EmojiItem[]; inventory: EmojiI
 /** Weak dedicated heals (onion) plus, when overflow, potions/hearts. Never cooked or raw cookables. */
 export function isHealJunk(i: EmojiItem, overflowHeals: boolean): boolean {
   if (i.healAmount === undefined || i.consumed) return false;
+  if (i.restaurantBought) return false;
   if (i.isCooked || i.cookedBuff) return false;
   if (COOKABLE_EMOJIS.has(i.emoji)) return false;
   if (i.healAmount <= 4) return true;
@@ -74,6 +75,35 @@ export const RESTAURANT_COOKED_SELL_LIMIT = 5;
 
 export function isCookedDish(i: EmojiItem): boolean {
   return i.healAmount !== undefined && !i.consumed && (!!i.isCooked || !!i.cookedBuff);
+}
+
+export const RESTAURANT_RESALE_NOTE = "Bought from a Restaurant: can't be resold to Restaurants";
+
+/** Menu food. A dish you cook or find does not have this flag. */
+export function isRestaurantBought(item: { restaurantBought?: boolean }): boolean {
+  return item.restaurantBought === true;
+}
+
+/**
+ * Tag cooked food bought from any restaurant. Raw food stays untagged, so
+ * cooking it later still produces a sellable dish. The flag is per copy.
+ */
+export function tagRestaurantPurchase<T extends EmojiItem>(item: T): T {
+  if (!(item.isCooked || item.cookedBuff)) return item;
+  return { ...item, restaurantBought: true };
+}
+
+/** Restaurant Sell, Sell Best, and Sell Junk all use this. */
+export function restaurantCanResell(item: EmojiItem): boolean {
+  return !isRestaurantBought(item);
+}
+
+/**
+ * Food storage keeps every copy. A menu dish and one you cooked share an
+ * emoji but not a pile, so the tag cannot move onto the cooked copy.
+ */
+export function foodCarryKey(item: { emoji: string; restaurantBought?: boolean }): string {
+  return `${item.emoji}|${item.restaurantBought ? 'restaurant' : 'own'}`;
 }
 
 export function restaurantCookedPrice(i: EmojiItem, lessons = 0): number {
@@ -179,8 +209,8 @@ export function foodHealLabel(item: EmojiItem, lessons: number, maxHp: number): 
   if (item.healAmount === undefined) return '';
   const total = cookedEatHeal(item, lessons, maxHp);
   const bonus = total - item.healAmount;
-  if (bonus > 0) return `+${total} HP (${item.healAmount} + ${bonus} Chef)`;
-  return `+${item.healAmount} HP`;
+  const line = bonus > 0 ? `+${total} HP (${item.healAmount} + ${bonus} Chef)` : `+${item.healAmount} HP`;
+  return item.restaurantBought ? `${line} · ${RESTAURANT_RESALE_NOTE}` : line;
 }
 
 /**
@@ -196,16 +226,17 @@ export function foodHealDescription(
   if (item.healAmount === undefined) return item.description;
   const total = cookedEatHeal(item, lessons, maxHp);
   const bonus = total - item.healAmount;
-  if (bonus <= 0) return item.description;
+  const note = item.restaurantBought ? ` · ${RESTAURANT_RESALE_NOTE}` : '';
+  if (bonus <= 0) return `${item.description}${note}`;
   const replaced = item.description
     .replace(/\+(\d+)\s*HP/i, `+${total} HP`)
     .replace(/Restores\s+(\d+)\s+HP/i, `Restores ${total} HP`);
   if (replaced === item.description) {
     return includeChefNote
       ? `${item.description} · ${foodHealLabel(item, lessons, maxHp)}`
-      : `${item.description} · +${total} HP`;
+      : `${item.description} · +${total} HP${note}`;
   }
-  return includeChefNote ? `${replaced} (${item.healAmount} + ${bonus} Chef)` : replaced;
+  return includeChefNote ? `${replaced} (${item.healAmount} + ${bonus} Chef)${note}` : `${replaced}${note}`;
 }
 
 /** Highest-priced cooked dishes to sell: fill to 4/5, or the last 1 if already at 4. */
@@ -213,7 +244,7 @@ export function pickBestDishesToSell(items: EmojiItem[], soldCount: number): Emo
   const remaining = RESTAURANT_COOKED_SELL_LIMIT - soldCount;
   if (remaining <= 0) return [];
   const cookedOwned = [...items]
-    .filter(isCookedDish)
+    .filter(item => isCookedDish(item) && restaurantCanResell(item))
     .sort((a, b) => restaurantCookedPrice(b) - restaurantCookedPrice(a));
   const targetCap = soldCount >= 4 ? 5 : 4;
   const sellCount = Math.min(cookedOwned.length, Math.max(0, targetCap - soldCount));

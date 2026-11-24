@@ -382,6 +382,11 @@ export interface EmojiItem {
   stackCount?: number; // for stackable bag passives — how many copies are collapsed into this slot
   isCooked?: boolean;
   cookedBuff?: { stat: 'attack' | 'defense'; amount: number; turns: number };
+  /**
+   * Cooked dish bought from a restaurant menu. Stays on this copy only.
+   * Food storage never merges copies, so a dish you cooked cannot inherit it.
+   */
+  restaurantBought?: boolean;
   isMoneyBag?: boolean;
   /** Blueprint of a city structure. Using it grants an EmojiCB token. */
   isStructure?: boolean;
