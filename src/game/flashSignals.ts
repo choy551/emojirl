@@ -63,3 +63,37 @@ export function handleGodBlessedImmunity(
   });
   return { proc: true, newPlayerHp, newEnemies };
 }
+
+/**
+ * A killing blow on a God-Blessed foe uses the melee rule: they cling to 1 HP,
+ * lose the blessing, and counterattack. A non-lethal hit does not call this.
+ */
+export function spareLethalHit(args: {
+  enemy: Enemy;
+  lethal: boolean;
+  enemies: Enemy[];
+  index: number;
+  playerHp: number;
+  turn: number;
+  log: (msg: string) => void;
+  floats?: FloatingText[];
+}): { spared: boolean; enemies: Enemy[]; playerHp: number; playerDied: boolean } {
+  if (!args.lethal || !args.enemy.godBlessed || args.index < 0) {
+    return { spared: false, enemies: args.enemies, playerHp: args.playerHp, playerDied: false };
+  }
+  const saved = handleGodBlessedImmunity(
+    args.enemy,
+    args.enemies,
+    args.index,
+    args.playerHp,
+    args.turn,
+    args.log,
+    args.floats ?? [],
+  );
+  return {
+    spared: saved.proc,
+    enemies: saved.newEnemies,
+    playerHp: saved.newPlayerHp,
+    playerDied: saved.newPlayerHp <= 0,
+  };
+}

@@ -1,4 +1,5 @@
 import { isHostileCombatTarget } from './combat';
+import { spareLethalHit } from './flashSignals';
 import { starXpGain } from './emojiBalance';
 import { applyEquippedAttack, applyEquipmentAndPassives, playerSoftCap } from './inventory';
 import { applyLevelUp } from './playerTurn';
@@ -65,12 +66,11 @@ export function applyMeteorBlast(args: {
   const logs = ['☄️ Meteor strikes.'];
   const floats: FloatingText[] = [];
   let player = args.player;
-  const enemies: Enemy[] = [];
-  for (const enemy of args.enemies) {
-    if (!inside.has(`${enemy.pos.x},${enemy.pos.y}`) || enemy.hp <= 0 || !isHostileCombatTarget(enemy)) {
-      enemies.push(enemy);
-      continue;
-    }
+  let roster = args.enemies.map(enemy => ({ ...enemy }));
+  for (const enemy of [...roster]) {
+    if (!inside.has(`${enemy.pos.x},${enemy.pos.y}`) || enemy.hp <= 0 || !isHostileCombatTarget(enemy)) continue;
+    const idx = roster.findIndex(live => live.id === enemy.id);
+    if (idx < 0) continue;
     const dealt = meteorStrikeDamage(player, enemy.defense ?? 0);
     const nextHp = enemy.hp - dealt;
     floats.push({
@@ -81,9 +81,25 @@ export function applyMeteorBlast(args: {
       life: 2,
     });
     if (nextHp > 0) {
-      enemies.push({ ...enemy, hp: nextHp, engaged: true });
+      roster[idx] = { ...roster[idx], hp: nextHp, engaged: true };
       continue;
     }
+    const spared = spareLethalHit({
+      enemy,
+      lethal: true,
+      enemies: roster,
+      index: idx,
+      playerHp: player.stats.hp,
+      turn: args.turn,
+      log: text => logs.push(text),
+      floats,
+    });
+    if (spared.spared) {
+      roster = spared.enemies;
+      player = { ...player, stats: { ...player.stats, hp: spared.playerHp } };
+      continue;
+    }
+    roster = roster.filter(live => live.id !== enemy.id);
     const paid = notePrestigeKill(player, args.floor, playerSoftCap(player).raw.luck, enemy);
     player = paid.player;
     logs.push(...paid.logs);
@@ -94,7 +110,7 @@ export function applyMeteorBlast(args: {
     if (newLevel > oldLevel) player = applyLevelUp(player, oldLevel, newLevel, text => logs.push(text));
     logs.push(`☄️ ${enemy.emoji} ${enemy.name} is crushed.`);
   }
-  return { player, enemies, logs, tiles, floats };
+  return { player, enemies: roster, logs, tiles, floats };
 }
 
 /** Detonate a mark whose turn has arrived. Earlier turns leave it on the map. */

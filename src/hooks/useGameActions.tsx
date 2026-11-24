@@ -29,6 +29,7 @@ import {
 import { lightningArcDamage } from '../game/passives';
 import { applyEquippedAttack } from '../game/inventory';
 import { formatHitBreakdown, type HitComponent } from '../game/hitLog';
+import { spareLethalHit } from '../game/flashSignals';
 import { manaAfterQuietWait } from '../game/genieMana';
 import { placeMeteor } from '../game/meteor';
 import { appendMonkeyPickaxe, canMineWall, findHotbarPickaxe, shouldAutoMine } from '../game/pickaxe';
@@ -211,7 +212,24 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           let cSkip: string | undefined;
           let cKillCounts = { ...prev.killCounts };
           let cItems = prev.items;
-          if (cResult.enemyDied) {
+          const shotSpare = spareLethalHit({
+            enemy,
+            lethal: cResult.enemyDied,
+            enemies: cEnemies,
+            index: enemyIdx,
+            playerHp: cPlayer.stats.hp,
+            turn: prev.turn,
+            log: addLog,
+            floats: cFloats,
+          });
+          if (shotSpare.playerDied) {
+            return { ...prev, player: { ...cPlayer, stats: { ...cPlayer.stats, hp: shotSpare.playerHp } }, enemies: shotSpare.enemies, floatingTexts: cFloats, gameOver: true, killer: { name: enemy.name, emoji: enemy.emoji } };
+          }
+          if (shotSpare.spared) {
+            cEnemies = shotSpare.enemies;
+            cPlayer = { ...cPlayer, stats: { ...cPlayer.stats, hp: shotSpare.playerHp } };
+            cSkip = enemy.id;
+          } else if (cResult.enemyDied) {
             markEnemyKilled(enemy.emoji);
             cKillCounts = { ...cKillCounts, [enemy.emoji]: (cKillCounts[enemy.emoji] ?? 0) + 1 };
             cPlayer = applyMonkeyDropOnKill(enemy, cPlayer);
@@ -256,7 +274,20 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               const sResult = resolveCombat(effectiveCowboy, second, addLog, { mood, cowboyMoodValue: cowboyCombatMoodValue(prev.player), advantage: _cowboyPassives.advantageDice, execBlow: _cowboyPassives.execBlow, trueAim: _cowboyPassives.trueAim, shieldWall: _cowboyPassives.shieldWall, isRanged: true, damageMult: 1, collectHits: shotParts, hitName: 'Offhand', hitTarget: `${second.emoji} ${second.name}`, noCounter: true });
               addLog(off ? `🕴️ Offhand — ${second.emoji} ${second.name}.` : '🕴️ Offhand — same target.');
               cPlayer = { ...cPlayer, stats: { ...cPlayer.stats, hp: sResult.playerHp } };
-              if (sResult.enemyDied) {
+              const offSpare = spareLethalHit({
+                enemy: second,
+                lethal: sResult.enemyDied,
+                enemies: cEnemies,
+                index: secondIdx,
+                playerHp: cPlayer.stats.hp,
+                turn: prev.turn,
+                log: addLog,
+                floats: cFloats,
+              });
+              if (offSpare.spared) {
+                cEnemies = offSpare.enemies;
+                cPlayer = { ...cPlayer, stats: { ...cPlayer.stats, hp: offSpare.playerHp } };
+              } else if (sResult.enemyDied) {
                 markEnemyKilled(second.emoji);
                 cKillCounts = { ...cKillCounts, [second.emoji]: (cKillCounts[second.emoji] ?? 0) + 1 };
                 cEnemies.splice(secondIdx, 1);
@@ -399,7 +430,21 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             if (!victim) return;
             const pd = pierceDamage(rangedDmgToEnemy);
             addLog(`💂 Piercing shot hits ${victim.emoji} for ${pd}.`);
-            if (victim.hp - pd <= 0) {
+            const pierceIdx = newEnemies.findIndex(e => e.id === victim.id);
+            const pierceSpare = spareLethalHit({
+              enemy: victim,
+              lethal: victim.hp - pd <= 0,
+              enemies: newEnemies,
+              index: pierceIdx,
+              playerHp: newPlayer.stats.hp,
+              turn: prev.turn,
+              log: addLog,
+              floats: rangedBaseFloats,
+            });
+            if (pierceSpare.spared) {
+              newEnemies = pierceSpare.enemies;
+              newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, hp: pierceSpare.playerHp } };
+            } else if (victim.hp - pd <= 0) {
               markEnemyKilled(victim.emoji);
               rangerKillCounts = { ...rangerKillCounts, [victim.emoji]: (rangerKillCounts[victim.emoji] ?? 0) + 1 };
               newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, xp: newPlayer.stats.xp + starXpGain(victim.isBoss ? 25 : 5, newPlayer.stats.xpBoostTurns) } };
@@ -408,7 +453,24 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               newEnemies = newEnemies.map(e => e.id === victim.id ? { ...e, hp: e.hp - pd, engaged: true } : e);
             }
           };
-          if (combatResult.enemyDied) {
+          const rangerSpare = spareLethalHit({
+            enemy,
+            lethal: combatResult.enemyDied,
+            enemies: newEnemies,
+            index: enemyIdx,
+            playerHp: newPlayer.stats.hp,
+            turn: prev.turn,
+            log: addLog,
+            floats: rangedBaseFloats,
+          });
+          if (rangerSpare.playerDied) {
+            return { ...prev, player: { ...newPlayer, stats: { ...newPlayer.stats, hp: rangerSpare.playerHp } }, enemies: rangerSpare.enemies, floatingTexts: rangedBaseFloats, gameOver: true, killer: { name: enemy.name, emoji: enemy.emoji } };
+          }
+          if (rangerSpare.spared) {
+            newEnemies = rangerSpare.enemies;
+            newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, hp: rangerSpare.playerHp } };
+            skipFightId = enemy.id;
+          } else if (combatResult.enemyDied) {
             markEnemyKilled(enemy.emoji);
             rangerKillCounts = { ...rangerKillCounts, [enemy.emoji]: (rangerKillCounts[enemy.emoji] ?? 0) + 1 };
             newPlayer = applyMonkeyDropOnKill(enemy, newPlayer);
@@ -456,7 +518,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
           applyShotPierce();
           if (combatResult.playerDied) return { ...prev, killCounts: rangerKillCounts, player: newPlayer, enemies: newEnemies, floatingTexts: rangedBaseFloats, gameOver: true, killer: { name: enemy.name, emoji: enemy.emoji } };
           let midState: GameState = { ...prev, killCounts: rangerKillCounts, player: newPlayer, enemies: newEnemies, turn: prev.turn + 1, floatingTexts: rangedBaseFloats, pendingBeam: rangerBeam };
-          if (combatResult.enemyDied && enemy.isBoss) midState = creditVoidBoss(midState, enemy);
+          if (combatResult.enemyDied && !rangerSpare.spared && enemy.isBoss) midState = creditVoidBoss(midState, enemy);
           return applyEnemyTurns(midState, runEnemyTurns(midState, skipFightId));
         }
       }
@@ -864,7 +926,19 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
               const newHp = tgt.hp - arcDmg;
               bits.push(`${tgt.emoji}-${arcDmg}`);
               arcParts.push({ name: 'Arc', damage: arcDmg, target: `${tgt.emoji} ${tgt.name}` });
-              if (newHp <= 0) {
+              const arcSpare = spareLethalHit({
+                enemy: tgt,
+                lethal: newHp <= 0,
+                enemies: newEnemies,
+                index: idx,
+                playerHp: newPlayer.stats.hp,
+                turn: prev.turn,
+                log: addLog,
+              });
+              if (arcSpare.spared) {
+                newEnemies = arcSpare.enemies;
+                newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, hp: arcSpare.playerHp } };
+              } else if (newHp <= 0) {
                 markEnemyKilled(tgt.emoji);
                 updatedKillCounts[tgt.emoji] = (updatedKillCounts[tgt.emoji] ?? 0) + 1;
                 newPlayer = applyMonkeyDropOnKill(tgt, newPlayer);
@@ -1237,7 +1311,23 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
 
           const boltEnemyIdx = newState.enemies.findIndex(e => e.id === boltTarget.id);
           let boltEnemies = [...newState.enemies];
-          if (boltResult.enemyDied) {
+          const boltSpare = spareLethalHit({
+            enemy: boltTarget,
+            lethal: boltResult.enemyDied,
+            enemies: boltEnemies,
+            index: boltEnemyIdx,
+            playerHp: newPlayer.stats.hp,
+            turn: newState.turn,
+            log: addLog,
+            floats: boltFloats,
+          });
+          if (boltSpare.playerDied) {
+            return { ...newState, player: { ...newPlayer, stats: { ...newPlayer.stats, hp: boltSpare.playerHp } }, enemies: boltSpare.enemies, turn: newState.turn + 1, gameOver: true, killer: { name: boltTarget.name, emoji: boltTarget.emoji } };
+          }
+          if (boltSpare.spared) {
+            boltEnemies = boltSpare.enemies;
+            newPlayer = { ...newPlayer, stats: { ...newPlayer.stats, hp: boltSpare.playerHp } };
+          } else if (boltResult.enemyDied) {
             markEnemyKilled(boltTarget.emoji);
             newState.killCounts = { ...newState.killCounts, [boltTarget.emoji]: (newState.killCounts[boltTarget.emoji] ?? 0) + 1 };
             newPlayer = applyMonkeyDropOnKill(boltTarget, newPlayer);
@@ -1450,7 +1540,23 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
             return { ...prev, player: waitPlayer, enemies: waitEnemies, floatingTexts: [...waitFloats, ...(prev.floatingTexts ?? [])], turn: prev.turn + 1, gameOver: true, killer: { name: boltTarget.name, emoji: boltTarget.emoji } };
           }
           const boltEnemyIdx = waitEnemies.findIndex(e => e.id === boltTarget.id);
-          if (boltResult.enemyDied) {
+          const waitBoltSpare = spareLethalHit({
+            enemy: boltTarget,
+            lethal: boltResult.enemyDied,
+            enemies: waitEnemies,
+            index: boltEnemyIdx,
+            playerHp: waitPlayer.stats.hp,
+            turn: prev.turn,
+            log: addLog,
+            floats: waitFloats,
+          });
+          if (waitBoltSpare.playerDied) {
+            return { ...prev, player: { ...waitPlayer, stats: { ...waitPlayer.stats, hp: waitBoltSpare.playerHp } }, enemies: waitBoltSpare.enemies, floatingTexts: [...waitFloats, ...(prev.floatingTexts ?? [])], turn: prev.turn + 1, gameOver: true, killer: { name: boltTarget.name, emoji: boltTarget.emoji } };
+          }
+          if (waitBoltSpare.spared) {
+            waitEnemies = waitBoltSpare.enemies;
+            waitPlayer = { ...waitPlayer, stats: { ...waitPlayer.stats, hp: waitBoltSpare.playerHp } };
+          } else if (boltResult.enemyDied) {
             markEnemyKilled(boltTarget.emoji);
             waitKillCounts = { ...waitKillCounts, [boltTarget.emoji]: (waitKillCounts[boltTarget.emoji] ?? 0) + 1 };
             waitPlayer = applyMonkeyDropOnKill(boltTarget, waitPlayer);
