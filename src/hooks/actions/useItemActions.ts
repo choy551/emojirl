@@ -8,12 +8,12 @@ import { isStackableBagPassive } from '../../game/passives';
 import {
   moodMax, refillBagFromBank, removeAndRefillBag, takeOneMatchingFromBank,
   tickActiveBuffs, withVisibility, runEnemyTurns, applyEnemyTurns, getItemBuyPrice, cookedEatHeal,
-  buildHotbarSlots, grantGhostStack, livingMaxHp, healHp,
+  buildHotbarSlots, livingMaxHp, healHp,
 } from '../../game/gameHelpers';
 import { applyInstantItemUse, canBuyAndUse } from '../../game/shopUse';
 import { applyDrinkToPlayer, pickDrink } from '../../game/drinks';
-import { GHOST_LINGER_TEXT, isVoidSoulSpend } from '../../game/voidDamage';
-import { recordHotbarSoulConsume } from '../../game/voidMeta';
+import { GHOST_LINGER_TEXT } from '../../game/voidDamage';
+import { creditVoidGhostConsume } from '../../game/voidMeta';
 import {
   chargeGhostUseRefusal,
   chargeKindForEmoji,
@@ -487,14 +487,11 @@ export function useItemActions(
         }
       }
       const cityGrant = echo ? null : recordRunEmojiConsume(slotItem.emoji, 1, slotItem);
-      if (!echo && prev.player.characterClass === '👤' && isVoidSoulSpend(slotItem)) {
-        const rec = recordHotbarSoulConsume(slotItem.emoji);
-        if (rec.crossed) {
-          nextPlayer = grantGhostStack(nextPlayer, slotItem.emoji, rec.unlocks);
-          const text = rec.unlocks <= 1
-            ? `👤 Ghost unlocked: ${slotItem.emoji}`
-            : `👤 Ghost unlocked: ${slotItem.emoji} (stack ×${rec.unlocks})`;
-          nextLogs = [{ id: `ghost-${applied.turn}-${slotItem.emoji}-${rec.unlocks}`, text, turn: applied.turn }, ...nextLogs].slice(0, 24);
+      if (!echo) {
+        const ghostCredit = creditVoidGhostConsume(nextPlayer, slotItem);
+        nextPlayer = ghostCredit.player;
+        if (ghostCredit.log) {
+          nextLogs = [{ id: `ghost-${applied.turn}-${slotItem.emoji}`, text: ghostCredit.log, turn: applied.turn }, ...nextLogs].slice(0, 24);
         }
       }
       if (!echo && prev.player.characterClass === '👤') {
@@ -538,7 +535,15 @@ export function useItemActions(
       if (!used) return prev;
       succeeded = true;
       const cityGrant = recordRunEmojiConsume(item.emoji, 1, item);
-      return { ...noteFullCity(used, cityGrant.notice, `city-full-${prev.turn}`), shopStock: nextStock };
+      const ghostCredit = creditVoidGhostConsume(used.player, item);
+      const withGhost = ghostCredit.log
+        ? {
+            ...used,
+            player: ghostCredit.player,
+            logs: [{ id: `shop-ghost-${prev.turn}-${item.emoji}`, text: ghostCredit.log, turn: used.turn }, ...used.logs].slice(0, 24),
+          }
+        : { ...used, player: ghostCredit.player };
+      return { ...noteFullCity(withGhost, cityGrant.notice, `city-full-${prev.turn}`), shopStock: nextStock };
     });
     return succeeded;
   }, [gameStateRef, setGameState, applyMonkeyDropOnKill]);

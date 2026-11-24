@@ -7,6 +7,7 @@ import { migrateEquippedCrown, splitPooledGuardAmmo } from './royalGuard';
 import { ROYAL_GUARD } from './prestigeConstants';
 import { FINALE_FLOOR } from './finaleConstants';
 import { stampLegacyProtectedWalls } from './pickaxe';
+import { stampVoidRosterFloor } from './voidDamage';
 
 export const SAVE_KEY = 'emojirl_save_v1';
 
@@ -260,6 +261,7 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
     ghostHotbar: Array.isArray(rawPlayer.ghostHotbar) ? (rawPlayer.ghostHotbar as Player['ghostHotbar']) : undefined,
     ghostBank: Array.isArray(rawPlayer.ghostBank) ? (rawPlayer.ghostBank as Player['ghostBank']) : undefined,
     voidBossesCleared: (rawPlayer.voidBossesCleared as number | undefined) ?? (raw.voidBossesCleared as number | undefined) ?? 0,
+    voidRosterFloor: typeof rawPlayer.voidRosterFloor === 'number' ? rawPlayer.voidRosterFloor : undefined,
     voidSlotBurden: normalizeVoidSlotBurden(rawPlayer.voidSlotBurden),
     drinkBuff: rawPlayer.drinkBuff as Player['drinkBuff'],
     banquet: rawPlayer.banquet as Player['banquet'],
@@ -277,13 +279,14 @@ function normalizeGameState(raw: Record<string, unknown>): GameState {
 
   // ── GameState ─────────────────────────────────────────────────────────────
   const currentFloor = (raw.currentFloor as number) ?? 1;
+  const rosterPlayer = stampVoidRosterFloor(player, currentFloor);
   const loadedMap = (raw.map as GameState['map']) ?? [];
   const map = stampLegacyProtectedWalls(loadedMap, {
     arena: currentFloor === FINALE_FLOOR || (!!raw.bossrush && typeof raw.bossrush === 'object'),
   });
   return {
     schemaVersion:            CURRENT_SCHEMA_VERSION,
-    player,
+    player: rosterPlayer,
     currentFloor,
     map,
     enemies:                  (raw.enemies                   as GameState['enemies'])     ?? [],

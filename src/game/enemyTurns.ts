@@ -1,7 +1,7 @@
 import { Enemy, EmojiItem, GameState, Position, FloatingText, PlacedBomb, ActiveProjectile } from './types';
 import { chebyshev } from './geo';
 import { applyEquipmentAndPassives, addToPlayerBag, playerBagPassives, parkVoidOverflow, countVoidPressureSlots, healHp, applyEquippedAttack, applyEquippedReduction } from './inventory';
-import { applyNullMomentum, applyVoidPressureTick, creditVoidBoss, occupiedGhosts, voidClassTurnDamage, voidDamageFor, voidGhostCapacity, VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from './voidDamage';
+import { applyNullMomentum, applyVoidPressureTick, creditVoidBoss, occupiedGhosts, stampVoidRosterFloor, voidClassTurnDamage, voidDamageFor, voidGhostCapacity, VOID_DEATH_TEXT, VOID_UNLOCK_TEXT } from './voidDamage';
 import { applyEntropicTithe, type GhostKillEffect } from './voidAbilities';
 import { unlockVoidClass } from './voidMeta';
 import { stealOneSoulEmoji, applySoulThefts, stolenEmojiSummary } from './monkeyLoot';
@@ -61,7 +61,7 @@ export interface EnemyTurnResult {
 }
 
 export function runEnemyTurns(state: GameState, skipId?: string, sleeping = false): EnemyTurnResult {
-  const { player } = state;
+  const player = stampVoidRosterFloor(state.player, state.currentFloor);
   let map = state.map;
   const effectivePlayer = applyEquipmentAndPassives(player);
   const dodgeChance = playerDodgeChance(
@@ -1117,6 +1117,7 @@ export function applyEnemyTurns(state: GameState, result: EnemyTurnResult): Game
   for (let i = 0; i < (result.depthBossKills ?? 0); i++) {
     next = creditVoidBoss(next, { isBoss: true });
   }
+  next = { ...next, player: stampVoidRosterFloor(next.player, next.currentFloor) };
   if (next.player.characterClass === '👤') {
     const cap = voidGhostCapacity(next.currentFloor, next.voidBossesCleared ?? next.player.voidBossesCleared ?? 0);
     const held = occupiedGhosts(next.player.ghostHotbar);

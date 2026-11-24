@@ -82,6 +82,35 @@ export function writeGhostCharge(player: Player, emoji: string, uses: number, ma
   return { ...player, ghostBank: bank };
 }
 
+/**
+ * An active Pickaxe ghost with uses left. Uses are the ghost's charge pool:
+ * the catalog count when first unlocked, one spent per dug tile, and 0 until
+ * another Pickaxe is unmade. A dormant ghost does not count.
+ */
+export function activeGhostPickaxe(player: Player): { emoji: string; uses: number; maxUses: number } | null {
+  if (player.characterClass !== '👤') return null;
+  const cell = buildHotbarSlots(player).find(slot =>
+    !!slot?.isVoidGhost && slot.activeKind === 'pickaxe' && !slot.isVoidGhostDormant,
+  );
+  if (!cell) return null;
+  const ghost = locateVoidGhost(player, cell.emoji)?.ghost;
+  const resolved = ghost ? resolvedChargeUses(ghost) : null;
+  const uses = resolved?.uses ?? cell.charges ?? 0;
+  const maxUses = resolved?.maxUses ?? (uses < 0 ? uses : Math.max(uses, 0));
+  if (uses === 0) return null;
+  return { emoji: cell.emoji, uses, maxUses };
+}
+
+/** Spend dug tiles from a Pickaxe ghost. Endless uses stay endless. */
+export function spendGhostPickaxeUses(player: Player, emoji: string, dug: number): Player {
+  const loc = locateVoidGhost(player, emoji);
+  if (!loc) return player;
+  const resolved = resolvedChargeUses(loc.ghost);
+  if (!resolved) return player;
+  if (resolved.uses < 0 || resolved.maxUses < 0) return writeGhostCharge(player, emoji, -1, -1);
+  return writeGhostCharge(player, emoji, Math.max(0, resolved.uses - Math.max(0, dug)), resolved.maxUses);
+}
+
 export function chargeGhostUseRefusal(
   display: Pick<EmojiItem, 'isVoidGhost' | 'isVoidGhostDormant' | 'emoji'>,
   ghost: VoidGhost | null | undefined,

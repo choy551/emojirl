@@ -19,6 +19,7 @@ import {
 import { playerMood } from '../../game/drinks';
 import { starXpGain } from '../../game/emojiBalance';
 import { digCardinalLine } from '../../game/pickaxe';
+import { activeGhostPickaxe, spendGhostPickaxeUses } from '../../game/voidCharge';
 import { markEnemyKilled } from '../../game/discoveries';
 import {
   moodMax, chebyshev, hasLOSBetween, PLAYER_PASSABLE_TILES, playerBagPassives,
@@ -62,15 +63,27 @@ export function useCombatActions(
           return prev;
         }
         const pick = prev.player.inventory.find(item => item.activeKind === 'pickaxe' && !item.consumed && (item.charges ?? 0) > 0);
-        if (!pick) { addLog('No ⛏️ Pickaxe in the hotbar.'); return prev; }
-        const dug = digCardinalLine(prev.map, prev.player.pos, dx, dy, pick.charges ?? 0);
+        const ghostPick = pick ? null : activeGhostPickaxe(prev.player);
+        if (!pick && !ghostPick) { addLog('No ⛏️ Pickaxe in the hotbar.'); return prev; }
+        const charges = pick ? (pick.charges ?? 0) : ghostPick!.uses;
+        const dug = digCardinalLine(prev.map, prev.player.pos, dx, dy, charges);
         if (dug.dug === 0) { addLog('⛏️ Nothing there to dig.'); return prev; }
-        const left = (pick.charges ?? 0) - dug.dug;
-        const inventory = left > 0
-          ? prev.player.inventory.map(item => item.id === pick.id ? { ...item, charges: left } : item)
-          : prev.player.inventory.filter(item => item.id !== pick.id);
-        addLog(left > 0 ? `⛏️ Dug ${dug.dug} tile${dug.dug === 1 ? '' : 's'}. ${left} charges left.` : `⛏️ Dug ${dug.dug} and the pickaxe breaks.`);
-        const mid = { ...prev, map: dug.map, player: { ...prev.player, inventory }, turn: prev.turn + 1 };
+        let miner = prev.player;
+        if (pick) {
+          const left = (pick.charges ?? 0) - dug.dug;
+          const inventory = left > 0
+            ? prev.player.inventory.map(item => item.id === pick.id ? { ...item, charges: left } : item)
+            : prev.player.inventory.filter(item => item.id !== pick.id);
+          miner = { ...prev.player, inventory };
+          addLog(left > 0 ? `⛏️ Dug ${dug.dug} tile${dug.dug === 1 ? '' : 's'}. ${left} charges left.` : `⛏️ Dug ${dug.dug} and the pickaxe breaks.`);
+        } else if (ghostPick) {
+          miner = spendGhostPickaxeUses(prev.player, ghostPick.emoji, dug.dug);
+          const left = Math.max(0, ghostPick.uses - dug.dug);
+          addLog(left > 0
+            ? `⛏️ Dug ${dug.dug} tile${dug.dug === 1 ? '' : 's'}. ${left} ghost uses left.`
+            : `⛏️ Dug ${dug.dug} and the ghost pickaxe is spent. Unmake another Pickaxe to recharge it.`);
+        }
+        const mid = { ...prev, map: dug.map, player: miner, turn: prev.turn + 1 };
         return applyEnemyTurns(withVisibility(mid), runEnemyTurns(mid));
       }
       if (prev.activeProjectile) {

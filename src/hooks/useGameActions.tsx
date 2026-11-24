@@ -33,6 +33,8 @@ import { spareLethalHit } from '../game/flashSignals';
 import { manaAfterQuietWait } from '../game/genieMana';
 import { placeMeteor } from '../game/meteor';
 import { appendMonkeyPickaxe, canMineWall, findHotbarPickaxe, shouldAutoMine } from '../game/pickaxe';
+import { activeGhostPickaxe, spendGhostPickaxeUses } from '../game/voidCharge';
+import { voidExplorePressureLog, voidHotbarPressureGain } from '../game/inventory';
 import { butterflyHeal, diamondThorns, heartHeal, igniteFields, mushroomHeal, starXpGain } from '../game/emojiBalance';
 import { afterGuardShot, chooseGuardShot, gainCarriedAmmo, guardHasBow, guardHasGun, guardHasRangedWeapon } from '../game/royalGuard';
 import { equippedGuns, isLongGun, longGunRange, nextStill, pickOffhandTarget } from '../game/sharpshooter';
@@ -70,7 +72,7 @@ function stampDualGunsFanfare(state: GameState, prevEquipment: Player['equipment
 
 export function useGameActions(refs: GameRefs, setters: GameSetters) {
   const {
-    gameStateRef, wizardTacticsRef, autoStealthRef, rangerModeRef,
+    gameStateRef, wizardTacticsRef, autoStealthRef, rangerModeRef, autoExploreRef,
     lastCowboyFlavorTurnRef,
     blinkTurnRef, trailblazeTurnRef,
     lavaStepConfirmedRef,
@@ -79,7 +81,7 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
     voidAttackModeRef,
   } = refs;
   const {
-    setGameState, setWizardTactics, setRangerMode,
+    setGameState, setWizardTactics, setRangerMode, setAutoExplore,
     setPendingFairyId, setPendingMonkeyInteraction,
     setPendingAdventurerInteraction, setPendingBearInteraction, setPendingFarmerId,
     setBlinkTurn, setTrailblazeTurn,
@@ -616,15 +618,24 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
         }
       } else if (!PLAYER_PASSABLE_TILES.has(tile.type)) {
         const pick = findHotbarPickaxe(prev.player.inventory);
-        if (tile.type === 'wall' && shouldAutoMine(!!pick, canMineWall(prev.map, newPos.x, newPos.y)) && pick) {
+        const ghostPick = pick ? null : activeGhostPickaxe(prev.player);
+        if (tile.type === 'wall' && shouldAutoMine(!!pick || !!ghostPick, canMineWall(prev.map, newPos.x, newPos.y)) && (pick || ghostPick)) {
           const map = prev.map.map(row => row.map(cell => ({ ...cell })));
           map[newPos.y][newPos.x] = { ...map[newPos.y][newPos.x], type: 'floor', emoji: '⬜' };
-          const left = (pick.charges ?? 0) - 1;
-          const inventory = left > 0
-            ? prev.player.inventory.map(item => item.id === pick.id ? { ...item, charges: left } : item)
-            : prev.player.inventory.filter(item => item.id !== pick.id);
-          addLog(left > 0 ? `⛏️ The wall crumbles. ${left} charges left.` : '⛏️ The pickaxe breaks.');
-          const mid = { ...prev, map, player: { ...prev.player, inventory }, turn: prev.turn + 1 };
+          let miner = prev.player;
+          if (pick) {
+            const left = (pick.charges ?? 0) - 1;
+            const inventory = left > 0
+              ? prev.player.inventory.map(item => item.id === pick.id ? { ...item, charges: left } : item)
+              : prev.player.inventory.filter(item => item.id !== pick.id);
+            miner = { ...prev.player, inventory };
+            addLog(left > 0 ? `⛏️ The wall crumbles. ${left} charges left.` : '⛏️ The pickaxe breaks.');
+          } else if (ghostPick) {
+            miner = spendGhostPickaxeUses(prev.player, ghostPick.emoji, 1);
+            const left = Math.max(0, ghostPick.uses - 1);
+            addLog(left > 0 ? `⛏️ The wall crumbles. ${left} ghost uses left.` : '⛏️ The ghost pickaxe is spent. Unmake another Pickaxe to recharge it.');
+          }
+          const mid = { ...prev, map, player: miner, turn: prev.turn + 1 };
           return applyEnemyTurns(withVisibility(mid), runEnemyTurns(mid));
         }
         return prev;
@@ -1088,9 +1099,14 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                 : `Picked up ${pickedUp.emoji} ${pickedUp.name} → Equip tab (⚔️).`);
             }
           } else {
+            const beforeStow = newPlayer;
             const stowed = stowFoundItems(newPlayer, pickedUp);
             const wentToBank = stowed.player.bank.some(i => i.id === pickedUp.id || i.id === `${pickedUp.id}-overflow`);
             newPlayer = stowed.player;
+            if (autoExploreRef.current && voidHotbarPressureGain(beforeStow, newPlayer) > 0) {
+              setAutoExplore(false);
+              addLog(voidExplorePressureLog(pickedUp.emoji, pickedUp.name));
+            }
             stowed.logs.forEach(addLog);
             addLog(wentToBank
               ? `🎒 Bag full! ${pickedUp.emoji} ${pickedUp.name} sent to bank. (B to open)`
@@ -1127,9 +1143,14 @@ export function useGameActions(refs: GameRefs, setters: GameSetters) {
                     : `🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you → Equip tab (⚔️).`);
                 }
               } else {
+                const beforeMagnet = newPlayer;
                 const stowed = stowFoundItems(newPlayer, pickedUp);
                 const magnetWentToBank = stowed.player.bank.some(i => i.id === pickedUp.id || i.id === `${pickedUp.id}-overflow`);
                 newPlayer = stowed.player;
+                if (autoExploreRef.current && voidHotbarPressureGain(beforeMagnet, newPlayer) > 0) {
+                  setAutoExplore(false);
+                  addLog(voidExplorePressureLog(pickedUp.emoji, pickedUp.name));
+                }
                 stowed.logs.forEach(addLog);
                 addLog(magnetWentToBank
                   ? `🧲 ${pickedUp.emoji} ${pickedUp.name} drawn to you — bag full, sent to bank.`
